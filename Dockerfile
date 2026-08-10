@@ -21,11 +21,12 @@ EXPOSE 7860
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# --timeout is how long gunicorn lets a worker sit on a single request
-# before killing it. 120s is too tight for /api/kaggle/download: within a
-# single request it both pulls a job's full output from Kaggle AND streams
-# it on to the browser, and real result bundles here run to hundreds of MB
-# (528 MB in one observed run) — either leg alone can pass 120s on an
-# ordinary connection, let alone both. 900s gives that room without
-# leaving a truly-hung request stuck forever.
-CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "2", "--threads", "4", "--timeout", "900", "app:app"]
+# Keep one Gunicorn worker because the application has process-local session
+# state and the legacy Kaggle runner is not designed as a multi-process
+# coordinator. Threads still allow concurrent HTTP requests while avoiding
+# duplicate worker state, inconsistent fallback Flask secret keys, and races
+# during Kaggle job polling/submission. Set SECRET_KEY in the Space secrets
+# for stable sessions across container restarts as documented in README.md.
+# --timeout is intentionally long because result downloads pull a Kaggle
+# archive and stream it to the browser in the same request.
+CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "1", "--threads", "8", "--timeout", "900", "--graceful-timeout", "30", "--keep-alive", "5", "app:app"]
