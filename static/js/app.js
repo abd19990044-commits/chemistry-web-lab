@@ -1436,7 +1436,7 @@
     fileInput.type = 'file'; fileInput.accept = '.json,application/json'; fileInput.style.display = 'none';
     fileLabel.appendChild(fileInput);
     const downloadBtn = document.createElement('button');
-    downloadBtn.type = 'button'; downloadBtn.className = 'btn btn-ghost btn-small'; downloadBtn.textContent = '⬇ Save kaggle.json';
+    downloadBtn.type = 'button'; downloadBtn.className = 'btn btn-ghost btn-small'; downloadBtn.textContent = '⬇ Save Kaggle credentials';
     const settingsLink = document.createElement('a');
     settingsLink.className = 'btn btn-ghost btn-small'; settingsLink.href = 'https://www.kaggle.com/settings/api';
     settingsLink.target = '_blank'; settingsLink.rel = 'noopener noreferrer'; settingsLink.textContent = 'Kaggle API settings';
@@ -1461,9 +1461,11 @@
     downloadBtn.addEventListener('click', () => {
       const username = userInput.value.trim(), key = keyInput.value.trim();
       if (!username || !key) { showToast('Enter your Kaggle username and API key/token first.'); return; }
-      const blob = new Blob([JSON.stringify({username, key}, null, 2) + '\n'], {type:'application/json'});
+      const isLegacy = /^[0-9a-f]{32}$/.test(key);
+      const payload = isLegacy ? JSON.stringify({username, key}, null, 2) + '\n' : key + '\n';
+      const blob = new Blob([payload], {type:'text/plain'});
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = 'kaggle.json'; document.body.appendChild(a); a.click(); a.remove();
+      a.href = url; a.download = isLegacy ? 'kaggle.json' : 'access_token'; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
 
