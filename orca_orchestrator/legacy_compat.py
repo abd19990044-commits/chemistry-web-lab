@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Compatibility adapter for the pre-orchestrator browser API.
+"""Compatibility adapter for the historical ``/api/kaggle/*`` browser API.
 
-The UI historically called /api/kaggle/*. The production orchestrator lives
-behind /api/orca/*. This adapter keeps the old browser contract stable while
-routing every calculation operation through OrchestratorService. It is
-intentionally small and contains no orchestration logic of its own.
+The public UI originally used the legacy route names.  The production
+orchestrator owns the calculation lifecycle now, so these handlers translate
+the old request/response contract to ``OrchestratorService``.  No calculation
+logic is duplicated here.
 """
 from __future__ import annotations
 
 import os
 import re
 import shutil
+from types import MethodType
 
 from flask import after_this_request, jsonify, request, send_file
 
@@ -72,6 +73,7 @@ def submit():
     creds = _creds(form)
     input_filename = (form.get("input_filename") or "molecule.inp").strip()
     input_content = form.get("input_content") or ""
+
     upload = request.files.get("input_file")
     if upload and upload.filename:
         input_filename = os.path.basename(upload.filename)
@@ -125,8 +127,6 @@ def status():
         raise ValidationError("Missing job id.")
     job = get_service().status(creds, job_id)
     legacy = _legacy_job(job)
-    # The orchestrator keeps one stable job id across every continuation, so
-    # the browser never replaces its id when a new Kaggle window is created.
     legacy.update({
         "note": job.get("note"),
         "warning": job.get("note") or (job.get("error") or {}).get("message"),
@@ -162,11 +162,6 @@ def delete():
     supplied_id = (data.get("job_id") or "").strip()
     if not supplied_id:
         raise ValidationError("Missing job id.")
-
-    # The old browser stored every continuation slug in chainIds and deleted
-    # them one by one. The new service treats the stable root id as the unit of
-    # deletion and removes the entire chain atomically. Normalize either form
-    # here so old browser data cannot generate false deletion failures.
     root_id = re.sub(r"-r\d+$", "", supplied_id)
     return jsonify({"ok": True, **get_service().delete(creds, root_id)})
 
@@ -196,25 +191,25 @@ LEGACY_ROUTES = {
 }
 
 
-def install_legacy_route_adapter() -> None:
-    """Make legacy route declarations resolve to the orchestrator handlers.
+def install_legacy_route_adapter(app) -> None:
+    """Patch only this Flask application's route-registration method.
 
-    app.py still declares the historical endpoints. Replacing their view
-    function at registration time avoids duplicate Flask rules and, crucially,
-    prevents the old kaggle_runner from ever handling a calculation request.
+    The previous implementation monkey-patched ``flask.Flask.add_url_rule``
+    globally. That is unsafe library behaviour: importing the package changed
+    routing for every Flask application in the process and made tests order
+    dependent. Binding the adapter to the one application instance preserves
+    compatibility without modifying Flask itself.
     """
-    from flask import Flask
-
-    if getattr(Flask.add_url_rule, "_orca_legacy_adapter", False):
+    if getattr(app, "_orca_legacy_adapter_installed", False):
         return
 
-    original = Flask.add_url_rule
+    original = app.add_url_rule
 
     def add_url_rule(self, rule, endpoint=None, view_func=None, **options):
         replacement = LEGACY_ROUTES.get(str(rule))
         if replacement is not None:
             view_func = replacement
-        return original(self, rule, endpoint=endpoint, view_func=view_func, **options)
+        return original(rule, endpoint=endpoint, view_func=view_func, **options)
 
-    add_url_rule._orca_legacy_adapter = True
-    Flask.add_url_rule = add_url_rule
+    app.add_url_rule = MethodType(add_url_rule, app)
+    app._orca_legacy_adapter_installed = True
