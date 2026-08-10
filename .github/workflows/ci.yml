@@ -9,7 +9,7 @@ on:
 jobs:
   python-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,10 +18,10 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q .
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt pytest
       - name: Import orchestrator
         run: python -c "import orca_orchestrator; print(orca_orchestrator.__version__)"
-      - name: Import Flask application
+      - name: Run production wiring tests
         env:
           SECRET_KEY: ci-test-secret-key
-        run: python -c "import app; print('Flask app imported:', app.app.name)"
+        run: pytest -q tests/test_production_wiring.py
