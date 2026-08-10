@@ -9,18 +9,20 @@ on:
 jobs:
   python-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Compile Python sources
         run: python -m compileall -q .
       - name: Install dependencies
         run: pip install -r requirements.txt pytest
-      - name: Import orchestrator
-        run: python -c "import orca_orchestrator; print(orca_orchestrator.__version__)"
+      - name: Import production application
+        env:
+          SECRET_KEY: ci-test-secret-key
+        run: python -c "import chem_core; import orca_orchestrator; import app; print('production imports OK')"
       - name: Run production and drawing tests
         env:
           SECRET_KEY: ci-test-secret-key
