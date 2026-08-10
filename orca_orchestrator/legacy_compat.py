@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 """Compatibility adapter for the pre-orchestrator browser API.
 
-The UI historically called /api/kaggle/*.  The production orchestrator lives
-behind /api/orca/*.  This adapter keeps the old browser contract stable while
-routing every calculation operation through OrchestratorService.  It is
+The UI historically called /api/kaggle/*. The production orchestrator lives
+behind /api/orca/*. This adapter keeps the old browser contract stable while
+routing every calculation operation through OrchestratorService. It is
 intentionally small and contains no orchestration logic of its own.
 """
 from __future__ import annotations
 
 import os
+import re
 import shutil
 
 from flask import after_this_request, jsonify, request, send_file
 
 from .credentials import parse as parse_credentials
-from .errors import OrchestratorError, ValidationError
+from .errors import ValidationError
 from .service import get_service
 
 
@@ -33,7 +34,7 @@ def _legacy_status(state: str) -> str:
         return "error"
     if state == "CANCELLED":
         return "cancelled"
-    if state in {"RUNNING"}:
+    if state == "RUNNING":
         return "running"
     if state in {"CHECKPOINTING", "DOWNLOADING", "VERIFYING", "RESTORING", "ROLLING_BACK", "RESTARTING"}:
         return "restarting"
@@ -125,8 +126,7 @@ def status():
     job = get_service().status(creds, job_id)
     legacy = _legacy_job(job)
     # The orchestrator keeps one stable job id across every continuation, so
-    # there is no need for the browser to replace its id when a new window is
-    # created. The current URL and chain are always returned instead.
+    # the browser never replaces its id when a new Kaggle window is created.
     legacy.update({
         "note": job.get("note"),
         "warning": job.get("note") or (job.get("error") or {}).get("message"),
@@ -159,10 +159,16 @@ def download():
 def delete():
     data = request.get_json(force=True, silent=True) or {}
     creds = _creds(data)
-    job_id = (data.get("job_id") or "").strip()
-    if not job_id:
+    supplied_id = (data.get("job_id") or "").strip()
+    if not supplied_id:
         raise ValidationError("Missing job id.")
-    return jsonify({"ok": True, **get_service().delete(creds, job_id)})
+
+    # The old browser stored every continuation slug in chainIds and deleted
+    # them one by one. The new service treats the stable root id as the unit of
+    # deletion and removes the entire chain atomically. Normalize either form
+    # here so old browser data cannot generate false deletion failures.
+    root_id = re.sub(r"-r\d+$", "", supplied_id)
+    return jsonify({"ok": True, **get_service().delete(creds, root_id)})
 
 
 def cancel():
