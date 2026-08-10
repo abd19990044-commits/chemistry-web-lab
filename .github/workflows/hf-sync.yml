@@ -2,8 +2,7 @@ name: Sync to Hugging Face Space
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
@@ -32,14 +31,11 @@ jobs:
           grep -q '7860' Dockerfile
           echo "Deployment files look valid."
 
-      - name: Sync repository to Hugging Face Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${HF_TOKEN}" || { echo "Missing GitHub Actions secret: HF_TOKEN"; exit 1; }
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote add hf "https://user:${HF_TOKEN}@huggingface.co/spaces/mc2hf1999/orcaweb"
-          git push --force hf HEAD:main
+      - name: Sync to Hugging Face Space
+        uses: huggingface/hub-sync@v0.1.0
+        with:
+          github_repo_id: ${{ github.repository }}
+          huggingface_repo_id: mc2hf1999/orcaweb
+          repo_type: space
+          space_sdk: docker
+          hf_token: ${{ secrets.HF_TOKEN }}
