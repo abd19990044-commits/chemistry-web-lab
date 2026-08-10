@@ -1,0 +1,45 @@
+name: Sync to Hugging Face Space
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hf-space-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate deployment files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f Dockerfile
+          test -f requirements.txt
+          test -f app.py
+          grep -q '7860' Dockerfile
+          echo "Deployment files look valid."
+
+      - name: Sync repository to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${HF_TOKEN}" || { echo "Missing GitHub Actions secret: HF_TOKEN"; exit 1; }
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add hf "https://user:${HF_TOKEN}@huggingface.co/spaces/mc2hf1999/orcaweb"
+          git push --force hf HEAD:main
