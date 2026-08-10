@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chemistry Lab — Computational Chemistry, Online</title>
+<meta name="description" content="Chemistry Lab: draw molecules and reactions, generate ORCA input files, and launch ORCA calculations on Kaggle — all from one always-on site.">
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+{% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
+</head>
+<body>
+
+<div class="bg-orbit-field" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand" id="brand-home-btn" role="button" tabindex="0">
+    <svg class="brand-atom" viewBox="0 0 100 100" aria-hidden="true">
+      <circle class="atom-core" cx="50" cy="50" r="6"></circle>
+      <ellipse class="atom-ring ring-a" cx="50" cy="50" rx="42" ry="16"></ellipse>
+      <ellipse class="atom-ring ring-b" cx="50" cy="50" rx="42" ry="16" transform="rotate(60 50 50)"></ellipse>
+      <ellipse class="atom-ring ring-c" cx="50" cy="50" rx="42" ry="16" transform="rotate(120 50 50)"></ellipse>
+      <circle class="atom-electron e-a" r="3"></circle>
+      <circle class="atom-electron e-b" r="3"></circle>
+      <circle class="atom-electron e-c" r="3"></circle>
+    </svg>
+    <div class="brand-text">
+      <span class="brand-name">Chemistry Lab</span>
+      <span class="brand-tag">Computational chemistry lab</span>
+    </div>
+  </div>
+
+  <div class="topbar-actions">
+    <button type="button" id="back-home-btn" class="btn btn-ghost btn-small hidden">← Home</button>
+    <div id="google-signin-area">
+      {% if google_client_id %}
+      <div id="g_id_onload"
+           data-client_id="{{ google_client_id }}"
+           data-callback="handleGoogleCredential"
+           data-auto_prompt="false">
+      </div>
+      <div id="google-signin-btn" class="g_id_signin"
+           data-type="standard" data-size="medium" data-theme="outline"
+           data-text="signin" data-shape="pill"></div>
+      {% endif %}
+    </div>
+    <div id="user-chip" class="user-chip hidden">
+      <img id="user-avatar" alt="">
+      <span id="user-name"></span>
+      <button type="button" id="sign-out-btn" class="link-btn">Sign out</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============================== LANDING CHOICE SCREEN ============================== -->
+  <section id="home-view" class="view is-active">
+    <div class="hero">
+      <h1>Two labs. Always on one site.</h1>
+      <p class="hero-sub">
+        Pick a workspace to get started — draw clean 2D chemistry, or generate and
+        launch quantum-chemistry calculations, all from your browser.
+      </p>
+      <p class="hero-mission">A free, charitable initiative to support researchers everywhere — built by Abdulsalam S. Hasan, Mosul, Iraq.</p>
+    </div>
+
+    <div class="choice-grid">
+      <button type="button" class="choice-card" data-open="draw">
+        <span class="choice-icon" aria-hidden="true">🧬</span>
+        <span class="choice-title">Draw Chemistry</span>
+        <span class="choice-desc">Look up compounds and draw reaction schemes with publication-quality 2D structures.</span>
+        <span class="choice-cta">Open workspace →</span>
+      </button>
+      <button type="button" class="choice-card" data-open="orca">
+        <span class="choice-icon" aria-hidden="true">⚛️</span>
+        <span class="choice-title">ORCA Program</span>
+        <span class="choice-desc">Build ORCA 6 input files with a guided wizard, then launch them on Kaggle.</span>
+        <span class="choice-cta">Open workspace →</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ============================== DRAW CHEMISTRY WORKSPACE ============================== -->
+  <section id="draw-view" class="view">
+    <div class="workspace-nav">
+      <button class="ws-tab is-active" data-target="explorer">Molecule Explorer</button>
+      <button class="ws-tab" data-target="reaction">Reaction Drawing</button>
+    </div>
+
+    <!-- ---- Molecule Explorer ---- -->
+    <div id="explorer" class="ws-panel is-active">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Lookup & analysis</span>
+        <h2>Molecule Explorer</h2>
+        <p>Enter a compound name, SMILES, or InChI — get a clean structure plus its physical and chemical properties.</p>
+      </div>
+
+      <form id="explorer-form" class="tool-form">
+        <input type="text" id="explorer-query" placeholder="e.g. Aspirin   or   CC(=O)OC1=CC=CC=C1C(=O)O" autocomplete="off" required>
+        <button type="submit" class="btn btn-primary"><span class="btn-label">Analyze</span></button>
+      </form>
+
+      <div id="explorer-error" class="alert alert-error hidden"></div>
+      <div id="explorer-loading" class="loading-row hidden"><span class="spinner"></span> Querying PubChem and drawing the structure…</div>
+
+      <div id="explorer-result" class="result-grid hidden">
+        <div class="result-visual">
+          <img id="explorer-image" alt="Compound structure">
+          <a id="explorer-download-mol" class="btn btn-ghost btn-small" download>⬇ Download MOL file</a>
+        </div>
+        <div class="result-data">
+          <h3 id="explorer-title-out">—</h3>
+          <dl class="prop-list">
+            <div><dt>Molecular formula</dt><dd id="explorer-formula">—</dd></div>
+            <div><dt>Molecular weight</dt><dd id="explorer-weight">—</dd></div>
+            <div><dt>Canonical SMILES</dt><dd id="explorer-smiles" class="mono">—</dd></div>
+          </dl>
+          <div id="explorer-solubility-wrap" class="hidden">
+            <h4>Solubility</h4>
+            <ul id="explorer-solubility"></ul>
+          </div>
+          <div id="explorer-wiki-wrap" class="hidden">
+            <h4>Summary</h4>
+            <p id="explorer-wiki"></p>
+          </div>
+          <button type="button" id="explorer-send-to-orca" class="btn btn-outline btn-small">Use this structure in the ORCA generator →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- Reaction Drawing ---- -->
+    <div id="reaction" class="ws-panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Reaction schemes</span>
+        <h2>Reaction Drawing</h2>
+        <p>Separate reactants with a “+”, and enter products in the matching field. Names and SMILES can be mixed freely.</p>
+      </div>
+
+      <form id="reaction-form" class="tool-form reaction-form">
+        <div class="reaction-side">
+          <label for="reaction-reactants">Reactants</label>
+          <input type="text" id="reaction-reactants" placeholder="2 H2 + O2" autocomplete="off" required>
+        </div>
+        <div class="reaction-arrow" aria-hidden="true">⟶</div>
+        <div class="reaction-side">
+          <label for="reaction-products">Products</label>
+          <input type="text" id="reaction-products" placeholder="2 water" autocomplete="off" required>
+        </div>
+        <button type="submit" class="btn btn-primary reaction-submit"><span class="btn-label">Draw reaction</span></button>
+      </form>
+      <label class="checkbox-row reaction-option">
+        <input type="checkbox" id="reaction-small-as-formula" checked>
+        Write small molecules as formulas (O<sub>2</sub>, H<sub>2</sub>O, CO<sub>2</sub>)
+        instead of drawing them
+      </label>
+      <p class="field-hint reaction-hint">
+        Put the number of moles in front of a species — <code>2 H2 + O2</code>, <code>2H2O</code>,
+        or the fractional <code>1/2 O2</code>. Names, formulas, SMILES and InChI all work;
+        a species with no number is taken as 1.
+      </p>
+
+      <details id="reaction-help" class="reaction-help">
+        <summary>How to write an equation &mdash; syntax, examples, and what you get back</summary>
+        <div class="reaction-help-body">
+
+          <h4>1. The shape of an equation</h4>
+          <p>
+            Put the reactants in the left box and the products in the right one. Separate
+            species with <code>+</code>. The arrow is the gap between the two boxes &mdash; you
+            do not type it.
+          </p>
+          <pre class="reaction-example">Reactants:  CH4 + 2 O2
+Products:   CO2 + 2 H2O</pre>
+
+          <h4>2. Number of moles (stoichiometric coefficient)</h4>
+          <p>Write the number in front of the species. Three forms are accepted:</p>
+          <ul>
+            <li><code>2 H2O</code> &mdash; a number, a space, then the species.</li>
+            <li><code>2H2O</code> &mdash; glued to a formula. Only read as a coefficient when
+              what follows is a bare formula, so <code>2-butanone</code>,
+              <code>1H-pyrrole</code> and <code>13C-methanol</code> keep their names intact.</li>
+            <li><code>1/2 O2</code> or <code>0.5 O2</code> &mdash; a fraction, as thermochemistry
+              is usually written.</li>
+          </ul>
+          <p>A species with no number in front of it counts as 1.</p>
+
+          <h4>3. Naming a species</h4>
+          <p>Any of these work, and they can be mixed in the same equation:</p>
+          <ul>
+            <li><strong>Name</strong> &mdash; <code>water</code>, <code>acetic acid</code>,
+              <code>benzene</code> (looked up in PubChem).</li>
+            <li><strong>Formula</strong> &mdash; <code>H2O</code>, <code>CO2</code>,
+              <code>NaCl</code>.</li>
+            <li><strong>SMILES</strong> &mdash; <code>CCO</code>, <code>c1ccccc1</code>,
+              <code>CC(=O)O</code>. Best for anything with a specific structure.</li>
+            <li><strong>InChI</strong> &mdash; paste it starting with <code>InChI=</code>.</li>
+          </ul>
+          <p class="reaction-help-note">
+            A few strings are both a valid SMILES and a common formula &mdash; <code>CO</code> is
+            methanol as SMILES and carbon monoxide as a formula. Those are read as the formula
+            and the page tells you which reading it used, so you can switch to an unambiguous
+            SMILES if it guessed the other way.
+          </p>
+
+          <h4>4. What gets drawn, and what gets written</h4>
+          <p>
+            Small unambiguous species are <em>written</em> as formulas &mdash; O<sub>2</sub>,
+            H<sub>2</sub>O, CO<sub>2</sub>, NH<sub>3</sub> &mdash; because a skeletal drawing of
+            O<sub>2</sub> is two letters and a line, taking the width of a benzene ring to say
+            less. Everything else is drawn as a structure. Ethanol is always drawn, never written
+            as C<sub>2</sub>H<sub>6</sub>O: dimethyl ether has that same formula, so writing it
+            would throw away exactly what the drawing is for. Untick
+            <em>Write small molecules as formulas</em> to draw every species instead.
+          </p>
+
+          <h4>5. The balance check</h4>
+          <p>
+            After drawing, every element and the total charge are counted on both sides using
+            your coefficients. If they do not match you are told which element is in excess and
+            on which side. The scheme is still drawn &mdash; a mechanism step or a fragment is
+            legitimately unbalanced, and the problem this guards against is not noticing.
+          </p>
+
+          <h4>6. The downloaded .rxn file</h4>
+          <p>
+            You get an <strong>MDL RXN V2000</strong> file, which is the format ChemDraw,
+            MarvinSketch, Avogadro and RDKit all import. That format has no field for a
+            coefficient, so the convention every reader understands is used instead: the
+            structure appears once per unit. <code>2 H2O</code> puts two water molecules in the
+            file, and ChemDraw will show two of them rather than the text
+            &ldquo;2 H<sub>2</sub>O&rdquo;. The stoichiometry is there and machine-readable, just
+            not as a numeral. A fractional coefficient cannot be written at all, so all
+            coefficients are multiplied up to whole numbers &mdash; the ratios are unchanged, and
+            the factor used is reported.
+          </p>
+          <p>
+            The file is checked before you are offered it: the <code>$RXN</code> header, the
+            component counts matching the blocks that follow, and a <code>M&nbsp;&nbsp;END</code>
+            terminator on every structure. The badge under the drawing reports that check.
+          </p>
+
+          <h4>7. A worked example</h4>
+          <p>The complete combustion of benzene, with the coefficients balanced:</p>
+          <pre class="reaction-example">Reactants:  2 benzene + 15 O2
+Products:   12 CO2 + 6 H2O</pre>
+          <p>
+            Benzene is drawn as a ring; O<sub>2</sub>, CO<sub>2</sub> and H<sub>2</sub>O are
+            written as formulas; the badge confirms the equation balances; and the .rxn file
+            contains 2 benzenes, 15 oxygens, 12 carbon dioxides and 6 waters &mdash; 35 structures
+            in total.
+          </p>
+          <button type="button" id="reaction-example-btn" class="btn btn-ghost btn-small">
+            Fill the boxes with this example
+          </button>
+        </div>
+      </details>
+
+      <div id="reaction-error" class="alert alert-error hidden"></div>
+      <div id="reaction-loading" class="loading-row hidden"><span class="spinner"></span> Parsing formulas and drawing the scheme…</div>
+
+      <div id="reaction-result" class="result-visual reaction-result hidden">
+        <img id="reaction-image" alt="Reaction scheme">
+        <div id="reaction-equation" class="reaction-equation"></div>
+        <div id="reaction-balance" class="reaction-badge hidden"></div>
+        <div id="reaction-filecheck" class="reaction-badge hidden"></div>
+        <ul id="reaction-notes" class="reaction-notes hidden"></ul>
+        <div class="reaction-actions">
+          <a id="reaction-download-rxn" class="btn btn-ghost btn-small" download>⬇ Download RXN file</a>
+          <code id="reaction-smiles" class="mono small"></code>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== ORCA PROGRAM WORKSPACE ============================== -->
+  <section id="orca-view" class="view">
+    <div class="workspace-nav">
+      <button class="ws-tab is-active" data-target="orca">Input Generator</button>
+      <button class="ws-tab" data-target="kaggle">Kaggle Launcher</button>
+      <button class="ws-tab" data-target="jobs">My Jobs</button>
+    </div>
+
+    <!-- ---- ORCA Input Generator ---- -->
+    <div id="orca" class="ws-panel is-active">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Computational chemistry</span>
+        <h2>ORCA 6 Input Generator</h2>
+        <p>A guided wizard with sequential option windows — produces an <code>.inp</code> file that matches exactly what you chose, with no silent additions.</p>
+      </div>
+
+      <div class="orca-launch-row">
+        <button type="button" id="orca-open-wizard" class="btn btn-primary btn-large">🧪 Start the wizard</button>
+        <div class="orca-coords-status" id="orca-coords-status">No structure selected yet.</div>
+      </div>
+
+      <div id="orca-output-wrap" class="hidden">
+        <h4>Generated input file</h4>
+        <pre id="orca-output" class="code-block mono"></pre>
+        <div class="orca-output-actions">
+          <a id="orca-download-inp" class="btn btn-ghost btn-small" download>⬇ Download .inp file</a>
+          <button type="button" id="orca-send-to-kaggle" class="btn btn-outline btn-small">Send this file to the Kaggle Launcher →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- Kaggle Launcher ---- -->
+    <div id="kaggle" class="ws-panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Remote execution</span>
+        <h2>Launch ORCA on Kaggle</h2>
+        <p>
+          Packages your input file into a Kaggle notebook of your own and runs it on Kaggle's free compute,
+          automatically relaunching until convergence whenever a session runs out of time (11h45m)
+          <em>or</em> out of scratch disk space — each new session picks up from the last completed step.
+        </p>
+      </div>
+      <div class="alert alert-info">
+        This feature does not distribute the ORCA program. You must provide your own licensed
+        ORCA package (downloaded from the official ORCA forum after your own registration) —
+        either as a <strong>private Kaggle Dataset</strong> attached to the job, or via a
+        <strong>Google Drive / direct download link</strong> that the job downloads and
+        extracts into <code>/tmp</code> itself. Your credentials are used once to submit the
+        job and are never stored on the server — only in your own browser, if you choose to
+        remember them below. Both the new single API token and the legacy username/key from
+        Kaggle's Settings → API page are accepted in the field below.
+      </div>
+
+      <details class="help-disclosure">
+        <summary>📋 How do I get my Kaggle username and API key/token?</summary>
+        <div class="help-body">
+          <h4>1 — Create a free Kaggle account</h4>
+          <p>If you don't have one yet, go to <a href="https://www.kaggle.com" target="_blank" rel="noopener">kaggle.com</a> and sign up (email, Google, etc.), then verify your email address.</p>
+
+          <h4>2 — Open Settings → API</h4>
+          <p>Once signed in, click your profile picture in the top-right corner → <strong>Settings</strong>, then scroll down to the <strong>API</strong> section.</p>
+
+          <h4>3 — Create your key/token</h4>
+          <p>Click <strong>Create New Token</strong>. Kaggle issues a token that looks like <code>KGAT_…</code> — paste it into the "API key / token" field below, together with your Kaggle username in the field above it.</p>
+          <p>Prefer the older format? The same page also has a <strong>Legacy API Credentials</strong> section with a <strong>Create Legacy API Key</strong> button, which downloads a <code>kaggle.json</code> file holding your username and a 32-character key. Either format is accepted here — just always pair whichever one you use with the username shown on that same Settings page.</p>
+
+          <h4>4 — Verify your phone number</h4>
+          <p>Jobs submitted from here run with internet access turned on (needed to fetch/extract your ORCA package and install a couple of small Python packages). Kaggle only allows internet access on <strong>phone-verified</strong> accounts, under Settings → Phone Verification. Skipping this is the single most common reason a first submission fails with no obvious explanation.</p>
+
+          <div class="help-note">
+            Treat this key/token like a password: anyone who has it can act as you on Kaggle. It's sent only for the moment of a request and is never written to a database or kept long-term on this server; checking "remember me" saves it only in your own browser's local storage. Full details on <a href="#" data-view-link="legal">the Legal, Privacy &amp; Disclaimer page</a>.
+          </div>
+        </div>
+      </details>
+
+      <form id="kaggle-login-form" class="tool-form kaggle-form">
+        <div class="form-row">
+          <label for="kaggle-username">Kaggle username</label>
+          <input type="text" id="kaggle-username" required autocomplete="off">
+        </div>
+        <div class="form-row">
+          <label for="kaggle-key">Kaggle API key / token</label>
+          <input type="password" id="kaggle-key" placeholder="KGAT_… (new token) or the legacy 32-char key" required autocomplete="off">
+        </div>
+        <div class="form-row">
+          <label class="checkbox-row"><input type="checkbox" id="kaggle-remember" checked> Remember me on this browser</label>
+        </div>
+        <span class="field-hint">
+          Signing in also pulls back any jobs already submitted from this Kaggle account, so you can get
+          back to them even after clearing your browser data or switching devices.
+        </span>
+        <button type="submit" class="btn btn-primary"><span class="btn-label">Sign in with Kaggle</span></button>
+      </form>
+
+      <div id="kaggle-login-error" class="alert alert-error hidden"></div>
+      <div id="kaggle-login-loading" class="loading-row hidden"><span class="spinner"></span> Signing in and checking for existing jobs…</div>
+      <div id="kaggle-signed-in-as" class="alert alert-info hidden"></div>
+
+      <details class="help-disclosure">
+        <summary>⚛️ How do I get ORCA, and why does it have to be the Linux version?</summary>
+        <div class="help-body">
+          <h4>What ORCA is</h4>
+          <p>ORCA is a professional quantum-chemistry program developed by Prof. Frank Neese's group and distributed by FACCTs GmbH. It's free for academic and personal, non-commercial use — but it is closed-source and its license forbids redistribution, which is exactly why this site can't just hand you a copy and instead walks you through getting your own.</p>
+
+          <h4>1 — Register on the ORCA Forum</h4>
+          <p>Go to <a href="https://orcaforum.kofo.mpg.de/" target="_blank" rel="noopener">orcaforum.kofo.mpg.de</a> and create a free account, then confirm your email — registration only completes after that step.</p>
+
+          <h4>2 — Accept the license and open Downloads</h4>
+          <p>Once logged in, open the forum's <strong>Downloads</strong> section. You'll be asked to read and accept ORCA's End User License Agreement (EULA) before any file becomes available.</p>
+
+          <h4>3 — Pick the Linux build — this is the part that matters here</h4>
+          <p>ORCA ships builds for Windows, macOS, <em>and</em> Linux. This launcher runs your job inside a <strong>Kaggle Notebook</strong>, which is a cloud machine running Linux — not Windows, not macOS. A Windows <code>.exe</code> or a Mac binary is a different executable format that a Linux machine simply cannot run; only a Linux-compiled build will actually execute there. So from the list, pick the one described along the lines of:</p>
+          <ul>
+            <li><strong>Linux, x86-64, shared-version, .tar.xz Archive</strong> — the "dynamically linked" build, paired with an OpenMPI version shown right in its filename (e.g. <code>orca_6_..._linux_x86-64_shared_openmpi....tar.xz</code>).</li>
+          </ul>
+          <p>If a listing is marked as requiring AVX2 and you aren't sure that applies to you, the plain (non-AVX2) Linux shared build is the safer default.</p>
+
+          <h4>4 — Upload it to Kaggle as your own private Dataset</h4>
+          <ol>
+            <li>On Kaggle, go to <strong>Create → New Dataset</strong>.</li>
+            <li>Upload the <code>.tar.xz</code> file you downloaded (or its extracted contents).</li>
+            <li>Keep its visibility set to <strong>Private</strong> — this is your own licensed copy, not something to share.</li>
+            <li>Copy its identifier, shown as <code>your-username/the-dataset-slug</code>, into the "Your ORCA Dataset id(s)" field below.</li>
+          </ol>
+          <p>Rather not create a Dataset? Switch to the other option above and paste a Google Drive share link or any direct-download URL instead — the Kaggle job will download and extract it into <code>/tmp</code> itself on start-up.</p>
+
+          <div class="help-warn">
+            You're responsible for using ORCA only under your own registration and in line with its EULA (academic/personal use, non-commercial, no redistribution). This site has no part in, and takes no responsibility for, how you obtained or use your copy — see <a href="#" data-view-link="legal">the Legal, Privacy &amp; Disclaimer page</a>.
+          </div>
+        </div>
+      </details>
+
+      <form id="kaggle-form" class="tool-form kaggle-form hidden">
+        <div class="form-row form-row-full">
+          <label>ORCA source</label>
+          <div class="radio-row">
+            <label class="radio-option"><input type="radio" name="orca-source" id="orca-source-dataset" value="dataset" checked> Kaggle Dataset</label>
+            <label class="radio-option"><input type="radio" name="orca-source" id="orca-source-link" value="link"> Google Drive / direct link</label>
+          </div>
+        </div>
+        <div class="form-row" id="kaggle-dataset-row">
+          <label for="kaggle-dataset">Your ORCA Dataset id(s) (comma-separated for more than one)</label>
+          <input type="text" id="kaggle-dataset" placeholder="https://www.kaggle.com/datasets/username/orca-6-1-0" autocomplete="off">
+        </div>
+        <div class="form-row hidden" id="kaggle-orca-link-row">
+          <label for="kaggle-orca-link">ORCA archive link (Google Drive share link, or a direct .zip/.tar.xz URL)</label>
+          <input type="url" id="kaggle-orca-link" placeholder="https://drive.google.com/file/d/..." autocomplete="off">
+          <span class="field-hint">Downloaded and extracted into /tmp on the Kaggle job at start-up.</span>
+        </div>
+        <div class="form-row form-row-full">
+          <span class="field-hint">
+            Whichever source you choose is remembered on this device, so you don't retype it
+            for every job.
+            <button type="button" id="kaggle-forget-source" class="link-button">Forget it</button>
+          </span>
+        </div>
+
+        <div class="form-row form-row-full">
+          <label>Input file</label>
+          <div class="radio-row">
+            <label class="radio-option"><input type="radio" name="inp-source" id="inp-source-text" value="text" checked> Paste / generated content</label>
+            <label class="radio-option"><input type="radio" name="inp-source" id="inp-source-upload" value="upload"> Upload a ready .inp file</label>
+          </div>
+        </div>
+        <div id="kaggle-inp-text-row">
+          <div class="form-row">
+            <label for="kaggle-inp-name">Input file name</label>
+            <input type="text" id="kaggle-inp-name" placeholder="molecule.inp">
+            <span class="field-hint">Also used as the job's default name below if you leave that field blank.</span>
+          </div>
+          <div class="form-row form-row-full">
+            <label for="kaggle-inp-content">.inp file content</label>
+            <textarea id="kaggle-inp-content" rows="8" class="mono" placeholder="Build one with the Input Generator above, or paste it here directly"></textarea>
+          </div>
+        </div>
+        <div class="form-row form-row-full hidden" id="kaggle-inp-upload-row">
+          <label for="kaggle-inp-file">Upload .inp file</label>
+          <input type="file" id="kaggle-inp-file" accept=".inp">
+        </div>
+
+        <div class="form-row form-row-full">
+          <label for="kaggle-aux-files">Optional auxiliary files (.xyz / .allxyz / .hess / .mdrestart)</label>
+          <input type="file" id="kaggle-aux-files" multiple accept=".xyz,.allxyz,.hess,.mdrestart">
+        </div>
+        <div class="form-row form-row-full">
+          <label for="kaggle-job-name">Job name <span class="field-optional">(optional)</span></label>
+          <input type="text" id="kaggle-job-name" placeholder="Defaults to the input file's name" maxlength="50" autocomplete="off">
+          <span class="field-hint">Shown here in My Jobs, and used to build the notebook's address on Kaggle (lower-cased, spaces become dashes, plus a short unique suffix). Leave blank to use the input file's name instead.</span>
+        </div>
+        <button type="submit" class="btn btn-primary"><span class="btn-label">🚀 Submit job to Kaggle</span></button>
+      </form>
+
+      <div id="kaggle-error" class="alert alert-error hidden"></div>
+      <div id="kaggle-loading" class="loading-row hidden"><span class="spinner"></span> Packaging and pushing the job to Kaggle…</div>
+      <div id="kaggle-result" class="alert alert-success hidden"></div>
+    </div>
+
+    <!-- ---- My Jobs ---- -->
+    <div id="jobs" class="ws-panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Track progress</span>
+        <h2>My Jobs</h2>
+        <p>Jobs submitted under your signed-in Kaggle account. Status refreshes automatically; a download link appears next to a job's name once its results are ready. A job that had to continue in a fresh session stays a single entry here and follows its newest notebook. Deleting a job here also permanently deletes its notebook — and every continuation it spawned — from Kaggle.</p>
+      </div>
+      <div id="jobs-signin-required" class="alert alert-info">Sign in with your Kaggle account on the Kaggle Launcher tab to see your jobs.</div>
+      <div id="jobs-signed-in-area" class="hidden">
+        <div class="jobs-toolbar">
+          <button type="button" id="jobs-refresh-btn" class="btn btn-ghost btn-small">Refresh now</button>
+          <button type="button" id="kaggle-signout-btn" class="btn btn-ghost btn-small">Sign out</button>
+        </div>
+        <div id="jobs-empty" class="alert alert-info">No jobs submitted yet from this account.</div>
+        <ul id="jobs-list" class="jobs-list"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== LEGAL / DISCLAIMER ============================== -->
+  <section id="legal-view" class="view">
+    <div class="panel-head">
+      <span class="panel-eyebrow">Legal</span>
+      <h2>Legal, Privacy &amp; Disclaimer</h2>
+      <p>What this site does and doesn't do, how it handles your data, and the notices a service used by people worldwide needs to cover — including for visitors in the EU/EEA/UK and the United States.</p>
+    </div>
+
+    <div class="legal-content">
+      <p class="legal-updated">Last updated: 5 July 2026 · Site: <span class="legal-placeholder">https://mc2hf1999-chemistrytools.hf.space/</span></p>
+
+      <div class="legal-note-box">
+        <strong>Important Note About Your Data </strong>  <strong>🔒</strong> Your security is important to us! This site is designed to work without saving any information. <span class="legal-placeholder"></span>  All your data is instantly and automatically deleted as soon as you finish. We never see or store your data.
+      </div>
+
+      <div class="legal-toc">
+        <h4>On this page</h4>
+        <ol>
+          <li><a href="#legal-acceptance">Acceptance of these terms</a></li>
+          <li><a href="#legal-service">What this site is (and isn't)</a></li>
+          <li><a href="#legal-orca-license">ORCA &amp; third-party software</a></li>
+          <li><a href="#legal-kaggle">Your Kaggle account &amp; credentials</a></li>
+          <li><a href="#legal-warranty">No warranty; accuracy of results</a></li>
+          <li><a href="#legal-liability">Limitation of liability</a></li>
+          <li><a href="#legal-gdpr">Privacy notice — EU / EEA / UK</a></li>
+          <li><a href="#legal-us-privacy">Privacy notice — United States</a></li>
+          <li><a href="#legal-cookies">Cookies &amp; local storage</a></li>
+          <li><a href="#legal-children">Children's privacy</a></li>
+          <li><a href="#legal-third-parties">Third-party services</a></li>
+          <li><a href="#legal-export">Export control &amp; sanctions</a></li>
+          <li><a href="#legal-indemnity">Indemnification</a></li>
+          <li><a href="#legal-law">Governing law &amp; disputes</a></li>
+          <li><a href="#legal-changes">Changes to this page</a></li>
+          <li><a href="#legal-contact">Contact</a></li>
+        </ol>
+      </div>
+
+      <div class="legal-section" id="legal-acceptance">
+        <h3>1. Acceptance of these terms</h3>
+        <p>By using Chemistry Lab ("the Site", "we", "us"), you agree to this page in full. If you don't agree, please don't use the Site. For simplicity, this single page combines a general Disclaimer, Terms of Use, and Privacy Notice.</p>
+      </div>
+
+      <div class="legal-section" id="legal-service">
+        <h3>2. What this site is (and isn't)</h3>
+        <p>Chemistry Lab is a free, charitable initiative created by <strong>Abdulsalam S. Hasan</strong> (Mosul, Iraq) to give researchers accessible computational-chemistry tools. It has no paid tiers, runs no advertising, and does not sell or monetize visitors' data — see Sections 8 &amp; 9.</p>
+        <p>It's a tool for looking up and drawing chemical structures, generating ORCA input files, and — if you choose — packaging and running those calculations on your own Kaggle account, provided for educational, research, and personal use.</p>
+        <p>It is <strong>not</strong> a substitute for professional scientific, safety, medical, or legal judgment. No output should be relied on for safety-critical decisions — for example, handling hazardous compounds — without independent verification by a qualified professional.</p>
+      </div>
+
+      <div class="legal-section" id="legal-orca-license">
+        <h3>3. ORCA &amp; third-party software</h3>
+        <p>This Site does not include, host, or distribute the ORCA program in any form. ORCA is proprietary software distributed by FACCTs GmbH under its own End User License Agreement (EULA), obtained directly from the official ORCA Forum after your own registration.</p>
+        <p>If you use the Kaggle Launcher, <strong>you</strong> supply your own licensed copy of ORCA (as a private Kaggle Dataset, or via a link you provide), and <strong>you</strong> are solely responsible for complying with its license — including the restriction to academic/personal, non-commercial use and the prohibition on redistribution. We take no responsibility for, and have no visibility into, how or where you obtained your copy.</p>
+      </div>
+
+      <div class="legal-section" id="legal-kaggle">
+        <h3>4. Your Kaggle account &amp; credentials</h3>
+        <p>The Kaggle Launcher submits and manages jobs using <strong>your own</strong> Kaggle account and its compute quota — never ours. Concretely:</p>
+        <ul>
+          <li>Your Kaggle username and API key/token are sent to our server only at the moment of a sign-in, submission, status-check, download, or delete request.</li>
+          <li>They're held only for the duration of that single request — so the official Kaggle command-line tool can act on your behalf — and are deleted immediately afterward. We do not keep a database of user credentials.</li>
+          <li>If you tick "remember me", your username and key/token are saved only inside your own browser's local storage, on your own device. We have no access to that copy; clearing it, or using "Sign out", removes it.</li>
+          <li>Job results are streamed directly from Kaggle's own servers to your browser; we don't keep a copy of your input files, coordinates, or results once a request finishes.</li>
+          <li>Any compute time, storage, or other usage on Kaggle is billed against, and governed by the terms of, your own Kaggle account — see Kaggle's own <a href="https://www.kaggle.com/terms" target="_blank" rel="noopener">Terms of Use</a>.</li>
+        </ul>
+      </div>
+
+      <div class="legal-section" id="legal-warranty">
+        <h3>5. No warranty; accuracy of results</h3>
+        <p>The Site — including all structures, properties, generated input files, and computed results — is provided <strong>"as is" and "as available,"</strong> without warranties of any kind, express or implied, including accuracy, completeness, merchantability, fitness for a particular purpose, or non-infringement.</p>
+        <p>Compound data is pulled live from third-party sources (PubChem, Wikipedia); ORCA calculations run on infrastructure and software we don't control. We don't guarantee any of it is correct, current, or suitable for your purposes — always verify independently before relying on it, especially for publication, safety, or regulatory decisions.</p>
+      </div>
+
+      <div class="legal-section" id="legal-liability">
+        <h3>6. Limitation of liability</h3>
+        <p>To the fullest extent permitted by applicable law, the Site's operator will not be liable for indirect, incidental, special, consequential, or punitive damages, or for lost data, compute costs, research time, or profits, arising from your use of (or inability to use) the Site — including any action taken based on it, any issue with your Kaggle account (quota usage, suspension, or billing), or any dispute over your use of ORCA or another third party's software.</p>
+        <p>Nothing here limits liability that cannot lawfully be limited — for example, liability for death or personal injury caused by negligence, or for fraud, under the law that applies to you.</p>
+      </div>
+
+      <div class="legal-section" id="legal-gdpr">
+        <h3>7. Privacy notice — EU / EEA / UK</h3>
+        <p>If you're in the European Economic Area, the UK, or Switzerland, the following applies under the GDPR and equivalent UK/Swiss law.</p>
+        <h4>Data controller</h4>
+        <p><strong>Abdulsalam S. Hasan</strong>, an individual operating this Site from Mosul, Iraq (no registered company or charity behind it), is the data controller for personal data processed directly by this Site — separate from Kaggle, Google, PubChem, or other third parties you interact with, who act as independent controllers for their own services. Contact: <a href="mailto:abdulsalam.s.hasan@gmail.com">abdulsalam.s.hasan@gmail.com</a>.</p>
+        <h4>What we process, and why</h4>
+        <ul>
+          <li><strong>Kaggle credentials</strong> — processed transiently to carry out your explicit request (sign in, submit, check status, download, delete). Basis: performance of your request (Art. 6(1)(b)) and our legitimate interest in operating the feature (Art. 6(1)(f)).</li>
+          <li><strong>Google account info</strong> (name, email, profile photo) — only if you choose to sign in with Google; used solely to show your name/photo in the header. Basis: consent (Art. 6(1)(a)), given by starting that sign-in.</li>
+          <li><strong>Compound/reaction queries</strong> — sent to PubChem/Wikipedia to fetch structures and data; not linked to your identity by us. Basis: legitimate interest in providing the tool (Art. 6(1)(f)).</li>
+          <li><strong>Basic technical interactions</strong> — processed instantly to serve the webpage and deleted immediately. We absolutely do not retain server logs tracking your IP address or activity.</li>
+        </ul>
+        <h4>Retention</h4>
+        <p>We operate on a strict zero-retention policy. We do not keep a server-side database of your credentials, jobs, results, or technical logs. All data is processed in real-time and immediately discarded.</p>
+        <h4>International transfers</h4>
+        <p>Because the Site relies on Kaggle, Google, PubChem/NCBI, and hosting infrastructure that may sit outside the EEA/UK (including the United States), your data may be transferred to and processed in those countries as part of using those features, under those providers' own safeguards (see Section 11).</p>
+        <h4>Your rights</h4>
+        <p>Depending on where you live, you have the right to request access to, correction of, or deletion of your personal information, and to opt out of its sale or sharing. <strong>However, because we operate on a strict zero-retention policy, we do not hold, store, or sell any of your personal data.</strong> Therefore, there is no data to return, correct, or delete. If you have any questions regarding this policy, contact <a href="mailto:abdulsalam.s.hasan@gmail.com">abdulsalam.s.hasan@gmail.com</a>.</p>
+      </div>
+
+      <div class="legal-section" id="legal-us-privacy">
+        <h3>8. Privacy notice — United States</h3>
+        <p>For residents of California and other U.S. states with comprehensive privacy laws (CCPA/CPRA and similar state statutes), here's a summary in those laws' terms.</p>
+        <h4>Categories of personal information</h4>
+        <p>Identifiers (username; email/name/photo if you sign in with Google) are processed only in real-time and are never stored. We do not retain your internet/network activity, IP addresses, or technical logs. We do not collect or store sensitive personal information as defined by these laws.</p>
+        <h4>No sale or sharing</h4>
+        <p>We do not sell or share (as those terms are defined under CCPA/CPRA) your personal information, and we don't use it for cross-context behavioral advertising — there is no advertising on this Site.</p>
+        <h4>Your rights</h4>
+        <p>Depending on where you live, you have the right to request access to, correction of, or deletion of your personal information, and to opt out of its sale or sharing. <strong>However, because we operate on a strict zero-retention policy, we do not hold, store, or sell any of your personal data.</strong> Therefore, there is no data to return, correct, or delete. If you have any questions regarding this policy, contact <a href="mailto:abdulsalam.s.hasan@gmail.com">abdulsalam.s.hasan@gmail.com</a>.</p>
+      </div>
+
+      <div class="legal-section" id="legal-cookies">
+        <h3>9. Cookies &amp; local storage</h3>
+        <p>This Site does not use advertising or analytics cookies. It uses only what's strictly needed to function:</p>
+        <ul>
+          <li>A <strong>session cookie</strong>, only if Google Sign-In is enabled and you use it, to keep you signed in during your visit.</li>
+          <li><strong>Browser local storage</strong> (not a cookie, but a similar on-device technology) to optionally remember your Kaggle username/key and your job list on this device, only if you tick "remember me" — see Section 4.</li>
+        </ul>
+        <p>You can clear either at any time through your browser settings, or with the "Sign out" buttons on the Site.</p>
+      </div>
+
+      <div class="legal-section" id="legal-children">
+        <h3>10. Children's privacy</h3>
+        <p>This Site is a technical/scientific tool not directed at children. It isn't intended for use by anyone under 16. We absolutely do not retain, store, or keep any personal data or information for children, nor do we retain any data for any other users. All information is instantly deleted upon completing your session. If you have any concerns, contact <a href="mailto:abdulsalam.s.hasan@gmail.com">abdulsalam.s.hasan@gmail.com</a>.</p>
+      </div>
+
+      <div class="legal-section" id="legal-third-parties">
+        <h3>11. Third-party services</h3>
+        <p>Using this Site involves several independent services, each governed by its own terms and privacy policy, which we encourage you to read:</p>
+        <ul>
+          <li><strong>Kaggle</strong> (job execution) — <a href="https://www.kaggle.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>, <a href="https://www.kaggle.com/terms" target="_blank" rel="noopener">Terms of Use</a></li>
+          <li><strong>ORCA / FACCTs GmbH</strong> (the software you supply) — see the EULA on the <a href="https://orcaforum.kofo.mpg.de/" target="_blank" rel="noopener">ORCA Forum</a></li>
+          <li><strong>Google Sign-In</strong> (optional identity display) — <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a></li>
+          <li><strong>PubChem / NCBI</strong> (U.S. National Library of Medicine — compound data)</li>
+          <li><strong>Wikipedia / Wikimedia Foundation</strong> (compound summaries)</li>
+          <li>This Site's hosting infrastructure (e.g. Hugging Face Spaces, if deployed there) — <a href="https://huggingface.co/privacy" target="_blank" rel="noopener">Hugging Face Privacy Policy</a></li>
+        </ul>
+        <p>We don't control these services and aren't responsible for their content, availability, or data practices.</p>
+      </div>
+
+      <div class="legal-section" id="legal-export">
+        <h3>12. Export control &amp; sanctions</h3>
+        <p>You're responsible for complying with any export control, sanctions, or similar laws that apply to you — including those of the United States, the European Union, and your own country — when accessing this Site or using ORCA, Kaggle, or any other software or service through it. Don't use the Site if you're located in, or on a government sanctions/denied-party list of, a jurisdiction where doing so would violate applicable law.</p>
+      </div>
+
+      <div class="legal-section" id="legal-indemnity">
+        <h3>13. Indemnification</h3>
+        <p>You agree to indemnify and hold harmless the Site's operator from claims, damages, losses, or expenses (including reasonable legal fees) arising from your use of the Site, your violation of this page, or your violation of any third party's rights — including ORCA's or Kaggle's own terms.</p>
+      </div>
+
+      <div class="legal-section" id="legal-law">
+        <h3>14. Governing law &amp; disputes</h3>
+        <p>This page intentionally does not designate a specific governing law or court. If a dispute ever arose, the applicable law would instead be worked out under ordinary conflict-of-laws rules based on where the parties are — less predictable than naming one upfront. If you're a consumer in the EU/EEA, UK, or a U.S. state, the mandatory consumer-protection rules of your own place of residence apply regardless of any choice made here.</p>
+        <p><span class="legal-placeholder"> Iraq </span></p>
+      </div>
+
+      <div class="legal-section" id="legal-changes">
+        <h3>15. Changes to this page</h3>
+        <p>We may update this page from time to time; the "Last updated" date at the top reflects the latest revision. Continuing to use the Site after a change means you accept the update.</p>
+      </div>
+
+      <div class="legal-section" id="legal-contact">
+        <h3>16. Contact</h3>
+        <p>Questions, privacy requests, or legal notices: <a href="mailto:abdulsalam.s.hasan@gmail.com">abdulsalam.s.hasan@gmail.com</a>.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
+<footer class="site-footer">
+  <p>Chemistry Lab — a free, charitable service for researchers. Not affiliated with ORCA/FACCTs, Kaggle, or Google.</p>
+  <p>Created by <strong>Abdulsalam S. Hasan</strong> · Mosul, Iraq</p>
+  <div class="footer-links">
+    <a href="#" data-view-link="legal" class="link-btn">Legal, Privacy &amp; Disclaimer</a>
+  </div>
+</footer>
+
+<!-- ============================== ORCA WIZARD MODAL ============================== -->
+<div id="orca-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="orca-modal-title">
+  <div class="modal-window">
+    <div class="modal-header">
+      <span id="orca-modal-step-badge" class="modal-step-badge">Step 1</span>
+      <h3 id="orca-modal-title">Select the molecular structure</h3>
+      <button type="button" id="orca-modal-close" class="modal-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body" id="orca-modal-body">
+      <!-- populated dynamically by app.js -->
+    </div>
+  </div>
+</div>
+
+<script id="orca-config" type="application/json">
+{
+  "calc_types": {{ calc_types | tojson }},
+  "composite_methods": {{ composite_methods | tojson }},
+  "dft_functionals": {{ dft_functionals | tojson }},
+  "mp2_variants": {{ mp2_variants | tojson }},
+  "ccsd_variants": {{ ccsd_variants | tojson }},
+  "ri_options": {{ ri_options | tojson }},
+  "basis_map": {{ basis_map | tojson }},
+  "dispersion_models": {{ dispersion_models | tojson }},
+  "solvation_models": {{ solvation_models | tojson }},
+  "solvents": {{ solvents | tojson }}
+}
+</script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
