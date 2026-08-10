@@ -21,7 +21,7 @@ jobs:
         run: pip install -r requirements.txt pytest
       - name: Import orchestrator
         run: python -c "import orca_orchestrator; print(orca_orchestrator.__version__)"
-      - name: Run production wiring tests
+      - name: Run production and drawing tests
         env:
           SECRET_KEY: ci-test-secret-key
-        run: pytest -q tests/test_production_wiring.py
+        run: pytest -q tests/test_production_wiring.py tests/test_drawing.py
