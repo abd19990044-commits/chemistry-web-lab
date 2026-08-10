@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+title: "Chemistry Lab: Fault-Tolerant Web Orchestration for Long-Running ORCA Calculations"
+type: software
+message: "If you use Chemistry Lab in research, please cite the software and the associated SoftwareX article when available."
+authors:
+  - family-names: Hasan
+    given-names: Abdulsalam S.
+repository-code: "https://github.com/abd19990044-commits/chemistry-web-lab"
+url: "https://github.com/abd19990044-commits/chemistry-web-lab"
+license: MIT
+keywords:
+  - ORCA
+  - computational chemistry
+  - quantum chemistry
+  - Kaggle
+  - fault tolerance
+  - checkpointing
+  - workflow orchestration
+  - RDKit
+abstract: >-
+  Chemistry Lab is a web-based research-software platform for molecular
+  structure exploration, ORCA input generation, and fault-tolerant execution
+  of long-running ORCA calculations through user-owned Kaggle notebooks.
+  The orchestration layer uses an explicit finite-state machine, verified
+  checkpoints, idempotent operations, leases, reconciliation, and watchdog
+  recovery to survive hosted-notebook session limits and web-service restarts.
