@@ -114,13 +114,7 @@ LEGACY_ROUTES = {"/api/kaggle/login": login, "/api/kaggle/submit": submit, "/api
 
 
 def install_legacy_route_adapter(app):
-    """Bind legacy route declarations to orchestrator handlers on this app only.
-
-    Flask 3's ``route`` decorator delegates to ``add_url_rule``. The previous
-    implementation patched only the instance's ``add_url_rule`` and was fragile
-    during the package/app import ordering used by this project. Wrapping the
-    route decorator itself makes the interception explicit and deterministic.
-    """
+    """Bind legacy route declarations to orchestrator handlers on this app only."""
     if getattr(app, "_orca_legacy_adapter_installed", False):
         return
 
@@ -140,3 +134,10 @@ def install_legacy_route_adapter(app):
 
     app.route = MethodType(route, app)
     app._orca_legacy_adapter_installed = True
+
+    # app.py still declares login/submit/status/download/delete. It no longer
+    # declares cancel/resume, although the browser contract and old clients do.
+    # Register those two missing endpoints directly so the compatibility surface
+    # is complete and both operations reach OrchestratorService.
+    app.add_url_rule("/api/kaggle/cancel", endpoint="legacy_cancel", view_func=cancel, methods=["POST"])
+    app.add_url_rule("/api/kaggle/resume", endpoint="legacy_resume", view_func=resume, methods=["POST"])
