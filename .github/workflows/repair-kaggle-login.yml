@@ -24,11 +24,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          import re
 
-          # 1) Add a fast credential verifier without disturbing the existing
-          # job-list implementation. Login only asks Kaggle for one row; the
-          # expensive full recovery remains available through /sync.
           p = Path('kaggle_runner.py')
           s = p.read_text(encoding='utf-8')
           if 'def verify_kaggle_credentials(' not in s:
@@ -38,11 +34,7 @@ jobs:
               fn = r'''
 
 def verify_kaggle_credentials(kaggle_username: str, kaggle_key: str) -> dict:
-    """Fast Kaggle authentication check used by the web sign-in endpoint.
-
-    Only one row is requested. Full job recovery is intentionally separate so
-    an account with hundreds/thousands of kernels cannot make sign-in time out.
-    """
+    """Fast Kaggle authentication check used by the web sign-in endpoint."""
     auth = resolve_kaggle_auth(kaggle_username, kaggle_key)
     with _temp_kaggle_env(kaggle_username, kaggle_key) as env:
         result = _run_kaggle_cli(
@@ -67,8 +59,6 @@ def verify_kaggle_credentials(kaggle_username: str, kaggle_key: str) -> dict:
               s = s.replace(marker, fn + marker, 1)
               p.write_text(s, encoding='utf-8')
 
-          # 2) Replace the synchronous login endpoint with a fast verifier and
-          # add a dedicated synchronization endpoint.
           p = Path('app.py')
           s = p.read_text(encoding='utf-8')
           start = s.find('@app.route("/api/kaggle/login", methods=["POST"])')
@@ -77,23 +67,13 @@ def verify_kaggle_credentials(kaggle_username: str, kaggle_key: str) -> dict:
               raise SystemExit('Could not locate Kaggle login/submit routes in app.py')
           route = r'''@app.route("/api/kaggle/login", methods=["POST"])
 def api_kaggle_login():
-    """Fast credential verification only.
-
-    Do not synchronize the entire Kaggle kernel history here. That operation
-    can be slow for large accounts and used to make the browser receive a
-    proxy HTML error instead of JSON, which appeared as "Invalid response from
-    server." The browser starts /api/kaggle/sync after this succeeds.
-    """
+    """Fast credential verification only; job recovery is separate."""
     data = request.get_json(force=True, silent=True) or {}
     kaggle_username = (data.get("kaggle_username") or "").strip()
     kaggle_key = (data.get("kaggle_key") or "").strip()
-    kaggle_username, kaggle_key = kaggle_runner.clean_kaggle_credentials(
-        kaggle_username, kaggle_key
-    )
-
+    kaggle_username, kaggle_key = kaggle_runner.clean_kaggle_credentials(kaggle_username, kaggle_key)
     if not kaggle_username or not kaggle_key:
         return error_response("Please enter your Kaggle username and API key/token.")
-
     try:
         auth = kaggle_runner.verify_kaggle_credentials(kaggle_username, kaggle_key)
         log.info("kaggle credentials verified", extra={"event": "signed_in"})
@@ -109,20 +89,13 @@ def api_kaggle_login():
 
 @app.route("/api/kaggle/sync", methods=["POST"])
 def api_kaggle_sync():
-    """Rebuild the browser's Chemistry Lab job list from Kaggle.
-
-    This is deliberately separate from authentication. A slow/large job list
-    must never turn a valid Kaggle login into a failed login response.
-    """
+    """Recover Chemistry Lab jobs from Kaggle after authentication."""
     data = request.get_json(force=True, silent=True) or {}
     kaggle_username = (data.get("kaggle_username") or "").strip()
     kaggle_key = (data.get("kaggle_key") or "").strip()
-    kaggle_username, kaggle_key = kaggle_runner.clean_kaggle_credentials(
-        kaggle_username, kaggle_key
-    )
+    kaggle_username, kaggle_key = kaggle_runner.clean_kaggle_credentials(kaggle_username, kaggle_key)
     if not kaggle_username or not kaggle_key:
         return error_response("Missing Kaggle username or API key/token.")
-
     try:
         jobs = kaggle_runner.list_jobs(kaggle_username, kaggle_key)
         return jsonify({"ok": True, "jobs": jobs})
@@ -138,9 +111,6 @@ def api_kaggle_sync():
           s = s[:start] + route + s[end:]
           p.write_text(s, encoding='utf-8')
 
-          # 3) Make browser JSON parsing honest: if the proxy returns HTML or
-          # an empty body, show the HTTP status instead of the misleading
-          # "Invalid response from server." message.
           candidates = list(Path('static').rglob('*.js')) + list(Path('templates').rglob('*.js'))
           js = None
           for f in candidates:
@@ -185,7 +155,6 @@ def api_kaggle_sync():
               raise SystemExit('Expected postJSON implementation not found')
           s = s.replace(old_post, new_post, 1)
 
-          # Replace attemptLogin with fast login + asynchronous sync.
           a = s.find('  async function attemptLogin(username, key, opts) {')
           b = s.find('\n  // If credentials were remembered from a previous visit', a)
           if a < 0 or b < 0:
@@ -193,10 +162,7 @@ def api_kaggle_sync():
           attempt = '''  async function syncKaggleJobs(username, key, opts = {}) {
     const silent = !!opts.silent;
     try {
-      const data = await postJSON("/api/kaggle/sync", {
-        kaggle_username: username,
-        kaggle_key: key,
-      });
+      const data = await postJSON("/api/kaggle/sync", { kaggle_username: username, kaggle_key: key });
       mergeRemoteJobs(username, key, data.jobs || []);
       pollAllActiveJobs();
       return true;
@@ -211,14 +177,10 @@ def api_kaggle_sync():
     const silent = opts && opts.silent;
     if (!silent) { hide(kaggleLoginError); show(kaggleLoginLoading); }
     try {
-      const data = await postJSON("/api/kaggle/login", {
-        kaggle_username: username,
-        kaggle_key: key,
-      });
+      const data = await postJSON("/api/kaggle/login", { kaggle_username: username, kaggle_key: key });
       const verifiedUsername = data.username || username;
       setSignedIn(verifiedUsername, key);
       sessionKaggleKey = key;
-      // Authentication is complete here. Do not wait for the full job history.
       syncKaggleJobs(verifiedUsername, key, { silent: true });
       return true;
     } catch (err) {
@@ -230,23 +192,14 @@ def api_kaggle_sync():
   }
 '''
           s = s[:a] + attempt + s[b:]
-
-          # The toolbar's explicit account refresh should use the sync endpoint,
-          # not re-authentication plus an expensive list operation.
           s = s.replace("postJSON('/api/kaggle/login', {kaggle_username: currentKaggle.username, kaggle_key: currentKaggle.key})",
                         "postJSON('/api/kaggle/sync', {kaggle_username: currentKaggle.username, kaggle_key: currentKaggle.key})")
-
-          # The submit handler still sets the session key after attemptLogin;
-          # leaving that assignment is harmless, but this keeps auto sign-in and
-          # manual sign-in behavior identical.
           js.write_text(s, encoding='utf-8')
-
-          print('Kaggle login-flow repair applied to', js)
+          print('Repair applied to', js)
           PY
 
       - name: Validate Python syntax
-        run: |
-          python -m py_compile app.py kaggle_runner.py
+        run: python -m py_compile app.py kaggle_runner.py
 
       - name: Commit repair
         shell: bash
@@ -255,9 +208,6 @@ def api_kaggle_sync():
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app.py kaggle_runner.py static templates
-          if git diff --cached --quiet; then
-            echo "No changes needed."
-            exit 0
-          fi
+          if git diff --cached --quiet; then exit 0; fi
           git commit -m "Fix Kaggle login and background job sync [skip ci]"
           git push
