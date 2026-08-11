@@ -1,11 +1,14 @@
-"""Production startup patch for the Chemistry Lab Space.
+"""Production startup patches for the Chemistry Lab Space.
 
-Python loads sitecustomize automatically at interpreter startup. The patch is
-kept isolated from the large legacy runner so deployment fixes can be reviewed
+Python loads sitecustomize automatically at interpreter startup. The patches are
+kept isolated from the main application so deployment fixes can be reviewed
 and removed independently.
 """
 from __future__ import annotations
 
+# ─────────────────────────────────────────────────────────────
+# Kaggle production status patch
+# ─────────────────────────────────────────────────────────────
 try:
     import kaggle_runner as _kr
 
@@ -34,9 +37,6 @@ try:
                 return {"status": "error", "next_job_id": None,
                         "next_kaggle_url": None, "note": note}
 
-            # A successor is deterministic (<base>-r<N+1>). Check it before
-            # accepting COMPLETE/ERROR/CANCELLED so a hand-off remains visible
-            # even when the predecessor's output listing is unavailable.
             if status in ("complete", "error", "cancelled"):
                 next_id, next_url = _kr._probe_successor(env, auth["username"], job_id)
                 if next_id:
@@ -51,10 +51,6 @@ try:
                 return {"status": status, "next_job_id": None,
                         "next_kaggle_url": None, "note": text}
 
-            # Only use the old, output-aware checker when Kaggle itself did not
-            # provide a recognizable status. This preserves its richer hand-off
-            # handling without allowing an output-listing failure to turn a
-            # known COMPLETE state into UNKNOWN.
             return _kr._ORIGINAL_CHECK_JOB_STATUS(kaggle_username, kaggle_key, job_id)
 
     if not hasattr(_kr, "_ORIGINAL_CHECK_JOB_STATUS"):
@@ -62,10 +58,8 @@ try:
         _kr.check_job_status = _production_check_job_status
 
     # Cosmetic production fix: the original UI timer measures time since the
-    # browser submitted the job. For a job whose browser was closed overnight,
-    # that can display 19 hours even though ORCA itself ran for 55 minutes.
-    # Once the backend says COMPLETE, replace that misleading live timer with a
-    # terminal label. Active jobs keep their real submission-to-now timer.
+    # browser submitted the job. Once the backend says COMPLETE, the frontend
+    # replacement can show a terminal label instead of a misleading live timer.
     try:
         import flask as _flask
         _original_flask_init = _flask.Flask.__init__
@@ -95,6 +89,30 @@ try:
         pass
 
 except Exception:
-    # Never prevent the application from starting because an optional patch
-    # failed. The normal runner remains available as a fallback.
+    pass
+
+# ─────────────────────────────────────────────────────────────
+# RDKit publication-style drawing proportions
+# ─────────────────────────────────────────────────────────────
+# RDKit exposes baseFontSize, fixedFontSize, min/maxFontSize and bondLineWidth
+# through MolDrawOptions.  The previous project setting of 0.85 made labels
+# such as OH and OMe visually dominate the carbon skeleton.  Keep this patch
+# defensive so a missing optional chemistry dependency can never stop the Space.
+try:
+    import chem_core as _chem_core
+
+    def _balanced_draw_options(drawer):
+        opts = drawer.drawOptions()
+        opts.addStereoAnnotation = True
+        opts.bondLineWidth = 1.7
+        opts.baseFontSize = 0.55
+        opts.minFontSize = 7
+        opts.maxFontSize = 24
+        opts.annotationFontScale = 0.45
+        opts.additionalAtomLabelPadding = 0.0
+        opts.padding = 0.10
+        opts.legendFontSize = 16
+
+    _chem_core._apply_common_draw_options = _balanced_draw_options
+except Exception:
     pass
