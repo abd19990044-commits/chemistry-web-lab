@@ -295,6 +295,7 @@ def api_compound():
         if not image_bytes:
             return error_response("Could not draw a structure for this input.", 422)
         mol_bytes = core.generate_mol_file_bytes(smiles)
+        svg_bytes = core.render_molecule_svg(smiles)
 
         props = None
         wiki = None
@@ -313,6 +314,7 @@ def api_compound():
             "input_kind": parsed.kind.name,
             "smiles": smiles,
             "image_png_base64": b64(image_bytes),
+            "image_svg_base64": b64(svg_bytes),
             "mol_file_base64": b64(mol_bytes),
             "filename": core.safe_filename(query),
             "formula": (props or {}).get("MolecularFormula"),
@@ -399,6 +401,8 @@ def api_reaction():
         small_as_formula = data.get("small_as_formula", True) is not False
         image_bytes = core.render_reaction_png(as_pairs(reactant_terms), as_pairs(product_terms),
                                                small_as_formula=small_as_formula)
+        svg_bytes = core.render_reaction_svg(as_pairs(reactant_terms), as_pairs(product_terms),
+                                               small_as_formula=small_as_formula)
         if not image_bytes:
             return error_response("Could not draw the reaction scheme — check the formulas.", 422)
 
@@ -427,6 +431,7 @@ def api_reaction():
         return jsonify({
             "ok": True,
             "image_png_base64": b64(image_bytes),
+            "image_svg_base64": b64(svg_bytes),
             "rxn_file_base64": b64(rxn_bytes),
             "reaction_smiles": "%s>>%s" % (
                 ".".join(resolved[t.name] for t in reactant_terms),

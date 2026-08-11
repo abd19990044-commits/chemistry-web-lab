@@ -158,6 +158,7 @@
 
       document.getElementById("explorer-image").src = b64ToDataUrl(data.image_png_base64, "image/png");
       setDownload(document.getElementById("explorer-download-mol"), data.mol_file_base64, "chemical/x-mdl-molfile", `${data.filename}.mol`);
+      setDownload(document.getElementById("explorer-download-svg"), data.image_svg_base64, "image/svg+xml", `${data.filename}.svg`);
       document.getElementById("explorer-title-out").textContent = data.title || data.iupac_name || query;
       document.getElementById("explorer-formula").textContent = data.formula || "—";
       document.getElementById("explorer-weight").textContent = data.weight ? `${data.weight} g/mol` : "—";
@@ -218,6 +219,7 @@
       });
       document.getElementById("reaction-image").src = b64ToDataUrl(data.image_png_base64, "image/png");
       setDownload(document.getElementById("reaction-download-rxn"), data.rxn_file_base64, "chemical/x-mdl-rxnfile", "reaction.rxn");
+      setDownload(document.getElementById("reaction-download-svg"), data.image_svg_base64, "image/svg+xml", "reaction.svg");
       document.getElementById("reaction-smiles").textContent = data.reaction_smiles;
       document.getElementById("reaction-equation").textContent = data.equation || "";
 
