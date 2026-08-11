@@ -1,1 +1,1 @@
-Trigger deployment of the deterministic RDKit molecule renderer fix.
+Trigger deterministic RDKit molecule renderer deployment after workflow updates are settled.
