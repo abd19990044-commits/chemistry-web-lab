@@ -31,12 +31,11 @@ jobs:
           test -f Dockerfile
           test -f requirements.txt
           test -f app.py
-          test -f publication_bootstrap.py
           grep -Eq 'EXPOSE[[:space:]]+7860|0\.0\.0\.0:7860|:7860' Dockerfile
           test -d orca_orchestrator
           test -d templates
           test -d static
-          python -m py_compile app.py chem_core.py publication_bootstrap.py
+          python -m py_compile app.py chem_core.py
 
   deploy:
     needs: validate
@@ -70,7 +69,6 @@ jobs:
           token = os.environ["HF_TOKEN"]
           repo_id = os.environ["HF_SPACE"]
           api = HfApi(token=token)
-
           for attempt in range(1, 6):
               try:
                   who = api.whoami()
@@ -103,7 +101,6 @@ jobs:
           api = HfApi(token=token)
           commit = None
           last_error = None
-
           for attempt in range(1, 6):
               try:
                   commit = api.upload_folder(
@@ -137,10 +134,8 @@ jobs:
                   print(f"Hugging Face upload attempt {attempt}/5 failed: {exc}")
                   if attempt < 5:
                       time.sleep(15 * attempt)
-
           if commit is None:
               raise RuntimeError(f"Hugging Face upload failed after 5 attempts: {last_error}")
-
           print("Hugging Face commit created:", commit.oid)
           print("Hugging Face commit URL:", commit.commit_url)
           PY
@@ -173,7 +168,6 @@ jobs:
                       time.sleep(10 * attempt)
           else:
               raise RuntimeError(f"Hugging Face verification failed after 5 attempts: {last_error}")
-
           print("GitHub commit submitted:", expected)
           print("Deployment upload completed successfully.")
           PY
