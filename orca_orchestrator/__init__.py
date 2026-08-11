@@ -18,9 +18,9 @@ __all__ = [
     "JobState",
     "Trigger",
     "TRANSITIONS",
-    "JobManifest",
     "CheckpointManifest",
     "Event",
+    "JobManifest",
     "OrchestratorError",
     "TransientError",
     "PermanentError",
@@ -28,14 +28,6 @@ __all__ = [
     "get_service",
     "__version__",
 ]
-
-# app.py historically declares /api/kaggle/* after importing this package.
-# Install the compatibility adapter before those decorators execute, so the
-# browser contract remains stable while every calculation request is handled
-# by OrchestratorService rather than the legacy runner.
-from .legacy_compat import install_legacy_route_adapter as _install_legacy_route_adapter
-_install_legacy_route_adapter()
-del _install_legacy_route_adapter
 
 
 def get_service(**kwargs):
