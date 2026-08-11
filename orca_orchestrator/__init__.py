@@ -27,9 +27,14 @@ __all__ = [
     "get_service",
 ]
 
-# The Flask compatibility adapter is installed explicitly by app.py, because
-# it needs the actual Flask application instance. Importing this package must
-# remain side-effect-safe for CI, workers, CLI tools, and tests.
+# The Flask compatibility adapter needs the concrete Flask instance. During
+# normal app.py startup the module is already present in sys.modules and has
+# created ``app`` before importing orca_orchestrator. The adapter therefore
+# safely installs the historical /api/kaggle/* routes on that one application.
+# Standalone imports (CI utilities, workers and tests) remain no-op.
+from .legacy_compat import install_legacy_route_adapter as _install_legacy_route_adapter
+_install_legacy_route_adapter()
+del _install_legacy_route_adapter
 
 # The Flask application imports chem_core immediately before importing this
 # package. Install the scientific policy gate at this boundary so the existing
