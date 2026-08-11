@@ -1,0 +1,142 @@
+name: One-time 600 dpi renderer patch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch RDKit export resolution without changing drawing geometry
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('chem_core.py')
+          s = p.read_text(encoding='utf-8')
+
+          s = s.replace(
+              'MOL_IMAGE_SIZE = (560, 420)\nREACTION_SUBIMAGE_SIZE = (420, 340)\nDRAWING_BOND_LINE_WIDTH = 2\nDRAWING_FONT_SCALE = 0.85',
+              '# Publication-quality PNG export: 2400x1800 px = 4x3 in at 600 dpi.\n'
+              'MOL_IMAGE_SIZE = (2400, 1800)\n'
+              'REACTION_SUBIMAGE_SIZE = (1680, 1360)\n'
+              'DRAWING_EXPORT_DPI = 600\n'
+              'DRAWING_REFERENCE_SIZE = (560, 420)\n'
+              'DRAWING_BOND_LINE_WIDTH = 2\n'
+              'DRAWING_FONT_SCALE = 0.85'
+          )
+
+          pattern = re.compile(
+              r'def render_molecule_png\(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE\) -> bytes \| None:\n'
+              r'.*?\n\n\n# ---------------------------------------------------------------------------\n# Small molecules are written, not drawn',
+              re.S,
+          )
+
+          replacement = '''def render_molecule_png(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE) -> bytes | None:
+    """Render a publication-quality molecule PNG.
+
+    The drawing keeps the same visual geometry as the 560x420 web renderer,
+    but is rendered at 4x linear resolution and tagged as 600 dpi. Scaling the
+    RDKit bond/font settings with the canvas prevents the molecule from
+    becoming tiny when the export canvas is enlarged.
+    """
+    from PIL import Image
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+    try:
+        AllChem.Compute2DCoords(mol)
+        Chem.rdDepictor.StraightenDepiction(mol)
+    except Exception:
+        pass
+
+    drawer = rdMolDraw2D.MolDraw2DCairo(size[0], size[1])
+    _apply_common_draw_options(drawer)
+    opts = drawer.drawOptions()
+    scale = min(
+        size[0] / DRAWING_REFERENCE_SIZE[0],
+        size[1] / DRAWING_REFERENCE_SIZE[1],
+    )
+    try:
+        opts.fixedBondLength = 30.0 * scale
+        opts.fixedFontSize = 16.0 * scale
+        opts.minFontSize = 12.0 * scale
+        opts.maxFontSize = 18.0 * scale
+        opts.bondLineWidth = DRAWING_BOND_LINE_WIDTH * scale
+        opts.padding = 0.05
+    except Exception:
+        pass
+
+    rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol, legend=legend)
+    drawer.FinishDrawing()
+
+    # Cairo gives us the high-resolution pixels; Pillow adds explicit 600 dpi
+    # metadata so journal submission systems do not interpret the PNG as 72 dpi.
+    raw = drawer.GetDrawingText()
+    try:
+        image = Image.open(io.BytesIO(raw)).convert("RGB")
+        out = io.BytesIO()
+        image.save(
+            out,
+            format="PNG",
+            dpi=(DRAWING_EXPORT_DPI, DRAWING_EXPORT_DPI),
+            optimize=True,
+        )
+        return out.getvalue()
+    except Exception as exc:
+        logger.warning("Could not add PNG 600-dpi metadata: %s", exc)
+        return raw
+
+
+# ---------------------------------------------------------------------------
+# Small molecules are written, not drawn'''
+
+          ns, count = pattern.subn(replacement, s, count=1)
+          if count != 1:
+              raise SystemExit('renderer block not found; refusing unsafe edit')
+
+          p.write_text(ns, encoding='utf-8')
+          print('600 dpi renderer patch applied')
+
+      - name: Validate and test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile chem_core.py
+          grep -q 'MOL_IMAGE_SIZE = (2400, 1800)' chem_core.py
+          grep -q 'DRAWING_EXPORT_DPI = 600' chem_core.py
+          grep -q 'dpi=(DRAWING_EXPORT_DPI, DRAWING_EXPORT_DPI)' chem_core.py
+          python - <<'PY'
+          import io
+          from PIL import Image
+          import chem_core
+
+          raw = chem_core.render_molecule_png('COC1=CC=CC2=C1C=CC=C2C(C)C(=O)O')
+          assert raw and len(raw) > 1000
+          im = Image.open(io.BytesIO(raw))
+          assert im.size == (2400, 1800), im.size
+          dpi = im.info.get('dpi')
+          assert dpi and dpi[0] >= 599 and dpi[1] >= 599, dpi
+          print('600 dpi PNG validation passed:', im.size, dpi)
+          PY
+
+      - name: Commit patch and remove one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chem_core.py
+          git add -u .github/workflows/one-time-600dpi-renderer.yml
+          git commit -m 'feat: export chemical drawings at 600 dpi'
+          git push
