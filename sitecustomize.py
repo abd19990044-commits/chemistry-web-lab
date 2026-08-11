@@ -1,15 +1,8 @@
 """Production startup patch for the Chemistry Lab Space.
 
-This file is intentionally tiny and isolated from the large legacy runner. Python
-loads sitecustomize automatically at interpreter startup, so the patch applies
-before Gunicorn imports app.py.
-
-Fixes a compatibility problem in some Kaggle CLI versions: `kernels status`
-can report COMPLETE, but the subsequent `kernels output --file-pattern ...`
-probe can fail. The old checker converted that transport/projection failure into
-UNKNOWN, so a genuinely completed job stayed UNKNOWN forever and the download
-button never appeared. We trust Kaggle's authoritative kernel status first and
-only use the deterministic successor probe to detect an actual continuation.
+Python loads sitecustomize automatically at interpreter startup. The patch is
+kept isolated from the large legacy runner so deployment fixes can be reviewed
+and removed independently.
 """
 from __future__ import annotations
 
@@ -68,7 +61,40 @@ try:
         _kr._ORIGINAL_CHECK_JOB_STATUS = _kr.check_job_status
         _kr.check_job_status = _production_check_job_status
 
+    # Cosmetic production fix: the original UI timer measures time since the
+    # browser submitted the job. For a job whose browser was closed overnight,
+    # that can display 19 hours even though ORCA itself ran for 55 minutes.
+    # Once the backend says COMPLETE, replace that misleading live timer with a
+    # terminal label. Active jobs keep their real submission-to-now timer.
+    try:
+        import flask as _flask
+        _original_flask_init = _flask.Flask.__init__
+
+        def _patched_flask_init(self, *args, **kwargs):
+            _original_flask_init(self, *args, **kwargs)
+
+            @self.after_request
+            def _inject_runtime_fix(response):
+                try:
+                    if (response.status_code == 200
+                            and response.content_type
+                            and response.content_type.startswith("text/html")
+                            and not response.direct_passthrough):
+                        body = response.get_data(as_text=True)
+                        marker = '/static/job_runtime_fix.js?v=20260811'
+                        if marker not in body and "</body>" in body:
+                            tag = f'<script src="{marker}" defer></script>'
+                            response.set_data(body.replace("</body>", tag + "</body>"))
+                            response.headers.pop("Content-Length", None)
+                except Exception:
+                    pass
+                return response
+
+        _flask.Flask.__init__ = _patched_flask_init
+    except Exception:
+        pass
+
 except Exception:
-    # Never prevent the application from starting because this optional patch
+    # Never prevent the application from starting because an optional patch
     # failed. The normal runner remains available as a fallback.
     pass
