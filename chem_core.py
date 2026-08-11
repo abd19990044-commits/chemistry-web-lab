@@ -251,7 +251,6 @@ def _formula_lookup_table():
         mol = Chem.MolFromSmiles(smiles)
         if mol is not None:
             table.setdefault(formula.upper(), Chem.MolToSmiles(mol))
-    # Written forms that differ from the tabulated one but mean the same thing.
     for alias, formula in (("H2O2", "H2O2"), ("HOH", "H2O"), ("NH3", "NH3"),
                            ("CH3OH", "CH4O"), ("HO-", "OH-"), ("OH", "OH-"),
                            ("NAOH", "NAOH"), ("NACL", "NACL")):
@@ -260,13 +259,10 @@ def _formula_lookup_table():
     return table
 
 
-#: Built on first use: the table it inverts is defined further down the file,
-#: next to the drawing code that is its other consumer.
 _SMILES_BY_COMMON_FORMULA: dict[str, str] | None = None
 
 
 def smiles_from_common_formula(token: str) -> str | None:
-    """SMILES for a common molecular formula typed by hand, or None."""
     global _SMILES_BY_COMMON_FORMULA
     if _SMILES_BY_COMMON_FORMULA is None:
         _SMILES_BY_COMMON_FORMULA = _formula_lookup_table()
@@ -274,28 +270,9 @@ def smiles_from_common_formula(token: str) -> str | None:
 
 
 def resolve_species(token: str) -> tuple[str | None, str]:
-    """Resolves one species and says HOW it was read. Returns (smiles, note).
-
-    The plain `resolve_compound_to_smiles` decides between "name" and "SMILES"
-    from the characters alone, and that heuristic has two holes that matter when
-    someone is typing an equation rather than one compound:
-
-      * A SMILES with no digit and no bond symbol -- `CCO` for ethanol, `CCC`
-        for propane -- looked like a name and went to PubChem, so it failed
-        entirely without a network and was a needless round trip with one.
-
-      * `CO` is methanol as SMILES and carbon monoxide as a formula. Both parse.
-        Silently picking one draws a different molecule than the person meant,
-        which is the one failure mode that produces a confidently wrong picture.
-
-    So: known-ambiguous tokens are resolved by name and said so; otherwise a
-    name lookup is tried first and a local SMILES parse is the fallback. Either
-    way the caller gets a sentence it can show, because the only safe way to
-    handle an ambiguity is to make the reading visible."""
     raw = (token or "").strip()
     if not raw:
         return None, ""
-
     if raw.upper() in AMBIGUOUS_TOKENS and raw == raw.upper():
         meaning = AMBIGUOUS_TOKENS[raw.upper()]
         smiles = pubchem_smiles_by_name(meaning)
@@ -303,17 +280,12 @@ def resolve_species(token: str) -> tuple[str | None, str]:
             return smiles, ("'%s' was read as the formula for %s. Write it as SMILES "
                             "(for example '%s') if you meant the structure."
                             % (raw, meaning, raw.upper()))
-
-    # A bare formula is checked before anything else that could misread it:
-    # `O2` is not valid SMILES and a name lookup for it needs a network.
     formula_smiles = smiles_from_common_formula(raw)
     if formula_smiles:
         return formula_smiles, ""
-
     smiles = resolve_compound_to_smiles(raw)
     if smiles:
         return smiles, ""
-
     mol = Chem.MolFromSmiles(raw)
     if mol is not None:
         return Chem.MolToSmiles(mol), ("'%s' was not a name PubChem knows, so it was read "
@@ -322,22 +294,15 @@ def resolve_species(token: str) -> tuple[str | None, str]:
 
 
 def pubchem_reachable(timeout: float = 4.0) -> bool:
-    """Is PubChem reachable from this host at all?
-
-    Only ever called on the error path, to tell "no such compound" apart from
-    "this deployment cannot reach the internet". Both used to produce the same
-    message, which reads as "your molecule does not exist" and sends the person
-    looking in exactly the wrong place."""
     try:
         resp = requests.get(f"{PUBCHEM_BASE}/compound/name/water/cids/JSON",
                             headers=HEADERS, timeout=timeout)
         return resp.status_code == 200
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 
 def fetch_pubchem_properties(name: str) -> dict[str, Any] | None:
-    """CID / IUPAC name / formula / weight / canonical SMILES for a compound name."""
     encoded = urllib.parse.quote(name.strip())
     url = (
         f"{PUBCHEM_BASE}/compound/name/{encoded}/property/"
@@ -349,7 +314,7 @@ def fetch_pubchem_properties(name: str) -> dict[str, Any] | None:
             return None
         props = resp.json().get("PropertyTable", {}).get("Properties", [])
         return props[0] if props else None
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.info("PubChem property lookup failed for '%s': %s", name, exc)
         return None
 
@@ -380,7 +345,7 @@ def fetch_solubility(cid: int) -> list[str]:
         results: list[str] = []
         _extract_solubility_recursive(resp.json(), results)
         return results[:3]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.info("Solubility lookup failed for CID %s: %s", cid, exc)
         return []
 
@@ -397,7 +362,7 @@ def fetch_wikipedia_summary(name: str) -> str | None:
                 if extract:
                     match = re.search(r"^(.*?\.)(\s|$)", extract)
                     return match.group(1) if match else extract
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.info("Wikipedia lookup failed for '%s': %s", name, exc)
     return None
 
@@ -408,7 +373,7 @@ def fetch_pubchem_png(cid: int) -> bytes | None:
         resp = requests.get(url, headers=HEADERS, timeout=HTTP_TIMEOUT)
         if resp.status_code == 200 and resp.content:
             return resp.content
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.info("PubChem PNG download failed for CID %s: %s", cid, exc)
     return None
 
@@ -420,7 +385,7 @@ def fetch_pubchem_sdf(cid: int) -> str | None:
             resp = requests.get(url, headers=HEADERS, timeout=HTTP_TIMEOUT)
             if resp.status_code == 200 and resp.text.strip():
                 return resp.text
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.info("SDF download failed (%s) for CID %s: %s", record_type, cid, exc)
     return None
 
@@ -451,7 +416,7 @@ def mol_block_to_xyz(mol_block: str) -> str | None:
             x, y, z, symbol = parts[0], parts[1], parts[2], parts[3]
             coords.append(f"{symbol} {x} {y} {z}")
         return "\n".join(coords) if coords else None
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.info("MOL->XYZ parse error: %s", exc)
         return None
 
@@ -468,12 +433,11 @@ def normalize_xyz_text(text: str) -> str | None:
             if len(parts) >= 4:
                 parsed.append(f"{parts[0]} {parts[1]} {parts[2]} {parts[3]}")
         return "\n".join(parsed) if parsed else None
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
 def xyz_from_uploaded_file(raw: bytes, ext: str) -> tuple[str | None, str | None]:
-    """Returns (xyz_body, error)."""
     try:
         text = raw.decode("utf-8", errors="ignore")
         ext = ext.lower()
@@ -484,12 +448,11 @@ def xyz_from_uploaded_file(raw: bytes, ext: str) -> tuple[str | None, str | None
             xyz = mol_block_to_xyz(text)
             return (xyz, None) if xyz else (None, "Could not parse SDF/MOL file.")
         return None, "Unsupported file format."
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return None, str(exc)
 
 
 def xyz_from_smiles(smiles: str) -> str | None:
-    """3D-embed a SMILES with RDKit (used when PubChem has no usable SDF)."""
     try:
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
@@ -506,7 +469,7 @@ def xyz_from_smiles(smiles: str) -> str | None:
             pos = conf.GetAtomPosition(atom.GetIdx())
             lines.append(f"{atom.GetSymbol()} {pos.x:.6f} {pos.y:.6f} {pos.z:.6f}")
         return "\n".join(lines)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.info("RDKit 3D embedding failed: %s", exc)
         return None
 
@@ -524,16 +487,34 @@ def _apply_common_draw_options(drawer) -> None:
 
 
 def render_molecule_png(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE) -> bytes | None:
+    """Render one molecule with a stable chemical drawing scale.
+
+    The molecular skeleton is scaled from a fixed bond length rather than from
+    the amount of empty canvas. This prevents adding/removing a substituent from
+    causing RDKit to enlarge or shrink the entire core structure. Atom-label
+    font sizes are constrained independently so labels such as OH, NH and O
+    remain proportional to the skeleton.
+    """
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
     try:
         AllChem.Compute2DCoords(mol)
         Chem.rdDepictor.StraightenDepiction(mol)
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
+
     drawer = rdMolDraw2D.MolDraw2DCairo(size[0], size[1])
     _apply_common_draw_options(drawer)
+    opts = drawer.drawOptions()
+    try:
+        opts.fixedBondLength = 30.0
+        opts.fixedFontSize = 16.0
+        opts.minFontSize = 12.0
+        opts.maxFontSize = 18.0
+    except Exception:
+        pass
+
     rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol, legend=legend)
     drawer.FinishDrawing()
     return drawer.GetDrawingText()
@@ -556,25 +537,18 @@ def render_molecule_png(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE) -> b
 # not in the table falls back to the Hill formula only when Hill happens to be
 # right for it — otherwise it is drawn as a structure, which is never wrong.
 _CONVENTIONAL_FORMULAS = {
-    # diatomics and elements
     "O=O": "O2", "[H][H]": "H2", "N#N": "N2", "ClCl": "Cl2", "BrBr": "Br2",
     "II": "I2", "FF": "F2", "[O][O]": "O2", "O=[O+][O-]": "O3",
-    # oxides and common gases
     "O=C=O": "CO2", "[C-]#[O+]": "CO", "O=S=O": "SO2", "O=S(=O)=O": "SO3",
     "[N]=O": "NO", "[O-][N+]=O": "NO2", "[N-]=[N+]=O": "N2O",
-    # hydrides
     "O": "H2O", "OO": "H2O2", "N": "NH3", "S": "H2S", "C": "CH4",
     "Cl": "HCl", "Br": "HBr", "I": "HI", "F": "HF", "P": "PH3",
     "[SiH4]": "SiH4",
-    # acids, bases, salts
     "OS(=O)(=O)O": "H2SO4", "O[N+](=O)[O-]": "HNO3", "OP(=O)(O)O": "H3PO4",
     "OC(=O)O": "H2CO3", "OS(=O)O": "H2SO3", "N#C": "HCN",
-    # Plain ASCII; the renderer turns digits into subscripts and a trailing
-    # charge into a superscript, so the table stays readable and greppable.
     "[OH-]": "OH-", "[H+]": "H+", "[NH4+]": "NH4+",
     "[Na+].[Cl-]": "NaCl", "[Na+].[OH-]": "NaOH", "[K+].[OH-]": "KOH",
     "[Ca+2].[O-2]": "CaO", "[Na+].[Na+].[O-]C([O-])=O": "Na2CO3",
-    # one-carbon species whose Hill formula IS the conventional one
     "ClC(Cl)Cl": "CHCl3", "ClC(Cl)(Cl)Cl": "CCl4",
 }
 
@@ -592,31 +566,19 @@ _FORMULA_BY_CANONICAL_SMILES = _canonical_formula_table()
 
 
 def formula_for_display(smiles: str) -> str | None:
-    """The formula to write instead of drawing, or None to draw the structure.
-
-    A formula is only used where it is unambiguous and conventional. Ethanol is
-    drawn, never written as C2H6O: that formula is shared with dimethyl ether,
-    so writing it would discard the very information the drawing exists to
-    carry."""
     mol = Chem.MolFromSmiles(smiles or "")
     if mol is None:
         return None
     canonical = Chem.MolToSmiles(mol)
     if canonical in _FORMULA_BY_CANONICAL_SMILES:
         return _FORMULA_BY_CANONICAL_SMILES[canonical]
-
     carbons = sum(1 for a in mol.GetAtoms() if a.GetSymbol() == "C")
     if mol.GetRingInfo().NumRings() or carbons > 1 or mol.GetNumHeavyAtoms() > 4:
         return None
-    # A carbon bearing O-H or N-H is written condensed (CH3OH, not CH4O), and
-    # this does not generate condensed forms, so those are drawn instead.
     if carbons and any(a.GetSymbol() in ("O", "N", "S") and a.GetTotalNumHs()
                        for a in mol.GetAtoms()):
         return None
     hill = rdMolDescriptors.CalcMolFormula(mol)
-    # Hill puts hydrogen first for carbon-free species, which is only sometimes
-    # the convention. If it did that and the species is not in the table above,
-    # there is no way to know whether it is right, so the structure is drawn.
     if not carbons and hill.startswith("H"):
         return None
     return hill
@@ -629,21 +591,16 @@ _FONT_CANDIDATES = (
     "/System/Library/Fonts/Helvetica.ttc",
 )
 
-
 _FORMULA_TOKEN_RE = re.compile(r"([A-Za-z]+|\d+|[+-]\d*)")
 
 
 def _formula_tokens(formula: str):
-    """Splits `H2SO4` / `NH4+` into (text, style) with style in
-    {normal, sub, sup}, so digits render as subscripts and the charge as a
-    superscript — which is the difference between a formula and a string."""
     tokens = []
     parts = [p for p in _FORMULA_TOKEN_RE.split(formula or "") if p]
     for i, part in enumerate(parts):
         if part[0] in "+-":
             tokens.append((part[1:] + part[0] if len(part) > 1 else part, "sup"))
         elif part.isdigit():
-            # A digit only subscripts when it counts a preceding element.
             tokens.append((part, "sub" if i and parts[i - 1][0].isalpha() else "normal"))
         else:
             tokens.append((part, "normal"))
@@ -651,14 +608,10 @@ def _formula_tokens(formula: str):
 
 
 def _render_formula_image(formula: str, size: int):
-    """Draws `H2O` with a real subscript, on a transparent-free white tile that
-    composites with the structure images beside it."""
     from PIL import Image, ImageDraw
-
     base_font = _layout_font(size)
     small_font = _layout_font(max(10, int(size * 0.62)))
     tokens = _formula_tokens(formula)
-
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     widths, ascent = [], 0
     for text, style in tokens:
@@ -666,11 +619,9 @@ def _render_formula_image(formula: str, size: int):
         box = probe.textbbox((0, 0), text, font=font)
         widths.append(box[2] - box[0])
         ascent = max(ascent, box[3] - box[1])
-
     shift = max(3, int(size * 0.20))
     pad = max(4, size // 5)
-    canvas = Image.new("RGB", (sum(widths) + pad * 2, ascent + shift * 2 + pad * 2),
-                       (255, 255, 255))
+    canvas = Image.new("RGB", (sum(widths) + pad * 2, ascent + shift * 2 + pad * 2), (255, 255, 255))
     pen = ImageDraw.Draw(canvas)
     x, baseline = pad, pad + shift
     for (text, style), width in zip(tokens, widths):
@@ -687,27 +638,19 @@ def _render_formula_image(formula: str, size: int):
 
 
 def _layout_font(size: int):
-    """A scalable font for the coefficients and operators.
-
-    The container may ship without any system fonts, so every candidate can
-    miss; Pillow's bundled default is scalable and is the last resort. Falling
-    back to the old fixed 11px bitmap font would make a coefficient unreadable
-    next to a 340px structure, which defeats the point of drawing it."""
     from PIL import ImageFont
     for path in _FONT_CANDIDATES:
         try:
             return ImageFont.truetype(path, size)
-        except Exception:  # noqa: BLE001
+        except Exception:
             continue
     try:
         return ImageFont.load_default(size=size)
-    except TypeError:                       # Pillow < 10.1: not scalable
+    except TypeError:
         return ImageFont.load_default()
 
 
 def _trim_white(image, pad: int = 6):
-    """Crops the white margin RDKit leaves around a structure, so the pieces of
-    the equation sit at a natural spacing instead of drifting apart."""
     from PIL import Image, ImageChops
     background = Image.new(image.mode, image.size, (255, 255, 255))
     box = ImageChops.difference(image, background).getbbox()
@@ -720,23 +663,7 @@ def _trim_white(image, pad: int = 6):
 
 def render_reaction_png(reactant_pairs, product_pairs, sub_size=REACTION_SUBIMAGE_SIZE,
                         small_as_formula: bool = True) -> bytes | None:
-    """Draws `2 H2 + O2 -> 2 H2O` with the coefficients shown as numerals.
-
-    Each species is drawn ONCE and labelled with its coefficient, which is how a
-    chemist writes an equation. That deliberately differs from the .rxn file,
-    where the same stoichiometry is expressed by repeating the structure --
-    the format has no numeral field, so the two representations say the same
-    thing in the only way each of them can.
-
-    Small, unambiguous species are WRITTEN rather than drawn: a skeletal O2 is
-    two letters and a line taking the width of a benzene ring, and it says less
-    than "O2" does. `small_as_formula=False` draws everything, for anyone who
-    wants the structures throughout.
-
-    `*_pairs` are (coefficient, smiles).
-    """
     from PIL import Image, ImageDraw
-
     def draw_one(smiles):
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
@@ -744,29 +671,19 @@ def render_reaction_png(reactant_pairs, product_pairs, sub_size=REACTION_SUBIMAG
         AllChem.Compute2DCoords(mol)
         drawer = rdMolDraw2D.MolDraw2DCairo(sub_size[0], sub_size[1])
         _apply_common_draw_options(drawer)
-        # One bond length for the whole equation. Without this RDKit scales each
-        # structure to fill its own canvas, so H2 comes out with a bond three
-        # times longer than the C-C bonds beside it — the equation reads as a
-        # set of unrelated drawings rather than one scheme.
         try:
             drawer.drawOptions().fixedBondLength = bond_length
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
         drawer.FinishDrawing()
         return _trim_white(Image.open(io.BytesIO(drawer.GetDrawingText())).convert("RGB"))
-
     bond_length = max(24, sub_size[1] // 7)
     formula_size = max(30, sub_size[1] // 6)
     arrow_length = max(60, sub_size[0] // 5)
     arrow_head = max(14, sub_size[1] // 20)
-    # Set at the same size as a written formula: in a handwritten equation the
-    # 15 in "15 O2" is the same height as the O. Sizing these off the canvas
-    # instead left the numerals visibly smaller than the formulas they multiply.
     coefficient_font = _layout_font(formula_size)
     operator_font = _layout_font(formula_size)
-
-    # (kind, payload) tokens laid out left to right.
     tokens: list[tuple[str, object]] = []
     for side_index, pairs in enumerate((reactant_pairs, product_pairs)):
         if side_index:
@@ -784,7 +701,6 @@ def render_reaction_png(reactant_pairs, product_pairs, sub_size=REACTION_SUBIMAG
             tokens.append(("mol", image))
     if not tokens:
         return None
-
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     gap = max(10, sub_size[0] // 28)
     widths, heights = [], []
@@ -797,37 +713,26 @@ def render_reaction_png(reactant_pairs, product_pairs, sub_size=REACTION_SUBIMAG
             font = coefficient_font if kind == "coefficient" else operator_font
             box = probe.textbbox((0, 0), payload, font=font)
             widths.append(box[2] - box[0]); heights.append(box[3] - box[1])
-
     margin = gap * 2
     total_width = sum(widths) + gap * (len(tokens) - 1) + margin * 2
     total_height = max(heights) + margin * 2
     canvas = Image.new("RGB", (total_width, total_height), (255, 255, 255))
     pen = ImageDraw.Draw(canvas)
-
     x = margin
     for (kind, payload), width in zip(tokens, widths):
         if kind == "mol":
             canvas.paste(payload, (x, (total_height - payload.height) // 2))
         elif kind == "arrow":
-            # Drawn rather than typeset. The Unicode arrow glyph is sized for
-            # running text, so beside a 200px structure it reads as an
-            # afterthought — and whether a given container's fallback font even
-            # has the glyph is not something worth depending on.
             mid = total_height // 2
-            pen.line([(x, mid), (x + arrow_length - arrow_head, mid)],
-                     fill=(20, 20, 20), width=max(2, arrow_head // 7))
+            pen.line([(x, mid), (x + arrow_length - arrow_head, mid)], fill=(20, 20, 20), width=max(2, arrow_head // 7))
             pen.polygon([(x + arrow_length, mid),
                          (x + arrow_length - arrow_head, mid - arrow_head // 2),
-                         (x + arrow_length - arrow_head, mid + arrow_head // 2)],
-                        fill=(20, 20, 20))
+                         (x + arrow_length - arrow_head, mid + arrow_head // 2)], fill=(20, 20, 20))
         else:
             font = coefficient_font if kind == "coefficient" else operator_font
             box = pen.textbbox((0, 0), payload, font=font)
-            pen.text((x - box[0], (total_height - (box[3] - box[1])) // 2 - box[1]),
-                     payload, fill=(20, 20, 20), font=font)
-        # A coefficient belongs to the structure after it, so it sits closer.
+            pen.text((x - box[0], (total_height - (box[3] - box[1])) // 2 - box[1]), payload, fill=(20, 20, 20), font=font)
         x += width + (gap // 2 if kind == "coefficient" else gap)
-
     out = io.BytesIO()
     canvas.save(out, format="PNG")
     return out.getvalue()
@@ -842,7 +747,6 @@ def generate_mol_file_bytes(smiles: str) -> bytes | None:
 
 
 def _element_counts(smiles: str) -> tuple[dict[str, int], int] | None:
-    """Atom counts (explicit hydrogens included) and net charge for one species."""
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
@@ -850,8 +754,6 @@ def _element_counts(smiles: str) -> tuple[dict[str, int], int] | None:
     charge = 0
     for atom in mol.GetAtoms():
         counts[atom.GetSymbol()] = counts.get(atom.GetSymbol(), 0) + 1
-        # Hydrogens are implicit in SMILES; a balance check that ignored them
-        # would call CH4 -> C + 2 H2 balanced.
         h = atom.GetTotalNumHs()
         if h:
             counts["H"] = counts.get("H", 0) + h
@@ -860,15 +762,6 @@ def _element_counts(smiles: str) -> tuple[dict[str, int], int] | None:
 
 
 def check_reaction_balance(reactant_pairs, product_pairs) -> dict:
-    """Is the equation balanced, given the coefficients the person supplied?
-
-    `*_pairs` are (coefficient, smiles). Returns a verdict with the per-element
-    surplus and the charge difference, so the caller can say exactly what is
-    missing instead of "unbalanced".
-
-    This is reported, never enforced: a chemist may legitimately want to draw an
-    unbalanced scheme (a fragment, a mechanism step, an unspecified counter-ion).
-    Drawing it without noticing is the failure -- being told is not."""
     def side_totals(pairs):
         totals: dict[str, Fraction] = {}
         charge = Fraction(0)
@@ -881,29 +774,23 @@ def check_reaction_balance(reactant_pairs, product_pairs) -> dict:
                 totals[element] = totals.get(element, Fraction(0)) + Fraction(coefficient) * n
             charge += Fraction(coefficient) * q
         return totals, charge
-
     left, left_charge = side_totals(reactant_pairs)
     right, right_charge = side_totals(product_pairs)
     if left is None or right is None:
         return {"checked": False, "balanced": False,
                 "message": "The structures could not be read, so balance was not checked."}
-
     diffs = {}
     for element in sorted(set(left) | set(right)):
         delta = right.get(element, Fraction(0)) - left.get(element, Fraction(0))
         if delta != 0:
             diffs[element] = delta
     charge_delta = right_charge - left_charge
-
     def fmt(value):
         value = Fraction(value)
         return str(value.numerator) if value.denominator == 1 else str(value)
-
     if not diffs and charge_delta == 0:
         return {"checked": True, "balanced": True,
-                "message": "The equation is balanced: every element and the total charge "
-                           "match on both sides."}
-
+                "message": "The equation is balanced: every element and the total charge match on both sides."}
     parts = []
     for element, delta in diffs.items():
         side = "product" if delta > 0 else "reactant"
@@ -911,46 +798,25 @@ def check_reaction_balance(reactant_pairs, product_pairs) -> dict:
     if charge_delta != 0:
         parts.append("a net charge difference of %s" % fmt(charge_delta))
     return {"checked": True, "balanced": False,
-            # Signed product-minus-reactant counts are what the arithmetic
-            # produces, but "element_surplus: {O: -1}" reads as a surplus of
-            # minus one. Both forms are reported, each named for what it is.
             "element_difference": {e: fmt(d) for e, d in diffs.items()},
-            "excess_side": {e: ("product" if d > 0 else "reactant")
-                            for e, d in diffs.items()},
+            "excess_side": {e: ("product" if d > 0 else "reactant") for e, d in diffs.items()},
             "excess_amount": {e: fmt(abs(d)) for e, d in diffs.items()},
             "charge_difference": fmt(charge_delta),
-            "message": "The equation is NOT balanced — there is an excess of "
-                       + "; ".join(parts) + ". The scheme was still drawn, in case that "
-                       "is what you intended."}
+            "message": "The equation is NOT balanced — there is an excess of " + "; ".join(parts) + ". The scheme was still drawn, in case that is what you intended."}
 
 
 def validate_rxn_block(text: str) -> dict:
-    """Structurally validates an MDL RXN block before it is offered as a download.
-
-    The point is to be able to say something true about the file. ChemDraw is not
-    installed here and cannot be, so "opens in ChemDraw" can only ever be an
-    inference -- but "this is a well-formed MDL RXN V2000 file, and that is the
-    format ChemDraw imports" IS checkable, and it is checked here: the $RXN
-    header and its four lines, a counts line whose two numbers match the number
-    of $MOL blocks that follow, and every one of those blocks carrying a V2000
-    counts line and terminating with `M  END`.
-
-    A malformed file is far more likely than a ChemDraw that cannot read a valid
-    one, so this is the check worth making."""
     problems: list[str] = []
     lines = (text or "").splitlines()
     if not lines or lines[0].strip() != "$RXN":
         return {"valid": False, "problems": ["the file does not begin with the $RXN header"]}
     if len(lines) < 5:
         return {"valid": False, "problems": ["the $RXN header is incomplete"]}
-
     try:
         n_reactants = int(lines[4][0:3])
         n_products = int(lines[4][3:6])
     except (ValueError, IndexError):
-        return {"valid": False,
-                "problems": ["the reactant/product counts line is not in MDL fixed-column form"]}
-
+        return {"valid": False, "problems": ["the reactant/product counts line is not in MDL fixed-column form"]}
     blocks, current = [], None
     for line in lines[5:]:
         if line.strip() == "$MOL":
@@ -961,37 +827,18 @@ def validate_rxn_block(text: str) -> dict:
             current.append(line)
     if current is not None:
         blocks.append(current)
-
     if len(blocks) != n_reactants + n_products:
-        problems.append("the header declares %d components but the file contains %d"
-                        % (n_reactants + n_products, len(blocks)))
+        problems.append("the header declares %d components but the file contains %d" % (n_reactants + n_products, len(blocks)))
     for i, block in enumerate(blocks, 1):
         if not any(l.rstrip().endswith(("V2000", "V3000")) for l in block[:6]):
             problems.append("component %d has no V2000/V3000 counts line" % i)
         if not any(l.strip() == "M  END" for l in block):
             problems.append("component %d is not terminated with 'M  END'" % i)
-
-    return {
-        "valid": not problems,
-        "problems": problems,
-        "format": "MDL RXN V2000",
-        "reactants": n_reactants,
-        "products": n_products,
-        "opens_in": ["ChemDraw", "ChemDraw JS", "MarvinSketch", "ISIS/Draw", "Avogadro",
-                     "RDKit", "Open Babel"],
-    }
+    return {"valid": not problems, "problems": problems, "format": "MDL RXN V2000", "reactants": n_reactants, "products": n_products,
+            "opens_in": ["ChemDraw", "ChemDraw JS", "MarvinSketch", "ISIS/Draw", "Avogadro", "RDKit", "Open Babel"]}
 
 
 def generate_rxn_file_bytes(reactant_pairs, product_pairs, title: str = "") -> bytes | None:
-    """Writes an MDL RXN V2000 file, repeating each species by its coefficient.
-
-    The RXN format has no field for a stoichiometric coefficient; the convention
-    every reader understands is that `2 H2O` means the structure appears twice.
-    So ChemDraw will show two water molecules rather than the text "2 H2O" --
-    the stoichiometry is chemically present and machine-readable, just not
-    rendered as a numeral. Coefficients must therefore be whole numbers by the
-    time they reach here; `scale_terms_to_integers` is what guarantees that.
-    """
     def expand(pairs):
         out = []
         for coefficient, smiles in pairs:
@@ -1000,20 +847,15 @@ def generate_rxn_file_bytes(reactant_pairs, product_pairs, title: str = "") -> b
                 return None
             out.extend([smiles] * int(n))
         return out
-
     left, right = expand(reactant_pairs), expand(product_pairs)
     if not left or not right:
         return None
-    rxn = rdChemReactions.ReactionFromSmarts("%s>>%s" % (".".join(left), ".".join(right)),
-                                             useSmiles=True)
+    rxn = rdChemReactions.ReactionFromSmarts("%s>>%s" % (".".join(left), ".".join(right)), useSmiles=True)
     if rxn is None:
         return None
     rdChemReactions.Compute2DCoordsForReaction(rxn)
     block = rdChemReactions.ReactionToRxnBlock(rxn)
-
     if title:
-        # Line 2 of the $RXN header is the reaction name; readers preserve it and
-        # ChemDraw shows it, so the equation as it was typed travels with the file.
         lines = block.split("\n")
         if len(lines) > 2:
             lines[1] = title[:80]
@@ -1035,18 +877,9 @@ CALC_TYPES = {
 }
 COMPOSITE_METHODS = ["r2SCAN-3C", "B97-3C", "PBEh-3C"]
 DFT_FUNCTIONALS = ["B3LYP", "CAM-B3LYP", "PBE0", "wB97M-V", "M062X", "wB97X-D4", "PBE", "BP86"]
-# The correlation-fitting basis must MATCH the orbital basis. These used to
-# hardcode "def2-tzvp/c", so picking def2-QZVP or cc-pVTZ produced a mismatched
-# /C auxiliary basis: ORCA runs without complaining and the RI error quietly
-# exceeds the method's own accuracy. AutoAux derives the right auxiliary basis
-# from whatever orbital basis the person chose, which is what ORCA recommends
-# when a matching /C set is not being named explicitly.
 MP2_VARIANTS = ["MP2", "RI-MP2", "DLPNO-MP2"]
 CCSD_VARIANTS = ["CCSD", "CCSD(T)", "DLPNO-CCSD", "DLPNO-CCSD(T)"]
-#: Methods that need a /C auxiliary basis; AutoAux is added for them.
 _NEEDS_AUX_C = ("RI-MP2", "DLPNO-MP2", "DLPNO-CCSD", "DLPNO-CCSD(T)")
-#: X2C requires a relativistically recontracted basis. Pairing it with def2 or
-#: cc-pV* is a methodological error ORCA will not warn about.
 X2C_BASIS = {
     "def2-SVP": "x2c-SVPall", "def2-TZVP": "x2c-TZVPall",
     "def2-TZVPP": "x2c-TZVPPall", "def2-QZVP": "x2c-QZVPall",
@@ -1065,60 +898,38 @@ SOLVENTS = ["Water", "Ethanol", "Methanol", "Acetone", "Chloroform", "DCM", "DMS
 
 def generate_orca_6_input(d: dict) -> str:
     input_text = "# ORCA 6.1 Input generated by Chemistry Lab\n"
-
     if d.get("custom_line"):
         input_text += f"{d['custom_line']}\n\n"
     else:
-        calc_cmd = {"sp": "SP", "opt": "Opt", "opt freq": "Opt Freq", "optts": "OptTS", "tddft": "SP"}.get(
-            d.get("calc_type", "sp"), "SP"
-        )
+        calc_cmd = {"sp": "SP", "opt": "Opt", "opt freq": "Opt Freq", "optts": "OptTS", "tddft": "SP"}.get(d.get("calc_type", "sp"), "SP")
         solv_str = f"{d['solv_model'].upper()}({d.get('solvent', 'Water')})" if d.get("solv_model", "none") != "none" else ""
         acc_part = f"{d['ri_type'].upper()} AutoAux" if d.get("ri_type", "none") != "none" else ""
         disp_part = d["disp"].upper() if d.get("disp", "none") != "none" else ""
         method = d.get("theory", "")
         basis = d.get("basis", "") if d.get("family") != "f_comp" else ""
-
         x2c, notes = "", []
         if d.get("x2c"):
             x2c = "X2C"
             swapped = X2C_BASIS.get(basis)
             if swapped:
-                notes.append("# X2C needs a relativistically recontracted basis; "
-                             "%s was substituted for %s." % (swapped, basis))
+                notes.append("# X2C needs a relativistically recontracted basis; %s was substituted for %s." % (swapped, basis))
                 basis = swapped
             elif basis:
-                notes.append("# WARNING: X2C is a relativistic Hamiltonian and %s is not a "
-                             "relativistically recontracted basis. Use an x2c-* or SARC set."
-                             % basis)
+                notes.append("# WARNING: X2C is a relativistic Hamiltonian and %s is not a relativistically recontracted basis. Use an x2c-* or SARC set." % basis)
             else:
-                # A 3c composite method ships its own, non-relativistic, heavily
-                # parameterised basis and its own dispersion and BSSE
-                # corrections. Those parameters were fitted without a
-                # relativistic Hamiltonian, so combining one with X2C is outside
-                # the range the method was defined for -- and the basis cannot
-                # be swapped without ceasing to be that method.
-                notes.append("# WARNING: X2C was requested with a composite (3c) method. "
-                             "Composite methods carry their own non-relativistic basis and "
-                             "fitted corrections, so they are not defined with a relativistic "
-                             "Hamiltonian. Use an explicit functional with an x2c-* or SARC "
-                             "basis instead.")
+                notes.append("# WARNING: X2C was requested with a composite (3c) method. Composite methods carry their own non-relativistic basis and fitted corrections, so they are not defined with a relativistic Hamiltonian. Use an explicit functional with an x2c-* or SARC basis instead.")
         if any(method.upper().startswith(m) for m in _NEEDS_AUX_C) and "autoaux" not in acc_part.lower():
-            # Derived from the chosen orbital basis rather than hardcoded.
             acc_part = (acc_part + " AutoAux").strip()
-
         keywords = ["!", method, basis, disp_part, acc_part, solv_str, calc_cmd, x2c]
         keywords = [k for k in keywords if str(k).strip()]
         input_text += " ".join(keywords) + "\n"
         for n in notes:
             input_text += n + "\n"
         input_text += "\n"
-
     input_text += f"%pal nprocs {d.get('cores', 4)} end\n"
     input_text += f"%maxcore {d.get('ram', 6000)}\n\n"
-
     if d.get("calc_type") == "tddft":
         input_text += f"%tddft\n   nroots {d.get('nroots', 10)}\nend\n\n"
-
     input_text += f"* xyz {d.get('charge', 0)} {d.get('mult', 1)}\n"
     input_text += f"{d.get('coords', '')}\n"
     input_text += "*\n"
