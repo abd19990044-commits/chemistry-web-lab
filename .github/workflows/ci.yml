@@ -31,11 +31,11 @@ jobs:
       - name: Run ORCA policy regression tests
         env:
           SECRET_KEY: ci-test-secret-key
-        run: pytest -q tests/test_orca_policy.py
+        run: python -m pytest -q tests/test_orca_policy.py
       - name: Run production and drawing tests
         env:
           SECRET_KEY: ci-test-secret-key
-        run: pytest -q tests/test_production_wiring.py tests/test_drawing.py
+        run: python -m pytest -q tests/test_production_wiring.py tests/test_drawing.py
       - name: Run frontend load-time regression tests
         env:
           SECRET_KEY: ci-test-secret-key
