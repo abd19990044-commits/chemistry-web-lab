@@ -57,9 +57,6 @@ try:
         _kr._ORIGINAL_CHECK_JOB_STATUS = _kr.check_job_status
         _kr.check_job_status = _production_check_job_status
 
-    # Cosmetic production fix: the original UI timer measures browser
-    # submission -> now. Once the backend says COMPLETE, the frontend can
-    # replace the misleading live timer with a terminal label.
     try:
         import flask as _flask
         _original_flask_init = _flask.Flask.__init__
@@ -92,9 +89,12 @@ except Exception:
     pass
 
 # ─────────────────────────────────────────────────────────────
-# RDKit publication-style drawing proportions
+# RDKit publication-quality drawing
 # ─────────────────────────────────────────────────────────────
 try:
+    import io as _io
+    import logging as _logging
+    from PIL import Image as _Image
     import chem_core as _chem_core
 
     def _balanced_draw_options(drawer):
@@ -111,17 +111,21 @@ try:
 
     _chem_core._apply_common_draw_options = _balanced_draw_options
 
-    def _production_render_molecule_png(smiles: str, legend: str = "", size=None) -> bytes | None:
-        """Render a molecule with a stable chemical scale.
+    _PUBLICATION_SIZE = (2400, 1800)
+    _REFERENCE_SIZE = (560, 420)
+    _PUBLICATION_DPI = 600
 
-        The bond length, rather than the canvas dimensions, defines the visual
-        scale. This prevents RDKit from enlarging the core skeleton whenever a
-        molecule has fewer substituents and prevents OH/NH/O labels from
-        becoming disproportionately large. The same principle is used by the
-        reaction drawing path in the project.
+    def _production_render_molecule_png(smiles: str, legend: str = "", size=None) -> bytes | None:
+        """Render the corrected drawing at 2400x1800 px with 600 dpi metadata.
+
+        The frontend may display the PNG at a smaller CSS width, but the actual
+        downloaded image retains publication-grade pixels. Geometry and label
+        proportions are scaled with the canvas so the earlier size correction is
+        preserved instead of producing a tiny molecule on the larger canvas.
         """
-        if size is None:
-            size = _chem_core.MOL_IMAGE_SIZE
+        if size is None or size == _chem_core.MOL_IMAGE_SIZE:
+            size = _PUBLICATION_SIZE
+
         mol = _chem_core.Chem.MolFromSmiles(smiles)
         if mol is None:
             return None
@@ -134,18 +138,42 @@ try:
         drawer = _chem_core.rdMolDraw2D.MolDraw2DCairo(size[0], size[1])
         _balanced_draw_options(drawer)
         opts = drawer.drawOptions()
-        # Keep the skeleton stable across molecules. RDKit will only need to
-        # compromise when a very large structure physically cannot fit.
+        scale = min(size[0] / _REFERENCE_SIZE[0], size[1] / _REFERENCE_SIZE[1])
         try:
-            opts.fixedBondLength = 30.0
-            opts.fixedFontSize = 16.0
-            opts.minFontSize = 12.0
-            opts.maxFontSize = 18.0
+            # 30 px / 16 pt were the corrected values at 560x420. Scale them
+            # linearly so the high-resolution output has identical proportions.
+            opts.fixedBondLength = 30.0 * scale
+            opts.fixedFontSize = 16.0 * scale
+            opts.minFontSize = 12.0 * scale
+            opts.maxFontSize = 18.0 * scale
+            opts.bondLineWidth = 1.7 * scale
+            opts.padding = 0.05
+            opts.centreMoleculesBeforeDrawing = True
+            opts.prepareMolsBeforeDrawing = True
         except Exception:  # noqa: BLE001
             pass
+
         _chem_core.rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol, legend=legend)
         drawer.FinishDrawing()
-        return drawer.GetDrawingText()
+        raw = drawer.GetDrawingText()
+
+        try:
+            # Cairo creates the full-resolution pixels. Pillow only adds the
+            # explicit physical-resolution metadata required by many journals.
+            image = _Image.open(_io.BytesIO(raw)).convert("RGB")
+            out = _io.BytesIO()
+            image.save(
+                out,
+                format="PNG",
+                dpi=(_PUBLICATION_DPI, _PUBLICATION_DPI),
+                optimize=True,
+            )
+            return out.getvalue()
+        except Exception as exc:  # noqa: BLE001
+            _logging.getLogger("chemistry_tools").warning(
+                "Could not attach 600 dpi PNG metadata: %s", exc
+            )
+            return raw
 
     _chem_core.render_molecule_png = _production_render_molecule_png
 except Exception:
