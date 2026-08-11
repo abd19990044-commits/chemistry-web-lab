@@ -17,7 +17,7 @@ from rdkit.Chem.Draw import rdMolDraw2D
 MOL_IMAGE_SIZE = (900, 700)
 DRAWING_BOND_LINE_WIDTH = 2.2
 DRAWING_FIXED_BOND_LENGTH = 38.0
-DRAWING_FIXED_FONT_SIZE = 22.0
+DRAWING_FIXED_FONT_SIZE = 22
 DRAWING_PADDING = 0.08
 
 
@@ -31,9 +31,6 @@ def prepare_molecule(smiles: str):
     except Exception:
         return None
 
-    # CoordGen gives cleaner fused-ring and heterocycle layouts. The fallback
-    # keeps compatibility with RDKit builds where CoordGen is unavailable or
-    # fails on an unusual structure.
     try:
         rdCoordGen.AddCoords(mol)
     except Exception:
@@ -69,9 +66,8 @@ def apply_draw_options(drawer) -> None:
     opts.multipleBondOffset = 0.16
     opts.additionalAtomLabelPadding = 0.02
     # Do not call SetACS1996Mode here. Its Python API requires a MolDrawOptions
-    # object plus a mean bond length, and it also overwrites fixedFontSize. The
-    # previous one-argument call was silently caught, so it never configured
-    # ACS mode while making the drawing code look as though it had.
+    # object plus a mean bond length, and it overwrites fixedFontSize. The former
+    # one-argument call was silently caught, so it never configured ACS mode.
 
 
 def trim_white(image, pad: int = 12):
