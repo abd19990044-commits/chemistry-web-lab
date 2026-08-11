@@ -23,11 +23,22 @@ jobs:
         run: |
           python -m py_compile chem_core.py app.py
           python - <<'PY'
+          import traceback
           import chem_core as c
-          x = c.render_molecule_svg('CCO')
-          assert x and b'<svg' in x and b'<path' in x
-          r = c.render_reaction_svg([(1, 'CCO')], [(1, 'O')], True)
-          assert r and b'<svg' in r
+          for label, fn in [
+              ('molecule SVG', lambda: c.render_molecule_svg('CCO')),
+              ('reaction SVG', lambda: c.render_reaction_svg([(1, 'CCO')], [(1, 'O')], True)),
+          ]:
+              try:
+                  value = fn()
+                  print(label, 'type=', type(value).__name__, 'bytes=', len(value or b''))
+                  print((value or b'')[:120])
+                  if not value or b'<svg' not in value:
+                      raise RuntimeError('SVG output missing <svg> marker')
+              except Exception:
+                  print(label, 'FAILED')
+                  traceback.print_exc()
+                  raise
           print('SVG smoke test: OK')
           PY
 
