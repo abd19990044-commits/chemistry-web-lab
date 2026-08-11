@@ -11,7 +11,7 @@ from .errors import (IntegrityError, OrchestratorError, PermanentError, Transien
 from .models import CheckpointManifest, Event, JobManifest
 from .states import TRANSITIONS, JobState, Trigger
 
-__version__ = "2.0.2"
+__version__ = "2.0.3"
 
 __all__ = [
     "CONFIG",
@@ -20,22 +20,16 @@ __all__ = [
     "TRANSITIONS",
     "CheckpointManifest",
     "JobManifest",
-    "Event",
     "OrchestratorError",
     "TransientError",
     "PermanentError",
     "IntegrityError",
     "get_service",
-    "__version__",
 ]
 
-# app.py historically declares /api/kaggle/* after importing this package.
-# Install the compatibility adapter before those decorators execute, so the
-# browser contract remains stable while every calculation request is handled
-# by OrchestratorService rather than the legacy runner.
-from .legacy_compat import install_legacy_route_adapter as _install_legacy_route_adapter
-_install_legacy_route_adapter()
-del _install_legacy_route_adapter
+# The Flask compatibility adapter is installed explicitly by app.py, because
+# it needs the actual Flask application instance. Importing this package must
+# remain side-effect-safe for CI, workers, CLI tools, and tests.
 
 # The Flask application imports chem_core immediately before importing this
 # package. Install the scientific policy gate at this boundary so the existing
