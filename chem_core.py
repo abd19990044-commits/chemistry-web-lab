@@ -622,6 +622,9 @@ def render_reaction_svg(reactant_pairs, product_pairs, small_as_formula: bool = 
         for i, (coefficient, smiles) in enumerate(pairs):
             if i:
                 tokens.append(("op", "+"))
+            label = ReactionTerm(Fraction(coefficient), "").pretty_coefficient
+            if label:
+                tokens.append(("coefficient", label))
             formula = formula_for_display(smiles) if small_as_formula else None
             if formula:
                 tokens.append(("formula", formula))
@@ -630,9 +633,6 @@ def render_reaction_svg(reactant_pairs, product_pairs, small_as_formula: bool = 
                 if fragment is None:
                     return None
                 tokens.append(("mol", fragment))
-            label = ReactionTerm(Fraction(coefficient), "").pretty_coefficient
-            if label:
-                tokens.append(("coefficient", label))
     if not tokens:
         return None
 
