@@ -567,36 +567,35 @@ def api_orca_generate():
 # ─────────────────────────────────────────────────────────────
 @app.route("/api/kaggle/login", methods=["POST"])
 def api_kaggle_login():
-    """Verifies the person's Kaggle username + API key/token and, in the
-    same call, pulls back the list of jobs this site has previously
-    submitted under that account straight from Kaggle. This is the
-    recovery path when a browser's local data (and with it the locally
-    remembered job list) has been cleared or a different browser/device
-    is used — logging back in with the same Kaggle credentials rebuilds
-    the job list from Kaggle itself rather than from anything stored on
-    this server."""
-    data = request.get_json(force=True, silent=True) or {}
-    kaggle_username = (data.get("kaggle_username") or "").strip()
-    kaggle_key = (data.get("kaggle_key") or "").strip()
-    kaggle_username, kaggle_key = kaggle_runner.clean_kaggle_credentials(kaggle_username, kaggle_key)
-
-    if not kaggle_username or not kaggle_key:
-        return error_response("Please enter your Kaggle username and API key/token.")
-
+    """Fast credential verification; job recovery is separate."""
+    data=request.get_json(force=True,silent=True) or {}
+    kaggle_username=(data.get("kaggle_username") or "").strip()
+    kaggle_key=(data.get("kaggle_key") or "").strip()
+    kaggle_username,kaggle_key=kaggle_runner.clean_kaggle_credentials(kaggle_username,kaggle_key)
+    if not kaggle_username or not kaggle_key: return error_response("Please enter your Kaggle username and API key/token.")
     try:
-        jobs = kaggle_runner.list_jobs(kaggle_username, kaggle_key)
-        log.info("kaggle sign-in", extra={"event": "signed_in", "jobs": len(jobs)})
-        return jsonify({"ok": True, "jobs": jobs})
-    except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
-        # 503, not 401. A 401 tells the person their credentials are wrong and
-        # sends them to regenerate their token — which cannot help, and which
-        # kills every job already running, since each running kernel carries the
-        # old token to push its own successor.
-        log.error("kaggle CLI unavailable:\n%s", traceback.format_exc())
-        return error_response(str(exc), 503)
-    except Exception as exc:  # noqa: BLE001
-        log.error("api_kaggle_login failed:\n%s", traceback.format_exc())
-        return error_response(f"Could not sign in to Kaggle: {exc}", 401)
+        auth=kaggle_runner.verify_kaggle_credentials(kaggle_username,kaggle_key)
+        return jsonify({"ok":True,"username":auth["username"]})
+    except (kaggle_runner.KaggleCliUnavailable,kaggle_runner.KaggleUnreachable) as exc:
+        return error_response(str(exc),503)
+    except Exception as exc:
+        return error_response(f"Could not sign in to Kaggle: {str(exc).strip() or 'credential verification failed.'}",401)
+
+
+@app.route("/api/kaggle/sync", methods=["POST"])
+def api_kaggle_sync():
+    """Synchronize jobs independently from authentication."""
+    data=request.get_json(force=True,silent=True) or {}
+    kaggle_username=(data.get("kaggle_username") or "").strip()
+    kaggle_key=(data.get("kaggle_key") or "").strip()
+    kaggle_username,kaggle_key=kaggle_runner.clean_kaggle_credentials(kaggle_username,kaggle_key)
+    if not kaggle_username or not kaggle_key: return error_response("Missing Kaggle username or API key/token.")
+    try:
+        return jsonify({"ok":True,"jobs":kaggle_runner.list_jobs(kaggle_username,kaggle_key)})
+    except (kaggle_runner.KaggleCliUnavailable,kaggle_runner.KaggleUnreachable) as exc:
+        return error_response(str(exc),503)
+    except Exception as exc:
+        return error_response(f"Could not synchronize Kaggle jobs: {exc}",502)
 
 
 @app.route("/api/kaggle/submit", methods=["POST"])

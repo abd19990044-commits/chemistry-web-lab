@@ -84,13 +84,13 @@
     anchorEl.download = filename;
   }
   async function postJSON(url, body) {
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await resp.json().catch(() => ({ ok: false, error: "Invalid response from server." }));
-    if (!resp.ok || !data.ok) throw new Error(data.error || "An unexpected error occurred.");
+    const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const contentType = resp.headers.get("content-type") || "";
+    let data = null;
+    if (contentType.includes("application/json")) data = await resp.json().catch(() => null);
+    else { const text = await resp.text().catch(() => ""); const detail = text.replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim().slice(0,240); throw new Error(`Server returned HTTP ${resp.status}${detail ? `: ${detail}` : "."}`); }
+    if (!data) throw new Error(`Server returned HTTP ${resp.status} with an invalid JSON response.`);
+    if (!resp.ok || !data.ok) throw new Error(data.error || `Request failed (HTTP ${resp.status}).`);
     return data;
   }
   function showError(el, message) { el.textContent = message; el.classList.remove("hidden"); }
@@ -884,21 +884,16 @@
     renderJobs();
   }
 
+  async function syncKaggleJobs(username, key, opts = {}) {
+    try { const data = await postJSON("/api/kaggle/sync", {kaggle_username: username, kaggle_key: key}); mergeRemoteJobs(username,key,data.jobs||[]); pollAllActiveJobs(); return true; }
+    catch (err) { if (!(opts && opts.silent)) showToast(`<strong>Kaggle job sync failed</strong><br>${err.message}`); else console.warn("Kaggle job sync failed:",err.message); return false; }
+  }
+
   async function attemptLogin(username, key, opts) {
-    const silent = opts && opts.silent;
-    if (!silent) { hide(kaggleLoginError); show(kaggleLoginLoading); }
-    try {
-      const data = await postJSON("/api/kaggle/login", { kaggle_username: username, kaggle_key: key });
-      setSignedIn(username, key);
-      mergeRemoteJobs(username, key, data.jobs || []);
-      pollAllActiveJobs();
-      return true;
-    } catch (err) {
-      if (!silent) showError(kaggleLoginError, err.message);
-      return false;
-    } finally {
-      if (!silent) hide(kaggleLoginLoading);
-    }
+    const silent=opts&&opts.silent; if(!silent){hide(kaggleLoginError);show(kaggleLoginLoading);}
+    try { const data=await postJSON("/api/kaggle/login",{kaggle_username:username,kaggle_key:key}); const u=data.username||username; setSignedIn(u,key); sessionKaggleKey=key; syncKaggleJobs(u,key,{silent:true}); return true; }
+    catch(err){ if(!silent) showError(kaggleLoginError,err.message); return false; }
+    finally{ if(!silent) hide(kaggleLoginLoading); }
   }
 
   // If credentials were remembered from a previous visit, sign in silently.

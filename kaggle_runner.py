@@ -3091,6 +3091,21 @@ def push_job(job_dir: str, kaggle_username: str, kaggle_key: str) -> dict:
     }
 
 
+
+def verify_kaggle_credentials(kaggle_username: str, kaggle_key: str) -> dict:
+    """Fast authentication check without enumerating account history."""
+    auth = resolve_kaggle_auth(kaggle_username, kaggle_key)
+    with _temp_kaggle_env(kaggle_username, kaggle_key) as env:
+        result = _run_kaggle_cli(["kaggle","kernels","list","--mine","--csv","--page-size","1","--page","1"], env=env, timeout=30, attempts=2, base_delay=1.0)
+        combined=(result.stdout or "")+"\n"+(result.stderr or "")
+        if result.returncode != 0:
+            _raise_if_cli_broken(combined); _raise_if_unreachable(combined)
+            low=combined.lower()
+            if "401" in combined or "unauthorized" in low or "authentication required" in low or "forbidden" in low:
+                raise RuntimeError("Kaggle rejected these credentials. Check the username and API key/token.")
+            raise RuntimeError((result.stderr or result.stdout or "Kaggle credential verification failed.").strip())
+    return {"username": auth["username"]}
+
 def list_jobs(kaggle_username: str, kaggle_key: str) -> list[dict]:
     """Logs in with the person's own Kaggle username + key/token and asks
     Kaggle itself for every kernel this account owns whose slug matches the
