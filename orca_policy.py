@@ -22,7 +22,7 @@ _HYBRID_DFT = {"B3LYP", "CAM-B3LYP", "PBE0", "M062X", "WB97M-V", "WB97X-D4"}
 _NONHYBRID_DFT = {"PBE", "BP86"}
 _COMPOSITE = {"R2SCAN-3C", "B97-3C", "PBEH-3C"}
 _DLPNO = {"DLPNO-MP2", "DLPNO-CCSD", "DLPNO-CCSD(T)"}
-_CORRELATION_RI = {"RI-MP2", "DLPNO-MP2", "DLPNO-CCSD", "DLPNO-CCSD(T)"}
+_CORRELATION_RI = {"RI-MP2"}
 
 
 class OrcaPolicyError(ValueError):
@@ -102,11 +102,14 @@ def validate_payload(payload: dict) -> None:
             "not generate a nominal 'No RI' input for this method."
         )
 
-    if method in _DLPNO and ri == "NONE":
-        raise OrcaPolicyError(f"{method} obligatorily uses RI. Select an RI-based option.")
+    # DLPNO methods obligatorily use RI internally. The wizard deliberately
+    # skips a separate RI screen for them and the low-level renderer adds
+    # AutoAux, so ``ri_type=none`` here means "no extra RI selector" rather than
+    # "turn RI off".
+    if method in _DLPNO and ri not in {"NONE", "RIJCOSX", "RIJK", "RI"}:
+        raise OrcaPolicyError(f"Unsupported RI selection for {method}.")
 
     # The renderer substitutes x2c-* bases for the supported def2 choices.
-    # Unsupported basis families are rejected instead of being silently paired.
     if payload.get("x2c") and basis and basis not in {
         "def2-SVP", "def2-TZVP", "def2-TZVPP", "def2-QZVP", "def2-TZVPD", "ma-def2-TZVP"
     }:
@@ -130,11 +133,15 @@ def install_policy() -> None:
         text = original(payload)
         if not payload.get("custom_line") and _norm(payload.get("ri_type") or "none") == "NONE":
             # ORCA 6.1 uses RI by default for non-hybrid DFT and RIJCOSX by
-            # default for hybrid DFT. NORI is the explicit opt-out.
-            lines = text.splitlines()
-            if len(lines) > 1:
-                lines[1] = lines[1].rstrip() + " NORI"
-                text = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+            # default for hybrid DFT. NORI is the explicit opt-out. DLPNO
+            # methods are the exception: their own method keyword requires RI,
+            # so the guided wizard does not present the No-RI screen for them.
+            method = _norm(payload.get("theory"))
+            if method not in _DLPNO:
+                lines = text.splitlines()
+                if len(lines) > 1:
+                    lines[1] = lines[1].rstrip() + " NORI"
+                    text = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
         return text
 
     chem_core.generate_orca_6_input = guarded
