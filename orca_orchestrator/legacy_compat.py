@@ -2,9 +2,9 @@
 """Compatibility adapter for the historical ``/api/kaggle/*`` browser API.
 
 The adapter translates the old HTTP contract to OrchestratorService. It never
-runs the legacy Kaggle runner. ``install_legacy_route_adapter`` is called before
-app.py declares its historical routes, so the instance-local route hook safely
-replaces those view functions without modifying Flask globally.
+runs the legacy Kaggle runner. ``install_legacy_route_adapter`` is called while
+app.py is declaring its historical routes, so the instance-local route hook
+safely replaces those view functions without modifying Flask globally.
 """
 from __future__ import annotations
 import os, re, shutil
@@ -114,16 +114,29 @@ LEGACY_ROUTES = {"/api/kaggle/login": login, "/api/kaggle/submit": submit, "/api
 
 
 def install_legacy_route_adapter(app):
-    """Patch only this Flask application's route-registration method.
+    """Bind legacy route declarations to orchestrator handlers on this app only.
 
-    Called before the remaining app.py routes are declared. This is instance-local
-    and therefore cannot affect unrelated Flask applications or test processes.
+    Flask 3's ``route`` decorator delegates to ``add_url_rule``. The previous
+    implementation patched only the instance's ``add_url_rule`` and was fragile
+    during the package/app import ordering used by this project. Wrapping the
+    route decorator itself makes the interception explicit and deterministic.
     """
-    if getattr(app, "_orca_legacy_adapter_installed", False): return
-    original = app.add_url_rule
-    def add_url_rule(self, rule, endpoint=None, view_func=None, **options):
+    if getattr(app, "_orca_legacy_adapter_installed", False):
+        return
+
+    original_route = app.route
+
+    def route(self, rule, **options):
         replacement = LEGACY_ROUTES.get(str(rule))
-        if replacement is not None: view_func = replacement
-        return original(rule, endpoint=endpoint, view_func=view_func, **options)
-    app.add_url_rule = MethodType(add_url_rule, app)
+        if replacement is None:
+            return original_route(rule, **options)
+
+        def decorator(view_func):
+            endpoint = options.pop("endpoint", None) or view_func.__name__
+            self.add_url_rule(rule, endpoint=endpoint, view_func=replacement, **options)
+            return view_func
+
+        return decorator
+
+    app.route = MethodType(route, app)
     app._orca_legacy_adapter_installed = True
