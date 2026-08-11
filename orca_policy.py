@@ -104,7 +104,7 @@ def validate_payload(payload: dict) -> None:
 
     # DLPNO methods obligatorily use RI internally. The wizard deliberately
     # skips a separate RI screen for them and the low-level renderer adds
-    # AutoAux, so ``ri_type=none`` here means "no extra RI selector" rather than
+    # AutoAux, so ``ri_type=none`` means "no extra RI selector" rather than
     # "turn RI off".
     if method in _DLPNO and ri not in {"NONE", "RIJCOSX", "RIJK", "RI"}:
         raise OrcaPolicyError(f"Unsupported RI selection for {method}.")
@@ -132,12 +132,12 @@ def install_policy() -> None:
         validate_payload(payload)
         text = original(payload)
         if not payload.get("custom_line") and _norm(payload.get("ri_type") or "none") == "NONE":
-            # ORCA 6.1 uses RI by default for non-hybrid DFT and RIJCOSX by
-            # default for hybrid DFT. NORI is the explicit opt-out. DLPNO
-            # methods are the exception: their own method keyword requires RI,
-            # so the guided wizard does not present the No-RI screen for them.
+            # ORCA 6.1 uses RI by default for DFT. NORI is the explicit opt-out.
+            # Canonical MP2 and other methods that do not have the same DFT RI
+            # default do not need an artificial NORI token.
             method = _norm(payload.get("theory"))
-            if method not in _DLPNO:
+            family = str(payload.get("family") or "").strip().lower()
+            if family in {"f_dft", "f_hf"} and method not in _DLPNO:
                 lines = text.splitlines()
                 if len(lines) > 1:
                     lines[1] = lines[1].rstrip() + " NORI"
