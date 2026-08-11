@@ -25,7 +25,8 @@ USER appuser
 # state and the legacy Kaggle runner is not designed as a multi-process
 # coordinator. Threads still allow concurrent HTTP requests while avoiding
 # duplicate worker state, inconsistent fallback Flask secret keys, and races
-# during Kaggle job polling/submission.
-# The publication bootstrap imports the established Flask app and adds only
-# vector-export endpoints plus download controls; it does not replace the app.
-CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "1", "--threads", "8", "--timeout", "900", "--graceful-timeout", "30", "--keep-alive", "5", "publication_bootstrap:app"]
+# during Kaggle job polling/submission. Set SECRET_KEY in the Space secrets
+# for stable sessions across container restarts as documented in README.md.
+# --timeout is intentionally long because result downloads pull a Kaggle
+# archive and stream it to the browser in the same request.
+CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "1", "--threads", "8", "--timeout", "900", "--graceful-timeout", "30", "--keep-alive", "5", "app:app"]
