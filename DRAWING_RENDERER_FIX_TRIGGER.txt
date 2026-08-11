@@ -1,1 +1,1 @@
-Trigger deterministic RDKit molecule renderer deployment after workflow updates are settled. Second deployment trigger.
+Trigger deployment of the 600-DPI publication-quality chemical renderer from commit 5a58e156734b41152fc5c450efd13d8f7d88b4dd.
