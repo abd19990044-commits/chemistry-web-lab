@@ -57,9 +57,9 @@ try:
         _kr._ORIGINAL_CHECK_JOB_STATUS = _kr.check_job_status
         _kr.check_job_status = _production_check_job_status
 
-    # Cosmetic production fix: the original UI timer measures time since the
-    # browser submitted the job. Once the backend says COMPLETE, the frontend
-    # replacement can show a terminal label instead of a misleading live timer.
+    # Cosmetic production fix: the original UI timer measures browser
+    # submission -> now. Once the backend says COMPLETE, the frontend can
+    # replace the misleading live timer with a terminal label.
     try:
         import flask as _flask
         _original_flask_init = _flask.Flask.__init__
@@ -94,10 +94,11 @@ except Exception:
 # ─────────────────────────────────────────────────────────────
 # RDKit publication-style drawing proportions
 # ─────────────────────────────────────────────────────────────
-# RDKit exposes baseFontSize, fixedFontSize, min/maxFontSize and bondLineWidth
-# through MolDrawOptions.  The previous project setting of 0.85 made labels
-# such as OH and OMe visually dominate the carbon skeleton.  Keep this patch
-# defensive so a missing optional chemistry dependency can never stop the Space.
+# RDKit's automatic label scaling can allow atom labels such as OH, O, N and
+# NH to become visually dominant on a 560x420 canvas.  Keep automatic scaling,
+# but use a tighter font range so labels remain subordinate to the molecular
+# skeleton.  This is intentionally isolated from chem_core.py so it is easy to
+# audit and does not disturb the chemistry or coordinate-generation logic.
 try:
     import chem_core as _chem_core
 
@@ -105,10 +106,10 @@ try:
         opts = drawer.drawOptions()
         opts.addStereoAnnotation = True
         opts.bondLineWidth = 1.7
-        opts.baseFontSize = 0.55
-        opts.minFontSize = 7
-        opts.maxFontSize = 24
-        opts.annotationFontScale = 0.45
+        opts.baseFontSize = 0.70
+        opts.minFontSize = 8
+        opts.maxFontSize = 18
+        opts.annotationFontScale = 0.60
         opts.additionalAtomLabelPadding = 0.0
         opts.padding = 0.10
         opts.legendFontSize = 16
