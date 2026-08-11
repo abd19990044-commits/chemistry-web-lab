@@ -4,13 +4,11 @@ Loaded by the Docker entrypoint instead of changing the established application
 architecture. The existing Flask application remains the source of truth for
 all chemistry logic and UI; this module only adds SVG export endpoints and a
 small client-side enhancement that exposes vector downloads.
+
+SVG exports are genuine vector drawings from RDKit's MolDraw2DSVG renderer;
+they do not depend on the 600-DPI PNG preview.
 """
 from __future__ import annotations
-
-import base64
-import json
-import re
-from fractions import Fraction
 
 from flask import Response, jsonify, request
 
