@@ -2,13 +2,13 @@
 """Publication-quality 2D molecular rendering for Chemistry Lab.
 
 The implementation is based on the supplied Chemistry Drawing Bot renderer,
-with additional deterministic CoordGen preparation, ACS-style drawing options,
-high-resolution PNG output, whitespace trimming, and SVG export.
+with deterministic CoordGen preparation, a fixed chemical bond scale, a fixed
+atom-label scale, high-resolution PNG output, whitespace trimming, and SVG
+export.
 """
 from __future__ import annotations
 
 import io
-from pathlib import Path
 
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdDepictor, rdCoordGen
@@ -16,7 +16,8 @@ from rdkit.Chem.Draw import rdMolDraw2D
 
 MOL_IMAGE_SIZE = (900, 700)
 DRAWING_BOND_LINE_WIDTH = 2.2
-DRAWING_FONT_SCALE = 0.95
+DRAWING_FIXED_BOND_LENGTH = 38.0
+DRAWING_FIXED_FONT_SIZE = 22.0
 DRAWING_PADDING = 0.08
 
 
@@ -30,16 +31,16 @@ def prepare_molecule(smiles: str):
     except Exception:
         return None
 
-    # CoordGen is preferred for cleaner fused rings and heterocycles. The
-    # fallback keeps compatibility with RDKit builds where CoordGen fails on
-    # an unusual structure.
+    # CoordGen gives cleaner fused-ring and heterocycle layouts. The fallback
+    # keeps compatibility with RDKit builds where CoordGen is unavailable or
+    # fails on an unusual structure.
     try:
         rdCoordGen.AddCoords(mol)
     except Exception:
         try:
-            rdDepictor.Compute2DCoords(mol, canonOrient=True)
+            rdDepictor.Compute2DCoords(mol, canonOrient=True, bondLength=1.0)
         except Exception:
-            AllChem.Compute2DCoords(mol)
+            AllChem.Compute2DCoords(mol, bondLength=1.0)
 
     try:
         rdDepictor.StraightenDepiction(mol)
@@ -49,33 +50,28 @@ def prepare_molecule(smiles: str):
 
 
 def apply_draw_options(drawer) -> None:
-    """Apply a restrained, publication-oriented chemical drawing style."""
+    """Apply a stable, publication-oriented chemical drawing style.
+
+    RDKit normally derives atom-label size from the final molecular scale. That
+    is useful for fitting arbitrary molecules into a canvas, but it causes the
+    O/OH/N labels to grow or shrink with the size of the whole structure. The
+    application wants a chemically consistent drawing: bond lengths and atom
+    labels remain stable when substituents are added or removed. RDKit exposes
+    both controls explicitly, so both are fixed here.
+    """
     opts = drawer.drawOptions()
     opts.addStereoAnnotation = True
     opts.bondLineWidth = DRAWING_BOND_LINE_WIDTH
-    opts.baseFontSize = DRAWING_FONT_SCALE
-    opts.legendFontSize = 20
+    opts.fixedBondLength = DRAWING_FIXED_BOND_LENGTH
+    opts.fixedFontSize = DRAWING_FIXED_FONT_SIZE
     opts.padding = DRAWING_PADDING
-    try:
-        opts.fixedBondLength = 38
-    except Exception:
-        pass
-    try:
-        opts.multipleBondOffset = 0.16
-    except Exception:
-        pass
-    try:
-        opts.minFontSize = 14
-    except Exception:
-        pass
-    try:
-        opts.annotationFontScale = 0.75
-    except Exception:
-        pass
-    try:
-        rdMolDraw2D.SetACS1996Mode(drawer)
-    except Exception:
-        pass
+    opts.annotationFontScale = 0.75
+    opts.multipleBondOffset = 0.16
+    opts.additionalAtomLabelPadding = 0.02
+    # Do not call SetACS1996Mode here. Its Python API requires a MolDrawOptions
+    # object plus a mean bond length, and it also overwrites fixedFontSize. The
+    # previous one-argument call was silently caught, so it never configured
+    # ACS mode while making the drawing code look as though it had.
 
 
 def trim_white(image, pad: int = 12):
