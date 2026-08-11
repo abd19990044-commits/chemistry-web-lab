@@ -7,7 +7,7 @@ app.py declares its historical routes, so the instance-local route hook safely
 replaces those view functions without modifying Flask globally.
 """
 from __future__ import annotations
-import os, re, shutil
+import os, re, shutil, sys
 from types import MethodType
 from flask import after_this_request, jsonify, request, send_file
 from .credentials import parse as parse_credentials
@@ -113,17 +113,27 @@ LEGACY_ROUTES = {"/api/kaggle/login": login, "/api/kaggle/submit": submit, "/api
                  "/api/kaggle/cancel": cancel, "/api/kaggle/resume": resume}
 
 
-def install_legacy_route_adapter(app):
-    """Patch only this Flask application's route-registration method.
+def install_legacy_route_adapter(app=None):
+    """Patch only the intended Flask application's route-registration method.
 
-    Called before the remaining app.py routes are declared. This is instance-local
-    and therefore cannot affect unrelated Flask applications or test processes.
+    When called by ``app.py`` through the package import, the Flask application
+    already exists as ``app.app`` in ``sys.modules``. For standalone imports,
+    do nothing rather than trying to import the partially initialized Flask
+    module. This keeps the orchestrator import-safe for CI, workers and tools.
     """
-    if getattr(app, "_orca_legacy_adapter_installed", False): return
+    if app is None:
+        module = sys.modules.get("app")
+        app = getattr(module, "app", None) if module is not None else None
+    if app is None:
+        return False
+    if getattr(app, "_orca_legacy_adapter_installed", False):
+        return True
     original = app.add_url_rule
     def add_url_rule(self, rule, endpoint=None, view_func=None, **options):
         replacement = LEGACY_ROUTES.get(str(rule))
-        if replacement is not None: view_func = replacement
+        if replacement is not None:
+            view_func = replacement
         return original(rule, endpoint=endpoint, view_func=view_func, **options)
     app.add_url_rule = MethodType(add_url_rule, app)
     app._orca_legacy_adapter_installed = True
+    return True
