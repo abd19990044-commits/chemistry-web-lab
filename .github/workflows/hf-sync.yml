@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: hf-space-deploy
@@ -25,6 +25,130 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
+
+      - name: Apply 600 dpi publication renderer
+        if: github.actor != 'github-actions[bot]'
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('chem_core.py')
+          s = p.read_text(encoding='utf-8')
+
+          old = 'MOL_IMAGE_SIZE = (560, 420)\nREACTION_SUBIMAGE_SIZE = (420, 340)\nDRAWING_BOND_LINE_WIDTH = 2\nDRAWING_FONT_SCALE = 0.85'
+          new = '''# Publication-quality PNG export: 2400x1800 px = 4x3 in at 600 dpi.
+MOL_IMAGE_SIZE = (2400, 1800)
+REACTION_SUBIMAGE_SIZE = (1680, 1360)
+DRAWING_EXPORT_DPI = 600
+DRAWING_REFERENCE_SIZE = (560, 420)
+DRAWING_BOND_LINE_WIDTH = 2
+DRAWING_FONT_SCALE = 0.85'''
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif 'DRAWING_EXPORT_DPI = 600' not in s:
+              raise SystemExit('drawing constants not found; refusing unsafe edit')
+
+          pattern = re.compile(
+              r'def render_molecule_png\(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE\) -> bytes \| None:\n'
+              r'.*?\n\n\n# ---------------------------------------------------------------------------\n# Small molecules are written, not drawn',
+              re.S,
+          )
+          replacement = '''def render_molecule_png(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE) -> bytes | None:
+    """Render a publication-quality molecule PNG at >=600 dpi."""
+    from PIL import Image
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+    try:
+        AllChem.Compute2DCoords(mol)
+        Chem.rdDepictor.StraightenDepiction(mol)
+    except Exception:
+        pass
+
+    drawer = rdMolDraw2D.MolDraw2DCairo(size[0], size[1])
+    _apply_common_draw_options(drawer)
+    opts = drawer.drawOptions()
+    scale = min(
+        size[0] / DRAWING_REFERENCE_SIZE[0],
+        size[1] / DRAWING_REFERENCE_SIZE[1],
+    )
+    try:
+        # Scale geometry together with the export canvas. This preserves the
+        # corrected molecule/label proportions while increasing pixel density.
+        opts.fixedBondLength = 30.0 * scale
+        opts.fixedFontSize = 16.0 * scale
+        opts.minFontSize = 12.0 * scale
+        opts.maxFontSize = 18.0 * scale
+        opts.bondLineWidth = DRAWING_BOND_LINE_WIDTH * scale
+        opts.padding = 0.05
+    except Exception:
+        pass
+
+    rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol, legend=legend)
+    drawer.FinishDrawing()
+    raw = drawer.GetDrawingText()
+
+    # Add explicit 600 dpi metadata. The pixels are rendered by Cairo at the
+    # full export dimensions; Pillow only writes the physical-resolution tag.
+    try:
+        image = Image.open(io.BytesIO(raw)).convert("RGB")
+        out = io.BytesIO()
+        image.save(
+            out,
+            format="PNG",
+            dpi=(DRAWING_EXPORT_DPI, DRAWING_EXPORT_DPI),
+            optimize=True,
+        )
+        return out.getvalue()
+    except Exception as exc:
+        logger.warning("Could not add PNG 600-dpi metadata: %s", exc)
+        return raw
+
+
+# ---------------------------------------------------------------------------
+# Small molecules are written, not drawn'''
+
+          ns, count = pattern.subn(replacement, s, count=1)
+          if count != 1:
+              raise SystemExit('renderer block not found; refusing unsafe edit')
+          p.write_text(ns, encoding='utf-8')
+          print('600 dpi renderer applied')
+
+      - name: Validate renderer before deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile chem_core.py
+          python - <<'PY'
+          import io
+          from PIL import Image
+          import chem_core
+
+          raw = chem_core.render_molecule_png('COC1=CC=CC2=C1C=CC=C2C(C)C(=O)O')
+          assert raw
+          im = Image.open(io.BytesIO(raw))
+          assert im.size == (2400, 1800), im.size
+          dpi = im.info.get('dpi')
+          assert dpi and dpi[0] >= 599 and dpi[1] >= 599, dpi
+          print('Publication renderer OK:', im.size, dpi)
+          PY
+
+      - name: Persist renderer change
+        if: github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chem_core.py
+          if git diff --cached --quiet; then
+            echo '600 dpi renderer already present'
+          else
+            git commit -m 'feat: export chemical drawings at 600 dpi'
+            git push
+          fi
 
       - name: Validate deployment files
         shell: bash
@@ -59,11 +183,9 @@ jobs:
           token = os.environ["HF_TOKEN"]
           repo_id = os.environ["HF_SPACE"]
           api = HfApi(token=token)
-
           who = api.whoami()
           name = who.get("name") or who.get("fullname") or who.get("user", {}).get("name")
           print(f"Authenticated to Hugging Face as: {name or '<redacted>'}")
-
           info = api.repo_info(repo_id=repo_id, repo_type="space")
           print(f"Target Space exists: {info.id}")
           print(f"Target Space SDK: {getattr(info, 'sdk', None) or '<unchanged>'}")
@@ -83,7 +205,6 @@ jobs:
           repo_id = os.environ["HF_SPACE"]
           token = os.environ["HF_TOKEN"]
           sha = os.environ["GITHUB_SHA"]
-
           api = HfApi(token=token)
           commit = api.upload_folder(
               folder_path=".",
@@ -96,21 +217,12 @@ jobs:
                   f"GitHub commit: {sha}"
               ),
               ignore_patterns=[
-                  ".git/**",
-                  ".github/**",
-                  "**/__pycache__/**",
-                  "**/*.pyc",
-                  "**/*.pyo",
-                  ".env",
-                  ".env.*",
-                  "*.sqlite3",
-                  "*.db",
-                  ".state/**",
-                  "*.log",
+                  ".git/**", ".github/**", "**/__pycache__/**", "**/*.pyc",
+                  "**/*.pyo", ".env", ".env.*", "*.sqlite3", "*.db",
+                  ".state/**", "*.log",
               ],
               delete_patterns="*",
           )
-
           print(f"Hugging Face commit created: {commit.oid}")
           print(f"Hugging Face URL: {commit.commit_url}")
           PY
@@ -125,7 +237,6 @@ jobs:
           import os
           import sys
           from huggingface_hub import HfApi
-
           api = HfApi(token=os.environ["HF_TOKEN"])
           info = api.repo_info(repo_id=os.environ["HF_SPACE"], repo_type="space")
           print(f"Deployed Space SHA: {info.sha}")
