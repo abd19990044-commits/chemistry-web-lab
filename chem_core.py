@@ -43,8 +43,9 @@ PUBCHEM_VIEW = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view"
 HTTP_TIMEOUT = 15
 HEADERS = {"User-Agent": "ChemistryToolsWeb/1.0 (+huggingface-space)"}
 
-MOL_IMAGE_SIZE = (560, 420)
-REACTION_SUBIMAGE_SIZE = (420, 340)
+MOL_IMAGE_SIZE = (1800, 1350)
+REACTION_SUBIMAGE_SIZE = (1260, 1020)
+RENDER_DPI = 600
 DRAWING_BOND_LINE_WIDTH = 2
 DRAWING_FONT_SCALE = 0.85
 
@@ -486,14 +487,29 @@ def _apply_common_draw_options(drawer) -> None:
     opts.legendFontSize = 18
 
 
-def render_molecule_png(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE) -> bytes | None:
-    """Render one molecule with a stable chemical drawing scale.
+def _png_with_dpi(raw: bytes, dpi: int = RENDER_DPI) -> bytes:
+    """Normalize a PNG and embed a real 600-DPI print resolution tag.
 
-    The molecular skeleton is scaled from a fixed bond length rather than from
-    the amount of empty canvas. This prevents adding/removing a substituent from
-    causing RDKit to enlarge or shrink the entire core structure. Atom-label
-    font sizes are constrained independently so labels such as OH, NH and O
-    remain proportional to the skeleton.
+    RDKit/Cairo produces excellent antialiased line art, but the PNG it returns
+    does not reliably carry a publication-resolution metadata tag. Re-saving
+    without resampling preserves every generated pixel while adding the DPI
+    metadata expected by graphics software and journal production workflows.
+    """
+    from PIL import Image
+    with Image.open(io.BytesIO(raw)) as image:
+        image.load()
+        out = io.BytesIO()
+        image.save(out, format="PNG", dpi=(dpi, dpi), compress_level=6)
+        return out.getvalue()
+
+
+def render_molecule_png(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE) -> bytes | None:
+    """Render publication-quality molecular line art at 600 DPI.
+
+    The output canvas is 1800x1350 px and carries a 600-DPI PNG resolution tag.
+    Bond and label scales are increased by the same factor as the canvas so the
+    molecule keeps the corrected visual proportions while retaining sharp lines
+    and text when placed in a manuscript.
     """
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
@@ -508,16 +524,21 @@ def render_molecule_png(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE) -> b
     _apply_common_draw_options(drawer)
     opts = drawer.drawOptions()
     try:
-        opts.fixedBondLength = 30.0
-        opts.fixedFontSize = 16.0
-        opts.minFontSize = 12.0
-        opts.maxFontSize = 18.0
+        opts.fixedBondLength = 90.0
+        opts.fixedFontSize = 48.0
+        opts.minFontSize = 36.0
+        opts.maxFontSize = 54.0
+        opts.padding = 0.05
+    except Exception:
+        pass
+    try:
+        drawer.SetFontSize(48)
     except Exception:
         pass
 
     rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol, legend=legend)
     drawer.FinishDrawing()
-    return drawer.GetDrawingText()
+    return _png_with_dpi(drawer.GetDrawingText())
 
 
 # ---------------------------------------------------------------------------
@@ -678,8 +699,8 @@ def render_reaction_png(reactant_pairs, product_pairs, sub_size=REACTION_SUBIMAG
         rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
         drawer.FinishDrawing()
         return _trim_white(Image.open(io.BytesIO(drawer.GetDrawingText())).convert("RGB"))
-    bond_length = max(24, sub_size[1] // 7)
-    formula_size = max(30, sub_size[1] // 6)
+    bond_length = max(72, sub_size[1] // 7)
+    formula_size = max(90, sub_size[1] // 6)
     arrow_length = max(60, sub_size[0] // 5)
     arrow_head = max(14, sub_size[1] // 20)
     coefficient_font = _layout_font(formula_size)
@@ -734,7 +755,7 @@ def render_reaction_png(reactant_pairs, product_pairs, sub_size=REACTION_SUBIMAG
             pen.text((x - box[0], (total_height - (box[3] - box[1])) // 2 - box[1]), payload, fill=(20, 20, 20), font=font)
         x += width + (gap // 2 if kind == "coefficient" else gap)
     out = io.BytesIO()
-    canvas.save(out, format="PNG")
+    canvas.save(out, format="PNG", dpi=(RENDER_DPI, RENDER_DPI), compress_level=6)
     return out.getvalue()
 
 
