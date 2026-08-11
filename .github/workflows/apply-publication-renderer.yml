@@ -1,0 +1,75 @@
+name: Apply publication renderer quality
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-renderer:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Upgrade renderer pixel density without changing drawing proportions
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('chem_core.py')
+          s = p.read_text(encoding='utf-8')
+
+          replacements = {
+              r'^MOL_IMAGE_SIZE\s*=\s*\([^\n]+\)$': 'MOL_IMAGE_SIZE = (3600, 2700)',
+              r'^REACTION_SUBIMAGE_SIZE\s*=\s*\([^\n]+\)$': 'REACTION_SUBIMAGE_SIZE = (2520, 2040)',
+              r'^RENDER_DPI\s*=\s*\d+$': 'RENDER_DPI = 600',
+              r'^DRAWING_BOND_LINE_WIDTH\s*=\s*\d+$': 'DRAWING_BOND_LINE_WIDTH = 4',
+          }
+          ns = s
+          for pattern, replacement in replacements.items():
+              ns, count = re.subn(pattern, replacement, ns, count=1, flags=re.M)
+              if count != 1:
+                  raise SystemExit(f'Expected renderer setting not found: {pattern}')
+
+          # Keep publication text legible at the larger raster canvas.
+          ns = ns.replace('opts.legendFontSize = 18', 'opts.legendFontSize = 48', 1)
+          ns = ns.replace('opts.fixedFontSize = 48.0', 'opts.fixedFontSize = 60.0', 1)
+          ns = ns.replace('opts.minFontSize = 36.0', 'opts.minFontSize = 48.0', 1)
+          ns = ns.replace('opts.maxFontSize = 54.0', 'opts.maxFontSize = 66.0', 1)
+          ns = ns.replace('drawer.SetFontSize(48)', 'drawer.SetFontSize(60)', 1)
+
+          if ns == s:
+              print('Renderer already has publication-quality settings; nothing to commit.')
+          else:
+              p.write_text(ns, encoding='utf-8')
+              print('Applied 600-DPI / high-pixel-density renderer settings.')
+
+      - name: Validate renderer settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'MOL_IMAGE_SIZE = (3600, 2700)' chem_core.py
+          grep -q 'REACTION_SUBIMAGE_SIZE = (2520, 2040)' chem_core.py
+          grep -q 'RENDER_DPI = 600' chem_core.py
+          grep -q 'DRAWING_BOND_LINE_WIDTH = 4' chem_core.py
+          python -m py_compile chem_core.py
+
+      - name: Commit renderer change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chem_core.py
+          if git diff --cached --quiet; then
+            echo 'No renderer change required.'
+          else
+            git commit -m 'fix: raise chemical drawing resolution for publication'
+            git push
+          fi
