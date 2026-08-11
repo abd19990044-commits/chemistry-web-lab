@@ -43,10 +43,10 @@ PUBCHEM_VIEW = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view"
 HTTP_TIMEOUT = 15
 HEADERS = {"User-Agent": "ChemistryToolsWeb/1.0 (+huggingface-space)"}
 
-MOL_IMAGE_SIZE = (1800, 1350)
-REACTION_SUBIMAGE_SIZE = (1260, 1020)
+MOL_IMAGE_SIZE = (3600, 2700)
+REACTION_SUBIMAGE_SIZE = (2520, 2040)
 RENDER_DPI = 600
-DRAWING_BOND_LINE_WIDTH = 2
+DRAWING_BOND_LINE_WIDTH = 4
 DRAWING_FONT_SCALE = 0.85
 
 _COEFFICIENT_RE = re.compile(r"^\s*\d+(\.\d+)?\s+(.*)$")
@@ -484,7 +484,7 @@ def _apply_common_draw_options(drawer) -> None:
     opts.bondLineWidth = DRAWING_BOND_LINE_WIDTH
     opts.baseFontSize = DRAWING_FONT_SCALE * (opts.baseFontSize or 0.6)
     opts.padding = 0.12
-    opts.legendFontSize = 18
+    opts.legendFontSize = 48
 
 
 def _png_with_dpi(raw: bytes, dpi: int = RENDER_DPI) -> bytes:
@@ -525,14 +525,14 @@ def render_molecule_png(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE) -> b
     opts = drawer.drawOptions()
     try:
         opts.fixedBondLength = 90.0
-        opts.fixedFontSize = 48.0
-        opts.minFontSize = 36.0
-        opts.maxFontSize = 54.0
+        opts.fixedFontSize = 60.0
+        opts.minFontSize = 48.0
+        opts.maxFontSize = 66.0
         opts.padding = 0.05
     except Exception:
         pass
     try:
-        drawer.SetFontSize(48)
+        drawer.SetFontSize(60)
     except Exception:
         pass
 
