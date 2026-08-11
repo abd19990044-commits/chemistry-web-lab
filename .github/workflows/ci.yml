@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: write
-
 jobs:
   python-checks:
     runs-on: ubuntu-latest
@@ -18,74 +15,6 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-
-      - name: Apply chem_core drawing-scale fix
-        if: github.actor != 'github-actions[bot]'
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-          p = Path('chem_core.py')
-          s = p.read_text(encoding='utf-8')
-          pattern = re.compile(
-              r'def render_molecule_png\(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE\) -> bytes \| None:\n'
-              r'.*?\n\n\n# ---------------------------------------------------------------------------\n# Small molecules are written, not drawn',
-              re.S,
-          )
-          replacement = '''def render_molecule_png(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE) -> bytes | None:
-    """Render a molecule at a stable chemical scale.
-
-    The canvas size must not determine molecular scale. A fixed bond length keeps
-    the core skeleton stable when substituents are added or removed, while RDKit
-    font limits keep O/OH/N/NH labels proportional to the skeleton.
-    """
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        return None
-    try:
-        AllChem.Compute2DCoords(mol)
-        Chem.rdDepictor.StraightenDepiction(mol)
-    except Exception:  # noqa: BLE001
-        pass
-    drawer = rdMolDraw2D.MolDraw2DCairo(size[0], size[1])
-    _apply_common_draw_options(drawer)
-    opts = drawer.drawOptions()
-    try:
-        opts.fixedBondLength = 30.0
-        opts.fixedFontSize = 16.0
-        opts.minFontSize = 12.0
-        opts.maxFontSize = 18.0
-    except Exception:  # noqa: BLE001
-        pass
-    rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol, legend=legend)
-    drawer.FinishDrawing()
-    return drawer.GetDrawingText()
-
-
-# ---------------------------------------------------------------------------
-# Small molecules are written, not drawn'''
-          ns, count = pattern.subn(replacement, s, count=1)
-          if count != 1:
-              raise SystemExit('render_molecule_png block not found; refusing unsafe edit')
-          if ns != s:
-              p.write_text(ns, encoding='utf-8')
-          PY
-
-      - name: Commit chem_core fix
-        if: github.actor != 'github-actions[bot]'
-        shell: bash
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add chem_core.py
-          if git diff --cached --quiet; then
-            echo 'chem_core already patched'
-          else
-            git commit -m 'fix: stabilize chem_core molecule drawing scale'
-            git push
-          fi
-
       - name: Compile Python sources
         run: python -m compileall -q .
       - name: Install dependencies
