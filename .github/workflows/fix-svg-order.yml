@@ -1,0 +1,36 @@
+name: Fix SVG coefficient order
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Fix SVG token order
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('chem_core.py')
+          s = p.read_text(encoding='utf-8')
+          old = '''            formula = formula_for_display(smiles) if small_as_formula else None\n            if formula:\n                tokens.append(("formula", formula))\n            else:\n                fragment = _molecule_svg_fragment(smiles)\n                if fragment is None:\n                    return None\n                tokens.append(("mol", fragment))\n            label = ReactionTerm(Fraction(coefficient), "").pretty_coefficient\n            if label:\n                tokens.append(("coefficient", label))\n'''
+          new = '''            label = ReactionTerm(Fraction(coefficient), "").pretty_coefficient\n            if label:\n                tokens.append(("coefficient", label))\n            formula = formula_for_display(smiles) if small_as_formula else None\n            if formula:\n                tokens.append(("formula", formula))\n            else:\n                fragment = _molecule_svg_fragment(smiles)\n                if fragment is None:\n                    return None\n                tokens.append(("mol", fragment))\n'''
+          if old not in s:
+              raise SystemExit('SVG token block not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+          python -m py_compile chem_core.py app.py
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chem_core.py
+          git commit -m 'fix: keep SVG reaction coefficients before species'
+          git push
