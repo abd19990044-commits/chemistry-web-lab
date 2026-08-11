@@ -11,15 +11,15 @@ from .errors import (IntegrityError, OrchestratorError, PermanentError, Transien
 from .models import CheckpointManifest, Event, JobManifest
 from .states import TRANSITIONS, JobState, Trigger
 
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 
 __all__ = [
     "CONFIG",
     "JobState",
     "Trigger",
     "TRANSITIONS",
-    "JobManifest",
     "CheckpointManifest",
+    "JobManifest",
     "Event",
     "OrchestratorError",
     "TransientError",
@@ -36,6 +36,15 @@ __all__ = [
 from .legacy_compat import install_legacy_route_adapter as _install_legacy_route_adapter
 _install_legacy_route_adapter()
 del _install_legacy_route_adapter
+
+# The Flask application imports chem_core immediately before importing this
+# package. Install the scientific policy gate at this boundary so the existing
+# low-level renderer remains reusable while the public wizard cannot emit a
+# method combination that ORCA 6.1 does not support or that changes the meaning
+# of the UI selection (notably "No RI" -> explicit NORI).
+from orca_policy import install_policy as _install_orca_policy
+_install_orca_policy()
+del _install_orca_policy
 
 
 def get_service(**kwargs):
