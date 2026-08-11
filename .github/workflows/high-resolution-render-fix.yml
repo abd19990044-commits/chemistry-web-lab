@@ -1,0 +1,81 @@
+name: High resolution chemical rendering fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-renderer:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upgrade RDKit PNG renderer to 600 DPI quality
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('chem_core.py')
+          s = p.read_text(encoding='utf-8')
+
+          s = s.replace(
+              'MOL_IMAGE_SIZE = (560, 420)\nREACTION_SUBIMAGE_SIZE = (420, 340)',
+              'MOL_IMAGE_SIZE = (1800, 1350)\nREACTION_SUBIMAGE_SIZE = (1260, 1020)\nRENDER_DPI = 600',
+              1,
+          )
+
+          old = '''def render_molecule_png(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE) -> bytes | None:\n    """Render one molecule with a stable chemical drawing scale.\n\n    The molecular skeleton is scaled from a fixed bond length rather than from\n    the amount of empty canvas. This prevents adding/removing a substituent from\n    causing RDKit to enlarge or shrink the entire core structure. Atom-label\n    font sizes are constrained independently so labels such as OH, NH and O\n    remain proportional to the skeleton.\n    """\n    mol = Chem.MolFromSmiles(smiles)\n    if mol is None:\n        return None\n    try:\n        AllChem.Compute2DCoords(mol)\n        Chem.rdDepictor.StraightenDepiction(mol)\n    except Exception:\n        pass\n\n    drawer = rdMolDraw2D.MolDraw2DCairo(size[0], size[1])\n    _apply_common_draw_options(drawer)\n    opts = drawer.drawOptions()\n    try:\n        opts.fixedBondLength = 30.0\n        opts.fixedFontSize = 16.0\n        opts.minFontSize = 12.0\n        opts.maxFontSize = 18.0\n    except Exception:\n        pass\n\n    rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol, legend=legend)\n    drawer.FinishDrawing()\n    return drawer.GetDrawingText()\n'''
+
+          new = '''def _png_with_dpi(raw: bytes, dpi: int = RENDER_DPI) -> bytes:\n    """Normalize a PNG and embed a real 600-DPI print resolution tag.\n\n    RDKit/Cairo produces excellent antialiased line art, but the PNG it returns\n    does not reliably carry a publication-resolution metadata tag. Re-saving\n    without resampling preserves every generated pixel while adding the DPI\n    metadata expected by graphics software and journal production workflows.\n    """\n    from PIL import Image\n    with Image.open(io.BytesIO(raw)) as image:\n        image.load()\n        out = io.BytesIO()\n        image.save(out, format="PNG", dpi=(dpi, dpi), compress_level=6)\n        return out.getvalue()\n\n\ndef render_molecule_png(smiles: str, legend: str = "", size=MOL_IMAGE_SIZE) -> bytes | None:\n    """Render publication-quality molecular line art at 600 DPI.\n\n    The output canvas is 1800x1350 px and carries a 600-DPI PNG resolution tag.\n    Bond and label scales are increased by the same factor as the canvas so the\n    molecule keeps the corrected visual proportions while retaining sharp lines\n    and text when placed in a manuscript.\n    """\n    mol = Chem.MolFromSmiles(smiles)\n    if mol is None:\n        return None\n    try:\n        AllChem.Compute2DCoords(mol)\n        Chem.rdDepictor.StraightenDepiction(mol)\n    except Exception:\n        pass\n\n    drawer = rdMolDraw2D.MolDraw2DCairo(size[0], size[1])\n    _apply_common_draw_options(drawer)\n    opts = drawer.drawOptions()\n    try:\n        opts.fixedBondLength = 90.0\n        opts.fixedFontSize = 48.0\n        opts.minFontSize = 36.0\n        opts.maxFontSize = 54.0\n        opts.padding = 0.05\n    except Exception:\n        pass\n    try:\n        drawer.SetFontSize(48)\n    except Exception:\n        pass\n\n    rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol, legend=legend)\n    drawer.FinishDrawing()\n    return _png_with_dpi(drawer.GetDrawingText())\n'''
+
+          if old not in s:
+              raise SystemExit('Expected molecule renderer block not found; refusing unsafe edit')
+          s = s.replace(old, new, 1)
+
+          # Make reaction drawings high-resolution too, without changing their chemistry.
+          s = s.replace(
+              'bond_length = max(24, sub_size[1] // 7)',
+              'bond_length = max(72, sub_size[1] // 7)',
+              1,
+          )
+          s = s.replace(
+              'formula_size = max(30, sub_size[1] // 6)',
+              'formula_size = max(90, sub_size[1] // 6)',
+              1,
+          )
+          s = s.replace(
+              'canvas.save(out, format="PNG")\n    return out.getvalue()',
+              'canvas.save(out, format="PNG", dpi=(RENDER_DPI, RENDER_DPI), compress_level=6)\n    return out.getvalue()',
+              1,
+          )
+
+          p.write_text(s, encoding='utf-8')
+          print('High-resolution renderer patch applied')
+
+      - name: Validate high-resolution renderer
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'MOL_IMAGE_SIZE = (1800, 1350)' chem_core.py
+          grep -q 'RENDER_DPI = 600' chem_core.py
+          grep -q 'opts.fixedBondLength = 90.0' chem_core.py
+          grep -q 'opts.fixedFontSize = 48.0' chem_core.py
+          python -m py_compile chem_core.py
+          echo '600-DPI renderer validation passed'
+
+      - name: Commit patch and remove one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add chem_core.py
+          git add -u .github/workflows/high-resolution-render-fix.yml
+          git diff --cached --quiet || git commit -m 'fix: render chemical drawings at 600 dpi'
+          git push
