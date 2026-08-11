@@ -1,22 +1,21 @@
 # -*- coding: utf-8 -*-
 """Scientific policy layer for the guided ORCA input wizard.
 
-The original generator is intentionally kept as the low-level renderer.  This
+The original generator is intentionally kept as the low-level renderer. This
 module is the policy gate in front of it: it rejects combinations that ORCA 6.1
 cannot support or that silently mean something different from what the UI says,
 and it makes an explicit ``No RI`` choice become the real ORCA ``NORI`` keyword.
 
-The policy is deliberately conservative.  Custom command-line inputs are not
-rewritten here because the user explicitly opted out of the guided wizard.
+Custom command-line inputs are not rewritten here because the user explicitly
+opted out of the guided wizard.
 """
 from __future__ import annotations
 
 from typing import Callable
 
 
-# ORCA 6.1: these are functionals whose dispersion treatment is already part of
-the functional definition.  Adding D3/D3BJ/D4 in the wizard would describe a
-second, different correction rather than "the same method with extra speed".
+# ORCA 6.1: these functionals have dispersion treatment built into the
+# functional definition. Adding D3/D3BJ/D4 would describe a different model.
 _NL_FUNCTIONALS = {"WB97M-V"}
 _BUILTIN_DISPERSION_FUNCTIONALS = {"WB97X-D4"}
 _HYBRID_DFT = {"B3LYP", "CAM-B3LYP", "PBE0", "M062X", "WB97M-V", "WB97X-D4"}
@@ -92,32 +91,29 @@ def validate_payload(payload: dict) -> None:
                 "Use RIJCOSX, RIJK, or No RI instead."
             )
         if method in _NONHYBRID_DFT and ri == "RIJCOSX":
-            # It is technically available, but the wizard's label promises a
-            # hybrid-style acceleration choice.  RI-J is the clear default for
-            # these functionals, so avoid an ambiguous option rather than
-            # silently changing the intended Coulomb treatment.
             raise OrcaPolicyError(
                 f"{method} is a non-hybrid DFT functional. Use Standard RI or No RI; "
-                "RIJCOSX is intended primarily for exchange-containing methods here."
+                "RIJCOSX is not offered for these methods by the guided policy."
             )
 
-    if method in _CORRELATION_RI:
-        if ri == "NONE":
-            raise OrcaPolicyError(
-                f"{method} requires an RI/correlation-fitting treatment. The wizard must "
-                "not generate a nominal 'No RI' input for this method."
-            )
-
-    if method in _DLPNO and ri == "NONE":
+    if method in _CORRELATION_RI and ri == "NONE":
         raise OrcaPolicyError(
-            f"{method} obligatorily uses RI. Select an RI-based option."
+            f"{method} requires an RI/correlation-fitting treatment. The wizard must "
+            "not generate a nominal 'No RI' input for this method."
         )
 
-    if payload.get("x2c") and basis in {"def2-SVP", "def2-TZVP", "def2-TZVPP", "def2-QZVP", "def2-TZVPD", "ma-def2-TZVP"}:
-        # The low-level renderer already substitutes the matching x2c-* basis;
-        # this check is intentionally not an error.  It exists here as a comment
-        # because the policy layer must not reject a supported substitution.
-        pass
+    if method in _DLPNO and ri == "NONE":
+        raise OrcaPolicyError(f"{method} obligatorily uses RI. Select an RI-based option.")
+
+    # The renderer substitutes x2c-* bases for the supported def2 choices.
+    # Unsupported basis families are rejected instead of being silently paired.
+    if payload.get("x2c") and basis and basis not in {
+        "def2-SVP", "def2-TZVP", "def2-TZVPP", "def2-QZVP", "def2-TZVPD", "ma-def2-TZVP"
+    }:
+        raise OrcaPolicyError(
+            f"X2C with {basis} is not supported by the guided wizard. Choose a supported "
+            "def2 basis so the matching relativistically recontracted x2c-* basis can be used."
+        )
 
 
 def install_policy() -> None:
@@ -132,14 +128,11 @@ def install_policy() -> None:
     def guarded(payload: dict) -> str:
         validate_payload(payload)
         text = original(payload)
-
-        # The UI's "No RI" option must mean exact Coulomb treatment, not "let
-        # ORCA silently choose its default RI approximation".  ORCA 6.1 uses RI
-        # by default for non-hybrid DFT and RIJCOSX by default for hybrids; NORI
-        # is the explicit opt-out.
         if not payload.get("custom_line") and _norm(payload.get("ri_type") or "none") == "NONE":
+            # ORCA 6.1 uses RI by default for non-hybrid DFT and RIJCOSX by
+            # default for hybrid DFT. NORI is the explicit opt-out.
             lines = text.splitlines()
-            if lines:
+            if len(lines) > 1:
                 lines[1] = lines[1].rstrip() + " NORI"
                 text = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
         return text
