@@ -22,8 +22,10 @@ jobs:
       - name: Import production application
         env:
           SECRET_KEY: ci-test-secret-key
+          PYTHONPATH: .
         run: python -c "import chem_core; import orca_orchestrator; import app; print('production imports OK')"
       - name: Run production and drawing tests
         env:
           SECRET_KEY: ci-test-secret-key
+          PYTHONPATH: .
         run: pytest -q tests/test_production_wiring.py tests/test_drawing.py
