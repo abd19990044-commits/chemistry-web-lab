@@ -2,12 +2,10 @@ Flask==3.0.3
 gunicorn==22.0.0
 requests==2.32.3
 rdkit==2025.3.6
-# There is no kaggle 2.2.3 on PyPI — the series is 1.x, and 1.7.4.5 is current.
-# The bad pin made `pip install -r requirements.txt` fail, which fails the whole
-# Docker build, which means the image has no `kaggle` command: every
-# /api/kaggle/* route then 502s and signing in does nothing. /health now reports
-# the CLI's absence explicitly so this cannot be silent again.
-kaggle==1.7.4.5
+# Kaggle CLI 2.2.x is the current supported series in 2026. The orchestrator
+# exercises kernels push/status/output/delete, so keep the major/minor line
+# explicit rather than accepting an unbounded upgrade.
+kaggle==2.2.3
 google-auth==2.32.0
 # Reaction schemes are composited (structures + coefficients + arrow) with PIL.
 # It arrives transitively with rdkit, but this file is the one that pins it.
