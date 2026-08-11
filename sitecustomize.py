@@ -94,11 +94,6 @@ except Exception:
 # ─────────────────────────────────────────────────────────────
 # RDKit publication-style drawing proportions
 # ─────────────────────────────────────────────────────────────
-# RDKit's automatic label scaling can allow atom labels such as OH, O, N and
-# NH to become visually dominant on a 560x420 canvas.  Keep automatic scaling,
-# but use a tighter font range so labels remain subordinate to the molecular
-# skeleton.  This is intentionally isolated from chem_core.py so it is easy to
-# audit and does not disturb the chemistry or coordinate-generation logic.
 try:
     import chem_core as _chem_core
 
@@ -115,5 +110,43 @@ try:
         opts.legendFontSize = 16
 
     _chem_core._apply_common_draw_options = _balanced_draw_options
+
+    def _production_render_molecule_png(smiles: str, legend: str = "", size=None) -> bytes | None:
+        """Render a molecule with a stable chemical scale.
+
+        The bond length, rather than the canvas dimensions, defines the visual
+        scale. This prevents RDKit from enlarging the core skeleton whenever a
+        molecule has fewer substituents and prevents OH/NH/O labels from
+        becoming disproportionately large. The same principle is used by the
+        reaction drawing path in the project.
+        """
+        if size is None:
+            size = _chem_core.MOL_IMAGE_SIZE
+        mol = _chem_core.Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return None
+        try:
+            _chem_core.AllChem.Compute2DCoords(mol)
+            _chem_core.Chem.rdDepictor.StraightenDepiction(mol)
+        except Exception:  # noqa: BLE001
+            pass
+
+        drawer = _chem_core.rdMolDraw2D.MolDraw2DCairo(size[0], size[1])
+        _balanced_draw_options(drawer)
+        opts = drawer.drawOptions()
+        # Keep the skeleton stable across molecules. RDKit will only need to
+        # compromise when a very large structure physically cannot fit.
+        try:
+            opts.fixedBondLength = 30.0
+            opts.fixedFontSize = 16.0
+            opts.minFontSize = 12.0
+            opts.maxFontSize = 18.0
+        except Exception:  # noqa: BLE001
+            pass
+        _chem_core.rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol, legend=legend)
+        drawer.FinishDrawing()
+        return drawer.GetDrawingText()
+
+    _chem_core.render_molecule_png = _production_render_molecule_png
 except Exception:
     pass
