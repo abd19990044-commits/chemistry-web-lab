@@ -21,8 +21,9 @@ jobs:
 
       - name: Apply chem_core drawing-scale fix
         if: github.actor != 'github-actions[bot]'
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
           import re
           p = Path('chem_core.py')
@@ -69,6 +70,7 @@ jobs:
               raise SystemExit('render_molecule_png block not found; refusing unsafe edit')
           if ns != s:
               p.write_text(ns, encoding='utf-8')
+          PY
 
       - name: Commit chem_core fix
         if: github.actor != 'github-actions[bot]'
