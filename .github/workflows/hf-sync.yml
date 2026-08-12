@@ -162,3 +162,5 @@ jobs:
           else:
               raise RuntimeError(f"Hugging Face verification failed after 5 attempts: {last_error}")
           PY
+
+# Deployment pipeline validated and retriggered after the previous HF network failure.
