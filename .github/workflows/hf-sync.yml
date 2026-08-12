@@ -149,7 +149,6 @@ jobs:
               raise RuntimeError(f"Hugging Face upload failed after 5 attempts: {last_error}")
           print("Hugging Face commit created:", commit.oid)
           print("Hugging Face commit URL:", commit.commit_url)
-          PY
 
       - name: Verify deployed revision
         env:
@@ -163,7 +162,6 @@ jobs:
           from huggingface_hub import HfApi
 
           api = HfApi(endpoint=os.environ["HF_ENDPOINT"], token=os.environ["HF_TOKEN"])
-          expected = os.environ["GITHUB_SHA"]
           last_error = None
           for attempt in range(1, 6):
               try:
@@ -171,6 +169,8 @@ jobs:
                   print("Deployed Space SHA:", info.sha)
                   if not info.sha:
                       raise RuntimeError("Hugging Face returned no Space revision SHA.")
+                  print("GitHub commit submitted:", os.environ["GITHUB_SHA"])
+                  print("Deployment upload completed successfully.")
                   break
               except Exception as exc:
                   last_error = exc
@@ -179,6 +179,4 @@ jobs:
                       time.sleep(10 * attempt)
           else:
               raise RuntimeError(f"Hugging Face verification failed after 5 attempts: {last_error}")
-          print("GitHub commit submitted:", expected)
-          print("Deployment upload completed successfully.")
           PY
