@@ -48,16 +48,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Check Hugging Face network endpoint
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --location \
-            --retry 6 --retry-all-errors \
-            --connect-timeout 15 --max-time 60 \
-            "${HF_ENDPOINT}/api/heartbeat" >/dev/null
-          echo "Hugging Face endpoint is reachable from GitHub Actions."
-
       - name: Install Hugging Face Hub client
         shell: bash
         run: |
@@ -77,22 +67,23 @@ jobs:
           import time
           from huggingface_hub import HfApi
 
-          token = os.environ["HF_TOKEN"]
-          repo_id = os.environ["HF_SPACE"]
-          api = HfApi(endpoint=os.environ["HF_ENDPOINT"], token=token)
+          api = HfApi(endpoint=os.environ["HF_ENDPOINT"], token=os.environ["HF_TOKEN"])
+          last_error = None
           for attempt in range(1, 6):
               try:
                   who = api.whoami()
-                  info = api.repo_info(repo_id=repo_id, repo_type="space")
+                  info = api.repo_info(repo_id=os.environ["HF_SPACE"], repo_type="space")
                   print("Authenticated Hugging Face account:", who.get("name") or who.get("fullname") or "<redacted>")
                   print("Target Space:", info.id)
                   print("Target Space SHA before deploy:", info.sha)
                   break
               except Exception as exc:
-                  print(f"Hugging Face preflight attempt {attempt}/5 failed: {exc}")
-                  if attempt == 5:
-                      raise
-                  time.sleep(10 * attempt)
+                  last_error = exc
+                  print(f"Hugging Face preflight attempt {attempt}/5 failed: {type(exc).__name__}: {exc}")
+                  if attempt < 5:
+                      time.sleep(10 * attempt)
+          else:
+              raise RuntimeError(f"Hugging Face preflight failed after 5 attempts: {last_error}")
           PY
 
       - name: Upload repository to Hugging Face Space
@@ -107,9 +98,7 @@ jobs:
           from huggingface_hub import HfApi
 
           repo_id = os.environ["HF_SPACE"]
-          token = os.environ["HF_TOKEN"]
-          sha = os.environ["GITHUB_SHA"]
-          api = HfApi(endpoint=os.environ["HF_ENDPOINT"], token=token)
+          api = HfApi(endpoint=os.environ["HF_ENDPOINT"], token=os.environ["HF_TOKEN"])
           commit = None
           last_error = None
           for attempt in range(1, 6):
@@ -119,36 +108,29 @@ jobs:
                       repo_id=repo_id,
                       repo_type="space",
                       revision="main",
-                      commit_message=f"Deploy GitHub {sha[:12]}",
+                      commit_message=f"Deploy GitHub {os.environ['GITHUB_SHA'][:12]}",
                       commit_description=(
                           f"Automated deployment from {os.environ['GITHUB_REPOSITORY']}\n"
-                          f"GitHub commit: {sha}"
+                          f"GitHub commit: {os.environ['GITHUB_SHA']}"
                       ),
                       ignore_patterns=[
-                          ".git/**",
-                          ".github/**",
-                          "**/__pycache__/**",
-                          "**/*.pyc",
-                          "**/*.pyo",
-                          ".env",
-                          ".env.*",
-                          "*.sqlite3",
-                          "*.db",
-                          ".state/**",
-                          "*.log",
+                          ".git/**", ".github/**", "**/__pycache__/**", "**/*.pyc",
+                          "**/*.pyo", ".env", ".env.*", "*.sqlite3", "*.db",
+                          ".state/**", "*.log",
                       ],
                       delete_patterns="*",
                   )
+                  print("Hugging Face commit created:", commit.oid)
+                  print("Hugging Face commit URL:", commit.commit_url)
                   break
               except Exception as exc:
                   last_error = exc
-                  print(f"Hugging Face upload attempt {attempt}/5 failed: {exc}")
+                  print(f"Hugging Face upload attempt {attempt}/5 failed: {type(exc).__name__}: {exc}")
                   if attempt < 5:
                       time.sleep(15 * attempt)
           if commit is None:
               raise RuntimeError(f"Hugging Face upload failed after 5 attempts: {last_error}")
-          print("Hugging Face commit created:", commit.oid)
-          print("Hugging Face commit URL:", commit.commit_url)
+          PY
 
       - name: Verify deployed revision
         env:
@@ -174,7 +156,7 @@ jobs:
                   break
               except Exception as exc:
                   last_error = exc
-                  print(f"Hugging Face verification attempt {attempt}/5 failed: {exc}")
+                  print(f"Hugging Face verification attempt {attempt}/5 failed: {type(exc).__name__}: {exc}")
                   if attempt < 5:
                       time.sleep(10 * attempt)
           else:
