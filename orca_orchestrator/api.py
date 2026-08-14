@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from flask import Blueprint, after_this_request, jsonify, request, send_file
+from .account_control import enforce_capacity, max_active_jobs_per_account, stop_all_active, stop_job_chain
 from .credentials import parse as parse_credentials
 from .errors import (ConcurrencyError, IntegrityError, OrchestratorError,
                      PermanentError, RateLimitError, TransientError, ValidationError)
@@ -64,13 +65,15 @@ def login():
     creds = _credentials_from(_json()); service = get_service()
     with log_context(correlation_id=request.environ["orca.correlation_id"]):
         service.authenticate(creds.username, creds.key or creds.api_token)
-        return jsonify({"ok": True, "owner": creds.username, "jobs": service.list_jobs(creds)})
+        return jsonify({"ok": True, "owner": creds.username, "jobs": service.list_jobs(creds),
+                        "max_active_jobs": max_active_jobs_per_account()})
 
 
 @bp.route("/jobs", methods=["POST"])
 def list_jobs():
     creds = _credentials_from(_json())
-    return jsonify({"ok": True, "jobs": get_service().list_jobs(creds)})
+    return jsonify({"ok": True, "jobs": get_service().list_jobs(creds),
+                    "max_active_jobs": max_active_jobs_per_account()})
 
 
 @bp.route("/submit", methods=["POST"])
@@ -96,12 +99,15 @@ def submit():
     orca_link = (form.get("orca_link") or "").strip() or None
     if not datasets and not orca_link:
         raise ValidationError("Provide an ORCA source: a licensed Kaggle Dataset identifier or a direct ORCA archive link.")
-    result = get_service().submit(
+    service = get_service()
+    enforce_capacity(service, creds)
+    result = service.submit(
         creds, input_filename=input_filename, input_content=input_content,
         job_name=(form.get("job_name") or "").strip(), aux_files=aux_files,
         dataset_sources=datasets, orca_link=orca_link,
         idempotency_key=request.headers.get("Idempotency-Key"))
     return jsonify({"ok": True, **result.to_dict(),
+                    "max_active_jobs": max_active_jobs_per_account(),
                     "message": "Job submitted. It will continue automatically across Kaggle sessions until it finishes."})
 
 
@@ -114,7 +120,17 @@ def status():
 @bp.route("/cancel", methods=["POST"])
 def cancel():
     payload = _json(); creds = _credentials_from(payload)
-    return jsonify({"ok": True, "job": get_service().cancel(creds, (payload.get("job_id") or "").strip())})
+    result = stop_job_chain(get_service(), creds, (payload.get("job_id") or "").strip())
+    return jsonify({"ok": True, **result,
+                    "warning": "Stopping uses Kaggle kernel deletion as the reliable hard-stop operation; removed windows cannot be resumed from Kaggle."})
+
+
+@bp.route("/stop-all", methods=["POST"])
+def stop_all():
+    payload = _json(); creds = _credentials_from(payload)
+    result = stop_all_active(get_service(), creds)
+    return jsonify({"ok": True, **result,
+                    "warning": "All discovered ORCA kernels for this account were hard-stopped by deletion."})
 
 
 @bp.route("/resume", methods=["POST"])
@@ -147,7 +163,7 @@ def results():
 def health():
     from .service import service_is_ready
     try:
-        return jsonify({"ok": True, "ready": True, **get_service().health()})
+        return jsonify({"ok": True, "ready": True, "max_active_jobs": max_active_jobs_per_account(), **get_service().health()})
     except Exception as exc:
         return jsonify({"ok": False, "ready": service_is_ready(),
                         "error": f"{type(exc).__name__}: {exc}",
