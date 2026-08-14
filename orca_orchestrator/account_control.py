@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
 """Account-level controls for Kaggle-backed ORCA jobs.
 
-A Kaggle notebook chain may span several 12-hour windows.  The public limit is
-therefore applied to *logical jobs*, not to individual ``-rN`` windows.
+A Kaggle notebook chain may span several 12-hour windows. The public limit is
+therefore applied to logical jobs, not to individual ``-rN`` windows.
 Stopping a logical job removes every known Kaggle window in that chain and then
 marks the local manifest CANCELLED, preventing the watchdog from continuing it.
 """
 from __future__ import annotations
 
 import os
-from collections import defaultdict
 
 from . import ledger as ledger_mod
 from .errors import OrchestratorError, RateLimitError
@@ -36,12 +35,7 @@ def active_remote_job_ids(client: KaggleClient) -> set[str]:
         if not windows:
             continue
         newest = max(windows, key=lambda item: int(item.get("epoch", 0)))
-        try:
-            status = client.status(newest["slug"])
-        except OrchestratorError:
-            # A transient status failure must not be treated as free capacity.
-            # The caller can retry the submission after the normal API error.
-            raise
+        status = client.status(newest["slug"])
         if status.status in KERNEL_ACTIVE_STATUSES:
             active.add(job_id)
     return active
@@ -53,8 +47,7 @@ def enforce_capacity(service, creds) -> int:
     Local non-terminal manifests are included because a freshly accepted submit
     can exist between persistence and the first Kaggle status becoming visible.
     Remote chains cover restarts and browser changes where the local cache is
-    incomplete.  A job is counted once even when it has many continuation
-    windows.
+    incomplete. A job is counted once even when it has many continuation windows.
     """
     client = KaggleClient(creds)
     active = active_remote_job_ids(client)
@@ -71,12 +64,12 @@ def enforce_capacity(service, creds) -> int:
 
 
 def stop_job_chain(service, creds, job_id: str) -> dict:
-    """Stop all known Kaggle windows for one logical job.
+    """Hard-stop all known Kaggle windows for one logical job.
 
     Kaggle's CLI does not expose a stable non-destructive cancel command across
-    supported versions.  ``kernels delete`` is therefore used as the reliable
+    supported versions. ``kernels delete`` is therefore used as the reliable
     hard-stop primitive: it terminates the remote notebook by removing the
-    kernel.  The API returns exactly which windows were removed or failed.
+    kernel. The API returns exactly which windows were removed or failed.
     """
     client = KaggleClient(creds)
     slugs: set[str] = set()
@@ -103,13 +96,12 @@ def stop_job_chain(service, creds, job_id: str) -> dict:
 
 
 def stop_all_active(service, creds) -> dict:
-    """Hard-stop every logical job belonging to the authenticated account."""
+    """Hard-stop active logical jobs without deleting completed history."""
     client = KaggleClient(creds)
-    chains = _remote_chains(client)
-    results = []
+    ids = active_remote_job_ids(client)
     # Also include locally known jobs that may not have reached Kaggle yet.
-    ids = set(chains)
     ids.update(job.job_id for job in service.store.list_jobs(creds.username) if not job.is_terminal)
+    results = []
     for job_id in sorted(ids):
         try:
             results.append(stop_job_chain(service, creds, job_id))
