@@ -1,10 +1,35 @@
 """Last-mile production patches loaded automatically by Python's :mod:`site`.
 
-This module deliberately contains only small compatibility fixes.  It runs after
-``sitecustomize.py`` and therefore patches the already installed production
-hooks without duplicating the application.
+This module deliberately contains small compatibility and production fixes that
+are applied before ``app.py`` imports the job runner.
 """
 from __future__ import annotations
+
+
+def _install_kaggle_heartbeat_patch() -> None:
+    """Make every generated Kaggle kernel emit a real progress heartbeat.
+
+    ORCA can legitimately stay silent for many hours during a large Hessian,
+    SCF cycle, optimisation step, or frequency calculation.  Kaggle's output
+    then looks frozen even though the process is alive.  Replace the blocking
+    ``proc.wait()`` in the generated kernel with a 30-second supervision loop
+    that prints elapsed time, PID, output-file size and free scratch space every
+    five minutes.  This changes monitoring only; it never kills or restarts a
+    healthy ORCA process.
+    """
+    import kaggle_runner as kr
+
+    body = getattr(kr, "KAGGLE_RUNNER_BODY", None)
+    if not isinstance(body, str):
+        return
+    if "[heartbeat] ORCA still running" in body:
+        return
+
+    old = """    thread.start()\n    proc.wait()\n    run_finished.set()"""
+    new = """    thread.start()\n    heartbeat_every = 300.0\n    next_heartbeat = time.monotonic() + heartbeat_every\n    while proc.poll() is None:\n        try:\n            proc.wait(timeout=min(30.0, max(1.0, next_heartbeat - time.monotonic())))\n        except subprocess.TimeoutExpired:\n            pass\n        if proc.poll() is None and time.monotonic() >= next_heartbeat:\n            elapsed = time.time() - START_TIME\n            free = _free_bytes(WORKDIR)\n            try:\n                out_size = os.path.getsize(out_path) if os.path.exists(out_path) else 0\n            except OSError:\n                out_size = 0\n            log(\"[heartbeat] ORCA still running | elapsed=%s | pid=%s | output=%s | free=%s\"\n                % (time.strftime(\"%Hh%Mm%Ss\", time.gmtime(max(0, int(elapsed)))),\n                   proc.pid, _gb(out_size), _gb(free)))\n            next_heartbeat = time.monotonic() + heartbeat_every\n    proc.wait()\n    run_finished.set()"""
+    if old not in body:
+        return
+    kr.KAGGLE_RUNNER_BODY = body.replace(old, new, 1)
 
 
 def _install_legacy_status_patch() -> None:
@@ -30,9 +55,6 @@ def _install_legacy_status_patch() -> None:
                         "next_kaggle_url": None,
                         "note": text or "Kaggle returned an unrecognised response; status will be checked again."}
 
-            # A continuation can appear before or after the predecessor reaches
-            # COMPLETE.  Probe it for every non-active/unknown response so an
-            # unrecognised CLI format can never break a multi-day chain.
             if status not in ("running", "queued"):
                 next_id, next_url = kr._probe_successor(env, auth["username"], job_id)
                 if next_id:
@@ -44,7 +66,6 @@ def _install_legacy_status_patch() -> None:
                 return {"status": status, "next_job_id": None,
                         "next_kaggle_url": None, "note": text}
 
-        # Preserve the legacy implementation as a final compatibility fallback.
         result = original(username, key, job_id)
         if result.get("status") == "unknown":
             result = dict(result)
@@ -82,7 +103,7 @@ def _install_orchestrator_listing_patch() -> None:
                 described["chain_slugs"] = sorted(set(described.get("chain_slugs", [])) | set(entry.get("chain_slugs", [])))
                 described["last_run"] = entry.get("last_run")
                 merged.append(described)
-            except Exception as exc:  # keep one bad notebook from hiding the rest
+            except Exception as exc:
                 merged.append({"job_id": job_id, "title": entry.get("title", job_id),
                                "state": "VERIFYING", "phase": "Verifying Kaggle status",
                                "epoch": entry.get("epoch", 0), "window": entry.get("epoch", 0) + 1,
@@ -101,6 +122,11 @@ def _install_orchestrator_listing_patch() -> None:
 
     OrchestratorService.list_jobs = list_jobs
 
+
+try:
+    _install_kaggle_heartbeat_patch()
+except Exception:
+    pass
 
 try:
     _install_legacy_status_patch()
