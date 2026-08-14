@@ -116,32 +116,21 @@ try:
     _PUBLICATION_DPI = 600
 
     def _production_render_molecule_png(smiles: str, legend: str = "", size=None) -> bytes | None:
-        """Render the corrected drawing at 2400x1800 px with 600 dpi metadata.
-
-        The frontend may display the PNG at a smaller CSS width, but the actual
-        downloaded image retains publication-grade pixels. Geometry and label
-        proportions are scaled with the canvas so the earlier size correction is
-        preserved instead of producing a tiny molecule on the larger canvas.
-        """
         if size is None or size == _chem_core.MOL_IMAGE_SIZE:
             size = _PUBLICATION_SIZE
-
         mol = _chem_core.Chem.MolFromSmiles(smiles)
         if mol is None:
             return None
         try:
             _chem_core.AllChem.Compute2DCoords(mol)
             _chem_core.Chem.rdDepictor.StraightenDepiction(mol)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
-
         drawer = _chem_core.rdMolDraw2D.MolDraw2DCairo(size[0], size[1])
         _balanced_draw_options(drawer)
         opts = drawer.drawOptions()
         scale = min(size[0] / _REFERENCE_SIZE[0], size[1] / _REFERENCE_SIZE[1])
         try:
-            # 30 px / 16 pt were the corrected values at 560x420. Scale them
-            # linearly so the high-resolution output has identical proportions.
             opts.fixedBondLength = 30.0 * scale
             opts.fixedFontSize = 16.0 * scale
             opts.minFontSize = 12.0 * scale
@@ -150,31 +139,68 @@ try:
             opts.padding = 0.05
             opts.centreMoleculesBeforeDrawing = True
             opts.prepareMolsBeforeDrawing = True
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
-
         _chem_core.rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol, legend=legend)
         drawer.FinishDrawing()
         raw = drawer.GetDrawingText()
-
         try:
-            # Cairo creates the full-resolution pixels. Pillow only adds the
-            # explicit physical-resolution metadata required by many journals.
             image = _Image.open(_io.BytesIO(raw)).convert("RGB")
             out = _io.BytesIO()
-            image.save(
-                out,
-                format="PNG",
-                dpi=(_PUBLICATION_DPI, _PUBLICATION_DPI),
-                optimize=True,
-            )
+            image.save(out, format="PNG", dpi=(_PUBLICATION_DPI, _PUBLICATION_DPI), optimize=True)
             return out.getvalue()
-        except Exception as exc:  # noqa: BLE001
-            _logging.getLogger("chemistry_tools").warning(
-                "Could not attach 600 dpi PNG metadata: %s", exc
-            )
+        except Exception as exc:
+            _logging.getLogger("chemistry_tools").warning("Could not attach 600 dpi PNG metadata: %s", exc)
             return raw
 
     _chem_core.render_molecule_png = _production_render_molecule_png
+except Exception:
+    pass
+
+# ─────────────────────────────────────────────────────────────
+# Kaggle → Hugging Face keepalive
+# ─────────────────────────────────────────────────────────────
+# usercustomize installs the existing five-minute ORCA heartbeat after Python
+# imports this module. Wait until that patch has finished, then augment only
+# the post-heartbeat reschedule point with a best-effort request to this Space.
+# A failed ping is logged but can never interrupt or restart ORCA.
+try:
+    import sys as _sys
+    import threading as _threading
+    import time as _time
+
+    _HF_KEEPALIVE_URL = "https://mc2hf1999-orcaweb.hf.space/health"
+
+    def _install_hf_keepalive() -> None:
+        deadline = _time.monotonic() + 30.0
+        while _time.monotonic() < deadline:
+            module = _sys.modules.get("kaggle_runner")
+            body = getattr(module, "KAGGLE_RUNNER_BODY", None) if module else None
+            if isinstance(body, str) and "[heartbeat] ORCA still running" in body:
+                if "[hf-keepalive]" in body:
+                    return
+                marker = "            next_heartbeat = time.monotonic() + heartbeat_every"
+                if marker not in body:
+                    return
+                ping = '''            try:
+                _urllib = __import__("urllib.request", fromlist=["Request", "urlopen"])
+                _request = _urllib.Request(
+                    "https://mc2hf1999-orcaweb.hf.space/health",
+                    headers={"User-Agent": "orcaweb-kaggle-keepalive/1.0"},
+                )
+                with _urllib.urlopen(_request, timeout=20) as _response:
+                    _status = getattr(_response, "status", "ok")
+                log("[hf-keepalive] Hugging Face ping ok | status=%s" % _status)
+            except Exception as _hf_exc:
+                log("[hf-keepalive] Hugging Face ping failed: %s" % type(_hf_exc).__name__)
+            next_heartbeat = time.monotonic() + heartbeat_every'''
+                head, tail = body.rsplit(marker, 1)
+                module.KAGGLE_RUNNER_BODY = head + ping + tail
+                return
+            _time.sleep(0.02)
+
+    _threading.Thread(target=_install_hf_keepalive,
+                      name="orcaweb-hf-keepalive-patch",
+                      daemon=True).start()
 except Exception:
     pass
