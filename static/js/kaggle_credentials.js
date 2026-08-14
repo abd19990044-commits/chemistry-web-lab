@@ -199,7 +199,6 @@
         } finally { button.disabled = false; }
       });
 
-      // Keep this control directly with the primary result actions.
       const controls = document.createElement("div");
       controls.className = "explorer-action-row";
       if (sendToOrca && sendToOrca.parentNode) {
@@ -223,10 +222,106 @@
     }, "btn btn-primary btn-small");
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // Kaggle job stop controls. The backend enforces ownership and the
+  // per-account active-job limit; these controls are only the UI layer.
+  // ─────────────────────────────────────────────────────────────
+  const STOP_TERMINAL = new Set(["complete", "completed", "error", "failed", "cancelled", "canceled"]);
+
+  function jobIdFromCard(card) {
+    return card?.dataset.jobId || card?.getAttribute("data-job-id") || card?.querySelector("[data-job-id]")?.dataset.jobId || null;
+  }
+
+  async function stopRequest(url, body) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) throw new Error(payload.error || `Request failed (HTTP ${response.status}).`);
+    return payload;
+  }
+
+  function activeCard(card) {
+    const status = (card.querySelector(".job-status")?.textContent || "").trim().toLowerCase();
+    return !STOP_TERMINAL.has(status);
+  }
+
+  function installJobStopControls() {
+    const jobsList = document.getElementById("jobs-list");
+    if (!jobsList) return;
+
+    let toolbar = document.getElementById("jobs-stop-toolbar");
+    if (!toolbar) {
+      toolbar = document.createElement("div");
+      toolbar.id = "jobs-stop-toolbar";
+      toolbar.style.display = "flex";
+      toolbar.style.justifyContent = "flex-end";
+      toolbar.style.margin = "0 0 0.75rem";
+      toolbar.style.gap = "0.5rem";
+      const allButton = document.createElement("button");
+      allButton.type = "button";
+      allButton.id = "stop-all-active-jobs";
+      allButton.className = "btn btn-ghost btn-small";
+      allButton.textContent = "Stop all active jobs";
+      allButton.addEventListener("click", async () => {
+        const count = [...jobsList.querySelectorAll(".job-card")].filter(activeCard).length;
+        if (!count) return showCopyToast("There are no active jobs to stop.");
+        if (!window.confirm(`Stop all ${count} active job${count === 1 ? "" : "s"}? Running Kaggle kernels will be terminated and no continuation will be started.`)) return;
+        allButton.disabled = true;
+        const oldText = allButton.textContent;
+        allButton.textContent = "Stopping…";
+        try {
+          const result = await stopRequest("/api/orca/stop-all");
+          showCopyToast(result.message || "Stop request sent for all active jobs.");
+          window.dispatchEvent(new CustomEvent("chemlab-jobs-refresh"));
+        } catch (err) { showCopyToast(err.message || "Could not stop active jobs.", true); }
+        finally { allButton.disabled = false; allButton.textContent = oldText; }
+      });
+      jobsList.parentNode?.insertBefore(toolbar, jobsList);
+      toolbar.appendChild(allButton);
+    }
+
+    jobsList.querySelectorAll(".job-card").forEach(card => {
+      const id = jobIdFromCard(card);
+      if (!id || !activeCard(card) || card.querySelector(".stop-job-btn")) return;
+      const actions = card.querySelector(".job-actions") || card.querySelector(".job-card-actions") || card;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-ghost btn-small stop-job-btn";
+      button.textContent = "Stop job";
+      button.addEventListener("click", async () => {
+        if (!window.confirm("Stop this job? Its running Kaggle kernel will be terminated and future continuation windows will not start.")) return;
+        button.disabled = true;
+        const oldText = button.textContent;
+        button.textContent = "Stopping…";
+        try {
+          const result = await stopRequest("/api/orca/cancel", { job_id: id });
+          showCopyToast(result.message || "Job stop requested.");
+          card.querySelector(".job-status")?.classList.add("status-cancelled");
+          const badge = card.querySelector(".job-status");
+          if (badge) badge.textContent = "Cancelled";
+          button.remove();
+          window.dispatchEvent(new CustomEvent("chemlab-jobs-refresh"));
+        } catch (err) {
+          showCopyToast(err.message || "Could not stop this job.", true);
+          button.disabled = false;
+          button.textContent = oldText;
+        }
+      });
+      actions.appendChild(button);
+    });
+  }
+
   function installChemicalActions() { installExplorerActions(); installReactionActions(); }
   ["explorer-result", "reaction-result"].forEach(id => {
     const node = document.getElementById(id);
     if (node) new MutationObserver(installChemicalActions).observe(node, { attributes: true, attributeFilter: ["class"] });
   });
+  const jobsNode = document.getElementById("jobs-list");
+  if (jobsNode) new MutationObserver(installJobStopControls).observe(jobsNode, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-job-id"] });
+  window.addEventListener("chemlab-jobs-rendered", installJobStopControls);
   installChemicalActions();
+  installJobStopControls();
 })();
