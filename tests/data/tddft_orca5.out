@@ -1,0 +1,14 @@
+                                 * O   R   C   A *
+       Program Version 5.0.2  - RELEASE -
+Your calculation utilizes the basis: def2-SVP
+
+         ABSORPTION SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS
+------------------------------------------------------------------------------
+State   Energy    Wavelength  fosc         T2        TX        TY        TZ
+        (cm-1)      (nm)                 (au**2)    (au)      (au)      (au)
+------------------------------------------------------------------------------
+   1   33134.0    301.8   0.039830350   0.39575   0.17031  -0.58917  -0.14009
+   2   35886.9    278.7   0.022928066   0.21033  -0.29680   0.34158   0.07462
+
+FINAL SINGLE POINT ENERGY      -60.000000000000
+                             ****ORCA TERMINATED NORMALLY****

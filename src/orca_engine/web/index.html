@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ORCA Studio &bull; 3D Molecular & UV-Vis Spectra Comparator</title>
+  <meta name="description" content="State-of-the-art 3D Molecular, HOMO/LUMO and UV-Vis Spectra Comparator with Multi-Trace Overlay and Wavelength Shift for ORCA Quantum Chemistry.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- 3Dmol.js for high-performance 3D molecular and orbital visualization -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.4/3Dmol-min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Navigation Bar -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 3v3m0 12v3M3 12h3m12 0h3"></path>
+            <circle cx="12" cy="12" r="8" stroke-dasharray="2 4"></circle>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">ORCA Studio</span>
+          <span class="brand-tag">3D &bull; HOMO-LUMO &bull; UV-Vis</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <label class="btn btn-secondary upload-btn" for="file-input">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <span>Open ORCA .out / .log</span>
+          <input type="file" id="file-input" multiple accept=".out,.log,.txt" style="display: none;">
+        </label>
+
+        <button class="btn btn-secondary" id="load-sample-btn" title="Load real ORCA UV-Vis sample calculations">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          <span>Load UV-Vis Sample</span>
+        </button>
+
+        <div class="header-divider"></div>
+
+        <button class="btn btn-primary" id="export-png-btn" title="Export current plot to high-res PNG">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+          <span>Export Image</span>
+        </button>
+
+        <button class="btn btn-secondary" id="export-csv-btn" title="Export composite spectrum data to CSV">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span>Export CSV</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main App Body -->
+    <div class="app-body">
+      <!-- Left Sidebar: Molecules & Traces Manager -->
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <div class="sidebar-header">
+            <h3>Loaded Molecules &amp; Traces</h3>
+            <span class="badge" id="trace-count-badge">0</span>
+          </div>
+
+          <div class="traces-list" id="traces-list">
+            <div class="empty-state">
+              <p>No ORCA files loaded.</p>
+              <p class="sub-text">Drag &amp; drop ORCA <code>.out</code> files here or click "Open ORCA" to begin.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Global Spectra Controls -->
+        <div class="sidebar-section controls-section">
+          <div class="sidebar-header">
+            <h3>Spectra Controls &amp; Shift</h3>
+          </div>
+
+          <!-- Broadening Control -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Gaussian Broadening (&sigma;)</span>
+              <span class="control-value" id="sigma-val">20.0 nm</span>
+            </div>
+            <input type="range" id="sigma-slider" min="5" max="60" step="1" value="20" class="slider">
+            <div class="slider-ticks">
+              <span>5 nm (Sharp)</span>
+              <span>30 nm</span>
+              <span>60 nm (Broad)</span>
+            </div>
+          </div>
+
+          <!-- Wavelength Shift Controller -->
+          <div class="control-group highlight-box">
+            <div class="control-label">
+              <span class="flex-center">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                  <polyline points="17 11 12 6 7 11"></polyline>
+                  <polyline points="17 18 12 13 7 18"></polyline>
+                </svg>
+                Wavelength Shift (&Delta;&lambda;)
+              </span>
+              <div class="num-input-wrap">
+                <input type="number" id="shift-num" value="0.0" step="1.0" class="num-input">
+                <span class="unit">nm</span>
+              </div>
+            </div>
+            <input type="range" id="shift-slider" min="-100" max="150" step="1" value="0" class="slider">
+            <div class="slider-ticks">
+              <span>-100 nm (Blue)</span>
+              <span>0 nm</span>
+              <span>+150 nm (Red)</span>
+            </div>
+            <p class="control-hint">Shift calculated vertical excitation band to calibrate with experimental solvent effects.</p>
+          </div>
+
+          <!-- Experimental Overlay Uploader -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Experimental Spectrum</span>
+              <button class="btn-link" id="clear-exp-btn" style="display:none;">Remove</button>
+            </div>
+            <label class="btn btn-outline exp-upload-btn" for="exp-file-input">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>Upload Exp. CSV (Wavelength, Abs)</span>
+              <input type="file" id="exp-file-input" accept=".csv,.txt,.dat" style="display: none;">
+            </label>
+          </div>
+
+          <!-- Display Options -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Plot Options</span>
+            </div>
+            <label class="checkbox-row">
+              <input type="checkbox" id="show-sticks-toggle" checked>
+              <span>Show Oscillator Strength Sticks (f<sub>osc</sub>)</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="normalize-toggle" checked>
+              <span>Normalize Peak Heights (0 &ndash; 1.0)</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="fill-curves-toggle" checked>
+              <span>Fill Area Under Curve</span>
+            </label>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Workspace Viewport -->
+      <main class="workspace">
+        <!-- Navigation Tabs -->
+        <nav class="view-tabs">
+          <button class="tab-btn active" data-tab="uvvis-tab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 3v18h18"></path>
+              <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"></path>
+            </svg>
+            <span>UV-Vis Spectrum Comparator</span>
+          </button>
+
+          <button class="tab-btn" data-tab="orbitals-tab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              <path d="M2 12h20"></path>
+            </svg>
+            <span>3D Molecular &amp; HOMO/LUMO</span>
+          </button>
+
+          <button class="tab-btn" data-tab="vibrations-tab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            <span>Vibrational &amp; Transition State</span>
+          </button>
+
+          <button class="tab-btn" data-tab="reactions-tab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="18" cy="5" r="3"></circle>
+              <circle cx="6" cy="12" r="3"></circle>
+              <circle cx="18" cy="19" r="3"></circle>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+            </svg>
+            <span>Reaction Thermochemistry</span>
+          </button>
+        </nav>
+
+        <!-- Tab 1: UV-Vis Spectrum Comparator -->
+        <section class="tab-pane active" id="uvvis-tab">
+          <div class="spectra-container">
+            <div class="spectra-canvas-wrap" id="plot-wrapper">
+              <canvas id="spectra-canvas"></canvas>
+              <!-- Interactive Crosshair & Tooltip Overlay -->
+              <div class="spectra-tooltip" id="plot-tooltip" style="display:none;"></div>
+            </div>
+
+            <!-- Peak Picking & Active State Metrics -->
+            <div class="spectra-meta-bar" id="peak-metrics-bar">
+              <div class="metric-pill">
+                <span class="label">&lambda;<sub>max</sub> Primary</span>
+                <span class="val" id="primary-lmax">&mdash;</span>
+              </div>
+              <div class="metric-pill">
+                <span class="label">Excitation Energy</span>
+                <span class="val" id="primary-energy">&mdash;</span>
+              </div>
+              <div class="metric-pill">
+                <span class="label">Major Transition</span>
+                <span class="val" id="primary-transition">&mdash;</span>
+              </div>
+              <div class="metric-pill">
+                <span class="label">Active Shift</span>
+                <span class="val" id="primary-shift">0.0 nm</span>
+              </div>
+            </div>
+
+            <!-- Transitions Data Table -->
+            <div class="panel data-table-panel">
+              <div class="panel-header">
+                <h4>Electronic Transitions &amp; Excited States</h4>
+                <div class="table-actions">
+                  <span class="table-info" id="transitions-count-label">0 states</span>
+                </div>
+              </div>
+              <div class="table-scroll">
+                <table class="data-table" id="transitions-table">
+                  <thead>
+                    <tr>
+                      <th>State #</th>
+                      <th>Energy (cm<sup>&minus;1</sup>)</th>
+                      <th>Energy (eV)</th>
+                      <th>&lambda; (nm)</th>
+                      <th>&lambda; + &Delta;&lambda; (nm)</th>
+                      <th>f<sub>osc</sub></th>
+                      <th>Strength Bar</th>
+                    </tr>
+                  </thead>
+                  <tbody id="transitions-tbody">
+                    <tr>
+                      <td colspan="7" class="text-center muted">Load an ORCA TD-DFT calculation to view transitions.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 2: 3D Molecular & HOMO/LUMO Viewer -->
+        <section class="tab-pane" id="orbitals-tab">
+          <div class="orbitals-layout">
+            <!-- 3D Molecular Geometry Viewer -->
+            <div class="panel viewer-3d-panel">
+              <div class="panel-header">
+                <div class="flex-center">
+                  <h4 id="viewer-molecule-title">3D Molecular Geometry</h4>
+                  <span class="formula-badge" id="viewer-formula-badge"></span>
+                </div>
+                <div class="viewer-tools">
+                  <select id="render-style-select" class="select-input">
+                    <option value="stick">Stick Model</option>
+                    <option value="ballAndStick" selected>Ball &amp; Stick</option>
+                    <option value="sphere">Spacefill (CPK)</option>
+                    <option value="wireframe">Wireframe</option>
+                  </select>
+                  <button class="btn btn-sm btn-secondary" id="reset-view-btn" title="Reset Camera View">Reset</button>
+                </div>
+              </div>
+
+              <div class="viewer-3d-canvas-wrap" id="mol-viewer-3d">
+                <div class="viewer-placeholder" id="viewer-placeholder">
+                  <p>3D Molecular Viewer</p>
+                  <span>Select or load a molecule to view Cartesian geometry in &Aring;ngstr&ouml;ms.</span>
+                </div>
+              </div>
+
+              <div class="viewer-footer-info">
+                <span id="atoms-count-label">0 atoms</span>
+                <span id="dipole-label">Dipole: &mdash; Debye</span>
+                <span id="ts-badge" class="badge-tag">Minimum</span>
+              </div>
+            </div>
+
+            <!-- HOMO / LUMO Energy Ladder & Conceptual DFT -->
+            <div class="panel orbitals-panel">
+              <div class="panel-header">
+                <h4>HOMO &ndash; LUMO Energy Levels</h4>
+              </div>
+
+              <!-- Energy Diagram Canvas / Graphic -->
+              <div class="orbital-ladder-wrap">
+                <div class="orbital-level lumo-level">
+                  <div class="orbital-indicator">
+                    <span class="orb-name">LUMO</span>
+                    <span class="orb-ev" id="lumo-val-ev">&mdash; eV</span>
+                  </div>
+                  <div class="spin-arrows" id="lumo-spins">
+                    <span class="unpaired">&ndash;</span>
+                  </div>
+                </div>
+
+                <div class="gap-indicator">
+                  <div class="gap-line"></div>
+                  <span class="gap-text" id="gap-val-ev">&Delta;E<sub>gap</sub>: &mdash; eV</span>
+                  <div class="gap-line"></div>
+                </div>
+
+                <div class="orbital-level homo-level">
+                  <div class="orbital-indicator">
+                    <span class="orb-name">HOMO</span>
+                    <span class="orb-ev" id="homo-val-ev">&mdash; eV</span>
+                  </div>
+                  <div class="spin-arrows" id="homo-spins">
+                    <span class="spin-up">&uarr;</span><span class="spin-down">&darr;</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Conceptual DFT Reactivity Indices Grid -->
+              <div class="cdft-grid">
+                <div class="cdft-card">
+                  <span class="cdft-title">Chemical Hardness (&eta;)</span>
+                  <span class="cdft-val" id="cdft-hardness">&mdash;</span>
+                  <span class="cdft-unit">eV</span>
+                </div>
+                <div class="cdft-card">
+                  <span class="cdft-title">Chemical Potential (&mu;)</span>
+                  <span class="cdft-val" id="cdft-potential">&mdash;</span>
+                  <span class="cdft-unit">eV</span>
+                </div>
+                <div class="cdft-card">
+                  <span class="cdft-title">Electronegativity (&chi;)</span>
+                  <span class="cdft-val" id="cdft-electronegativity">&mdash;</span>
+                  <span class="cdft-unit">eV</span>
+                </div>
+                <div class="cdft-card">
+                  <span class="cdft-title">Electrophilicity Index (&omega;)</span>
+                  <span class="cdft-val" id="cdft-electrophilicity">&mdash;</span>
+                  <span class="cdft-unit">eV</span>
+                </div>
+                <div class="cdft-card">
+                  <span class="cdft-title">Ionization Potential (I)</span>
+                  <span class="cdft-val" id="cdft-ip">&mdash;</span>
+                  <span class="cdft-unit">eV</span>
+                </div>
+                <div class="cdft-card">
+                  <span class="cdft-title">Electron Affinity (A)</span>
+                  <span class="cdft-val" id="cdft-ea">&mdash;</span>
+                  <span class="cdft-unit">eV</span>
+                </div>
+                <div class="cdft-card">
+                  <span class="cdft-title">Electrodonating Power (&omega;<sup>&minus;</sup>)</span>
+                  <span class="cdft-val" id="cdft-edonating">&mdash;</span>
+                  <span class="cdft-unit">eV</span>
+                </div>
+                <div class="cdft-card">
+                  <span class="cdft-title">Electroaccepting Power (&omega;<sup>+</sup>)</span>
+                  <span class="cdft-val" id="cdft-eaccepting">&mdash;</span>
+                  <span class="cdft-unit">eV</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 3: Vibrational & Transition State -->
+        <section class="tab-pane" id="vibrations-tab">
+          <div class="vibrations-layout">
+            <div class="panel">
+              <div class="panel-header">
+                <h4>Vibrational Frequency Analysis</h4>
+                <span class="badge" id="vib-count-badge">0 modes</span>
+              </div>
+              <div class="table-scroll">
+                <table class="data-table" id="vibrations-table">
+                  <thead>
+                    <tr>
+                      <th>Mode #</th>
+                      <th>Frequency (cm<sup>&minus;1</sup>)</th>
+                      <th>Nature / State</th>
+                    </tr>
+                  </thead>
+                  <tbody id="vibrations-tbody">
+                    <tr>
+                      <td colspan="3" class="text-center muted">No vibrational calculations loaded.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h4>Thermochemical State Corrections</h4>
+              </div>
+              <div class="thermo-summary-grid">
+                <div class="thermo-card">
+                  <span class="thermo-label">Electronic Energy (E<sub>elec</sub>)</span>
+                  <span class="thermo-val" id="thermo-eelec">&mdash;</span>
+                  <span class="thermo-unit">E<sub>h</sub></span>
+                </div>
+                <div class="thermo-card">
+                  <span class="thermo-label">Zero-Point Energy (ZPE)</span>
+                  <span class="thermo-val" id="thermo-zpe">&mdash;</span>
+                  <span class="thermo-unit">E<sub>h</sub></span>
+                </div>
+                <div class="thermo-card">
+                  <span class="thermo-label">Total Enthalpy (H)</span>
+                  <span class="thermo-val" id="thermo-enthalpy">&mdash;</span>
+                  <span class="thermo-unit">E<sub>h</sub></span>
+                </div>
+                <div class="thermo-card">
+                  <span class="thermo-label">Gibbs Free Energy (G)</span>
+                  <span class="thermo-val" id="thermo-gibbs">&mdash;</span>
+                  <span class="thermo-unit">E<sub>h</sub></span>
+                </div>
+                <div class="thermo-card">
+                  <span class="thermo-label">Entropy Term (TS)</span>
+                  <span class="thermo-val" id="thermo-ts">&mdash;</span>
+                  <span class="thermo-unit">E<sub>h</sub></span>
+                </div>
+                <div class="thermo-card">
+                  <span class="thermo-label">Spin Contamination (&lang;S<sup>2</sup>&rang; - S(S+1))</span>
+                  <span class="thermo-val" id="thermo-spin">&mdash;</span>
+                  <span class="thermo-unit"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 4: Reaction Thermochemistry -->
+        <section class="tab-pane" id="reactions-tab">
+          <div class="panel reaction-panel">
+            <div class="panel-header">
+              <h4>Reaction Energy &amp; Equilibrium Calculator</h4>
+            </div>
+
+            <div class="reaction-input-wrap">
+              <label for="rxn-input">Reaction Equation (Supports <code>&lt;=&gt;</code>, <code>&lt;-&gt;</code>, <code>-&gt;</code>, <code>1-butanol</code>):</label>
+              <div class="reaction-form-row">
+                <input type="text" id="rxn-input" class="text-input" placeholder="e.g. nap + 2 rxn_h2 <=> napbrbr">
+                <button class="btn btn-primary" id="calc-rxn-btn">Calculate Thermochemistry</button>
+              </div>
+            </div>
+
+            <div class="reaction-results-grid" id="reaction-results" style="display:none;">
+              <div class="rxn-card highlight">
+                <span class="rxn-label">&Delta;G&deg; (Gibbs Free Energy)</span>
+                <span class="rxn-val" id="rxn-dg">&mdash;</span>
+                <span class="rxn-unit">kcal/mol</span>
+                <span class="exergonic-tag" id="rxn-exergonic-badge">Exergonic</span>
+              </div>
+              <div class="rxn-card">
+                <span class="rxn-label">&Delta;H&deg; (Reaction Enthalpy)</span>
+                <span class="rxn-val" id="rxn-dh">&mdash;</span>
+                <span class="rxn-unit">kcal/mol</span>
+              </div>
+              <div class="rxn-card">
+                <span class="rxn-label">&Delta;S&deg; (Reaction Entropy)</span>
+                <span class="rxn-val" id="rxn-ds">&mdash;</span>
+                <span class="rxn-unit">cal/(mol&bull;K)</span>
+              </div>
+              <div class="rxn-card">
+                <span class="rxn-label">Equilibrium Constant (K<sub>eq</sub>)</span>
+                <span class="rxn-val" id="rxn-keq">&mdash;</span>
+                <span class="rxn-unit">at 298.15 K</span>
+              </div>
+            </div>
+
+            <div class="consistency-box" id="rxn-consistency-box" style="display:none;">
+              <h5>Physical Consistency &amp; Atom Balance</h5>
+              <div id="consistency-messages"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

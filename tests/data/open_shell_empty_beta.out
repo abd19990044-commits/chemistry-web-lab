@@ -1,0 +1,22 @@
+                                 * O   R   C   A *
+       Program Version 5.0.2  - RELEASE -
+ Total Charge           Charge          ....    0
+ Multiplicity           Mult            ....    2
+ Number of Electrons    NEL             ....    1
+Your calculation utilizes the basis: def2-SVP
+
+----------------
+ORBITAL ENERGIES
+----------------
+                 SPIN UP ORBITALS
+  NO   OCC          E(Eh)            E(eV)
+   0   1.0000      -0.279015        -7.5931
+   1   0.0000       0.223116         6.0712
+
+                 SPIN DOWN ORBITALS
+  NO   OCC          E(Eh)            E(eV)
+   0   0.0000      -0.052635        -1.4323
+   1   0.0000       0.388101        10.5608
+
+FINAL SINGLE POINT ENERGY      -0.500000000000
+                             ****ORCA TERMINATED NORMALLY****

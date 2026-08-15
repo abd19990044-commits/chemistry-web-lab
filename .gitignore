@@ -1,0 +1,45 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test and type-check caches
+.pytest_cache/
+.pytest_temp/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Generated reports
+ORCA_Parsed_Data.json
+ORCA_Parsed_Data.csv
+
+# ORCA output corpus.
+# The validation set is archived on Zenodo rather than committed here; see
+# README.md ("Validation data"). Small fixtures live in tests/data/ and are
+# tracked deliberately.
+data/orcafile/
+*.gbw
+*.densities
+*.tmp

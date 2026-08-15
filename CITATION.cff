@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+title: "orca-engine: a streaming parser and thermochemistry engine for ORCA output files"
+message: "If you use this software, please cite it using these metadata."
+type: software
+authors:
+  - family-names: Hasan
+    given-names: Salam
+    email: salamhasan199904@gmail.com
+repository-code: "https://github.com/salamhasan/orca-engine"
+license: MIT
+version: 1.0.0
+date-released: "2026-07-29"
+keywords:
+  - computational chemistry
+  - quantum chemistry
+  - ORCA
+  - density functional theory
+  - thermochemistry
+  - reproducibility
+abstract: >-
+  orca-engine is a dependency-free Python library that parses ORCA 5 and ORCA 6
+  quantum chemistry output files in a single streaming pass and computes
+  reaction energies and bond dissociation energies. It records the level of
+  theory, charge, multiplicity, temperature and pressure of every calculation
+  and uses them to check that a requested reaction is atom balanced, charge
+  balanced, and computed at a single consistent level of theory before
+  reporting an energy. The parser is designed around failure modes that produce
+  plausible but incorrect numbers rather than errors, including frontier
+  orbitals drawn from different geometry optimization steps, atomic-unit
+  coordinates reported as Angstrom, and error terminations masked by a
+  subsequent rerun.

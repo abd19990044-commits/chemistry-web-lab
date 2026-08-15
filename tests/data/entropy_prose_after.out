@@ -1,0 +1,15 @@
+                                 * O   R   C   A *
+       Program Version 6.1.0  - RELEASE -
+Your calculation utilizes the basis: def2-TZVP
+
+FINAL SINGLE POINT ENERGY      -76.400000000000
+
+Temperature         ...   298.15 K
+Zero point energy                ...      0.02100000 Eh
+Total enthalpy                   ...    -76.37000000 Eh
+Final entropy term               ...      0.02000000 Eh      12.55 kcal/mol
+Final Gibbs free energy          ...    -76.39000000 Eh
+Error: SCF gradient norm 0.000012 exceeds the tight threshold
+out the resulting rotational entropy values for sn=1,12:
+      1     0.00     2     1.38     3     2.18
+                             ****ORCA TERMINATED NORMALLY****

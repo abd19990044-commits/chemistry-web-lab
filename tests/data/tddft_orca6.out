@@ -1,0 +1,14 @@
+                                 * O   R   C   A *
+       Program Version 6.1.0  - RELEASE -
+Your calculation utilizes the basis: def2-TZVP
+
+                     ABSORPTION SPECTRUM VIA TRANSITION ELECTRIC DIPOLE MOMENTS
+-----------------------------------------------------------------------------------------------------
+     Transition      Energy     Energy  Wavelength fosc(D2)      D2        DX        DY        DZ
+                      (eV)      (cm-1)    (nm)                 (au**2)    (au)      (au)      (au)
+-----------------------------------------------------------------------------------------------------
+  0-1A  ->  1-1A    2.249858   18146.3   551.1   0.550147942   9.98082   1.49991  -2.77889  -0.09425
+  0-1A  ->  2-1A    2.701860   21792.0   458.9   0.205701740   3.10754  -1.40356   1.04984  -0.18812
+
+FINAL SINGLE POINT ENERGY      -70.000000000000
+                             ****ORCA TERMINATED NORMALLY****
