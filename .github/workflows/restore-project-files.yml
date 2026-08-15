@@ -1,0 +1,41 @@
+name: Restore Previous Project Files
+
+on:
+  push:
+    paths:
+      - '.github/workflows/restore-project-files.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore project from preserved commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESTORE_SHA="c8110832deaf2ae28dc9752a69c6d402df8b87c9"
+          git fetch --no-tags origin "$RESTORE_SHA" || true
+          git cat-file -e "$RESTORE_SHA^{commit}"
+          git checkout "$RESTORE_SHA" -- .
+          # Keep this restoration workflow so the process is auditable.
+          git checkout HEAD -- .github/workflows/restore-project-files.yml
+          git status --short
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No files required restoration."
+          else
+            git commit -m "restore: recover complete project files from preserved commit"
+            git push origin HEAD:main
+          fi
