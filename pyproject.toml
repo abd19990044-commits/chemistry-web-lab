@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "orca-web-lab"
-version = "1.0.0"
+version = "1.0.2"
 description = "Web lab, quantum chemistry analyzer, reaction editor, and thermochemistry workbench for ORCA"
 readme = "README.md"
 license = { text = "ORCA Web Lab Academic and Non-Commercial License v1.1" }

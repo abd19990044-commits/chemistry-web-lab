@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "orca-engine"
-version = "1.0.0"
+version = "1.0.2"
 description = "Streaming parser and thermochemistry engine for ORCA quantum chemistry output files"
 readme = "README.md"
 license = { text = "ORCA Web Lab Academic and Non-Commercial License v1.1" }

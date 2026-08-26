@@ -472,7 +472,7 @@ def generate_and_verify_manifest(target_dir: Path, release_type: str, provenance
     manifest_json = {
         "schema_version": "orca-web-lab.release-manifest.v1.0",
         "application_name": "orca-web-lab",
-        "version": "1.0.0",
+        "version": "1.0.2",
         "release_type": release_type,
         "package_mode": provenance["package_mode"],
         "source_type": provenance["source_type"],

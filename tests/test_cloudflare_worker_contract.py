@@ -113,7 +113,7 @@ class D1SimulatedServer(BaseHTTPRequestHandler):
             self._send_json({
                 "ok": True,
                 "service": "orca-cloudflare-control-plane",
-                "version": "1.0.0",
+                "version": "1.0.2",
                 "database_available": True,
                 "type": "http",
             })

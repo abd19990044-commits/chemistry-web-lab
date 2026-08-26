@@ -8,8 +8,8 @@ authors:
     email: salamhasan199904@gmail.com
 repository-code: "https://github.com/salamhasan/orca-engine"
 license: "ORCA-Web-Lab-Academic-and-Non-Commercial-License-v1.1"
-version: 1.0.0
-date-released: "2026-07-29"
+version: 1.0.2
+date-released: "2026-08-27"
 keywords:
   - computational chemistry
   - quantum chemistry
