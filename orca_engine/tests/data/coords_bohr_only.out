@@ -1,0 +1,13 @@
+                                 * O   R   C   A *
+       Program Version 6.1.0  - RELEASE -
+Your calculation utilizes the basis: def2-TZVP
+
+----------------------------
+CARTESIAN COORDINATES (A.U.)
+----------------------------
+  NO LB      ZA    FRAG     MASS         X           Y           Z
+   0 C     6.0000    0    12.011    1.889726    0.000000    0.000000
+   1 H     1.0000    0     1.008    3.779452    0.000000    0.000000
+
+FINAL SINGLE POINT ENERGY      -100.000000000000
+                             ****ORCA TERMINATED NORMALLY****

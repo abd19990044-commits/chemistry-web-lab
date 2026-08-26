@@ -1,0 +1,54 @@
+# Git repository metadata
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Python bytecode, cache, and builds
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing, typecheck, and coverage reports
+.pytest_cache/
+.pytest_temp/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Documentation and development scratch dumps
+orca_manual_*.pdf
+orca_all_code.txt
+manual_exact_specs.txt
+search_specifics.txt
+scratch/
+scratch_*
+*.tmp
+*.log
+
+# Agent & local workflow artifacts
+.agents/
+.autoclaw/
+.openclaw/
+.openclaw-attachments/

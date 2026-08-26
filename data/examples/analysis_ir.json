@@ -1,0 +1,179 @@
+{
+  "schema_version": "orca-web-lab.1.0",
+  "dataset_version": "2026.1",
+  "record_type": "analysis_record",
+  "record_id": "an_ir_acetone_001",
+  "content_hash": "bcc0346fb1a804efcc32017e286f7602e6141592c13cf4ebb42917485de4234f",
+  "split_group_key": "CC(=O)C",
+  "name": "Acetone IR Spectral Analysis & Peak Assignment",
+  "created_at": "2026-08-24T21:48:21.522317+00:00",
+  "updated_at": "2026-08-25T12:17:14.453613+00:00",
+  "provenance": {
+    "source_type": "orca_analyzer",
+    "source_filename": "acetone_ir.out",
+    "source_job_id": null,
+    "source_result_manifest": null,
+    "result_sha256": null,
+    "source_url": null,
+    "application_version": "2026.1",
+    "orca_version": "6.1.0",
+    "parser_version": "2026.1",
+    "git_sha": null,
+    "generated_by": "ORCA Web Lab Canonical Normalizer",
+    "imported_from": null
+  },
+  "migration_report": {
+    "mapped_fields": [
+      "canonical_record_preserved"
+    ],
+    "transformed_fields": [],
+    "omitted_fields": [],
+    "missing_fields": [],
+    "warnings": [],
+    "unsupported_fields": []
+  },
+  "analysis_results": {
+    "analysis_type": "OPT",
+    "status": "SUCCESS",
+    "single_point_energy_eh": null,
+    "zero_point_energy_eh": null,
+    "total_enthalpy_eh": null,
+    "gibbs_free_energy_eh": null,
+    "entropy_cal_mol_k": null,
+    "dipole_moment_debye": null,
+    "homo_ev": null,
+    "lumo_ev": null,
+    "homo_lumo_gap_ev": null,
+    "converged": true,
+    "stationary_point_status": "MINIMUM",
+    "imaginary_frequencies_count": 0
+  },
+  "molecular_system": {
+    "system_id": "sys_an_ir_ac",
+    "name": "Acetone IR Spectral Analysis & Peak Assignment",
+    "total_charge": 0,
+    "total_multiplicity": 1,
+    "stoichiometry_formula": "C3H6O",
+    "fragments": [],
+    "species": [
+      {
+        "species_id": "sp_an_ir_ac_1",
+        "name": "Acetone IR Spectral Analysis & Peak Assignment",
+        "formula": "C3H6O",
+        "canonical_smiles": "CC(=O)C",
+        "isomeric_smiles": null,
+        "inchi": null,
+        "inchikey": null,
+        "charge": 0,
+        "multiplicity": 1,
+        "atoms": [],
+        "bonds": [],
+        "geometry_refs": []
+      }
+    ]
+  },
+  "reaction": null,
+  "geometries": [],
+  "calculations": [
+    {
+      "calculation_id": "calc_an_ir_ac_1",
+      "calculation_type": "OPT",
+      "status": "COMPLETED",
+      "input_parameters": {
+        "method": "B3LYP",
+        "basis": "def2-SVP",
+        "dispersion": "D3BJ",
+        "solvation": "None",
+        "solvent": "None",
+        "charge": 0,
+        "multiplicity": 1,
+        "temperature_k": null,
+        "pressure_atm": null,
+        "input_geometry_id": null
+      },
+      "analysis_record_id": "an_an_ir_ac",
+      "orca_version": "6.1.0",
+      "input_source": null,
+      "output_source": null
+    }
+  ],
+  "workflows": [],
+  "thermochemistry": null,
+  "properties": {
+    "electronic": {
+      "homo_ev": null,
+      "lumo_ev": null,
+      "homo_lumo_gap_ev": null,
+      "dipole_moment_debye": null
+    },
+    "thermodynamic": null,
+    "spectroscopic": null,
+    "reactivity_indices": {
+      "electronegativity_ev": null,
+      "chemical_hardness_ev": null,
+      "electrophilicity_index_ev": null
+    }
+  },
+  "spectroscopy": {
+    "ir": {
+      "theoretical_modes": [
+        {
+          "mode": 1,
+          "frequency_cm": 530.2,
+          "intensity_km_mol": 8.5
+        },
+        {
+          "mode": 16,
+          "frequency_cm": 1715.0,
+          "intensity_km_mol": 280.0
+        },
+        {
+          "mode": 20,
+          "frequency_cm": 2960.0,
+          "intensity_km_mol": 55.0
+        }
+      ],
+      "experimental_spectra": [],
+      "peak_assignments": [
+        {
+          "peak_wavenumber_cm": 1715.0,
+          "functional_group": "Ketone",
+          "subgroup": "Aliphatic Ketone",
+          "bond_or_mode": "C=O stretch",
+          "confidence": "High",
+          "confidence_score": 1.495,
+          "evidence_rationale": "Strong C=O stretch observed in aliphatic ketone region.",
+          "source": "Silverstein et al. (2005)",
+          "source_type": "VERIFIED",
+          "structural_support": true,
+          "database_record_id": "IR_CARB_KETONE_ALIPHATIC"
+        }
+      ]
+    },
+    "uv_vis": {
+      "theoretical_transitions": [],
+      "experimental_spectra": []
+    },
+    "nmr": {
+      "nuclei": []
+    }
+  },
+  "training_metadata": {
+    "task_type": "molecular_property_prediction",
+    "input_modality": "smiles",
+    "target_modality": "spectrum",
+    "label": null,
+    "label_type": "null",
+    "quality_flags": [
+      "missing_geometry"
+    ],
+    "split_hint": "train"
+  },
+  "data_quality": {
+    "validation_status": "partially_verified",
+    "completeness_score": 0.6,
+    "missing_fields": [],
+    "warnings": [],
+    "errors": []
+  }
+}

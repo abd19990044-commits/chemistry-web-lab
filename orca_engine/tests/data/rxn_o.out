@@ -1,0 +1,18 @@
+                                 * O   R   C   A *
+       Program Version 6.1.0  - RELEASE -
+ Total Charge           Charge          ....    0
+ Multiplicity           Mult            ....    3
+Your calculation utilizes the basis: def2-TZVP
+
+---------------------------------
+CARTESIAN COORDINATES (ANGSTROEM)
+---------------------------------
+  O      0.000000    0.000000    0.000000
+
+FINAL SINGLE POINT ENERGY      -75.050000000000
+
+Temperature         ...   298.15 K
+Zero point energy                ...      0.00000000 Eh
+Total enthalpy                   ...    -75.040000000000 Eh
+Final Gibbs free energy          ...    -75.045000000000 Eh
+                             ****ORCA TERMINATED NORMALLY****

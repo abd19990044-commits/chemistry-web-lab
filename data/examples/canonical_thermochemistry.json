@@ -1,0 +1,222 @@
+{
+  "schema_version": "orca-web-lab.1.0",
+  "dataset_version": "2026.1",
+  "record_type": "thermochemistry_dataset",
+  "record_id": "thermo_composite_reaction_001",
+  "content_hash": "a7e00bdcb4c3086783776a14ce588550c21aace7841a7c41f74c83b5597220ae",
+  "split_group_key": "group_thermo_c",
+  "name": "Methane Halogenation Composite Thermochemistry",
+  "created_at": "2026-08-24T21:48:35.925592+00:00",
+  "updated_at": "2026-08-25T12:17:15.534029+00:00",
+  "provenance": {
+    "source_type": "user_defined",
+    "source_filename": null,
+    "source_job_id": null,
+    "source_result_manifest": null,
+    "result_sha256": null,
+    "source_url": null,
+    "application_version": "2026.1",
+    "orca_version": "6.1.0",
+    "parser_version": "2026.1",
+    "git_sha": null,
+    "generated_by": "ORCA Web Lab Canonical Normalizer",
+    "imported_from": null
+  },
+  "migration_report": {
+    "mapped_fields": [
+      "canonical_record_preserved"
+    ],
+    "transformed_fields": [],
+    "omitted_fields": [],
+    "missing_fields": [],
+    "warnings": [],
+    "unsupported_fields": []
+  },
+  "analysis_results": {
+    "analysis_type": "OPT",
+    "status": "SUCCESS",
+    "single_point_energy_eh": -960.52184,
+    "zero_point_energy_eh": 0.05214,
+    "total_enthalpy_eh": -960.4632,
+    "gibbs_free_energy_eh": -960.49815,
+    "entropy_cal_mol_k": null,
+    "dipole_moment_debye": null,
+    "homo_ev": null,
+    "lumo_ev": null,
+    "homo_lumo_gap_ev": null,
+    "converged": true,
+    "stationary_point_status": "MINIMUM",
+    "imaginary_frequencies_count": 0
+  },
+  "molecular_system": {
+    "system_id": "sys_thermo_c",
+    "name": "Methane Halogenation Composite Thermochemistry",
+    "total_charge": 0,
+    "total_multiplicity": 1,
+    "stoichiometry_formula": null,
+    "fragments": [],
+    "species": [
+      {
+        "species_id": "sp_thermo_c_1",
+        "name": "Methane Halogenation Composite Thermochemistry",
+        "formula": null,
+        "canonical_smiles": null,
+        "isomeric_smiles": null,
+        "inchi": null,
+        "inchikey": null,
+        "charge": 0,
+        "multiplicity": 1,
+        "atoms": [],
+        "bonds": [],
+        "geometry_refs": []
+      }
+    ]
+  },
+  "reaction": {
+    "reaction_id": "rxn_thermo_c",
+    "equation": "CH4 + Cl2 -> CH3Cl + HCl",
+    "reaction_smiles": null,
+    "conditions": {
+      "temperature_k": 298.15,
+      "pressure_atm": 1.0,
+      "solvent": null,
+      "catalyst": null,
+      "standard_state": "Gas Phase (1 atm)"
+    },
+    "reactants": [
+      {
+        "species_id": "sp_ch4",
+        "species_name": "CH4",
+        "stoichiometric_coefficient": 1.0,
+        "role": "reactant"
+      },
+      {
+        "species_id": "sp_cl2",
+        "species_name": "Cl2",
+        "stoichiometric_coefficient": 1.0,
+        "role": "reactant"
+      }
+    ],
+    "products": [
+      {
+        "species_id": "sp_ch3cl",
+        "species_name": "CH3Cl",
+        "stoichiometric_coefficient": 1.0,
+        "role": "product"
+      },
+      {
+        "species_id": "sp_hcl",
+        "species_name": "HCl",
+        "stoichiometric_coefficient": 1.0,
+        "role": "product"
+      }
+    ],
+    "agents": [],
+    "balance": {
+      "balanced": true,
+      "atom_delta": {},
+      "charge_delta": 0.0,
+      "balance_status": "balanced"
+    }
+  },
+  "geometries": [],
+  "calculations": [
+    {
+      "calculation_id": "calc_thermo_c_1",
+      "calculation_type": "OPT",
+      "status": "COMPLETED",
+      "input_parameters": {
+        "method": "B3LYP",
+        "basis": "def2-SVP",
+        "dispersion": "D3BJ",
+        "solvation": "None",
+        "solvent": "None",
+        "charge": 0,
+        "multiplicity": 1,
+        "temperature_k": 298.15,
+        "pressure_atm": 1.0,
+        "input_geometry_id": null
+      },
+      "analysis_record_id": null,
+      "orca_version": "6.1.0",
+      "input_source": null,
+      "output_source": null
+    }
+  ],
+  "workflows": [],
+  "thermochemistry": {
+    "electronic_energy": {
+      "value": -960.52184,
+      "unit": "hartree",
+      "source_calculation_id": "calc_thermo_c_1",
+      "uncertainty": null
+    },
+    "zpe": {
+      "value": 0.05214,
+      "unit": "hartree",
+      "source_calculation_id": "calc_thermo_c_1",
+      "uncertainty": null
+    },
+    "thermal_correction": null,
+    "enthalpy": {
+      "value": -960.4632,
+      "unit": "hartree",
+      "source_calculation_id": "calc_thermo_c_1",
+      "uncertainty": null
+    },
+    "entropy": null,
+    "gibbs_free_energy": {
+      "value": -960.49815,
+      "unit": "hartree",
+      "source_calculation_id": "calc_thermo_c_1",
+      "uncertainty": null
+    },
+    "equilibrium_constant": null,
+    "temperature_k": 298.15,
+    "pressure_atm": 1.0,
+    "standard_state": "Gas Phase (1 atm)",
+    "stationary_point_status": "MINIMUM",
+    "composite_sources": {
+      "electronic_energy_source": "DLPNO-CCSD(T)/def2-TZVPP Single-Point Calculation",
+      "zpe_source": "B3LYP-D3BJ/def2-SVP Harmonic Frequencies",
+      "vibrational_source": "B3LYP-D3BJ/def2-SVP Harmonic Frequencies",
+      "thermal_correction_source": null,
+      "entropy_source": null,
+      "geometry_source": "B3LYP-D3BJ/def2-SVP Optimized Equilibrium Geometry"
+    }
+  },
+  "properties": {
+    "electronic": {
+      "homo_ev": null,
+      "lumo_ev": null,
+      "homo_lumo_gap_ev": null,
+      "dipole_moment_debye": null
+    },
+    "thermodynamic": null,
+    "spectroscopic": null,
+    "reactivity_indices": {
+      "electronegativity_ev": null,
+      "chemical_hardness_ev": null,
+      "electrophilicity_index_ev": null
+    }
+  },
+  "spectroscopy": null,
+  "training_metadata": {
+    "task_type": "vibrational_mode_prediction",
+    "input_modality": "smiles",
+    "target_modality": "energy",
+    "label": -960.49815,
+    "label_type": "float",
+    "quality_flags": [
+      "missing_geometry"
+    ],
+    "split_hint": "train"
+  },
+  "data_quality": {
+    "validation_status": "partially_verified",
+    "completeness_score": 0.7,
+    "missing_fields": [],
+    "warnings": [],
+    "errors": []
+  }
+}

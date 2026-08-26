@@ -1,0 +1,20 @@
+Flask==3.0.3
+gunicorn==22.0.0; sys_platform != 'win32'
+requests==2.32.3
+rdkit==2025.3.6
+# Use the current official Kaggle CLI so both the modern API token (KGAT_...)
+# and legacy username + key credentials are supported. Older 1.7.x releases
+# predate the CLI's access-token authentication support.
+kaggle>=2.2.3
+google-auth==2.32.0
+# Reaction schemes are composited (structures + coefficients + arrow) with PIL.
+# It arrives transitively with rdkit, but this file is the one that pins it.
+pillow==11.3.0
+rarfile==4.5
+# Excel (.xlsx) experimental spectrum parsing in orca_engine
+openpyxl>=3.1.2
+# Canonical Scientific JSON Schema validation
+jsonschema>=4.20.0
+# Authenticated AEAD encryption for Kaggle credentials
+cryptography>=41.0.0
+

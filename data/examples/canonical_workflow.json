@@ -1,0 +1,299 @@
+{
+  "schema_version": "orca-web-lab.1.0",
+  "dataset_version": "2026.1",
+  "record_type": "workflow",
+  "record_id": "wf_opt_freq_sp_001",
+  "content_hash": "3e2c584b40f4052ced4d5e4a9b8933db9c08dcc9a99297a36d3ed7bae25b9c63",
+  "split_group_key": "H2O",
+  "name": "Water Benchmark Optimization and Single-Point Workflow",
+  "created_at": "2026-08-24T21:48:35.924277+00:00",
+  "updated_at": "2026-08-25T12:17:15.731039+00:00",
+  "provenance": {
+    "source_type": "user_defined",
+    "source_filename": null,
+    "source_job_id": null,
+    "source_result_manifest": null,
+    "result_sha256": null,
+    "source_url": null,
+    "application_version": "2026.1",
+    "orca_version": "6.1.0",
+    "parser_version": "2026.1",
+    "git_sha": null,
+    "generated_by": "ORCA Web Lab Canonical Normalizer",
+    "imported_from": null
+  },
+  "migration_report": {
+    "mapped_fields": [
+      "canonical_record_preserved"
+    ],
+    "transformed_fields": [],
+    "omitted_fields": [],
+    "missing_fields": [],
+    "warnings": [],
+    "unsupported_fields": []
+  },
+  "analysis_results": {
+    "analysis_type": "OPT",
+    "status": "SUCCESS",
+    "single_point_energy_eh": -76.43892,
+    "zero_point_energy_eh": 0.02145,
+    "total_enthalpy_eh": null,
+    "gibbs_free_energy_eh": -76.43912,
+    "entropy_cal_mol_k": null,
+    "dipole_moment_debye": null,
+    "homo_ev": null,
+    "lumo_ev": null,
+    "homo_lumo_gap_ev": null,
+    "converged": true,
+    "stationary_point_status": "MINIMUM",
+    "imaginary_frequencies_count": 0
+  },
+  "molecular_system": {
+    "system_id": "sys_wf_opt_f",
+    "name": "Water Benchmark Optimization and Single-Point Workflow",
+    "total_charge": 0,
+    "total_multiplicity": 1,
+    "stoichiometry_formula": "H2O",
+    "fragments": [],
+    "species": [
+      {
+        "species_id": "sp_wf_opt_f_1",
+        "name": "Water Benchmark Optimization and Single-Point Workflow",
+        "formula": "H2O",
+        "canonical_smiles": null,
+        "isomeric_smiles": null,
+        "inchi": null,
+        "inchikey": null,
+        "charge": 0,
+        "multiplicity": 1,
+        "atoms": [
+          {
+            "atom_id": 1,
+            "element": "O",
+            "atomic_number": 8,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.1173,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          },
+          {
+            "atom_id": 2,
+            "element": "H",
+            "atomic_number": 1,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 0.0,
+              "y": 0.7572,
+              "z": -0.4692,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          },
+          {
+            "atom_id": 3,
+            "element": "H",
+            "atomic_number": 1,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 0.0,
+              "y": -0.7572,
+              "z": -0.4692,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          }
+        ],
+        "bonds": [],
+        "geometry_refs": [
+          "geo_wf_opt_f_1"
+        ]
+      }
+    ]
+  },
+  "reaction": null,
+  "geometries": [
+    {
+      "geometry_id": "geo_wf_opt_f_1",
+      "species_ref": "sp_wf_opt_f_1",
+      "geometry_type": "input",
+      "coordinate_units": "angstrom",
+      "coordinates": [
+        {
+          "element": "O",
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.1173
+        },
+        {
+          "element": "H",
+          "x": 0.0,
+          "y": 0.7572,
+          "z": -0.4692
+        },
+        {
+          "element": "H",
+          "x": 0.0,
+          "y": -0.7572,
+          "z": -0.4692
+        }
+      ],
+      "geometry_hash": "7d655d445639ea5197c4104dcb3e121c48f10273b3b98f6fc066e5000bd650b9",
+      "source_calculation_id": null
+    }
+  ],
+  "calculations": [
+    {
+      "calculation_id": "calc_wf_opt_f_1",
+      "calculation_type": "OPT",
+      "status": "COMPLETED",
+      "input_parameters": {
+        "method": "B3LYP",
+        "basis": "def2-SVP",
+        "dispersion": "D3BJ",
+        "solvation": "None",
+        "solvent": "None",
+        "charge": 0,
+        "multiplicity": 1,
+        "temperature_k": null,
+        "pressure_atm": null,
+        "input_geometry_id": "geo_wf_opt_f_1"
+      },
+      "analysis_record_id": null,
+      "orca_version": "6.1.0",
+      "input_source": null,
+      "output_source": null
+    }
+  ],
+  "workflows": [
+    {
+      "workflow_id": "wf_wf_opt_f",
+      "name": "DFT Opt-Freq with DLPNO-CCSD(T) Refinement",
+      "status": "COMPLETED",
+      "steps": [
+        {
+          "step_id": "step_1",
+          "step_index": 1,
+          "calculation_type": "OPT",
+          "calculation_id": "calc_wf_opt_f_1_s1",
+          "depends_on": [],
+          "input_geometry_id": "geo_wf_opt_f_1",
+          "output_geometry_id": "geo_wf_opt_f_1",
+          "analysis_record_id": "an_wf_opt_f_s1",
+          "status": "COMPLETED"
+        },
+        {
+          "step_id": "step_2",
+          "step_index": 2,
+          "calculation_type": "FREQ",
+          "calculation_id": "calc_wf_opt_f_1_s2",
+          "depends_on": [
+            "step_1"
+          ],
+          "input_geometry_id": "geo_wf_opt_f_1",
+          "output_geometry_id": "geo_wf_opt_f_1",
+          "analysis_record_id": "an_wf_opt_f_s2",
+          "status": "COMPLETED"
+        },
+        {
+          "step_id": "step_3",
+          "step_index": 3,
+          "calculation_type": "SP",
+          "calculation_id": "calc_wf_opt_f_1_s3",
+          "depends_on": [
+            "step_2"
+          ],
+          "input_geometry_id": "geo_wf_opt_f_1",
+          "output_geometry_id": "geo_wf_opt_f_1",
+          "analysis_record_id": "an_wf_opt_f_s3",
+          "status": "COMPLETED"
+        }
+      ]
+    }
+  ],
+  "thermochemistry": {
+    "electronic_energy": {
+      "value": -76.43892,
+      "unit": "hartree",
+      "source_calculation_id": "calc_wf_opt_f_1",
+      "uncertainty": null
+    },
+    "zpe": {
+      "value": 0.02145,
+      "unit": "hartree",
+      "source_calculation_id": "calc_wf_opt_f_1",
+      "uncertainty": null
+    },
+    "thermal_correction": null,
+    "enthalpy": null,
+    "entropy": null,
+    "gibbs_free_energy": {
+      "value": -76.43912,
+      "unit": "hartree",
+      "source_calculation_id": "calc_wf_opt_f_1",
+      "uncertainty": null
+    },
+    "equilibrium_constant": null,
+    "temperature_k": null,
+    "pressure_atm": null,
+    "standard_state": "Gas Phase (1 atm)",
+    "stationary_point_status": "MINIMUM",
+    "composite_sources": {
+      "electronic_energy_source": null,
+      "zpe_source": null,
+      "vibrational_source": null,
+      "thermal_correction_source": null,
+      "entropy_source": null,
+      "geometry_source": null
+    }
+  },
+  "properties": {
+    "electronic": {
+      "homo_ev": null,
+      "lumo_ev": null,
+      "homo_lumo_gap_ev": null,
+      "dipole_moment_debye": null
+    },
+    "thermodynamic": null,
+    "spectroscopic": null,
+    "reactivity_indices": {
+      "electronegativity_ev": null,
+      "chemical_hardness_ev": null,
+      "electrophilicity_index_ev": null
+    }
+  },
+  "spectroscopy": null,
+  "training_metadata": {
+    "task_type": "vibrational_mode_prediction",
+    "input_modality": "coordinates",
+    "target_modality": "energy",
+    "label": -76.43912,
+    "label_type": "float",
+    "quality_flags": [
+      "valid_geometry"
+    ],
+    "split_hint": "train"
+  },
+  "data_quality": {
+    "validation_status": "verified",
+    "completeness_score": 1.0,
+    "missing_fields": [],
+    "warnings": [],
+    "errors": []
+  }
+}

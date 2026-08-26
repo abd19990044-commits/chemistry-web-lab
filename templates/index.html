@@ -1,0 +1,2025 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chemistry Lab - Computational Chemistry, Online</title>
+<meta name="description" content="Chemistry Lab: draw molecules and reactions, generate ORCA input files, and launch ORCA calculations on Kaggle - all from one always-on site.">
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" defer></script>
+{% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
+</head>
+<body>
+
+<div class="bg-orbit-field" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand" id="brand-home-btn" role="button" tabindex="0">
+    <svg class="brand-atom" viewBox="0 0 100 100" aria-hidden="true">
+      <circle class="atom-core" cx="50" cy="50" r="6"></circle>
+      <ellipse class="atom-ring ring-a" cx="50" cy="50" rx="42" ry="16"></ellipse>
+      <ellipse class="atom-ring ring-b" cx="50" cy="50" rx="42" ry="16" transform="rotate(60 50 50)"></ellipse>
+      <ellipse class="atom-ring ring-c" cx="50" cy="50" rx="42" ry="16" transform="rotate(120 50 50)"></ellipse>
+      <circle class="atom-electron e-a" r="3"></circle>
+      <circle class="atom-electron e-b" r="3"></circle>
+      <circle class="atom-electron e-c" r="3"></circle>
+    </svg>
+    <div class="brand-text">
+      <span class="brand-name">Chemistry Lab</span>
+      <span class="brand-tag">Computational chemistry lab</span>
+    </div>
+  </div>
+
+  <div class="topbar-actions">
+    <button type="button" id="back-home-btn" class="btn btn-ghost btn-small hidden">← Home</button>
+    <div id="google-signin-area">
+      {% if google_client_id %}
+      <div id="g_id_onload"
+           data-client_id="{{ google_client_id }}"
+           data-callback="handleGoogleCredential"
+           data-auto_prompt="false">
+      </div>
+      <div id="google-signin-btn" class="g_id_signin"
+           data-type="standard" data-size="medium" data-theme="outline"
+           data-text="signin" data-shape="pill"></div>
+      {% endif %}
+    </div>
+    <div id="user-chip" class="user-chip hidden">
+      <img id="user-avatar" alt="">
+      <span id="user-name"></span>
+      <button type="button" id="sign-out-btn" class="link-btn">Sign out</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============================== LANDING CHOICE SCREEN ============================== -->
+  <section id="home-view" class="view is-active">
+    <div class="hero">
+      <h1>Integrated Quantum &amp; Computational Chemistry Lab</h1>
+      <p class="hero-sub">
+        Three unified studios on one platform: draw publication-ready chemical structures and reaction schemes,
+        generate and run ORCA calculations with cloud auto-recovery, and analyze 3D quantum geometries, UV-Vis spectra &amp; reaction thermochemistry.
+      </p>
+      <p class="hero-mission">An open-access academic suite for quantum and computational chemistry researchers - developed by <strong>ABDULSALAM S. HASAN</strong> · Mosul, Iraq.</p>
+      <div class="hero-actions" style="display: flex; gap: 0.75rem; justify-content: center; margin-top: 1.25rem; flex-wrap: wrap;">
+        <a href="/download/manual" id="hero-download-manual-btn" class="btn btn-primary btn-small" download>
+          <span>📄</span> Download Academic Manual (.docx)
+        </a>
+        <button type="button" id="hero-cite-btn" class="btn btn-outline btn-small" data-open-citation="true" onclick="document.getElementById('citation-modal')?.classList.remove('hidden')">
+          <span>📋</span> Academic Citation Guide
+        </button>
+      </div>
+
+
+    </div>
+
+
+    <div class="choice-grid choice-grid-3">
+      <button type="button" class="choice-card" data-open="draw" onclick="window.showChemistryView ? window.showChemistryView('draw') : (function(){ document.querySelectorAll('.view').forEach(function(v){v.classList.remove('is-active');}); document.getElementById('draw-view').classList.add('is-active'); document.getElementById('back-home-btn')?.classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'}); })()">
+        <span class="choice-icon" aria-hidden="true">🧬</span>
+        <span class="choice-title">Draw Chemistry</span>
+        <span class="choice-desc">Look up compounds, properties, and draw balanced reaction schemes with publication-quality structures.</span>
+        <span class="choice-cta">Open Studio →</span>
+      </button>
+
+      <button type="button" class="choice-card" data-open="orca" data-tab="orca" onclick="window.showChemistryView ? window.showChemistryView('orca','orca') : (function(){ document.querySelectorAll('.view').forEach(function(v){v.classList.remove('is-active');}); document.getElementById('orca-view').classList.add('is-active'); document.getElementById('back-home-btn')?.classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'}); })()">
+        <span class="choice-icon" aria-hidden="true">⚛️</span>
+        <span class="choice-title">ORCA Calculations &amp; Jobs</span>
+        <span class="choice-desc">Step-by-step ORCA 6 input generator wizard, Kaggle launcher, and live job tracking with auto-recovery.</span>
+        <span class="choice-cta">Manage calculations →</span>
+      </button>
+
+      <button type="button" class="choice-card choice-card-highlight" data-open="quantum" data-tab="engine" onclick="window.showChemistryView ? window.showChemistryView('quantum','engine') : (function(){ document.querySelectorAll('.view').forEach(function(v){v.classList.remove('is-active');}); document.getElementById('quantum-view').classList.add('is-active'); document.getElementById('back-home-btn')?.classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'}); })()">
+        <span class="choice-icon" aria-hidden="true">🔬</span>
+        <span class="choice-title">Quantum Engine &amp; Thermochemistry</span>
+        <span class="choice-desc">Parse ORCA outputs, inspect 3D geometries, HOMO-LUMO gap, UV-Vis spectra, and calculate reaction thermochemistry &amp; BDE.</span>
+        <span class="choice-cta">Analyze calculations →</span>
+      </button>
+    </div>
+  </section>
+
+
+  <!-- ============================== DRAW CHEMISTRY WORKSPACE ============================== -->
+  <section id="draw-view" class="view">
+    <div class="workspace-nav">
+      <button class="ws-tab is-active" data-target="explorer">Molecule Explorer</button>
+      <button class="ws-tab" data-target="reaction">Reaction Drawing</button>
+    </div>
+
+    <!-- ---- Molecule Explorer ---- -->
+    <div id="explorer" class="ws-panel is-active">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Lookup & analysis</span>
+        <h2>Molecule Explorer</h2>
+        <p>Enter a compound name, SMILES, or InChI - get a clean structure plus its physical and chemical properties.</p>
+      </div>
+
+      <form id="explorer-form" class="tool-form">
+        <input type="text" id="explorer-query" placeholder="e.g. Aspirin   or   CC(=O)OC1=CC=CC=C1C(=O)O" autocomplete="off" required>
+        <button type="submit" class="btn btn-primary"><span class="btn-label">Analyze</span></button>
+      </form>
+
+      <div id="explorer-error" class="alert alert-error hidden"></div>
+      <div id="explorer-loading" class="loading-row hidden"><span class="spinner"></span> Querying PubChem and drawing the structure…</div>
+
+      <div id="explorer-result" class="result-grid hidden">
+        <div class="result-visual" id="explorer-visual-box">
+          <div class="drawing-toolbar">
+            <span class="toolbar-label">Canvas background:</span>
+            <button type="button" class="btn-canvas-theme active" data-bg="#ffffff" title="Pure White Background">☀️ White</button>
+            <button type="button" class="btn-canvas-theme" data-bg="#0b0f19" title="Dark Slate Background">🌙 Dark</button>
+            <button type="button" class="btn-canvas-theme" data-bg="transparent" title="Transparent Background">📄 Transparent</button>
+          </div>
+          <div class="molecule-img-stage" id="explorer-img-stage">
+            <img id="explorer-image" alt="Compound structure">
+          </div>
+          <a id="explorer-download-mol" class="btn btn-ghost btn-small" download>⬇ Download MOL file</a>
+          <a id="explorer-download-svg" class="btn btn-outline btn-small" download>⬇ Download SVG</a>
+        </div>
+        <div class="result-data">
+          <h3 id="explorer-title-out">-</h3>
+          <dl class="prop-list">
+            <div><dt>Molecular formula</dt><dd id="explorer-formula">-</dd></div>
+            <div><dt>Molecular weight</dt><dd id="explorer-weight">-</dd></div>
+            <div id="explorer-iupac-row"><dt>IUPAC name</dt><dd id="explorer-iupac" class="iupac-dd"><span id="explorer-iupac-val" class="iupac-text">-</span><button type="button" id="explorer-copy-iupac" class="btn-copy-inline hidden" title="Copy IUPAC name" aria-label="Copy IUPAC name">📋</button></dd></div>
+            <div><dt>Canonical SMILES</dt><dd id="explorer-smiles" class="mono">-</dd></div>
+          </dl>
+          <div id="explorer-solubility-wrap" class="hidden">
+            <h4>Solubility</h4>
+            <ul id="explorer-solubility"></ul>
+          </div>
+          <div id="explorer-wiki-wrap" class="hidden">
+            <h4>Summary</h4>
+            <p id="explorer-wiki"></p>
+          </div>
+          <button type="button" id="explorer-send-to-orca" class="btn btn-outline btn-small">Use this structure in the ORCA generator →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- Reaction Drawing ---- -->
+    <div id="reaction" class="ws-panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Reaction schemes</span>
+        <h2>Reaction Drawing</h2>
+        <p>Separate reactants with a “+”, and enter products in the matching field. Names and SMILES can be mixed freely.</p>
+      </div>
+
+      <form id="reaction-form" class="tool-form reaction-card-form">
+        <div class="reaction-equation-grid">
+          <div class="reaction-input-group reaction-group-reactants">
+            <label for="reaction-reactants" class="reaction-field-label">
+              <span class="reaction-label-title">Reactants</span>
+              <span class="reaction-label-hint">Names, formulas, or SMILES separated by +</span>
+            </label>
+            <div class="reaction-input-wrapper">
+              <input type="text" id="reaction-reactants" class="reaction-text-input" placeholder="e.g. 2 H2 + O2" autocomplete="off" required>
+            </div>
+          </div>
+
+          <div class="reaction-arrow-center">
+            <div class="reaction-condition-field">
+              <label for="reaction-arrow-top" class="reaction-condition-label">Above arrow <span class="reaction-optional">(catalyst / solvent)</span></label>
+              <input type="text" id="reaction-arrow-top" class="reaction-text-input reaction-condition-input" placeholder="e.g. Δ, H2SO4, Pd/C" autocomplete="off">
+            </div>
+            <div class="reaction-arrow-divider" aria-hidden="true">
+              <span class="reaction-arrow-line"></span>
+              <span class="reaction-arrow-symbol">⟶</span>
+              <span class="reaction-arrow-line"></span>
+            </div>
+            <div class="reaction-condition-field">
+              <label for="reaction-arrow-bottom" class="reaction-condition-label">Below arrow <span class="reaction-optional">(conditions / temp)</span></label>
+              <input type="text" id="reaction-arrow-bottom" class="reaction-text-input reaction-condition-input" placeholder="e.g. heat, 80^oC, 2 h" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="reaction-input-group reaction-group-products">
+            <label for="reaction-products" class="reaction-field-label">
+              <span class="reaction-label-title">Products</span>
+              <span class="reaction-label-hint">Names, formulas, or SMILES separated by +</span>
+            </label>
+            <div class="reaction-input-wrapper">
+              <input type="text" id="reaction-products" class="reaction-text-input" placeholder="e.g. 2 water" autocomplete="off" required>
+            </div>
+          </div>
+        </div>
+
+        <div class="reaction-card-footer">
+          <div class="reaction-footer-options">
+            <label class="checkbox-row reaction-option">
+              <input type="checkbox" id="reaction-small-as-formula" checked>
+              <span>Write small molecules as formulas (O<sub>2</sub>, H<sub>2</sub>O, CO<sub>2</sub>) instead of drawing them</span>
+            </label>
+          </div>
+          <div class="reaction-footer-actions">
+            <button type="submit" class="btn btn-primary reaction-submit-btn"><span class="btn-label">Draw reaction →</span></button>
+          </div>
+        </div>
+      </form>
+
+      <div class="reaction-quick-hint">
+        <span class="hint-icon">💡</span>
+        <span>Put the number of moles in front of a species: <code>2 H2 + O2</code>, <code>2H2O</code>, or fractional <code>1/2 O2</code>. Names, formulas, SMILES, and InChI all work seamlessly.</span>
+      </div>
+
+      <details id="reaction-help" class="reaction-help">
+        <summary>How to write an equation - syntax, examples, and what you get back</summary>
+        <div class="reaction-help-body">
+
+          <h4>1. The shape of an equation</h4>
+          <p>
+            Put the reactants in the left box and the products in the right one. Separate
+            species with <code>+</code>. The arrow is the gap between the two boxes - you
+            do not type it.
+          </p>
+          <pre class="reaction-example">Reactants:  CH4 + 2 O2
+Products:   CO2 + 2 H2O</pre>
+
+          <h4>2. Labels above and below the arrow</h4>
+          <p>
+            Use <strong>Above arrow</strong> and <strong>Below arrow</strong> for catalysts, solvents,
+            temperature, pressure, light, or other reaction conditions. The arrow will expand to fit
+            the longer label. Type <code>^</code> immediately before a superscript segment; the marker
+            itself is removed and the superscript ends at the next space. Example: <code>H^+</code>
+            displays H<sup>+</sup>, and <code>SO4^2-</code> displays the charge as superscript.
+          </p>
+
+          <h4>2. Number of moles (stoichiometric coefficient)</h4>
+          <p>Write the number in front of the species. Three forms are accepted:</p>
+          <ul>
+            <li><code>2 H2O</code> - a number, a space, then the species.</li>
+            <li><code>2H2O</code> - glued to a formula. Only read as a coefficient when
+              what follows is a bare formula, so <code>2-butanone</code>,
+              <code>1H-pyrrole</code> and <code>13C-methanol</code> keep their names intact.</li>
+            <li><code>1/2 O2</code> or <code>0.5 O2</code> - a fraction, as thermochemistry
+              is usually written.</li>
+          </ul>
+          <p>A species with no number in front of it counts as 1.</p>
+
+          <h4>3. Naming a species</h4>
+          <p>Any of these work, and they can be mixed in the same equation:</p>
+          <ul>
+            <li><strong>Name</strong>-<code>water</code>, <code>acetic acid</code>,
+              <code>benzene</code> (looked up in PubChem).</li>
+            <li><strong>Formula</strong>-<code>H2O</code>, <code>CO2</code>,
+              <code>NaCl</code>.</li>
+            <li><strong>SMILES</strong>-<code>CCO</code>, <code>c1ccccc1</code>,
+              <code>CC(=O)O</code>. Best for anything with a specific structure.</li>
+            <li><strong>InChI</strong> - paste it starting with <code>InChI=</code>.</li>
+          </ul>
+          <p class="reaction-help-note">
+            A few strings are both a valid SMILES and a common formula - <code>CO</code> is
+            methanol as SMILES and carbon monoxide as a formula. Those are read as the formula
+            and the page tells you which reading it used, so you can switch to an unambiguous
+            SMILES if it guessed the other way.
+          </p>
+
+          <h4>4. What gets drawn, and what gets written</h4>
+          <p>
+            Small unambiguous species are <em>written</em> as formulas - O<sub>2</sub>,
+            H<sub>2</sub>O, CO<sub>2</sub>, NH<sub>3</sub> - because a skeletal drawing of
+            O<sub>2</sub> is two letters and a line, taking the width of a benzene ring to say
+            less. Everything else is drawn as a structure. Ethanol is always drawn, never written
+            as C<sub>2</sub>H<sub>6</sub>O: dimethyl ether has that same formula, so writing it
+            would throw away exactly what the drawing is for. Untick
+            <em>Write small molecules as formulas</em> to draw every species instead.
+          </p>
+
+          <h4>5. The balance check</h4>
+          <p>
+            After drawing, every element and the total charge are counted on both sides using
+            your coefficients. If they do not match you are told which element is in excess and
+            on which side. The scheme is still drawn - a mechanism step or a fragment is
+            legitimately unbalanced, and the problem this guards against is not noticing.
+          </p>
+
+          <h4>6. The downloaded .rxn file</h4>
+          <p>
+            You get an <strong>MDL RXN V2000</strong> file, which is the format ChemDraw,
+            MarvinSketch, Avogadro and RDKit all import. That format has no field for a
+            coefficient, so the convention every reader understands is used instead: the
+            structure appears once per unit. <code>2 H2O</code> puts two water molecules in the
+            file, and ChemDraw will show two of them rather than the text
+            &ldquo;2 H<sub>2</sub>O&rdquo;. The stoichiometry is there and machine-readable, just
+            not as a numeral. A fractional coefficient cannot be written at all, so all
+            coefficients are multiplied up to whole numbers - the ratios are unchanged, and
+            the factor used is reported.
+          </p>
+          <p>
+            The file is checked before you are offered it: the <code>$RXN</code> header, the
+            component counts matching the blocks that follow, and a <code>M&nbsp;&nbsp;END</code>
+            terminator on every structure. The badge under the drawing reports that check.
+          </p>
+
+          <h4>7. A worked example</h4>
+          <p>The complete combustion of benzene, with the coefficients balanced:</p>
+          <pre class="reaction-example">Reactants:  2 benzene + 15 O2
+Products:   12 CO2 + 6 H2O</pre>
+          <p>
+            Benzene is drawn as a ring; O<sub>2</sub>, CO<sub>2</sub> and H<sub>2</sub>O are
+            written as formulas; the badge confirms the equation balances; and the .rxn file
+            contains 2 benzenes, 15 oxygens, 12 carbon dioxides and 6 waters - 35 structures
+            in total.
+          </p>
+          <button type="button" id="reaction-example-btn" class="btn btn-ghost btn-small">
+            Fill the boxes with this example
+          </button>
+        </div>
+      </details>
+
+      <div id="reaction-error" class="alert alert-error hidden"></div>
+      <div id="reaction-loading" class="loading-row hidden"><span class="spinner"></span> Parsing formulas and drawing the scheme…</div>
+
+      <div id="reaction-result" class="result-visual reaction-result hidden">
+        <!-- Reaction Drawing Controls & Background Switcher -->
+        <div class="reaction-viewport-controls">
+          <div class="drawing-toolbar">
+            <span class="toolbar-label">Reaction background:</span>
+            <button type="button" class="btn-rxn-theme active" data-bg="#ffffff" title="Pure White Background">☀️ White</button>
+            <button type="button" class="btn-rxn-theme" data-bg="#0b0f19" title="Dark Slate Background">🌙 Dark</button>
+            <button type="button" class="btn-rxn-theme" data-bg="transparent" title="Transparent Background">📄 Transparent</button>
+          </div>
+          <div class="viewport-btn-group">
+            <button type="button" id="reaction-zoom-in" class="btn btn-ghost btn-small" title="Zoom in">🔍 +</button>
+            <button type="button" id="reaction-zoom-out" class="btn btn-ghost btn-small" title="Zoom out">🔍 -</button>
+            <button type="button" id="reaction-zoom-fit" class="btn btn-ghost btn-small active" title="Fit to container width">↔ Fit Width</button>
+            <button type="button" id="reaction-zoom-100" class="btn btn-ghost btn-small" title="100% full scale resolution with horizontal scroll">100% Scale</button>
+          </div>
+        </div>
+
+        <!-- Scrollable Reaction Viewport Container -->
+        <div class="reaction-canvas-container" id="reaction-canvas-container">
+          <div class="reaction-scroll-stage" id="reaction-scroll-stage">
+            <img id="reaction-image" alt="Reaction scheme" class="reaction-scheme-img">
+          </div>
+        </div>
+        <div id="reaction-equation" class="reaction-equation"></div>
+        <div id="reaction-balance" class="reaction-badge hidden"></div>
+        <div id="reaction-filecheck" class="reaction-badge hidden"></div>
+        <ul id="reaction-notes" class="reaction-notes hidden"></ul>
+        <div class="reaction-actions">
+          <a id="reaction-download-rxn" class="btn btn-ghost btn-small" download>⬇ Download RXN file</a>
+          <a id="reaction-download-svg" class="btn btn-outline btn-small" download>⬇ Download SVG</a>
+          <code id="reaction-smiles" class="mono small"></code>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== ORCA PROGRAM WORKSPACE ============================== -->
+  <section id="orca-view" class="view">
+        <div class="workspace-nav">
+      <button class="ws-tab is-active" data-target="orca">Input Generator</button>
+      <button class="ws-tab" data-target="kaggle">Kaggle Launcher</button>
+      <button class="ws-tab" data-target="jobs">My Jobs</button>
+    </div>
+
+    <!-- ---- ORCA Input Generator ---- -->
+    <div id="orca" class="ws-panel is-active">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Computational chemistry</span>
+        <h2>ORCA 6 Input Generator</h2>
+        <p>A guided wizard with sequential option windows - produces an <code>.inp</code> file that matches exactly what you chose, with no silent additions.</p>
+      </div>
+
+      <div class="orca-launch-row">
+        <button type="button" id="orca-open-wizard" class="btn btn-primary btn-large">🧪 Start the wizard</button>
+        <div class="orca-coords-status" id="orca-coords-status">No structure selected yet.</div>
+      </div>
+
+      <div id="orca-output-wrap" class="hidden">
+        <div id="orca-output-header-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 id="orca-output-title" style="margin:0;">Generated input file</h4>
+        </div>
+        <div id="orca-dual-tabs-wrap" class="dual-output-tabs hidden">
+          <button type="button" class="dual-output-tab is-active" id="btn-tab-stage1">Stage 1: Geometry Optimization</button>
+          <button type="button" class="dual-output-tab" id="btn-tab-stage2">Stage 2: High-Level Evaluation</button>
+        </div>
+        <pre id="orca-output" class="code-block mono"></pre>
+        <div class="orca-output-actions">
+          <a id="orca-download-inp" class="btn btn-ghost btn-small" download>⬇ Download .inp file</a>
+          <button type="button" id="orca-send-to-kaggle" class="btn btn-outline btn-small">Send this file to the Kaggle Launcher →</button>
+          <button type="button" id="orca-submit-dual-queue" class="btn btn-primary btn-small hidden">🚀 Submit Dual Workflow to Kaggle Queue (Auto-Chained)</button>
+        </div>
+      </div>
+    </div>
+
+<!-- ---- Kaggle Launcher ---- -->
+    <div id="kaggle" class="ws-panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Remote execution</span>
+        <h2>Launch ORCA on Kaggle</h2>
+        <p>
+          Packages your input file into a Kaggle notebook of your own and runs it on Kaggle's free compute,
+          automatically relaunching until convergence whenever a session runs out of time (11h45m)
+          <em>or</em> out of scratch disk space - each new session picks up from the last completed step.
+        </p>
+      </div>
+      <div class="alert alert-info">
+        This feature does not distribute the ORCA program. You must provide your own licensed
+        ORCA package (downloaded from the official ORCA forum after your own registration) - either as a <strong>private Kaggle Dataset</strong> attached to the job, or via a
+        <strong>Google Drive / direct download link</strong> that the job downloads and
+        extracts into <code>/tmp</code> itself. Your credentials are used once to submit the
+        job and are never stored on the server - only in your own browser, if you choose to
+        remember them below. Both the new single API token and the legacy username/key from
+        Kaggle's Settings → API page are accepted in the field below.
+      </div>
+
+      <details class="help-disclosure">
+        <summary>📋 How do I get my Kaggle username and API key/token?</summary>
+        <div class="help-body">
+          <h4>1 - Create a free Kaggle account</h4>
+          <p>If you don't have one yet, go to <a href="https://www.kaggle.com" target="_blank" rel="noopener">kaggle.com</a> and sign up (email, Google, etc.), then verify your email address.</p>
+
+          <h4>2 - Open Settings → API</h4>
+          <p>Once signed in, click your profile picture in the top-right corner → <strong>Settings</strong>, then scroll down to the <strong>API</strong> section.</p>
+
+          <h4>3 - Create your key/token</h4>
+          <p>Click <strong>Create New Token</strong>. Kaggle issues a token that looks like <code>KGAT_…</code> - paste it into the "API key / token" field below, together with your Kaggle username in the field above it.</p>
+          <p>Prefer the older format? The same page also has a <strong>Legacy API Credentials</strong> section with a <strong>Create Legacy API Key</strong> button, which downloads a <code>kaggle.json</code> file holding your username and a 32-character key. Either format is accepted here - just always pair whichever one you use with the username shown on that same Settings page.</p>
+
+          <h4>4 - Verify your phone number</h4>
+          <p>Jobs submitted from here run with internet access turned on (needed to fetch/extract your ORCA package and install a couple of small Python packages). Kaggle only allows internet access on <strong>phone-verified</strong> accounts, under Settings → Phone Verification. Skipping this is the single most common reason a first submission fails with no obvious explanation.</p>
+
+          <div class="help-note">
+            Treat this key/token like a password: anyone who has it can act as you on Kaggle. It's sent only for the moment of a request and is never written to a database or kept long-term on this server; checking "remember me" saves it only in your own browser's local storage. Full details on <a href="#" data-view-link="legal">the Legal, Privacy &amp; Disclaimer page</a>.
+          </div>
+        </div>
+      </details>
+
+      <form id="kaggle-login-form" class="tool-form kaggle-form">
+        <div class="form-row">
+          <label for="kaggle-username">Kaggle username</label>
+          <input type="text" id="kaggle-username" required autocomplete="off">
+        </div>
+        <div class="form-row">
+          <label for="kaggle-key">Kaggle API key / token</label>
+          <input type="password" id="kaggle-key" placeholder="KGAT_… (new token) or the legacy 32-char key" required autocomplete="off">
+        </div>
+        <div class="form-row">
+          <label class="checkbox-row"><input type="checkbox" id="kaggle-remember" checked> Remember me on this browser</label>
+        </div>
+        <span class="field-hint">
+          Signing in also pulls back any jobs already submitted from this Kaggle account, so you can get
+          back to them even after clearing your browser data or switching devices.
+        </span>
+        <button type="submit" class="btn btn-primary"><span class="btn-label">Sign in with Kaggle</span></button>
+      </form>
+
+      <div id="kaggle-login-error" class="alert alert-error hidden"></div>
+      <div id="kaggle-login-loading" class="loading-row hidden"><span class="spinner"></span> Signing in and checking for existing jobs…</div>
+      <div id="kaggle-signed-in-as" class="alert alert-info hidden"></div>
+
+      <details class="help-disclosure">
+        <summary>⚛️ How do I get ORCA, and why does it have to be the Linux version?</summary>
+        <div class="help-body">
+          <h4>What ORCA is</h4>
+          <p>ORCA is a professional quantum-chemistry program developed by Prof. Frank Neese's group and distributed by FACCTs GmbH. It's free for academic and personal, non-commercial use - but it is closed-source and its license forbids redistribution, which is exactly why this site can't just hand you a copy and instead walks you through getting your own.</p>
+
+          <h4>1 - Register on the ORCA Forum</h4>
+          <p>Go to <a href="https://orcaforum.kofo.mpg.de/" target="_blank" rel="noopener">orcaforum.kofo.mpg.de</a> and create a free account, then confirm your email - registration only completes after that step.</p>
+
+          <h4>2 - Accept the license and open Downloads</h4>
+          <p>Once logged in, open the forum's <strong>Downloads</strong> section. You'll be asked to read and accept ORCA's End User License Agreement (EULA) before any file becomes available.</p>
+
+          <h4>3 - Pick the Linux build - this is the part that matters here</h4>
+          <p>ORCA ships builds for Windows, macOS, <em>and</em> Linux. This launcher runs your job inside a <strong>Kaggle Notebook</strong>, which is a cloud machine running Linux - not Windows, not macOS. A Windows <code>.exe</code> or a Mac binary is a different executable format that a Linux machine simply cannot run; only a Linux-compiled build will actually execute there. So from the list, pick the one described along the lines of:</p>
+          <ul>
+            <li><strong>Linux, x86-64, shared-version, .tar.xz Archive</strong> - the "dynamically linked" build, paired with an OpenMPI version shown right in its filename (e.g. <code>orca_6_..._linux_x86-64_shared_openmpi....tar.xz</code>).</li>
+          </ul>
+          <p>If a listing is marked as requiring AVX2 and you aren't sure that applies to you, the plain (non-AVX2) Linux shared build is the safer default.</p>
+
+          <h4>4 - Provide ORCA via your preferred source</h4>
+          <ul>
+            <li><strong>Option A - Kaggle Dataset:</strong> Upload the Linux <code>.tar.xz</code> to Kaggle as a private Dataset and supply its identifier (e.g. <code>username/dataset</code> or dummy example <code>jon534/orca6</code>) or full URL.</li>
+            <li><strong>Option B - Google Drive / direct link:</strong> Provide a direct download URL to your Linux ORCA archive.</li>
+          </ul>
+
+          <div class="help-warn">
+            You're responsible for using ORCA only under your own registration and in line with its EULA (academic/personal use, non-commercial, no redistribution). This site has no part in, and takes no responsibility for, how you obtained or use your copy - see <a href="#" data-view-link="legal">the Legal, Privacy &amp; Disclaimer page</a>.
+          </div>
+        </div>
+      </details>
+
+      <form id="kaggle-form" class="tool-form kaggle-form hidden">
+        <div class="form-row form-row-full">
+          <label>ORCA source</label>
+          <div class="radio-row">
+            <label class="radio-option"><input type="radio" name="orca-source" id="orca-source-dataset" value="dataset" checked> Kaggle Dataset</label>
+            <label class="radio-option"><input type="radio" name="orca-source" id="orca-source-link" value="link"> Google Drive / direct link</label>
+          </div>
+        </div>
+        <div class="form-row" id="kaggle-dataset-row">
+          <label for="kaggle-dataset">Your ORCA Dataset id(s) (comma-separated for more than one)</label>
+          <input type="text" id="kaggle-dataset" placeholder="jon534/orca6" autocomplete="off">
+          <span class="field-hint">Accepts <code>username/dataset</code> (e.g. <code>jon534/orca6</code>) or a full Kaggle Dataset URL.</span>
+        </div>
+        <div class="form-row hidden" id="kaggle-orca-link-row">
+          <label for="kaggle-orca-link">ORCA archive link (Google Drive share link, or a direct .zip/.tar.xz URL)</label>
+          <input type="url" id="kaggle-orca-link" placeholder="https://drive.google.com/file/d/..." autocomplete="off">
+          <span class="field-hint">The Kaggle job downloads and extracts it into scratch storage at start-up. You can also open the link or start the browser download here.</span>
+        </div>
+        <div class="form-row form-row-full">
+          <span class="field-hint">
+            Whichever source you choose is remembered on this device, so you don't retype it
+            for every job.
+            <button type="button" id="kaggle-forget-source" class="link-button">Forget it</button>
+          </span>
+        </div>
+
+        <div class="form-row form-row-full">
+          <label>Input file</label>
+          <div class="radio-row">
+            <label class="radio-option"><input type="radio" name="inp-source" id="inp-source-text" value="text" checked> Paste / generated content</label>
+            <label class="radio-option"><input type="radio" name="inp-source" id="inp-source-upload" value="upload"> Upload a ready .inp file</label>
+          </div>
+        </div>
+        <div id="kaggle-inp-text-row">
+          <div class="form-row">
+            <label for="kaggle-inp-name">Input file name</label>
+            <input type="text" id="kaggle-inp-name" placeholder="molecule.inp">
+            <span class="field-hint">Also used as the job's default name below if you leave that field blank.</span>
+          </div>
+          <div class="form-row form-row-full">
+            <label for="kaggle-inp-content">.inp file content</label>
+            <textarea id="kaggle-inp-content" rows="8" class="mono" placeholder="Build one with the Input Generator above, or paste it here directly"></textarea>
+          </div>
+        </div>
+        <div class="form-row form-row-full hidden" id="kaggle-inp-upload-row">
+          <label for="kaggle-inp-file">Upload .inp file</label>
+          <input type="file" id="kaggle-inp-file" accept=".inp">
+        </div>
+
+        <div class="form-row form-row-full">
+          <label for="kaggle-aux-files">Optional auxiliary files (.xyz / .allxyz / .hess / .mdrestart)</label>
+          <input type="file" id="kaggle-aux-files" multiple accept=".xyz,.allxyz,.hess,.mdrestart">
+        </div>
+        <div class="form-row form-row-full">
+          <label for="kaggle-job-name">Job name <span class="field-optional">(optional)</span></label>
+          <input type="text" id="kaggle-job-name" placeholder="Defaults to the input file's name" maxlength="50" autocomplete="off">
+          <span class="field-hint">Shown here in My Jobs, and used to build the notebook's address on Kaggle (lower-cased, spaces become dashes, plus a short unique suffix). Leave blank to use the input file's name instead.</span>
+        </div>
+        <button type="submit" class="btn btn-primary"><span class="btn-label">🚀 Submit job to Kaggle</span></button>
+      </form>
+
+      <div id="kaggle-error" class="alert alert-error hidden"></div>
+      <div id="kaggle-loading" class="loading-row hidden"><span class="spinner"></span> Packaging and pushing the job to Kaggle…</div>
+      <div id="kaggle-result" class="alert alert-success hidden"></div>
+    </div>
+
+    <!-- ---- My Jobs ---- -->
+    <div id="jobs" class="ws-panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Track progress</span>
+        <h2>My Jobs</h2>
+        <p>Jobs submitted under your signed-in Kaggle account. Status refreshes automatically; a download link appears next to a job's name once its results are ready. A job that had to continue in a fresh session stays a single entry here and follows its newest notebook. Deleting a job here also permanently deletes its notebook - and every continuation it spawned - from Kaggle.</p>
+      </div>
+      <div id="jobs-signin-required" class="alert alert-info">Sign in with your Kaggle account on the Kaggle Launcher tab to see your jobs.</div>
+      <div id="jobs-signed-in-area" class="hidden">
+        <div class="jobs-toolbar">
+          <button type="button" id="jobs-refresh-btn" class="btn btn-ghost btn-small">Refresh now</button>
+          <button type="button" id="kaggle-signout-btn" class="btn btn-ghost btn-small">Sign out</button>
+        </div>
+        <div id="jobs-queue-banner" class="jobs-queue-governor-banner">
+          <div class="queue-stat-pill"><strong>🟢 Active on Kaggle:</strong> <span id="stat-active-slots">0</span> / 5 max</div>
+          <div class="queue-stat-pill"><strong>⏳ In Queue:</strong> <span id="stat-queued-count">0</span></div>
+          <div class="queue-stat-pill"><strong>🔗 Waiting Dependency:</strong> <span id="stat-dep-count">0</span></div>
+          <div class="queue-stat-pill"><strong>✅ Completed:</strong> <span id="stat-completed-count">0</span></div>
+        </div>
+        <div id="jobs-empty" class="alert alert-info">No jobs submitted yet from this account.</div>
+        <ul id="jobs-list" class="jobs-list"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== QUANTUM RESULTS ANALYZER & THERMOCHEMISTRY WORKSPACE ============================== -->
+  <section id="quantum-view" class="view">
+    <div class="workspace-nav">
+      <button class="ws-tab is-active" data-target="engine">🔬 Calculation Analyzer</button>
+      <button class="ws-tab" data-target="thermo">🌡️ Reaction Thermochemistry</button>
+    </div>
+
+    <!-- ---- Quantum Calculation Analyzer Panel ---- -->
+    <div id="engine" class="ws-panel is-active">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Quantum Chemistry Engine</span>
+        <h2>ORCA Calculation Analyzer &amp; 3D Viewer</h2>
+        <p>Parse <strong>any</strong> ORCA calculation output file (<code>.out</code>, <code>.log</code>, <code>.property.txt</code>) or compressed archive (<code>.zip</code>, <code>.rar</code>) to inspect 3D molecular geometries, frontier molecular orbitals (HOMO/LUMO), UV-Vis spectra with real-time Gaussian convolution, and CDFT reactivity descriptors.</p>
+      </div>
+
+      <div class="engine-input-card">
+        <!-- Quick job selector bar -->
+        <div class="engine-job-select-bar">
+          <div class="job-picker-group">
+            <label for="engine-job-picker" class="picker-label">⚡ From Completed Jobs:</label>
+            <select id="engine-job-picker" class="select-small">
+              <option value="">-- Select from your completed Kaggle calculations --</option>
+            </select>
+            <button type="button" id="engine-load-job-btn" class="btn btn-outline btn-small">Load Job Results</button>
+          </div>
+        </div>
+
+        <form id="engine-form" class="engine-form">
+          <div class="engine-dropzone" id="engine-dropzone">
+            <span class="dropzone-icon">📁</span>
+            <div class="dropzone-text">
+              <strong>Drag &amp; drop ORCA output files (.out, .log, .property.txt) or archive (.zip, .rar) here</strong>
+              <span>or click to browse your computer</span>
+            </div>
+            <input type="file" id="engine-file-input" accept=".out,.log,.property.txt,.txt,.xyz,.zip,.rar,.tar.gz,.tgz,.tar" multiple class="hidden">
+            <button type="button" id="engine-browse-btn" class="btn btn-outline btn-small">Browse Files / Archives</button>
+          </div>
+
+          <details class="paste-disclosure">
+            <summary>📝 Or paste ORCA output text directly</summary>
+            <div class="paste-body">
+              <textarea id="engine-paste-text" class="mono" rows="6" placeholder="Paste ORCA output text here (starting with 'Program Version' or calculation header)..."></textarea>
+            </div>
+          </details>
+
+          <div class="engine-actions">
+            <button type="submit" id="engine-submit-btn" class="btn btn-primary"><span class="btn-label">🔬 Parse &amp; Analyze Results</span></button>
+            <span id="engine-file-chosen-label" class="file-chosen-label hidden"></span>
+          </div>
+        </form>
+      </div>
+
+      <div id="engine-loading" class="loading-row hidden"><span class="spinner"></span> Parsing quantum chemistry calculations, extracting orbitals &amp; building 3D geometry…</div>
+      <div id="engine-error" class="alert alert-error hidden"></div>
+
+      <!-- Client-Side Web Worker Pipeline Panel -->
+      <div id="engine-pipeline-panel" class="pipeline-panel hidden">
+        <div class="pipeline-header">
+          <div class="pipeline-title">
+            <span>📦</span>
+            <span id="pipeline-archive-name">Client-Side Archive Processing Pipeline</span>
+          </div>
+          <button type="button" id="pipeline-close-btn" class="btn btn-secondary btn-small">Dismiss Queue</button>
+        </div>
+
+        <div class="pipeline-metrics-row">
+          <div class="pipeline-metric-card">
+            <span class="pipeline-metric-label">Total Files</span>
+            <span id="metric-total-files" class="pipeline-metric-value">0</span>
+          </div>
+          <div class="pipeline-metric-card tier-analyze">
+            <span class="pipeline-metric-label">Supported (Analyze)</span>
+            <span id="metric-analyze-files" class="pipeline-metric-value">0</span>
+          </div>
+          <div class="pipeline-metric-card tier-keep">
+            <span class="pipeline-metric-label">Preserved (Keep)</span>
+            <span id="metric-keep-files" class="pipeline-metric-value">0</span>
+          </div>
+          <div class="pipeline-metric-card tier-unknown">
+            <span class="pipeline-metric-label">Reviewable (Unknown)</span>
+            <span id="metric-unknown-files" class="pipeline-metric-value">0</span>
+          </div>
+          <div class="pipeline-metric-card tier-duplicate">
+            <span class="pipeline-metric-label">Duplicates</span>
+            <span id="metric-duplicate-files" class="pipeline-metric-value">0</span>
+          </div>
+          <div class="pipeline-metric-card tier-ignore">
+            <span class="pipeline-metric-label">Ignored Meta</span>
+            <span id="metric-ignore-files" class="pipeline-metric-value">0</span>
+          </div>
+        </div>
+
+        <div id="pipeline-progress-box" class="pipeline-progress-container hidden">
+          <div class="pipeline-progress-bar-bg">
+            <div id="pipeline-progress-fill" class="pipeline-progress-bar-fill"></div>
+          </div>
+          <div class="pipeline-progress-text">
+            <span id="pipeline-progress-label">Extracting &amp; classifying files…</span>
+            <span id="pipeline-progress-pct">0%</span>
+          </div>
+        </div>
+
+        <div class="pipeline-table-controls">
+          <div class="pipeline-filter-buttons">
+            <button type="button" class="pipeline-filter-btn active" data-filter="ALL">All Files</button>
+            <button type="button" class="pipeline-filter-btn" data-filter="ANALYZE">Supported (.out/.log/.xyz)</button>
+            <button type="button" class="pipeline-filter-btn" data-filter="KEEP">Preserved Inputs</button>
+            <button type="button" class="pipeline-filter-btn" data-filter="UNKNOWN">Unknown / Review</button>
+            <button type="button" class="pipeline-filter-btn" data-filter="DUPLICATE">Duplicates</button>
+          </div>
+          <input type="text" id="pipeline-search-input" class="search-input" style="max-width:220px; font-size:0.78rem; padding:0.25rem 0.5rem;" placeholder="Search extracted files…">
+        </div>
+
+        <div class="pipeline-table-wrapper">
+          <table class="pipeline-table">
+            <thead>
+              <tr>
+                <th>File Path</th>
+                <th>Size</th>
+                <th>SHA-256 Digest</th>
+                <th>Classification &amp; Reason</th>
+                <th style="text-align:right;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="pipeline-files-tbody">
+              <!-- Rendered dynamically by Web Worker -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="engine-result" class="engine-result-grid hidden">
+        <!-- Archive calculation switcher bar (visible when an archive is loaded) -->
+        <div id="engine-archive-bar" class="engine-archive-bar hidden">
+          <div class="archive-bar-content">
+            <span class="archive-icon">📦</span>
+            <span class="archive-title">Calculations inside uploaded archive:</span>
+            <select id="engine-archive-select" class="select-small archive-select"></select>
+            <button type="button" id="engine-archive-switch-btn" class="btn btn-primary btn-small">Load Selected Calculation</button>
+            <span class="archive-cleanup-badge">⏳ Auto-clears in 30 min</span>
+          </div>
+        </div>
+
+        <!-- Overview summary banner -->
+        <div class="engine-overview-card">
+          <div class="overview-header">
+            <div>
+              <h3 id="engine-mol-name" class="engine-mol-name">-</h3>
+              <div class="badge-cluster">
+                <span id="engine-formula-badge" class="prop-badge badge-primary">-</span>
+                <span id="engine-version-badge" class="prop-badge badge-neutral">-</span>
+                <span id="engine-method-badge" class="prop-badge badge-neutral">-</span>
+                <span id="engine-basis-badge" class="prop-badge badge-neutral">-</span>
+                <span id="engine-solv-badge" class="prop-badge badge-neutral">-</span>
+                <span id="engine-status-badge" class="prop-badge badge-success">Normal Termination</span>
+              </div>
+            </div>
+            <div class="overview-right-actions">
+              <button type="button" id="engine-btn-export-json" class="btn btn-ghost btn-small">⬇ Export JSON</button>
+            </div>
+          </div>
+
+          <div class="metric-tiles-grid">
+            <div class="metric-tile">
+              <span class="metric-label">Electronic Energy (E<sub>el</sub>)</span>
+              <span class="metric-val mono" id="engine-val-eel">-</span>
+            </div>
+            <div class="metric-tile">
+              <span class="metric-label">Gibbs Free Energy (G)</span>
+              <span class="metric-val mono" id="engine-val-gibbs">-</span>
+            </div>
+            <div class="metric-tile">
+              <span class="metric-label">Enthalpy (H)</span>
+              <span class="metric-val mono" id="engine-val-enthalpy">-</span>
+            </div>
+            <div class="metric-tile">
+              <span class="metric-label">Zero-Point Energy (ZPE)</span>
+              <span class="metric-val mono" id="engine-val-zpe">-</span>
+            </div>
+            <div class="metric-tile">
+              <span class="metric-label">Dipole Moment (μ)</span>
+              <span class="metric-val mono" id="engine-val-dipole">-</span>
+            </div>
+            <div class="metric-tile">
+              <span class="metric-label">Spin &lt;S<sup>2</sup>&gt;</span>
+              <span class="metric-val mono" id="engine-val-spin">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Geometry Optimization Callout Banner -->
+        <div id="engine-opt-banner" class="engine-opt-banner hidden">
+          <div class="opt-banner-content">
+            <span class="opt-banner-icon">✨</span>
+            <div class="opt-banner-text">
+              <strong id="engine-opt-banner-title">Optimized Geometry Available:</strong>
+              <span id="engine-opt-banner-desc">Stationary point geometry has been extracted. You can feed these optimized Cartesian coordinates directly into the 3D Molecular Builder to inspect, assemble complex systems, modify atoms/bonds, and generate your next ORCA 6.1 input file.</span>
+            </div>
+          </div>
+          <button type="button" id="engine-opt-launch-btn" class="btn btn-primary btn-small">🚀 Start New Calculation with this Geometry</button>
+        </div>
+
+        <!-- Section 1: Full-Width 3D Molecular Geometry & Charges Studio -->
+        <div class="engine-full-card">
+          <div class="card-title-row">
+            <h4>Interactive 3D Molecular Geometry &amp; Atomic Charges Studio</h4>
+            <div class="viewer-controls">
+              <select id="engine-3d-style" class="select-small" title="Render Style">
+                <option value="ballAndStick" selected>Ball &amp; Stick</option>
+                <option value="stick">Stick</option>
+                <option value="sphere">Spacefill (CPK)</option>
+                <option value="wireframe">Wireframe</option>
+              </select>
+              <select id="engine-3d-bg" class="select-small" title="Viewport Background">
+                <option value="#0B0F19" selected>🌙 Dark Viewport</option>
+                <option value="#ffffff">☀️ Pure White</option>
+                <option value="transparent">📄 Transparent</option>
+              </select>
+              <select id="engine-3d-label-mode" class="select-small" title="Atom Labels & Partial Charges">
+                <option value="off" selected>Labels: Off</option>
+                <option value="elements">🏷 Atom Symbols (C1, H2)</option>
+                <option value="mulliken">⚡ Mulliken Charges</option>
+                <option value="both_mulliken">🏷+⚡ Atom &amp; Mulliken</option>
+              </select>
+
+              <select id="engine-3d-label-color" class="select-small" title="Label Text Color">
+                <option value="#ffffff" selected>⚪ White Text</option>
+                <option value="#000000">⚫ Black Text</option>
+                <option value="#FFD600">🟡 Gold Text</option>
+                <option value="#00E5FF">🔵 Cyan Text</option>
+                <option value="#00E676">🟢 Mint Text</option>
+                <option value="#FF3D00">🔴 Red Text</option>
+                <option value="#FF9100">🟠 Orange Text</option>
+                <option value="#E040FB">🟣 Magenta Text</option>
+              </select>
+              <select id="engine-3d-label-badge" class="select-small" title="Label Background & Capsule Badge">
+                <option value="dark" selected>⬛ Dark Capsule</option>
+                <option value="light">⬜ Light Capsule</option>
+                <option value="transparent">🚫 Transparent</option>
+              </select>
+              <button type="button" id="engine-3d-label-bold" class="btn btn-primary btn-small" title="Toggle Bold Font"><strong>𝗕 Bold</strong></button>
+
+              <input type="file" id="engine-3d-crg-input" accept=".crg,.txt,.dat" class="hidden">
+              <button type="button" id="engine-3d-load-crg-btn" class="btn btn-secondary btn-small" title="Upload MultiWfn .crg atomic charges file">📂 Upload .crg (MultiWfn)</button>
+
+              <button type="button" id="engine-3d-spin" class="btn btn-ghost btn-small">🔄 Spin</button>
+              <button type="button" id="engine-3d-dipole" class="btn btn-ghost btn-small">🧭 Dipole</button>
+              <button type="button" id="engine-3d-reset" class="btn btn-ghost btn-small">🎯 Reset</button>
+            </div>
+          </div>
+
+          <div id="engine-3d-viewport" class="viewport-3d"></div>
+          <div class="viewer-footer">
+            <span id="engine-3d-atomcount" class="field-hint">0 atoms</span>
+            <div class="viewer-footer-actions">
+              <button type="button" id="engine-3d-new-calc-btn" class="btn btn-primary btn-small" title="Feed these 3D coordinates into the 3D Builder to start a new ORCA calculation">🚀 New Calculation from Geometry</button>
+              <button type="button" id="engine-3d-download-png" class="btn btn-ghost btn-small" title="Export high-resolution publication PNG">📸 High-Res 3D (PNG)</button>
+              <a id="engine-download-xyz-btn" class="btn btn-ghost btn-small" download="structure.xyz">⬇ Download XYZ</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: 2-Column Grid for Vibrations & Frontier Orbitals / CDFT -->
+        <div class="engine-dual-grid">
+          <!-- Vibrational Modes & TS Verification Card -->
+          <div class="engine-col-card">
+            <div class="card-title-row">
+              <h5>Vibrational Modes &amp; TS Verification</h5>
+              <span id="engine-ts-badge" class="prop-badge badge-neutral">-</span>
+            </div>
+            <div id="engine-freq-table-wrap" class="freq-table-wrap">
+              <table class="data-table freq-table">
+                <thead>
+                  <tr><th>#</th><th>Frequency (cm<sup>-1</sup>)</th><th>Type</th></tr>
+                </thead>
+                <tbody id="engine-freq-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Molecular Orbitals & CDFT Indices Card -->
+          <div class="engine-col-card">
+            <div class="card-title-row">
+              <h4>Frontier Molecular Orbitals &amp; Gap</h4>
+              <button type="button" id="engine-orbitals-download-png" class="btn btn-ghost btn-small" title="Export orbital ladder diagram as high-res image">📸 High-Res Diagram</button>
+            </div>
+            <div class="orbital-diagram-wrap">
+              <div class="orbital-levels" id="engine-orbital-levels-ladder">
+                <div class="orbital-row lumo-row" id="orb-ladder-lumo">
+                  <span class="orbital-tag">LUMO</span>
+                  <span class="orbital-val mono" id="engine-val-lumo"> - eV</span>
+                </div>
+                <div class="gap-indicator">
+                  <div class="gap-line"></div>
+                  <span class="gap-badge" id="engine-val-gap">ΔE<sub>gap</sub>: - eV</span>
+                  <div class="gap-line"></div>
+                </div>
+                <div class="orbital-row homo-row" id="orb-ladder-homo">
+                  <span class="orbital-tag">HOMO</span>
+                  <span class="orbital-val mono" id="engine-val-homo"> - eV</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-title-row cdft-heading">
+              <h4>Conceptual DFT (CDFT) Reactivity Descriptors</h4>
+            </div>
+            <div class="cdft-grid">
+              <div class="cdft-item">
+                <span class="cdft-label">Chemical Hardness (η)</span>
+                <span class="cdft-val mono" id="cdft-hardness">-</span>
+                <span class="cdft-desc">(I - A)/2</span>
+              </div>
+              <div class="cdft-item">
+                <span class="cdft-label">Chemical Softness (S)</span>
+                <span class="cdft-val mono" id="cdft-softness">-</span>
+                <span class="cdft-desc">1 / (2η)</span>
+              </div>
+              <div class="cdft-item">
+                <span class="cdft-label">Electronegativity (χ)</span>
+                <span class="cdft-val mono" id="cdft-electronegativity">-</span>
+                <span class="cdft-desc">(I + A)/2</span>
+              </div>
+              <div class="cdft-item">
+                <span class="cdft-label">Chemical Potential (μ)</span>
+                <span class="cdft-val mono" id="cdft-potential">-</span>
+                <span class="cdft-desc">-χ</span>
+              </div>
+              <div class="cdft-item">
+                <span class="cdft-label">Electrophilicity Index (ω)</span>
+                <span class="cdft-val mono" id="cdft-electrophilicity">-</span>
+                <span class="cdft-desc">μ² / (2η)</span>
+              </div>
+              <div class="cdft-item">
+                <span class="cdft-label">Ionization Potential (I)</span>
+                <span class="cdft-val mono" id="cdft-ip">-</span>
+                <span class="cdft-desc">-E<sub>HOMO</sub></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- UV-Vis Absorption Spectrum & Interactive Multi-Spectrum Analysis Studio -->
+        <div id="engine-uvvis-section" class="engine-full-card hidden">
+          <div class="card-title-row">
+            <div>
+              <h4>Interactive Multi-Spectrum Analysis &amp; Experimental Overlay</h4>
+              <span class="card-subtitle" style="display:block; font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+                Compare theoretical TD-DFT spectra with experimental UV-Vis absorption measurements (TXT, CSV, XLSX)
+              </span>
+            </div>
+            <div class="uvvis-top-actions">
+              <input type="file" id="engine-exp-file-input" accept=".txt,.csv,.tsv,.xlsx,.xls,.dat" class="hidden" multiple>
+              <button type="button" id="engine-add-exp-btn" class="btn btn-secondary btn-small" title="Upload experimental UV-Vis spectrum file (.txt, .csv, .xlsx)">
+                🧪 + Upload Experimental (.xlsx, .txt, .csv)
+              </button>
+              <button type="button" id="engine-uvvis-legend-toggle" class="btn btn-ghost btn-small" title="Toggle Legend Labels in Top-Left Corner">🏷️ Hide Legend</button>
+              <button type="button" id="engine-uvvis-theme-toggle" class="btn btn-ghost btn-small">☀️ White Theme</button>
+              <button type="button" id="engine-uvvis-download-png" class="btn btn-ghost btn-small" title="Export high-resolution publication spectrum PNG">📸 High-Res PNG</button>
+              <button type="button" id="engine-uvvis-export-csv" class="btn btn-ghost btn-small" title="Export all active spectra to CSV">⬇ Export CSV</button>
+            </div>
+          </div>
+
+          <!-- Spectrum Interactive Canvas & Hover Readout -->
+          <div class="uvvis-canvas-wrap" id="uvvis-canvas-wrap">
+            <canvas id="engine-uvvis-canvas" width="1000" height="380"></canvas>
+            <div id="uvvis-tooltip" class="spectrum-tooltip hidden"></div>
+          </div>
+
+          <!-- Multi-Spectrum Layer Management Tray -->
+          <div class="spectrum-layers-tray" id="spectrum-layers-tray">
+            <div class="layers-tray-header">
+              <span class="layers-title">📊 Active Spectral Datasets &amp; Layers (<span id="spectrum-layers-count">1</span>):</span>
+              <div class="layers-quick-toggles">
+                <label class="toggle-pill"><input type="checkbox" id="uvvis-toggle-legend" checked> Legend Overlay</label>
+                <label class="toggle-pill"><input type="checkbox" id="toggle-all-exp" checked> Experimental</label>
+                <label class="toggle-pill"><input type="checkbox" id="toggle-all-theo" checked> Theoretical</label>
+                <label class="toggle-pill"><input type="checkbox" id="toggle-trans-sticks" checked> TD-DFT Sticks</label>
+                <label class="toggle-pill"><input type="checkbox" id="toggle-exp-peaks" checked> Exp Peaks</label>
+              </div>
+            </div>
+            <div class="layers-cards-list" id="spectrum-layers-list">
+              <!-- Dynamically populated layer cards -->
+            </div>
+          </div>
+
+          <!-- Partitioned Scientific Controls Grid -->
+          <div class="spectrum-controls-container">
+            <!-- Box 1: Theoretical Spectrum Processing -->
+            <div class="spectrum-control-box theo-box">
+              <div class="control-box-header">
+                <span class="box-icon">⚛️</span>
+                <h5>Theoretical Spectrum Processing</h5>
+                <span class="badge-scope">Theory Only</span>
+              </div>
+              <p class="box-hint">Gaussian broadening and wavelength shifts transform theoretical TD-DFT excited states. Experimental measurements remain strictly immutable.</p>
+
+              <div class="control-fields-grid">
+                <div class="slider-control">
+                  <div class="slider-label-row">
+                    <label for="engine-sigma-slider">Gaussian Broadening (σ):</label>
+                    <strong id="engine-sigma-label">20.0 nm (0.30 eV)</strong>
+                  </div>
+                  <input type="range" id="engine-sigma-slider" min="2" max="80" step="1" value="20">
+                </div>
+
+                <div class="slider-control">
+                  <div class="slider-label-row">
+                    <label for="engine-shift-slider">Theoretical Wavelength Shift (Δλ):</label>
+                    <strong id="engine-shift-label">0.0 nm</strong>
+                  </div>
+                  <input type="range" id="engine-shift-slider" min="-80" max="80" step="1" value="0">
+                </div>
+              </div>
+            </div>
+
+            <!-- Box 2: Experimental Reference Configuration -->
+            <div class="spectrum-control-box exp-box">
+              <div class="control-box-header">
+                <span class="box-icon">🧪</span>
+                <h5>Experimental Reference Layer</h5>
+                <span class="badge-scope badge-ref">Immutable Reference</span>
+              </div>
+              <p class="box-hint">Upload raw UV-Vis absorption data. Column headers, sheet names, and delimiters are detected automatically with manual override options.</p>
+
+              <div class="exp-config-row" id="exp-config-row">
+                <div class="form-group sheet-select-grp hidden" id="exp-sheet-group">
+                  <label for="exp-sheet-select">Excel Sheet:</label>
+                  <select id="exp-sheet-select" class="form-select"></select>
+                </div>
+                <div class="form-group">
+                  <label for="exp-wl-col-select">Wavelength Column (X):</label>
+                  <select id="exp-wl-col-select" class="form-select">
+                    <option value="auto">Auto (Wavelength / λ / nm)</option>
+                  </select>
+                </div>
+                <div class="form-group" style="flex: 1 1 100%; margin-top: 0.5rem;" id="exp-y-cols-wrapper">
+                  <label style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>Y Axes / Experimental Series:</span>
+                    <span style="font-size:0.75rem; color:var(--text-muted);"><a href="#" id="exp-select-all-y" style="color:var(--primary); text-decoration:none;">Select All</a> | <a href="#" id="exp-deselect-all-y" style="color:var(--primary); text-decoration:none;">Clear</a></span>
+                  </label>
+                  <div id="exp-y-cols-container" class="y-cols-checkbox-container" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.35rem; max-height:120px; overflow-y:auto; padding:0.4rem; background:var(--surface-sunken); border:1px solid var(--border); border-radius:var(--radius-s);">
+                    <span style="font-size:0.8rem; color:var(--text-muted);">Upload Excel/CSV to choose multiple Y series.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Box 3: Display & Viewport Comparison Options -->
+            <div class="spectrum-control-box display-box">
+              <div class="control-box-header">
+                <span class="box-icon">📐</span>
+                <h5>Display &amp; Viewport Options</h5>
+              </div>
+              <div class="display-options-row">
+                <div class="form-group">
+                  <label for="spectrum-norm-mode">Normalization Mode:</label>
+                  <select id="spectrum-norm-mode" class="form-select">
+                    <option value="none">None (Raw Measurement Scales)</option>
+                    <option value="theoretical_only">Normalize Theoretical Only (0 to 1)</option>
+                    <option value="experimental_only">Normalize Experimental Only (0 to 1)</option>
+                    <option value="all">Normalize All Datasets (0 to 1)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="spectrum-viewport-mode">Wavelength Viewport (X-Axis):</label>
+                  <select id="spectrum-viewport-mode" class="form-select">
+                    <option value="full">Full Combined Extent (e.g. 180-800 nm)</option>
+                    <option value="common">Common Overlap Region Only</option>
+                    <option value="uvvis_standard">Standard UV-Vis (200-700 nm)</option>
+                    <option value="custom">✂️ Custom Manual Range (Crop)</option>
+                  </select>
+                </div>
+                <div class="form-group hidden" id="spectrum-custom-range-wrap" style="display:none; gap:0.5rem; align-items:flex-end;">
+                  <div style="flex:1;">
+                    <label for="spectrum-min-wl" style="font-size:0.75rem; color:var(--text-muted);">Min λ (nm):</label>
+                    <input type="number" id="spectrum-min-wl" class="form-input" style="padding:0.35rem 0.5rem; font-size:0.85rem;" value="200" min="50" max="2000" step="10">
+                  </div>
+                  <div style="flex:1;">
+                    <label for="spectrum-max-wl" style="font-size:0.75rem; color:var(--text-muted);">Max λ (nm):</label>
+                    <input type="number" id="spectrum-max-wl" class="form-input" style="padding:0.35rem 0.5rem; font-size:0.85rem;" value="700" min="50" max="2000" step="10">
+                  </div>
+                </div>
+
+                <div class="form-group" style="flex: 1 1 100%; margin-top: 0.5rem;" id="spectrum-manual-axis-group">
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.35rem;">
+                    <label class="toggle-pill" style="margin:0;"><input type="checkbox" id="spectrum-manual-range-toggle"> Manual Axis Range</label>
+                    <div style="display:flex; gap:0.4rem;">
+                      <button type="button" id="spectrum-apply-axis-btn" class="btn btn-ghost btn-small" style="padding:0.2rem 0.6rem; font-size:0.78rem;">Apply</button>
+                      <button type="button" id="spectrum-auto-axis-btn" class="btn btn-ghost btn-small" style="padding:0.2rem 0.6rem; font-size:0.78rem;">Auto Range</button>
+                    </div>
+                  </div>
+                  <div id="spectrum-manual-axis-inputs" style="display:none; flex-wrap:wrap; gap:0.5rem; background:var(--surface-sunken); padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius-s);">
+                    <div style="flex:1; min-width:90px;">
+                      <label style="font-size:0.75rem; color:var(--text-muted);">X Min (nm):</label>
+                      <input type="number" id="spectrum-manual-min-x" class="form-input" style="padding:0.25rem 0.4rem; font-size:0.82rem;" placeholder="200">
+                    </div>
+                    <div style="flex:1; min-width:90px;">
+                      <label style="font-size:0.75rem; color:var(--text-muted);">X Max (nm):</label>
+                      <input type="number" id="spectrum-manual-max-x" class="form-input" style="padding:0.25rem 0.4rem; font-size:0.82rem;" placeholder="800">
+                    </div>
+                    <div style="flex:1; min-width:90px;">
+                      <label style="font-size:0.75rem; color:var(--text-muted);">Y Min (Abs):</label>
+                      <input type="number" id="spectrum-manual-min-y" class="form-input" style="padding:0.25rem 0.4rem; font-size:0.82rem;" step="0.05" placeholder="0">
+                    </div>
+                    <div style="flex:1; min-width:90px;">
+                      <label style="font-size:0.75rem; color:var(--text-muted);">Y Max (Abs):</label>
+                      <input type="number" id="spectrum-manual-max-y" class="form-input" style="padding:0.25rem 0.4rem; font-size:0.82rem;" step="0.05" placeholder="1.5">
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          <!-- Data Tables Disclosure -->
+          <details class="transitions-disclosure">
+            <summary>📊 View Calculated TD-DFT Transitions &amp; Experimental Points Table</summary>
+            <div class="tables-split-wrap">
+              <div class="table-block">
+                <h6 style="color: var(--primary); margin-bottom: 0.5rem;">Theoretical TD-DFT Transitions</h6>
+                <div class="transitions-table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr><th>State</th><th>Energy (cm<sup>-1</sup>)</th><th>Energy (eV)</th><th>Wavelength (nm)</th><th>f<sub>osc</sub></th></tr>
+                    </thead>
+                    <tbody id="engine-transitions-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="table-block" id="exp-table-block">
+                <h6 style="color: var(--accent); margin-bottom: 0.5rem;">Experimental Measurement Points</h6>
+                <div class="transitions-table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr><th>#</th><th>Wavelength (nm)</th><th>Absorbance (AU)</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="engine-exp-tbody">
+                      <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No experimental spectrum loaded. Click "+ Upload Experimental" above to add reference data.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- Section 4: Vibrational IR / FTIR Absorption Spectrum & Interactive Multi-Spectrum Analysis Studio -->
+        <div id="engine-ir-section" class="engine-full-card hidden">
+          <div class="card-title-row">
+            <div>
+              <h4>Interactive Vibrational IR / FTIR Spectroscopic Studio &amp; Experimental Overlay</h4>
+              <span class="card-subtitle" style="display:block; font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+                Convolute theoretical harmonic IR frequencies with Lorentzian line shapes and compare with experimental FTIR spectra (4000-400 cm⁻¹)
+              </span>
+            </div>
+            <div class="uvvis-top-actions">
+              <input type="file" id="engine-ir-exp-file-input" accept=".txt,.csv,.tsv,.xlsx,.xls,.dat,.dpt" class="hidden" multiple>
+              <button type="button" id="engine-ir-add-exp-btn" class="btn btn-secondary btn-small" title="Upload experimental IR / FTIR spectrum file (.xlsx, .txt, .csv, .dpt)">
+                🧪 + Upload Experimental IR (.xlsx, .txt, .csv)
+              </button>
+              <button type="button" id="engine-ir-legend-toggle" class="btn btn-ghost btn-small" title="Toggle Legend Labels in Top-Left Corner">🏷️ Hide Legend</button>
+              <button type="button" id="engine-ir-theme-toggle" class="btn btn-ghost btn-small">☀️ White Theme</button>
+              <button type="button" id="engine-ir-download-png" class="btn btn-ghost btn-small" title="Export high-resolution publication IR spectrum PNG">📸 High-Res PNG</button>
+              <button type="button" id="engine-ir-export-csv" class="btn btn-ghost btn-small" title="Export all active IR spectra to CSV">⬇ Export CSV</button>
+            </div>
+          </div>
+
+          <!-- Spectrum Interactive Canvas & Hover Readout -->
+          <div class="uvvis-canvas-wrap" id="ir-canvas-wrap">
+            <canvas id="engine-ir-canvas" width="1000" height="380"></canvas>
+            <div id="ir-tooltip" class="spectrum-tooltip hidden"></div>
+          </div>
+
+          <!-- Multi-Spectrum Layer Management Tray -->
+          <div class="spectrum-layers-tray" id="ir-layers-tray">
+            <div class="layers-tray-header">
+              <span class="layers-title">📊 Active IR Spectral Datasets &amp; Layers (<span id="ir-layers-count">1</span>):</span>
+              <div class="layers-quick-toggles">
+                <label class="toggle-pill"><input type="checkbox" id="ir-toggle-legend" checked> Legend Overlay</label>
+                <label class="toggle-pill"><input type="checkbox" id="ir-toggle-all-exp" checked> Experimental IR</label>
+                <label class="toggle-pill"><input type="checkbox" id="ir-toggle-all-theo" checked> Theoretical IR</label>
+                <label class="toggle-pill"><input type="checkbox" id="ir-toggle-sticks" checked> Harmonic Sticks</label>
+              </div>
+            </div>
+            <div class="layers-cards-list" id="ir-layers-list">
+              <!-- Dynamically populated layer cards -->
+            </div>
+          </div>
+
+          <!-- Partitioned Scientific Controls Grid -->
+          <div class="spectrum-controls-container">
+            <!-- Box 1: Theoretical IR Processing -->
+            <div class="spectrum-control-box theo-box">
+              <div class="control-box-header">
+                <span class="box-icon">⚛️</span>
+                <h5>Theoretical IR Processing</h5>
+                <span class="badge-scope">Theory Only</span>
+              </div>
+              <p class="box-hint">Apply empirical harmonic vibrational scaling factors and Lorentzian line broadening to computed normal modes.</p>
+
+              <div class="control-fields-grid">
+                <div class="slider-control">
+                  <div class="slider-label-row">
+                    <label for="engine-ir-scale-slider">Vibrational Scaling Factor:</label>
+                    <strong id="engine-ir-scale-label">1.000</strong>
+                  </div>
+                  <input type="range" id="engine-ir-scale-slider" min="0.800" max="1.100" step="0.005" value="1.000">
+                </div>
+
+                <div class="slider-control">
+                  <div class="slider-label-row">
+                    <label for="engine-ir-fwhm-slider">Lorentzian FWHM (γ):</label>
+                    <strong id="engine-ir-fwhm-label">15.0 cm⁻¹</strong>
+                  </div>
+                  <input type="range" id="engine-ir-fwhm-slider" min="2" max="60" step="1" value="15">
+                </div>
+
+                <div class="slider-control">
+                  <div class="slider-label-row">
+                    <label for="engine-ir-shift-slider">Wavenumber Shift (Δν̃):</label>
+                    <strong id="engine-ir-shift-label">0.0 cm⁻¹</strong>
+                  </div>
+                  <input type="range" id="engine-ir-shift-slider" min="-100" max="100" step="1" value="0">
+                </div>
+              </div>
+            </div>
+
+            <!-- Box 2: Experimental Reference Configuration (IR) -->
+            <div class="spectrum-control-box exp-box">
+              <div class="control-box-header">
+                <span class="box-icon">🧪</span>
+                <h5>Experimental FTIR Reference Layer</h5>
+                <span class="badge-scope badge-ref">Immutable Reference</span>
+              </div>
+              <p class="box-hint">Upload raw FTIR measurements. Wavenumber and % Transmittance / Absorbance columns are detected automatically.</p>
+
+              <div class="exp-config-row" id="ir-exp-config-row">
+                <div class="form-group sheet-select-grp hidden" id="ir-exp-sheet-group">
+                  <label for="ir-exp-sheet-select">Excel Sheet:</label>
+                  <select id="ir-exp-sheet-select" class="form-select"></select>
+                </div>
+                <div class="form-group">
+                  <label for="ir-exp-wn-col-select">Wavenumber Column (X):</label>
+                  <select id="ir-exp-wn-col-select" class="form-select">
+                    <option value="auto">Auto (Wavenumber / cm⁻¹ / Frequency)</option>
+                  </select>
+                </div>
+                <div class="form-group" style="flex: 1 1 100%; margin-top: 0.5rem;" id="ir-exp-y-cols-wrapper">
+                  <label style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>Y Axes / Experimental Series:</span>
+                    <span style="font-size:0.75rem; color:var(--text-muted);"><a href="#" id="ir-exp-select-all-y" style="color:var(--primary); text-decoration:none;">Select All</a> | <a href="#" id="ir-exp-deselect-all-y" style="color:var(--primary); text-decoration:none;">Clear</a></span>
+                  </label>
+                  <div id="ir-exp-y-cols-container" class="y-cols-checkbox-container" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.35rem; max-height:120px; overflow-y:auto; padding:0.4rem; background:var(--surface-sunken); border:1px solid var(--border); border-radius:var(--radius-s);">
+                    <span style="font-size:0.8rem; color:var(--text-muted);">Upload Excel/CSV to choose multiple Y series.</span>
+                  </div>
+                </div>
+                <div id="ir-unit-mismatch-banner" class="alert alert-warning hidden" style="flex:1 1 100%; margin-top:0.5rem; font-size:0.8rem; display:none;">
+                  ⚠️ <strong>Measurement Type Notice:</strong> These experimental spectra use different Y-axis measurement types (% Transmittance vs Absorbance). Choose your preferred representation below to view consistent overlaid data.
+                </div>
+              </div>
+            </div>
+
+            <!-- Box 3: Display & Viewport Comparison Options (IR) -->
+            <div class="spectrum-control-box display-box">
+              <div class="control-box-header">
+                <span class="box-icon">📐</span>
+                <h5>Display &amp; Viewport Options</h5>
+              </div>
+              <div class="display-options-row">
+                <div class="form-group">
+                  <label for="ir-y-mode">Y-Axis Representation:</label>
+                  <select id="ir-y-mode" class="form-select">
+                    <option value="transmittance" selected>Transmittance (%T) [FTIR / Pseudo-%T]</option>
+                    <option value="theory_intensity">Theoretical IR Intensity (km/mol)</option>
+                    <option value="absorbance">Absorbance (AU)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="ir-viewport-mode">Wavenumber Viewport (X-Axis):</label>
+                  <select id="ir-viewport-mode" class="form-select">
+                    <option value="standard" selected>Standard IR (4000-400 cm⁻¹) [Spectroscopy Descending]</option>
+                    <option value="fingerprint">Fingerprint Region (1500-400 cm⁻¹)</option>
+                    <option value="functional">Functional Group Region (4000-1500 cm⁻¹)</option>
+                    <option value="full">Full Detected Extent</option>
+                    <option value="custom">✂️ Custom Manual Range (Crop)</option>
+                  </select>
+                </div>
+                <div class="form-group hidden" id="ir-custom-range-wrap" style="display:none; gap:0.5rem; align-items:flex-end;">
+                  <div style="flex:1;">
+                    <label for="ir-min-wn" style="font-size:0.75rem; color:var(--text-muted);">Min ν̃ (cm⁻¹):</label>
+                    <input type="number" id="ir-min-wn" class="form-input" style="padding:0.35rem 0.5rem; font-size:0.85rem;" value="400" min="50" max="10000" step="50">
+                  </div>
+                  <div style="flex:1;">
+                    <label for="ir-max-wn" style="font-size:0.75rem; color:var(--text-muted);">Max ν̃ (cm⁻¹):</label>
+                    <input type="number" id="ir-max-wn" class="form-input" style="padding:0.35rem 0.5rem; font-size:0.85rem;" value="4000" min="50" max="10000" step="50">
+                  </div>
+                </div>
+
+                <div class="form-group" style="flex: 1 1 100%; margin-top: 0.5rem;" id="ir-manual-axis-group">
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.35rem;">
+                    <label class="toggle-pill" style="margin:0;"><input type="checkbox" id="ir-manual-range-toggle"> Manual Axis Range</label>
+                    <div style="display:flex; gap:0.4rem;">
+                      <button type="button" id="ir-apply-axis-btn" class="btn btn-ghost btn-small" style="padding:0.2rem 0.6rem; font-size:0.78rem;">Apply</button>
+                      <button type="button" id="ir-auto-axis-btn" class="btn btn-ghost btn-small" style="padding:0.2rem 0.6rem; font-size:0.78rem;">Auto Range</button>
+                    </div>
+                  </div>
+                  <div id="ir-manual-axis-inputs" style="display:none; flex-wrap:wrap; gap:0.5rem; background:var(--surface-sunken); padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius-s);">
+                    <div style="flex:1; min-width:90px;">
+                      <label style="font-size:0.75rem; color:var(--text-muted);">Wavenumber Min (cm⁻¹):</label>
+                      <input type="number" id="ir-manual-min-x" class="form-input" style="padding:0.25rem 0.4rem; font-size:0.82rem;" placeholder="400" min="50" max="10000" step="50">
+                    </div>
+                    <div style="flex:1; min-width:90px;">
+                      <label style="font-size:0.75rem; color:var(--text-muted);">Wavenumber Max (cm⁻¹):</label>
+                      <input type="number" id="ir-manual-max-x" class="form-input" style="padding:0.25rem 0.4rem; font-size:0.82rem;" placeholder="4000" min="50" max="10000" step="50">
+                    </div>
+                    <div style="flex:1; min-width:90px;">
+                      <label style="font-size:0.75rem; color:var(--text-muted);">Y Min (%T / Abs):</label>
+                      <input type="number" id="ir-manual-min-y" class="form-input" style="padding:0.25rem 0.4rem; font-size:0.82rem;" placeholder="0" step="1">
+                    </div>
+                    <div style="flex:1; min-width:90px;">
+                      <label style="font-size:0.75rem; color:var(--text-muted);">Y Max (%T / Abs):</label>
+                      <input type="number" id="ir-manual-max-y" class="form-input" style="padding:0.25rem 0.4rem; font-size:0.82rem;" placeholder="105" step="1">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Data Tables Disclosure (IR) -->
+          <details class="transitions-disclosure">
+            <summary>📊 View Calculated IR Modes &amp; Experimental Data Points Table</summary>
+            <div class="tables-split-wrap">
+              <div class="table-block">
+                <h6 style="color: var(--primary); margin-bottom: 0.5rem;">Theoretical Vibrational IR Modes</h6>
+                <div class="transitions-table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr><th>Mode #</th><th>Frequency (cm<sup>-1</sup>)</th><th>IR Intensity (km/mol)</th><th>Type</th></tr>
+                    </thead>
+                    <tbody id="engine-ir-modes-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="table-block" id="ir-exp-table-block">
+                <h6 style="color: var(--accent); margin-bottom: 0.5rem;">Experimental FTIR Measurement Points</h6>
+                <div class="transitions-table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr><th>#</th><th>Wavenumber (cm<sup>-1</sup>)</th><th>Signal (%T / Abs)</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="engine-ir-exp-tbody">
+                      <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No experimental IR spectrum loaded. Click "+ Upload Experimental IR" above to add reference data.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </details>
+
+        </div>
+
+
+        <!-- Section 5: Calculated NMR Spectrum Analyzer & Visualizer (1H & 13C) -->
+        <div id="engine-nmr-section" class="engine-full-card hidden">
+          <div class="card-title-row">
+            <div>
+              <h4>Calculated NMR Spectrum Analyzer &amp; Visualizer</h4>
+              <span class="card-subtitle" style="display:block; font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+                Calculated stick NMR spectra for <strong>¹H</strong> and <strong>¹³C</strong> with atomic assignment, isotropic shielding tensors (σ), and reference-calibrated chemical shifts (δ = σ<sub>ref</sub> - σ<sub>sample</sub>).
+              </span>
+            </div>
+            <div class="uvvis-top-actions">
+              <button type="button" id="engine-nmr-export-csv" class="btn btn-secondary btn-small" title="Download calculated NMR peak data as CSV">📊 Download CSV</button>
+              <button type="button" id="engine-nmr-export-json" class="btn btn-secondary btn-small" title="Download complete NMR results as JSON">📋 Download JSON</button>
+              <button type="button" id="engine-nmr-download-png" class="btn btn-ghost btn-small" title="Export high-resolution spectrum image">📸 High-Res PNG</button>
+            </div>
+          </div>
+
+          <!-- NMR Nucleus Switcher Bar -->
+          <div class="nmr-nucleus-bar" style="display:flex; gap:0.75rem; margin:1rem 0; align-items:center; flex-wrap:wrap;">
+            <div class="btn-group" role="group" aria-label="NMR Nucleus">
+              <button type="button" id="nmr-tab-1h" class="btn btn-primary btn-small is-active" data-nucleus="1H">¹H NMR (Proton)</button>
+              <button type="button" id="nmr-tab-13c" class="btn btn-ghost btn-small" data-nucleus="13C">¹³C NMR (Carbon-13)</button>
+            </div>
+            <span id="nmr-nucleus-badge" class="prop-badge badge-accent">¹H NMR Active</span>
+            <span id="nmr-provenance-badge" class="prop-badge badge-neutral">DFT / GIAO</span>
+          </div>
+
+          <!-- Spectrum Interactive Canvas & Hover Readout -->
+          <div class="spectrum-canvas-wrap">
+            <canvas id="engine-nmr-canvas" width="1000" height="420" class="spectrum-canvas"></canvas>
+            <div id="nmr-tooltip" class="spectrum-tooltip hidden"></div>
+          </div>
+
+          <!-- NMR Controls: Reference Calibration & Display Options -->
+          <div class="spectrum-controls-container" style="margin-top:1rem;">
+            <!-- Box 1: Reference Calibration -->
+            <div class="spectrum-control-box theo-box">
+              <div class="box-head">
+                <h5>Reference Calibration &amp; Chemical Shift Conversion</h5>
+              </div>
+              <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem;">
+                ORCA prints absolute isotropic shielding (σ). Choose a standard reference to convert to chemical shifts (δ = σ<sub>ref</sub> - σ<sub>sample</sub>) or view raw shieldings.
+              </p>
+              <div class="form-group">
+                <label for="nmr-ref-preset">Standard Reference Preset:</label>
+                <select id="nmr-ref-preset" class="form-select">
+                  <option value="none" selected>None (Display Raw Isotropic Shielding σ in ppm)</option>
+                  <option value="tms_tpss_pcsseg3">TMS (TPSS / pcSseg-3) - 31.77 / 188.10 ppm</option>
+                  <option value="tms_b3lyp_tzvpp">TMS (B3LYP / TZVPP) - 184.30 ppm (13C)</option>
+                  <option value="tms_bp86_tzvpp">TMS (BP86 / TZVPP) - 184.80 ppm (13C)</option>
+                  <option value="tms_hf_tzvpp">TMS (HF / TZVPP) - 194.10 ppm (13C)</option>
+                  <option value="custom">Custom Reference Shielding (Manual Entry)...</option>
+                </select>
+              </div>
+              <div class="form-group" id="nmr-custom-ref-wrap" style="display:none;">
+                <label for="nmr-custom-ref-val">Reference Absolute Shielding (σ<sub>ref</sub>, ppm):</label>
+                <input type="number" id="nmr-custom-ref-val" class="form-input" placeholder="e.g. 31.77" step="0.01">
+              </div>
+              <div id="nmr-ref-warning" class="alert alert-warning" style="margin-top:0.5rem; font-size:0.8rem; padding:0.4rem 0.75rem;">
+                ⚠️ Reference shielding not configured; displaying absolute isotropic shielding (σ, ppm).
+              </div>
+            </div>
+
+            <!-- Box 2: Visual & Peak Grouping Options -->
+            <div class="spectrum-control-box display-box">
+              <div class="box-head">
+                <h5>Spectrum Display &amp; Visual Grouping</h5>
+              </div>
+              <div class="form-group" style="margin-bottom:0.75rem;">
+                <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                  <input type="checkbox" id="nmr-group-peaks-toggle">
+                  <span><strong>Visual Peak Grouping</strong> (Coalesce near-degenerate shifts)</span>
+                </label>
+                <span class="field-hint">Coalesces visual sticks within tolerance while strictly preserving underlying atomic assignments.</span>
+              </div>
+              <div class="form-group" id="nmr-group-tol-wrap" style="display:none;">
+                <label for="nmr-group-tol">Grouping Tolerance Δδ (ppm):</label>
+                <input type="number" id="nmr-group-tol" class="form-input" value="0.02" step="0.005" min="0.001" max="1.0">
+              </div>
+              <div class="form-group" style="margin-top:0.5rem;">
+                <label>Axis Convention:</label>
+                <span style="font-size:0.82rem; color:var(--text-muted); display:block;">
+                  Conventional NMR standard: <strong>High ppm (Left) ➔ Low ppm (Right)</strong> for chemical shift (δ).
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Peak & Atomic Assignment Table -->
+          <div class="card-title-row" style="margin-top: 1.5rem; margin-bottom: 0.5rem;">
+            <h5>Calculated Peak &amp; Atomic Assignment Directory</h5>
+            <span class="card-subtitle" id="nmr-peaks-count" style="font-size: 0.85rem; color: var(--text-muted);">
+              0 signals assigned
+            </span>
+          </div>
+          <div class="transitions-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Signal / Peak #</th>
+                  <th>Atom</th>
+                  <th>Element</th>
+                  <th>Isotope</th>
+                  <th>Isotropic Shielding (σ, ppm)</th>
+                  <th>Chemical Shift (δ, ppm)</th>
+                  <th>Anisotropy (ppm)</th>
+                  <th>Assignment</th>
+                  <th>Coordinates (x, y, z)</th>
+                </tr>
+              </thead>
+              <tbody id="engine-nmr-tbody">
+                <tr><td colspan="9" style="text-align: center; color: var(--text-muted);">No calculated NMR shielding data loaded.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ---- Reaction Thermochemistry Panel ---- -->
+    <div id="thermo" class="ws-panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Thermodynamics</span>
+        <h2>Reaction Thermochemistry &amp; Energetics</h2>
+        <p>Calculate reaction enthalpy ΔH°, Gibbs free energy ΔG°, entropy ΔS°, and equilibrium constant K<sub>eq</sub> from parsed ORCA outputs with stoichiometric validation.</p>
+      </div>
+
+      <div class="engine-input-card">
+        <form id="thermo-form" class="thermo-form">
+          <!-- Live Chemical Equation Banner -->
+          <div class="thermo-eq-preview-banner">
+            <span class="eq-preview-label">Chemical Reaction Equation:</span>
+            <div id="thermo-live-equation" class="thermo-live-eq">2 H2 + O2 ➔ 2 H2O</div>
+            <input type="text" id="thermo-equation" name="equation" value="2 H2 + O2 -> 2 H2O" class="hidden">
+          </div>
+
+          <!-- Quick Archive Batch Upload Option -->
+          <div class="thermo-archive-dropzone-box" id="thermo-archive-dropzone">
+            <span class="archive-drop-icon">📦</span>
+            <div class="archive-drop-info">
+              <strong>Quick Batch Upload (ZIP / RAR Archive):</strong>
+              <span>Drop an archive containing all species ORCA output files - we'll auto-extract and match them to your reaction.</span>
+            </div>
+            <input type="file" id="thermo-archive-file-input" accept=".zip,.rar,.tar.gz,.tgz,.tar" class="hidden">
+            <button type="button" id="thermo-archive-browse-btn" class="btn btn-outline btn-small">Select Archive File</button>
+            <span id="thermo-archive-status" class="prop-badge badge-neutral hidden"></span>
+          </div>
+
+          <!-- Two-Box Dedicated Layout: Reactants & Products -->
+          <div class="thermo-two-column-boxes">
+            <!-- Box 1: Reactants -->
+            <div class="thermo-species-box thermo-reactants-box">
+              <div class="species-box-header">
+                <div class="box-header-title">
+                  <span class="box-badge-icon">🧪</span>
+                  <h4>Reactants</h4>
+                </div>
+                <button type="button" id="thermo-add-reactant-btn" class="btn btn-ghost btn-small">+ Add Reactant</button>
+              </div>
+              <p class="species-box-desc">Define reactant species, stoichiometric coefficients, and attach their ORCA output files or Kaggle jobs.</p>
+
+              <div id="thermo-reactants-list" class="species-cards-list"></div>
+            </div>
+
+            <!-- Box 2: Products -->
+            <div class="thermo-species-box thermo-products-box">
+              <div class="species-box-header">
+                <div class="box-header-title">
+                  <span class="box-badge-icon">⚗️</span>
+                  <h4>Products</h4>
+                </div>
+                <button type="button" id="thermo-add-product-btn" class="btn btn-ghost btn-small">+ Add Product</button>
+              </div>
+              <p class="species-box-desc">Define product species, stoichiometric coefficients, and attach their ORCA output files or Kaggle jobs.</p>
+
+              <div id="thermo-products-list" class="species-cards-list"></div>
+            </div>
+          </div>
+
+          <!-- Hidden placeholder for legacy test selectors -->
+          <div id="thermo-species-inputs" class="hidden">
+            <div id="thermo-species-list"></div>
+          </div>
+
+          <!-- Optional: Custom Gas-Phase Thermodynamic Conditions (Absence of Solvation) -->
+          <details class="thermo-custom-conditions-disclosure">
+            <summary>🌡️ Optional: Calculate at Custom Temperature &amp; Pressure (Gas Phase / Solvation-Free RRHO)</summary>
+            <div class="thermo-custom-conditions-panel">
+              <p class="field-hint" style="margin-bottom:0.75rem;">
+                By default, the platform extracts and applies the exact thermodynamic conditions (<em>T</em>, <em>P</em>) reported directly in your ORCA output files.
+                If you wish to recalculate the Ideal Gas / Rigid-Rotor Harmonic Oscillator (RRHO) statistical thermochemistry at a non-standard temperature or pressure (in the absence of implicit solvation models), enable custom conditions below:
+              </p>
+              <div class="custom-conditions-toggle-row">
+                <label class="toggle-control">
+                  <input type="checkbox" id="thermo-enable-custom-conditions">
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-label"><strong>Enable Custom Gas-Phase Temperature &amp; Pressure</strong></span>
+                </label>
+              </div>
+              <div class="thermo-params-row" id="thermo-custom-params-inputs" style="opacity: 0.6; pointer-events: none;">
+                <div class="form-row">
+                  <label for="thermo-temp">Custom Temperature (K)</label>
+                  <input type="number" id="thermo-temp" value="298.15" step="any" min="0" placeholder="e.g. 298.15">
+                </div>
+                <div class="form-row">
+                  <label for="thermo-pressure">Custom Pressure (atm)</label>
+                  <input type="number" id="thermo-pressure" value="1.0" step="any" min="0" placeholder="e.g. 1.0">
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <div class="thermo-actions-bar">
+            <button type="submit" id="thermo-submit-btn" class="btn btn-primary btn-large"><span class="btn-label">⚡ Calculate Reaction Energetics</span></button>
+          </div>
+        </form>
+      </div>
+
+      <div id="thermo-loading" class="loading-row hidden"><span class="spinner"></span> Parsing species and evaluating reaction thermodynamics…</div>
+      <div id="thermo-error" class="alert alert-error hidden"></div>
+
+      <div id="thermo-result" class="thermo-result-card hidden">
+        <div class="card-title-row">
+          <h3 id="thermo-eq-display">-</h3>
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <span id="thermo-conditions-badge" class="prop-badge badge-neutral">Conditions: ORCA Output</span>
+            <span id="thermo-balance-badge" class="prop-badge badge-success">Stoichiometrically Balanced</span>
+          </div>
+        </div>
+
+        <div class="thermo-metrics-grid">
+          <div class="thermo-tile highlight-tile">
+            <span class="thermo-label">Gibbs Free Energy (ΔG°)</span>
+            <span class="thermo-val" id="thermo-val-dg-kcal"> - kcal/mol</span>
+            <span class="thermo-sub" id="thermo-val-dg-kj"> - kJ/mol</span>
+          </div>
+          <div class="thermo-tile">
+            <span class="thermo-label">Enthalpy Change / BDE (ΔH°)</span>
+            <span class="thermo-val" id="thermo-val-dh-kcal"> - kcal/mol</span>
+            <span class="thermo-sub" id="thermo-val-dh-kj"> - kJ/mol</span>
+          </div>
+          <div class="thermo-tile">
+            <span class="thermo-label">Entropy Change (ΔS°)</span>
+            <span class="thermo-val" id="thermo-val-ds"> - cal/(mol·K)</span>
+            <span class="thermo-sub" id="thermo-val-ds-si"> - J/(mol·K)</span>
+          </div>
+          <div class="thermo-tile">
+            <span class="thermo-label">Equilibrium Constant (K<sub>eq</sub>)</span>
+            <span class="thermo-val mono" id="thermo-val-keq">-</span>
+            <span class="thermo-sub">exp(-ΔG° / RT)</span>
+          </div>
+          <div class="thermo-tile">
+            <span class="thermo-label">Electronic + ZPE (ΔE<sub>0</sub> / BDE<sub>0K</sub>)</span>
+            <span class="thermo-val mono" id="thermo-val-de0"> - kcal/mol</span>
+            <span class="thermo-sub">0 K Energy</span>
+          </div>
+          <div class="thermo-tile">
+            <span class="thermo-label">Pure Electronic Energy (ΔE<sub>el</sub>)</span>
+            <span class="thermo-val mono" id="thermo-val-deel"> - kcal/mol</span>
+            <span class="thermo-sub">Bottom of well</span>
+          </div>
+        </div>
+
+        <!-- Species Thermodynamic Energetics Table -->
+        <div class="thermo-species-breakdown-card">
+          <h4>Species Individual Energetics &amp; Thermodynamic Breakdown</h4>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Role</th>
+                  <th>Coeff</th>
+                  <th>Species</th>
+                  <th>Electronic Energy (E<sub>el</sub>)</th>
+                  <th>Enthalpy (H)</th>
+                  <th>Gibbs Energy (G)</th>
+                  <th>Entropy (S)</th>
+                </tr>
+              </thead>
+              <tbody id="thermo-species-breakdown-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="thermo-consistency-warning" class="alert alert-warning hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== LEGAL / DISCLAIMER ============================== -->
+  <section id="legal-view" class="view">
+    <div class="panel-head">
+      <span class="panel-eyebrow">Legal</span>
+      <h2>Legal, Privacy &amp; Disclaimer</h2>
+      <p>What this site does and doesn't do, how it handles your data, and the notices a service used by people worldwide needs to cover - including for visitors in the EU/EEA/UK and the United States.</p>
+    </div>
+
+    <div class="legal-content">
+      <p class="legal-updated">Last updated: August 2026 · Repository: <a href="https://github.com/abd19990044-commits/chemistry-web-lab" target="_blank" rel="noopener noreferrer" style="color: var(--primary);">https://github.com/abd19990044-commits/chemistry-web-lab</a></p>
+
+      <div class="legal-note-box">
+        <strong>Important Note About Your Data </strong>  <strong>🔒</strong> Your security is important to us! This site is designed to work without saving any information. <span class="legal-placeholder"></span>  All your data is instantly and automatically deleted as soon as you finish. We never see or store your data.
+      </div>
+
+      <div class="legal-toc">
+        <h4>On this page</h4>
+        <ol>
+          <li><a href="#legal-acceptance">Acceptance of these terms</a></li>
+          <li><a href="#legal-service">What this site is (and isn't)</a></li>
+          <li><a href="#legal-orca-license">ORCA &amp; third-party software</a></li>
+          <li><a href="#legal-kaggle">Your Kaggle account &amp; credentials</a></li>
+          <li><a href="#legal-warranty">No warranty; accuracy of results</a></li>
+          <li><a href="#legal-liability">Limitation of liability</a></li>
+          <li><a href="#legal-gdpr">Privacy notice - EU / EEA / UK</a></li>
+          <li><a href="#legal-us-privacy">Privacy notice - United States</a></li>
+          <li><a href="#legal-cookies">Cookies &amp; local storage</a></li>
+          <li><a href="#legal-children">Children's privacy</a></li>
+          <li><a href="#legal-third-parties">Third-party services</a></li>
+          <li><a href="#legal-export">Export control &amp; sanctions</a></li>
+          <li><a href="#legal-indemnity">Indemnification</a></li>
+          <li><a href="#legal-law">Governing law &amp; disputes</a></li>
+          <li><a href="#legal-changes">Changes to this page</a></li>
+          <li><a href="#legal-contact">Contact</a></li>
+        </ol>
+      </div>
+
+      <div class="legal-section" id="legal-acceptance">
+        <h3>1. Acceptance of these terms</h3>
+        <p>By using Chemistry Lab ("the Site", "we", "us"), you agree to this page in full. If you don't agree, please don't use the Site. For simplicity, this single page combines a general Disclaimer, Terms of Use, and Privacy Notice.</p>
+      </div>
+
+      <div class="legal-section" id="legal-service">
+        <h3>2. What this site is (and isn't)</h3>
+        <p>ORCA Web Lab is a proprietary source-available scientific suite developed and owned solely by <strong>ABDULSALAM S. HASAN</strong> (Mosul, Iraq) to provide computational chemists, researchers, and students with robust, accessible quantum chemistry workflows and analysis tools. Permitted non-commercial access is provided free of charge under the ORCA Web Lab Academic and Non-Commercial License v1.1. It has no paid public tiers, runs no advertising, and does not monetize user data - see Sections 8 &amp; 9.</p>
+        <p>It's a platform for exploring and drawing chemical structures, generating ORCA input files, and - if you choose - packaging and orchestrating calculations on your own Kaggle account, provided for academic, educational, and non-commercial research use.</p>
+        <p>It is <strong>not</strong> a substitute for professional scientific, safety, medical, or legal judgment. No output should be relied on for safety-critical decisions - for example, handling hazardous compounds - without independent verification by a qualified professional.</p>
+      </div>
+
+      <div class="legal-section" id="legal-orca-license">
+        <h3>3. ORCA &amp; third-party software</h3>
+        <p>This Site does not include, host, or distribute the ORCA program in any form. ORCA is proprietary software distributed by FACCTs GmbH under its own End User License Agreement (EULA), obtained directly from the official ORCA Forum after your own registration.</p>
+        <p>If you use the Kaggle Launcher, <strong>you</strong> supply your own licensed copy of ORCA (as a private Kaggle Dataset, or via a link you provide), and <strong>you</strong> are solely responsible for complying with its license - including the restriction to academic/personal, non-commercial use and the prohibition on redistribution. We take no responsibility for, and have no visibility into, how or where you obtained your copy.</p>
+      </div>
+
+      <div class="legal-section" id="legal-kaggle">
+        <h3>4. Your Kaggle account &amp; credentials</h3>
+        <p>The Kaggle Launcher submits and manages jobs using <strong>your own</strong> Kaggle account and its compute quota - never ours. Concretely:</p>
+        <ul>
+          <li>Your Kaggle username and API key/token are sent to our server only at the moment of a sign-in, submission, status-check, download, or delete request.</li>
+          <li>They're held only for the duration of that single request - so the official Kaggle command-line tool can act on your behalf - and are deleted immediately afterward. We do not keep a database of user credentials.</li>
+          <li>If you tick "remember me", your username and key/token are saved only inside your own browser's local storage, on your own device. We have no access to that copy; clearing it, or using "Sign out", removes it.</li>
+          <li>Job results are streamed directly from Kaggle's own servers to your browser; we don't keep a copy of your input files, coordinates, or results once a request finishes.</li>
+          <li>Any compute time, storage, or other usage on Kaggle is billed against, and governed by the terms of, your own Kaggle account - see Kaggle's own <a href="https://www.kaggle.com/terms" target="_blank" rel="noopener">Terms of Use</a>.</li>
+        </ul>
+      </div>
+
+      <div class="legal-section" id="legal-warranty">
+        <h3>5. No warranty; accuracy of results</h3>
+        <p>The Site - including all structures, properties, generated input files, and computed results - is provided <strong>"as is" and "as available,"</strong> without warranties of any kind, express or implied, including accuracy, completeness, merchantability, fitness for a particular purpose, or non-infringement.</p>
+        <p>Compound data is pulled live from third-party sources (PubChem, Wikipedia); ORCA calculations run on infrastructure and software we don't control. We don't guarantee any of it is correct, current, or suitable for your purposes - always verify independently before relying on it, especially for publication, safety, or regulatory decisions.</p>
+      </div>
+
+      <div class="legal-section" id="legal-liability">
+        <h3>6. Limitation of liability</h3>
+        <p>To the fullest extent permitted by applicable law, the Site's operator will not be liable for indirect, incidental, special, consequential, or punitive damages, or for lost data, compute costs, research time, or profits, arising from your use of (or inability to use) the Site - including any action taken based on it, any issue with your Kaggle account (quota usage, suspension, or billing), or any dispute over your use of ORCA or another third party's software.</p>
+        <p>Nothing here limits liability that cannot lawfully be limited - for example, liability for death or personal injury caused by negligence, or for fraud, under the law that applies to you.</p>
+      </div>
+
+      <div class="legal-section" id="legal-gdpr">
+        <h3>7. Privacy notice - EU / EEA / UK</h3>
+        <p>If you're in the European Economic Area, the UK, or Switzerland, the following applies under the GDPR and equivalent UK/Swiss law.</p>
+        <h4>Data controller</h4>
+        <p><strong>ABDULSALAM S. HASAN</strong>, academic developer operating this Site from Mosul, Iraq, is the data controller for personal data processed directly by this Site - separate from Kaggle, Google, PubChem, or other third parties you interact with, who act as independent controllers for their own services. Contact: <a href="mailto:abd.19990044@gmail.com">abd.19990044@gmail.com</a>.</p>
+        <h4>What we process, and why</h4>
+        <ul>
+          <li><strong>Kaggle credentials</strong> - processed transiently to carry out your explicit request (sign in, submit, check status, download, delete). Basis: performance of your request (Art. 6(1)(b)) and our legitimate interest in operating the feature (Art. 6(1)(f)).</li>
+          <li><strong>Google account info</strong> (name, email, profile photo) - only if you choose to sign in with Google; used solely to show your name/photo in the header. Basis: consent (Art. 6(1)(a)), given by starting that sign-in.</li>
+          <li><strong>Compound/reaction queries</strong> - sent to PubChem/Wikipedia to fetch structures and data; not linked to your identity by us. Basis: legitimate interest in providing the tool (Art. 6(1)(f)).</li>
+          <li><strong>Basic technical interactions</strong> - processed instantly to serve the webpage and deleted immediately. We absolutely do not retain server logs tracking your IP address or activity.</li>
+        </ul>
+        <h4>Retention</h4>
+        <p>We operate on a strict zero-retention policy. We do not keep a server-side database of your credentials, jobs, results, or technical logs. All data is processed in real-time and immediately discarded.</p>
+        <h4>International transfers</h4>
+        <p>Because the Site relies on Kaggle, Google, PubChem/NCBI, and hosting infrastructure that may sit outside the EEA/UK (including the United States), your data may be transferred to and processed in those countries as part of using those features, under those providers' own safeguards (see Section 11).</p>
+        <h4>Your rights</h4>
+        <p>Depending on where you live, you have the right to request access to, correction of, or deletion of your personal information, and to opt out of its sale or sharing. <strong>However, because we operate on a strict zero-retention policy, we do not hold, store, or sell any of your personal data.</strong> Therefore, there is no data to return, correct, or delete. If you have any questions regarding this policy, contact <a href="mailto:abd.19990044@gmail.com">abd.19990044@gmail.com</a>.</p>
+      </div>
+
+      <div class="legal-section" id="legal-us-privacy">
+        <h3>8. Privacy notice - United States</h3>
+        <p>For residents of California and other U.S. states with comprehensive privacy laws (CCPA/CPRA and similar state statutes), here's a summary in those laws' terms.</p>
+        <h4>Categories of personal information</h4>
+        <p>Identifiers (username; email/name/photo if you sign in with Google) are processed only in real-time and are never stored. We do not retain your internet/network activity, IP addresses, or technical logs. We do not collect or store sensitive personal information as defined by these laws.</p>
+        <h4>No sale or sharing</h4>
+        <p>We do not sell or share (as those terms are defined under CCPA/CPRA) your personal information, and we don't use it for cross-context behavioral advertising - there is no advertising on this Site.</p>
+        <h4>Your rights</h4>
+        <p>Depending on where you live, you have the right to request access to, correction of, or deletion of your personal information, and to opt out of its sale or sharing. <strong>However, because we operate on a strict zero-retention policy, we do not hold, store, or sell any of your personal data.</strong> Therefore, there is no data to return, correct, or delete. If you have any questions regarding this policy, contact <a href="mailto:abd.19990044@gmail.com">abd.19990044@gmail.com</a>.</p>
+      </div>
+
+      <div class="legal-section" id="legal-cookies">
+        <h3>9. Cookies &amp; local storage</h3>
+        <p>This Site does not use advertising or analytics cookies. It uses only what's strictly needed to function:</p>
+        <ul>
+          <li>A <strong>session cookie</strong>, only if Google Sign-In is enabled and you use it, to keep you signed in during your visit.</li>
+          <li><strong>Browser local storage</strong> (not a cookie, but a similar on-device technology) to optionally remember your Kaggle username/key and your job list on this device, only if you tick "remember me" - see Section 4.</li>
+        </ul>
+        <p>You can clear either at any time through your browser settings, or with the "Sign out" buttons on the Site.</p>
+      </div>
+
+      <div class="legal-section" id="legal-children">
+        <h3>10. Children's privacy</h3>
+        <p>This Site is a technical/scientific tool not directed at children. It isn't intended for use by anyone under 16. We absolutely do not retain, store, or keep any personal data or information for children, nor do we retain any data for any other users. All information is instantly deleted upon completing your session. If you have any concerns, contact <a href="mailto:abd.19990044@gmail.com">abd.19990044@gmail.com</a>.</p>
+      </div>
+
+      <div class="legal-section" id="legal-third-parties">
+        <h3>11. Third-party services</h3>
+        <p>Using this Site involves several independent services, each governed by its own terms and privacy policy, which we encourage you to read:</p>
+        <ul>
+          <li><strong>Kaggle</strong> (job execution) - <a href="https://www.kaggle.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>, <a href="https://www.kaggle.com/terms" target="_blank" rel="noopener">Terms of Use</a></li>
+          <li><strong>ORCA / FACCTs GmbH</strong> (the software you supply) - see the EULA on the <a href="https://orcaforum.kofo.mpg.de/" target="_blank" rel="noopener">ORCA Forum</a></li>
+          <li><strong>Google Sign-In</strong> (optional identity display) - <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a></li>
+          <li><strong>PubChem / NCBI</strong> (U.S. National Library of Medicine - compound data)</li>
+          <li><strong>Wikipedia / Wikimedia Foundation</strong> (compound summaries)</li>
+          <li>This Site's hosting infrastructure (e.g. Hugging Face Spaces, if deployed there) - <a href="https://huggingface.co/privacy" target="_blank" rel="noopener">Hugging Face Privacy Policy</a></li>
+        </ul>
+        <p>We don't control these services and aren't responsible for their content, availability, or data practices.</p>
+      </div>
+
+      <div class="legal-section" id="legal-export">
+        <h3>12. Export control &amp; sanctions</h3>
+        <p>You're responsible for complying with any export control, sanctions, or similar laws that apply to you - including those of the United States, the European Union, and your own country - when accessing this Site or using ORCA, Kaggle, or any other software or service through it. Don't use the Site if you're located in, or on a government sanctions/denied-party list of, a jurisdiction where doing so would violate applicable law.</p>
+      </div>
+
+      <div class="legal-section" id="legal-indemnity">
+        <h3>13. Indemnification</h3>
+        <p>You agree to indemnify and hold harmless the Site's operator from claims, damages, losses, or expenses (including reasonable legal fees) arising from your use of the Site, your violation of this page, or your violation of any third party's rights - including ORCA's or Kaggle's own terms.</p>
+      </div>
+
+      <div class="legal-section" id="legal-law">
+        <h3>14. Governing law &amp; disputes</h3>
+        <p>This page intentionally does not designate a specific governing law or court. If a dispute ever arose, the applicable law would instead be worked out under ordinary conflict-of-laws rules based on where the parties are - less predictable than naming one upfront. If you're a consumer in the EU/EEA, UK, or a U.S. state, the mandatory consumer-protection rules of your own place of residence apply regardless of any choice made here.</p>
+        <p><span class="legal-placeholder"> Iraq </span></p>
+      </div>
+
+      <div class="legal-section" id="legal-changes">
+        <h3>15. Changes to this page</h3>
+        <p>We may update this page from time to time; the "Last updated" date at the top reflects the latest revision. Continuing to use the Site after a change means you accept the update.</p>
+      </div>
+
+      <div class="legal-section" id="legal-contact">
+        <h3>16. Contact</h3>
+        <p>Questions, privacy requests, licensing, or legal notices: <a href="mailto:abd.19990044@gmail.com">abd.19990044@gmail.com</a> · WhatsApp: <a href="https://wa.me/9647715541279" target="_blank" rel="noopener noreferrer">+9647715541279</a>.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
+<footer class="site-footer">
+  <p>ORCA Web Lab - An open-access academic quantum chemistry research platform. Independent academic project, not affiliated with ORCA/FACCTs, Kaggle, or Google.</p>
+  <p>Developed by <strong>ABDULSALAM S. HASAN</strong> · Mosul, Iraq</p>
+  <div class="footer-links">
+    <a href="https://github.com/abd19990044-commits/chemistry-web-lab" target="_blank" rel="noopener noreferrer" class="link-btn">GitHub Repository</a>
+    <a href="/download/manual" id="footer-download-manual" class="link-btn" download>📄 Academic Manual (.docx)</a>
+    <button type="button" id="footer-cite-btn" class="link-btn" data-open-citation="true" onclick="document.getElementById('citation-modal')?.classList.remove('hidden')">Academic Citation Guide</button>
+    <button type="button" id="footer-license-btn" class="link-btn" onclick="document.getElementById('license-modal')?.classList.remove('hidden')">License &amp; Commercial Terms</button>
+    <a href="#" data-view-link="legal" class="link-btn">Legal, Privacy &amp; Disclaimer</a>
+  </div>
+</footer>
+
+
+<!-- ============================== ACADEMIC CITATION MODAL ============================== -->
+<div id="citation-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="citation-modal-title">
+  <div class="modal-window" style="max-width: 680px;">
+    <div class="modal-header">
+      <span class="modal-step-badge">Citation Guide</span>
+      <h3 id="citation-modal-title">How to Cite ORCA Web Lab</h3>
+      <button type="button" id="citation-modal-close" class="modal-close" aria-label="Close" onclick="document.getElementById('citation-modal')?.classList.add('hidden')">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+        If you use ORCA Web Lab in your research, computational modeling, or academic publications, please cite this platform and the underlying software packages:
+      </p>
+
+      <div style="margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+          <strong style="color: var(--primary);">BibTeX Entry</strong>
+          <button type="button" id="copy-bibtex-btn" class="btn btn-ghost btn-small" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">📋 Copy BibTeX</button>
+        </div>
+        <pre id="citation-bibtex" class="code-block mono small" style="background: var(--surface-sunken); padding: 0.75rem; border-radius: var(--radius-sm); user-select: all;">{% raw %}@software{Hasan2026OrcaWebLab,
+  author       = {Hasan, Abdulsalam S.},
+  title        = {{ORCA Web Lab: An Interactive Web-Based Computational Chemistry and Quantum Analysis Suite}},
+  year         = {2026},
+  version      = {1.0.0},
+  url          = {https://github.com/abd19990044-commits/chemistry-web-lab},
+  note         = {Academic and Non-Commercial Research Platform}
+}{% endraw %}</pre>
+
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+          <strong style="color: var(--primary);">ACS / Vancouver Chemistry Standard</strong>
+          <button type="button" id="copy-acs-btn" class="btn btn-ghost btn-small" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">📋 Copy ACS</button>
+        </div>
+        <p id="citation-acs" class="mono small" style="background: var(--surface-sunken); padding: 0.6rem; border-radius: var(--radius-sm); margin: 0; color: var(--text);">
+          Hasan, A. S. ORCA Web Lab, version 1.0.0; Advanced Quantum Chemical Modeling &amp; Spectroscopic Analysis Platform, 2026. https://github.com/abd19990044-commits/chemistry-web-lab
+        </p>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+          <strong style="color: var(--primary);">APA 7th Edition</strong>
+          <button type="button" id="copy-apa-btn" class="btn btn-ghost btn-small" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">📋 Copy APA</button>
+        </div>
+        <p id="citation-apa" class="mono small" style="background: var(--surface-sunken); padding: 0.6rem; border-radius: var(--radius-sm); margin: 0; color: var(--text);">
+          Hasan, A. S. (2026). ORCA Web Lab: An Interactive Web-Based Computational Chemistry Suite (Version 1.0.0) [Computer software]. https://github.com/abd19990044-commits/chemistry-web-lab
+        </p>
+      </div>
+
+      <details class="help-disclosure" style="margin-top: 1rem;">
+        <summary>📚 Underlying Scientific Packages (ORCA, RDKit, 3Dmol, MultiWfn)</summary>
+        <div class="help-body" style="font-size: 0.85rem; color: var(--text-muted);">
+          <ul style="padding-left: 1.2rem; margin: 0.5rem 0;">
+            <li><strong>ORCA:</strong> Neese, F. (2022). <em>WIREs Comput. Mol. Sci.</em>, 12(5), e1606. / Neese, F. et al. (2026). <em>ORCA 6.1 Package</em>.</li>
+            <li><strong>RDKit:</strong> Landrum, G. et al. (2026). <em>RDKit Open-Source Cheminformatics</em>.</li>
+            <li><strong>3Dmol.js:</strong> Rego, N., &amp; Koes, D. (2015). <em>Bioinformatics</em>, 31(8), 1322-1324.</li>
+            <li><strong>MultiWfn:</strong> Lu, T., &amp; Chen, F. (2012). <em>J. Comput. Chem.</em>, 33(5), 580-592.</li>
+          </ul>
+        </div>
+      </details>
+
+      <div class="modal-actions" style="margin-top: 1.25rem; justify-content: space-between;">
+        <a href="/download/manual" class="btn btn-primary btn-small" download>
+          📄 Download Full Academic Manual (.docx)
+        </a>
+        <button type="button" id="citation-modal-ok" class="btn btn-ghost btn-small" onclick="document.getElementById('citation-modal')?.classList.add('hidden')">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================== LICENSING & COMMERCIAL TERMS MODAL ============================== -->
+<div id="license-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="license-modal-title">
+  <div class="modal-window" style="max-width: 720px;">
+    <div class="modal-header">
+      <span class="modal-step-badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Licensing &amp; Legal</span>
+      <h3 id="license-modal-title">ORCA Web Lab Licensing &amp; Commercial Terms</h3>
+      <button type="button" id="license-modal-close" class="modal-close" aria-label="Close" onclick="document.getElementById('license-modal')?.classList.add('hidden')">✕</button>
+    </div>
+
+    <div class="modal-body" style="font-size: 0.92rem; line-height: 1.6;">
+      <div style="background: var(--surface-sunken); padding: 1rem 1.25rem; border-radius: var(--radius-sm); border-left: 4px solid #38bdf8; margin-bottom: 1.25rem;">
+        <h4 style="margin: 0 0 0.4rem 0; color: var(--primary);">Academic &amp; Non-Commercial License v1.1</h4>
+        <p style="margin: 0; color: var(--text-muted);">
+          ORCA Web Lab is proprietary source-available software authored and owned solely by <strong>Abdulsalam S. Hasan</strong>. It is free of charge for permitted academic, educational, personal, and non-commercial scientific research based on the <em>nature and purpose of the activity</em>. Source code is fully accessible for academic peer review and reproducibility.
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+        <div style="background: var(--panel); border: 1px solid var(--border); padding: 0.9rem; border-radius: var(--radius-sm);">
+          <strong style="display: block; color: var(--success); margin-bottom: 0.35rem;">✓ Permitted Non-Commercial Uses</strong>
+          <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.85rem; color: var(--text-muted);">
+            <li>Personal learning &amp; self-study</li>
+            <li>Classroom &amp; university teaching</li>
+            <li>Student theses &amp; dissertations</li>
+            <li>Independent academic research</li>
+            <li>Scientific benchmark studies</li>
+            <li>Local non-commercial adaptation</li>
+          </ul>
+        </div>
+        <div style="background: var(--panel); border: 1px solid var(--border); padding: 0.9rem; border-radius: var(--radius-sm);">
+          <strong style="display: block; color: var(--warning); margin-bottom: 0.35rem;">⚠ Requires Commercial License</strong>
+          <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.85rem; color: var(--text-muted);">
+            <li>Internal corporate R&amp;D (pharma/materials)</li>
+            <li>Sponsored commercial research</li>
+            <li>Commercial SaaS / hosted platforms</li>
+            <li>Fee-for-service / contract research</li>
+            <li>Integration into commercial products</li>
+            <li>White-labeling &amp; proprietary resale</li>
+          </ul>
+        </div>
+      </div>
+
+      <div style="background: rgba(30, 41, 59, 0.5); padding: 1rem 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 1.25rem;">
+        <h4 style="margin: 0 0 0.4rem 0; color: var(--accent);">Commercial Licensing &amp; Full IP Assignment</h4>
+        <p style="margin: 0 0 0.75rem 0; font-size: 0.88rem; color: var(--text-muted);">
+          The academic license grants permission to use the software and does <strong>not</strong> transfer copyright, title, or intellectual property rights. Commercial licenses, Enterprise deployments, and any potential full intellectual property assignment require a separate written agreement executed with Abdulsalam S. Hasan.
+        </p>
+        <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; font-size: 0.9rem;">
+          <div>
+            <strong>Email:</strong>
+            <a href="mailto:abd.19990044@gmail.com" style="color: var(--primary); text-decoration: underline; margin-left: 0.35rem;">abd.19990044@gmail.com</a>
+          </div>
+          <div>
+            <strong>WhatsApp:</strong>
+            <a href="https://wa.me/9647715541279" target="_blank" rel="noopener noreferrer" style="color: var(--success); text-decoration: underline; margin-left: 0.35rem;">+9647715541279</a>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size: 0.85rem; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 0.75rem;">
+        <p style="margin: 0 0 0.4rem 0;">
+          <strong>Third-Party Components &amp; ORCA Boundary:</strong> External libraries (RDKit, Flask, 3Dmol.js, etc.) remain subject to their respective open-source licenses. ORCA is proprietary software developed by Frank Neese / FACCTs GmbH; ORCA Web Lab does not bundle or distribute ORCA executables.
+        </p>
+        <p style="margin: 0;">
+          <strong>Copyright:</strong> Copyright &copy; 2026 Abdulsalam S. Hasan (Mosul, Iraq). All rights reserved.
+        </p>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 1.25rem; justify-content: space-between;">
+        <div style="display: flex; gap: 0.5rem;">
+          <a href="#" data-view-link="legal" class="btn btn-secondary btn-small" onclick="document.getElementById('license-modal')?.classList.add('hidden')">View Legal &amp; Disclaimer</a>
+        </div>
+        <button type="button" id="license-modal-ok" class="btn btn-ghost btn-small" onclick="document.getElementById('license-modal')?.classList.add('hidden')">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================== ORCA WIZARD MODAL ============================== -->
+<div id="orca-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="orca-modal-title">
+  <div class="modal-window">
+    <div class="modal-header">
+      <span id="orca-modal-step-badge" class="modal-step-badge">Step 1</span>
+      <h3 id="orca-modal-title">Select the molecular structure</h3>
+      <button type="button" id="orca-modal-close" class="modal-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body" id="orca-modal-body">
+      <!-- populated dynamically by app.js -->
+    </div>
+  </div>
+</div>
+
+<script id="orca-config" type="application/json">
+{
+  "calc_types": {{ calc_types | tojson }},
+  "composite_methods": {{ composite_methods | tojson }},
+  "dft_functionals": {{ dft_functionals | tojson }},
+  "mp2_variants": {{ mp2_variants | tojson }},
+  "ccsd_variants": {{ ccsd_variants | tojson }},
+  "ri_options": {{ ri_options | tojson }},
+  "basis_map": {{ basis_map | tojson }},
+  "dispersion_models": {{ dispersion_models | tojson }},
+  "solvation_models": {{ solvation_models | tojson }},
+  "solvents": {{ solvents | tojson }},
+  "scf_options": {{ scf_options | tojson }}
+}
+</script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=20260819a"></script>
+<script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
+<script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
+<script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>
+</body>
+</html>

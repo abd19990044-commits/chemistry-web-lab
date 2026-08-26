@@ -1,0 +1,28 @@
+{
+  "name": "orca-cloudflare-control-plane",
+  "version": "1.0.0",
+  "description": "ORCA Web Lab Cloudflare Control Plane (Workers + D1)",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "d1:migrate": "wrangler d1 migrations apply orca-control-plane-db --remote",
+    "d1:migrate:local": "wrangler d1 migrations apply orca-control-plane-db --local",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "orca",
+    "cloudflare-workers",
+    "d1",
+    "control-plane"
+  ],
+  "author": "ORCA Web Lab Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240903.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5",
+    "wrangler": "^3.75.0"
+  }
+}

@@ -1,0 +1,161 @@
+{
+  "schema_version": "orca-web-lab.1.0",
+  "dataset_version": "2026.1",
+  "record_type": "analysis_record",
+  "record_id": "an_sp_water_001",
+  "content_hash": "966ceabc12ac5ba1a68df25dbea71544268ce8795351ed8c8f6d887061de714e",
+  "split_group_key": "group_an_sp_wa",
+  "name": "Water DLPNO-CCSD(T) High-Precision Single-Point",
+  "created_at": "2026-08-24T21:48:21.517289+00:00",
+  "updated_at": "2026-08-25T12:17:14.260800+00:00",
+  "provenance": {
+    "source_type": "orca_analyzer",
+    "source_filename": "water_dlpno.out",
+    "source_job_id": null,
+    "source_result_manifest": null,
+    "result_sha256": null,
+    "source_url": null,
+    "application_version": "2026.1",
+    "orca_version": "6.1.0",
+    "parser_version": "2026.1",
+    "git_sha": null,
+    "generated_by": "ORCA Web Lab Canonical Normalizer",
+    "imported_from": null
+  },
+  "migration_report": {
+    "mapped_fields": [
+      "canonical_record_preserved"
+    ],
+    "transformed_fields": [],
+    "omitted_fields": [],
+    "missing_fields": [],
+    "warnings": [],
+    "unsupported_fields": []
+  },
+  "analysis_results": {
+    "analysis_type": "SP",
+    "status": "SUCCESS",
+    "single_point_energy_eh": -76.43892,
+    "zero_point_energy_eh": null,
+    "total_enthalpy_eh": null,
+    "gibbs_free_energy_eh": null,
+    "entropy_cal_mol_k": null,
+    "dipole_moment_debye": null,
+    "homo_ev": -12.61,
+    "lumo_ev": 2.1,
+    "homo_lumo_gap_ev": 14.71,
+    "converged": true,
+    "stationary_point_status": "MINIMUM",
+    "imaginary_frequencies_count": 0
+  },
+  "molecular_system": {
+    "system_id": "sys_an_sp_wa",
+    "name": "Water DLPNO-CCSD(T) High-Precision Single-Point",
+    "total_charge": 0,
+    "total_multiplicity": 1,
+    "stoichiometry_formula": null,
+    "fragments": [],
+    "species": [
+      {
+        "species_id": "sp_an_sp_wa_1",
+        "name": "Water DLPNO-CCSD(T) High-Precision Single-Point",
+        "formula": null,
+        "canonical_smiles": null,
+        "isomeric_smiles": null,
+        "inchi": null,
+        "inchikey": null,
+        "charge": 0,
+        "multiplicity": 1,
+        "atoms": [],
+        "bonds": [],
+        "geometry_refs": []
+      }
+    ]
+  },
+  "reaction": null,
+  "geometries": [],
+  "calculations": [
+    {
+      "calculation_id": "calc_an_sp_wa_1",
+      "calculation_type": "SP",
+      "status": "COMPLETED",
+      "input_parameters": {
+        "method": "DLPNO-CCSD(T)",
+        "basis": "def2-QZVPP",
+        "dispersion": "D3BJ",
+        "solvation": "None",
+        "solvent": "None",
+        "charge": 0,
+        "multiplicity": 1,
+        "temperature_k": null,
+        "pressure_atm": null,
+        "input_geometry_id": null
+      },
+      "analysis_record_id": "an_an_sp_wa",
+      "orca_version": "6.1.0",
+      "input_source": null,
+      "output_source": null
+    }
+  ],
+  "workflows": [],
+  "thermochemistry": {
+    "electronic_energy": {
+      "value": -76.43892,
+      "unit": "hartree",
+      "source_calculation_id": "calc_an_sp_wa_1",
+      "uncertainty": null
+    },
+    "zpe": null,
+    "thermal_correction": null,
+    "enthalpy": null,
+    "entropy": null,
+    "gibbs_free_energy": null,
+    "equilibrium_constant": null,
+    "temperature_k": null,
+    "pressure_atm": null,
+    "standard_state": "Gas Phase (1 atm)",
+    "stationary_point_status": "MINIMUM",
+    "composite_sources": {
+      "electronic_energy_source": null,
+      "zpe_source": null,
+      "vibrational_source": null,
+      "thermal_correction_source": null,
+      "entropy_source": null,
+      "geometry_source": null
+    }
+  },
+  "properties": {
+    "electronic": {
+      "homo_ev": -12.61,
+      "lumo_ev": 2.1,
+      "homo_lumo_gap_ev": 14.71,
+      "dipole_moment_debye": null
+    },
+    "thermodynamic": null,
+    "spectroscopic": null,
+    "reactivity_indices": {
+      "electronegativity_ev": null,
+      "chemical_hardness_ev": null,
+      "electrophilicity_index_ev": null
+    }
+  },
+  "spectroscopy": null,
+  "training_metadata": {
+    "task_type": "molecular_property_prediction",
+    "input_modality": "smiles",
+    "target_modality": "energy",
+    "label": null,
+    "label_type": "float",
+    "quality_flags": [
+      "missing_geometry"
+    ],
+    "split_hint": "train"
+  },
+  "data_quality": {
+    "validation_status": "partially_verified",
+    "completeness_score": 0.7,
+    "missing_fields": [],
+    "warnings": [],
+    "errors": []
+  }
+}

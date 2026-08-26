@@ -1,0 +1,328 @@
+{
+  "schema_version": "orca-web-lab.1.0",
+  "dataset_version": "2026.1",
+  "record_type": "analysis_record",
+  "record_id": "an_nap_smd_freq_001",
+  "content_hash": "b4a497e4fca87291984253d7fab548a110d63c4e6eedfbe0487b26b3b52d5256",
+  "split_group_key": "group_naproxen",
+  "name": "Naproxen SMD Ground State & Thermochemistry",
+  "created_at": "2026-08-25T12:17:13.663622+00:00",
+  "updated_at": "2026-08-25T12:17:13.663622+00:00",
+  "provenance": {
+    "source_type": "orca_analyzer",
+    "source_filename": "nap.out",
+    "source_job_id": null,
+    "source_result_manifest": null,
+    "result_sha256": null,
+    "source_url": null,
+    "application_version": "2026.1",
+    "orca_version": "6.1.0",
+    "parser_version": "2026.1",
+    "git_sha": null,
+    "generated_by": "ORCA Web Lab Canonical Normalizer",
+    "imported_from": null,
+    "source_artifacts": [
+      {
+        "artifact_id": "art_d1e2d24b_1",
+        "filename": "nap.out",
+        "artifact_type": "orca_output",
+        "storage_reference": "G:\\orca_engine\\data\\orcafile\\orca6.1\\nap.out",
+        "sha256": null,
+        "size_bytes": null
+      }
+    ]
+  },
+  "migration_report": {
+    "mapped_fields": [
+      "analysis_results",
+      "calculations",
+      "electronic_structure",
+      "source_artifacts",
+      "thermochemistry"
+    ],
+    "transformed_fields": [],
+    "omitted_fields": [],
+    "missing_fields": [],
+    "warnings": [],
+    "unsupported_fields": []
+  },
+  "data_quality": {
+    "validation_status": "verified",
+    "completeness_score": 0.8,
+    "calculation_status": "COMPLETED",
+    "termination_status": "NORMAL",
+    "termination_message": "****ORCA TERMINATED NORMALLY****",
+    "had_error_termination": false,
+    "error_count": 0,
+    "stationary_point_status": "MINIMUM",
+    "thermochemistry_reliability": "RELIABLE",
+    "is_transition_state": false,
+    "parser_status": "SUCCESS",
+    "scientific_validation_status": "VERIFIED",
+    "missing_fields": [],
+    "warnings": [],
+    "errors": []
+  },
+  "molecular_system": {
+    "system_id": "sys_d1e2d24b",
+    "name": "Naproxen SMD Ground State & Thermochemistry",
+    "total_charge": 0,
+    "total_multiplicity": 1,
+    "stoichiometry_formula": "C14H14O3",
+    "atoms_count": 31,
+    "fragments": [],
+    "species": [
+      {
+        "species_id": "sp_d1e2d24b_1",
+        "name": "Naproxen SMD Ground State & Thermochemistry",
+        "formula": "C14H14O3",
+        "canonical_smiles": null,
+        "isomeric_smiles": null,
+        "inchi": null,
+        "inchikey": null,
+        "charge": 0,
+        "multiplicity": 1,
+        "atoms": [],
+        "bonds": [],
+        "geometry_refs": []
+      }
+    ]
+  },
+  "geometries": [],
+  "reaction": null,
+  "calculations": [
+    {
+      "calculation_id": "calc_d1e2d24b_1",
+      "calculation_type": "OPT",
+      "status": "COMPLETED",
+      "input_parameters": {
+        "method": "B3LYP",
+        "basis": "def2-TZVP",
+        "dispersion": "None",
+        "solvation": "SMD",
+        "solvent": "None",
+        "charge": 0,
+        "multiplicity": 1,
+        "temperature_k": 298.15,
+        "pressure_atm": 1.0,
+        "input_geometry_id": null
+      },
+      "analysis_record_id": "an_d1e2d24b",
+      "orca_version": "6.1.0",
+      "input_source": null,
+      "output_source": null
+    }
+  ],
+  "workflows": [],
+  "analysis_results": {
+    "analysis_type": "OPT",
+    "status": "SUCCESS",
+    "single_point_energy_eh": -767.536960665877,
+    "zero_point_energy_eh": 0.24998355,
+    "zero_point_corrected_energy_eh": -767.286977115877,
+    "total_enthalpy_eh": -767.27076277,
+    "gibbs_free_energy_eh": -767.32833861,
+    "entropy_cal_mol_k": null,
+    "dipole_moment_debye": 2.746039174,
+    "homo_ev": -5.6987,
+    "lumo_ev": -1.2146,
+    "homo_lumo_gap_ev": 4.4841,
+    "converged": true,
+    "stationary_point_status": "MINIMUM",
+    "imaginary_frequencies_count": 0
+  },
+  "electronic_structure": {
+    "status": "calculated",
+    "electronic_energy": {
+      "value": -767.536960665877,
+      "unit": "hartree",
+      "semantic_type": "electronic_scf",
+      "source_calculation_id": "calc_d1e2d24b_1",
+      "uncertainty": null
+    },
+    "frontier_orbitals": {
+      "homo": {
+        "value": -5.6987,
+        "unit": "eV"
+      },
+      "lumo": {
+        "value": -1.2146,
+        "unit": "eV"
+      },
+      "homo_lumo_gap": {
+        "value": 4.4841,
+        "unit": "eV"
+      },
+      "alpha_homo": null,
+      "alpha_lumo": null,
+      "beta_homo": null,
+      "beta_lumo": null,
+      "orbitals_status": "restricted"
+    },
+    "conceptual_dft": {
+      "electronegativity": {
+        "value": 3.45665,
+        "unit": "eV"
+      },
+      "chemical_hardness": {
+        "value": 2.24205,
+        "unit": "eV"
+      },
+      "chemical_potential": {
+        "value": -3.45665,
+        "unit": "eV"
+      },
+      "chemical_softness": {
+        "value": 0.22301019156575458,
+        "unit": "eV^-1"
+      },
+      "electrophilicity_index": {
+        "value": 2.6646214898195844,
+        "unit": "eV"
+      },
+      "electrodonating_power": {
+        "value": 4.673202739819585,
+        "unit": "eV"
+      },
+      "electroaccepting_power": {
+        "value": 1.2165527398195848,
+        "unit": "eV"
+      },
+      "net_electrophilicity": {
+        "value": 5.88975547963917,
+        "unit": "eV"
+      },
+      "ionization_potential": {
+        "value": 5.6987,
+        "unit": "eV"
+      },
+      "electron_affinity": {
+        "value": 1.2146,
+        "unit": "eV"
+      }
+    },
+    "dipole_moment": {
+      "total_debye": 2.746039174,
+      "components_debye": null
+    },
+    "spin": {
+      "status": "not_applicable",
+      "s2_actual": null,
+      "s2_ideal": null,
+      "spin_contamination": null
+    }
+  },
+  "population_analysis": null,
+  "thermochemistry": {
+    "status": "calculated",
+    "electronic_energy": {
+      "value": -767.536960665877,
+      "unit": "hartree",
+      "source_calculation_id": "calc_d1e2d24b_1",
+      "semantic_type": "electronic_scf",
+      "uncertainty": null
+    },
+    "zero_point_energy": {
+      "value": 0.24998355,
+      "unit": "hartree",
+      "source_calculation_id": "calc_d1e2d24b_1",
+      "uncertainty": null
+    },
+    "zpe": {
+      "value": 0.24998355,
+      "unit": "hartree",
+      "source_calculation_id": "calc_d1e2d24b_1",
+      "uncertainty": null
+    },
+    "zero_point_corrected_energy": {
+      "value": -767.286977115877,
+      "unit": "hartree",
+      "formula": "E_electronic + ZPE",
+      "components": {
+        "electronic_energy": -767.536960665877,
+        "zero_point_energy": 0.24998355
+      }
+    },
+    "thermal_correction": {
+      "value": 0.01621434587696058,
+      "unit": "hartree",
+      "source_calculation_id": "calc_d1e2d24b_1",
+      "uncertainty": null
+    },
+    "enthalpy": {
+      "value": -767.27076277,
+      "unit": "hartree",
+      "source_calculation_id": "calc_d1e2d24b_1",
+      "uncertainty": null
+    },
+    "entropy": null,
+    "entropy_term_ts": {
+      "value": 0.05757584,
+      "unit": "hartree",
+      "source_calculation_id": "calc_d1e2d24b_1",
+      "uncertainty": null
+    },
+    "entropy_correction_minus_ts": {
+      "value": -0.05757584,
+      "unit": "hartree",
+      "source_calculation_id": "calc_d1e2d24b_1",
+      "uncertainty": null
+    },
+    "gibbs_free_energy": {
+      "value": -767.32833861,
+      "unit": "hartree",
+      "source_calculation_id": "calc_d1e2d24b_1",
+      "uncertainty": null
+    },
+    "equilibrium_constant": null,
+    "temperature_k": 298.15,
+    "pressure_atm": 1.0,
+    "standard_state": "Gas Phase (1 atm)",
+    "stationary_point_status": "MINIMUM",
+    "numerical_consistency": {
+      "e0_relation_valid": true,
+      "e0_delta_eh": 0.0,
+      "gibbs_relation_valid": true,
+      "gibbs_delta_eh": 1.1368683772161603e-13,
+      "warnings": []
+    },
+    "composite_sources": {
+      "electronic_energy_source": null,
+      "zpe_source": null,
+      "vibrational_source": null,
+      "thermal_correction_source": null,
+      "entropy_source": null,
+      "geometry_source": null
+    }
+  },
+  "vibrational_spectroscopy": null,
+  "electronic_spectroscopy": null,
+  "nmr_spectroscopy": null,
+  "properties": {
+    "electronic": {
+      "homo_ev": -5.6987,
+      "lumo_ev": -1.2146,
+      "homo_lumo_gap_ev": 4.4841,
+      "dipole_moment_debye": 2.746039174
+    },
+    "thermodynamic": null,
+    "spectroscopic": null,
+    "reactivity_indices": {
+      "electronegativity_ev": 3.45665,
+      "chemical_hardness_ev": 2.24205,
+      "electrophilicity_index_ev": 2.6646214898195844
+    }
+  },
+  "spectroscopy": null,
+  "training_metadata": {
+    "task_type": "molecular_property_prediction",
+    "input_modality": "smiles",
+    "target_modality": "energy",
+    "label": -767.32833861,
+    "label_type": "float",
+    "quality_flags": [
+      "missing_geometry"
+    ],
+    "split_hint": "train"
+  }
+}

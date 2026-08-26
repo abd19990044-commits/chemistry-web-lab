@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orca-cloudflare-control-plane",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-09-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "CONTROL_PLANE_PROJECT_ID": "orca-web-lab",
+    "CONTROL_PLANE_NAMESPACE": "production"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "orca-control-plane-db",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

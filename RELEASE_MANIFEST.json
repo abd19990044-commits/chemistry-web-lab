@@ -1,0 +1,1472 @@
+{
+  "schema_version": "orca-web-lab.release-manifest.v1.0",
+  "application_name": "orca-web-lab",
+  "version": "1.0.0",
+  "release_type": "github-source-release",
+  "package_mode": "RELEASE_FROM_COMMIT",
+  "source_type": "commit",
+  "source_git_state": "clean_commit",
+  "source_git_sha": "d714eaa75d7ba800e29037f4408a1ec4ff0872e7",
+  "source_git_dirty": false,
+  "package_tree_hash": "eed22703b23f0b7d755eca7d402e5093a9613d991250904766a8ba811c4583d6",
+  "generated_at": "2026-08-26T00:23:30Z",
+  "file_count": 291,
+  "total_size_bytes": 28239162,
+  "runtime_critical_files": {
+    ".dockerignore": {
+      "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
+      "size_bytes": 667,
+      "source_origin": "repo_source"
+    },
+    ".env.example": {
+      "sha256": "83912c6ed8a1efd3cfdfa393f42ed6faa99616d54e274b6e7ec9e027c87ed934",
+      "size_bytes": 670,
+      "source_origin": "package_metadata"
+    },
+    ".github/workflows/ci.yml": {
+      "sha256": "6d85ccef5dce432282d8e84bedbd5af5ee3c12684f15d5042de3626334e94705",
+      "size_bytes": 5033,
+      "source_origin": "repo_source"
+    },
+    ".gitignore": {
+      "sha256": "9c156f16da28dbfb0a69f340b7fd4dc7283b99fc46b6ce939877f8c64e47a185",
+      "size_bytes": 1007,
+      "source_origin": "repo_source"
+    },
+    "app.py": {
+      "sha256": "223376ee196a9ea744d1d54b72d04804b138d9cd347e36c749c65f1f5f54e83c",
+      "size_bytes": 124516,
+      "source_origin": "repo_source"
+    },
+    "ARCHITECTURE.md": {
+      "sha256": "a50d3a2703d48a159a61037d46fea6a2279d0b3a6bf79bb9bc307675c6656f8b",
+      "size_bytes": 48949,
+      "source_origin": "repo_source"
+    },
+    "benchmarks/benzene_tddft.out": {
+      "sha256": "2510aaa519c6fe573da8436020801ca8bc2d9040b442f045f12802300a103e7c",
+      "size_bytes": 1551,
+      "source_origin": "repo_source"
+    },
+    "benchmarks/water_sp_freq.out": {
+      "sha256": "a8c69da119edc8a2de9a4158a6cc7111ce015380a97e1810e9609ee0d1d9e63e",
+      "size_bytes": 3095,
+      "source_origin": "repo_source"
+    },
+    "chem_core/__init__.py": {
+      "sha256": "488eff6348efaf650c41e1a7f00643ad3d1519ffd40ddc286f45b458771741d0",
+      "size_bytes": 1898,
+      "source_origin": "repo_source"
+    },
+    "chem_core/drawing.py": {
+      "sha256": "a8fdc421bad6caf72fc27a4f0770e4ee99c9660327287ecd05a62aa0d896712c",
+      "size_bytes": 4271,
+      "source_origin": "repo_source"
+    },
+    "chem_core.py": {
+      "sha256": "81fb0780dde6d48a060b2cd9856fb74eb752ca2d349998c05c75a6a4ffd15dd7",
+      "size_bytes": 77054,
+      "source_origin": "repo_source"
+    },
+    "CITATION.cff": {
+      "sha256": "21fe49dd33fbf58e7ec1cd6f2e6deaa9fce06f81393e477135dfdd0abaefe13f",
+      "size_bytes": 1121,
+      "source_origin": "repo_source"
+    },
+    "cloudflare-control-plane/.dev.vars.example": {
+      "sha256": "124e38e87a6f88674df2a16539913398f4f40479708700e51e568f0fe6ed3473",
+      "size_bytes": 299,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/.github/workflows/ci.yml": {
+      "sha256": "38a59b4d4e6e62cfe7a6bcf4dea517814b5c3c5f820da6caf7f75224b7725651",
+      "size_bytes": 464,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/.gitignore": {
+      "sha256": "15bfa5c94a6180b58045c29f84da917b57299ccc312f88aa49ba30e32373e600",
+      "size_bytes": 237,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/LICENSE": {
+      "sha256": "4327184cf49abafe975c1aeffd961001b7afa58175281a441fd7972f243ae023",
+      "size_bytes": 1633,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/migrations/0001_initial.sql": {
+      "sha256": "5b08a9dfd24129b0c72fec8e9bbad0b73de4dfda777496aaa3ba17f936421f8a",
+      "size_bytes": 4144,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/migrations/0002_credential_vault.sql": {
+      "sha256": "4b07039e700e65f7822be88c7d1b19b123c21db1cfc601e52f9b73f0e9a8d04a",
+      "size_bytes": 1126,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/package.json": {
+      "sha256": "d6ac2568bf4b12d5de2b0a82616bdc6849b8aad1609ace4b746146cb6e1dcd66",
+      "size_bytes": 770,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/README.md": {
+      "sha256": "4a03dc386c016faed1a9d8ee36b0c406da6d98013090cf61a10867cf124a89fb",
+      "size_bytes": 7531,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/SECURITY.md": {
+      "sha256": "89bcab548b1d7514fa1927035a05623f557ff9675c045a36e7ac2ccfb29c7a91",
+      "size_bytes": 1699,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/src/db.ts": {
+      "sha256": "083482547837cadb0ef8cdb7a126c8d8b93eded0de151f6cdca828433105ff52",
+      "size_bytes": 21186,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/src/errors.ts": {
+      "sha256": "d1e8c35fc7eb032138c8eaf7f9732fb86eaf9c689b3d8b39d0b548736ea8a9f6",
+      "size_bytes": 828,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/src/index.ts": {
+      "sha256": "9f24e8d46667e9ca38a6152e227f88ea05f5b788687b432fdcf32e0fc6fed452",
+      "size_bytes": 14274,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/src/security.ts": {
+      "sha256": "42dc0681758342c89a4aa810dbd7979dbbfdeb6a755a6cc94a0cb6b9783f9fe8",
+      "size_bytes": 3249,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/src/types.ts": {
+      "sha256": "a7eaeb8ce5d035dc845f005ea7e422b5489fd8259c1bf6d55672707fc3beeae4",
+      "size_bytes": 3116,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/tsconfig.json": {
+      "sha256": "74920202c9714e4c73d6b09e8b9f02fd68e335350bee9c3292c7fd6bbc99430a",
+      "size_bytes": 273,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/wrangler.jsonc": {
+      "sha256": "e68db5dd2577d1e8f4fdd767b0cdc7e670c6cf1bdff6eb63a556b41d9f9194d3",
+      "size_bytes": 568,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "CONTRIBUTING.md": {
+      "sha256": "b22bd111a317ef45385e42f208e933f21274ee80710fd23cd4cd22b808a93b36",
+      "size_bytes": 2144,
+      "source_origin": "repo_source"
+    },
+    "data/examples/analysis_freq.json": {
+      "sha256": "c765e672633730cb92bf7ee87815b54dd7762f6c5451f414daca69d4650b0b30",
+      "size_bytes": 12409,
+      "source_origin": "repo_source"
+    },
+    "data/examples/analysis_h2o_freq.json": {
+      "sha256": "c765e672633730cb92bf7ee87815b54dd7762f6c5451f414daca69d4650b0b30",
+      "size_bytes": 12409,
+      "source_origin": "repo_source"
+    },
+    "data/examples/analysis_ir.json": {
+      "sha256": "730a3345b5b4fb716dab264168afcf43c7d3edabc356d641861d83a408647c39",
+      "size_bytes": 4792,
+      "source_origin": "repo_source"
+    },
+    "data/examples/analysis_nap_freq.json": {
+      "sha256": "e6629777adaa2561b80911b327593e30a3e0355c93f78a3f77d842e4b0ed000e",
+      "size_bytes": 8871,
+      "source_origin": "repo_source"
+    },
+    "data/examples/analysis_nmr.json": {
+      "sha256": "ae1565d6d3847b51d0fafbc762a2c5ef3752c0bca33163975ea218d7a10e6b4a",
+      "size_bytes": 4625,
+      "source_origin": "repo_source"
+    },
+    "data/examples/analysis_opt.json": {
+      "sha256": "d7dc1391e37d2578b9982f59a9222d9b915856ee25e24374674ead8e31b218af",
+      "size_bytes": 6383,
+      "source_origin": "repo_source"
+    },
+    "data/examples/analysis_sp.json": {
+      "sha256": "8053a7f33e567321c19aaa244ef50e15decf36e567d3c72603b1b7363bc505aa",
+      "size_bytes": 4379,
+      "source_origin": "repo_source"
+    },
+    "data/examples/analysis_uv.json": {
+      "sha256": "68b229f81567d6c4ef3fbbddd2903f1319bab78a1dfc074b6069cac2ef285e49",
+      "size_bytes": 3683,
+      "source_origin": "repo_source"
+    },
+    "data/examples/canonical_molecule.json": {
+      "sha256": "d33f4e6700e3da36e374caae5ebc69778e08c811dc48ae53e46f74754ea4372f",
+      "size_bytes": 12344,
+      "source_origin": "repo_source"
+    },
+    "data/examples/canonical_reaction.json": {
+      "sha256": "8f743792745d707bbbecca703cc44bf1471dda536873fa024fbb5f7ce1a94052",
+      "size_bytes": 5511,
+      "source_origin": "repo_source"
+    },
+    "data/examples/canonical_thermochemistry.json": {
+      "sha256": "2b5289e0d1f5375e8bd76d951e854ffddbc3da7098945e7511c3bcd73a76409a",
+      "size_bytes": 6032,
+      "source_origin": "repo_source"
+    },
+    "data/examples/canonical_workflow.json": {
+      "sha256": "f925f0a3f356ab4f765786a2899782953b48257b32cf11ecd6042824d159b30a",
+      "size_bytes": 8050,
+      "source_origin": "repo_source"
+    },
+    "DEPLOY.md": {
+      "sha256": "d58aa1bed81791210dea98b9fa799159ec708a13b1a9ed67c1a2268742336112",
+      "size_bytes": 9495,
+      "source_origin": "repo_source"
+    },
+    "Dockerfile": {
+      "sha256": "9a5808b6a195f52988d4c2ac06b4b73761a032f124a58756a8cb088366cfa2e1",
+      "size_bytes": 1426,
+      "source_origin": "repo_source"
+    },
+    "docs/SCIENTIFIC_JSON_SCHEMA.md": {
+      "sha256": "3a5efcca4e91af8f364de87ac0ff635146d25f6715ad1b32c0d3a28bceaab2d6",
+      "size_bytes": 20598,
+      "source_origin": "repo_source"
+    },
+    "kaggle_runner/__init__.py": {
+      "sha256": "73d30fc6625d564f90a6698b681178df4c4f8a389e7ea1507994c8be03f0de3a",
+      "size_bytes": 1347,
+      "source_origin": "repo_source"
+    },
+    "kaggle_runner.py": {
+      "sha256": "82913a0e6f9f7c01df34807be6b44d3127d9ede6ac0e79256fbe61a278402ef6",
+      "size_bytes": 179737,
+      "source_origin": "repo_source"
+    },
+    "LICENSE": {
+      "sha256": "5be6f2b9d34c8d3d2ca7d26e91013abe150c6070ed5ec976dd95745c444d268e",
+      "size_bytes": 21091,
+      "source_origin": "legal_document"
+    },
+    "LICENSE.txt": {
+      "sha256": "5be6f2b9d34c8d3d2ca7d26e91013abe150c6070ed5ec976dd95745c444d268e",
+      "size_bytes": 21091,
+      "source_origin": "legal_document"
+    },
+    "orca_engine/.github/workflows/ci.yml": {
+      "sha256": "95001c5859975b25297ba894df9ea49201aded1a0be4d5b0dbe898f4b98f052e",
+      "size_bytes": 2261,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/.gitignore": {
+      "sha256": "3483108f29e56cf2cc00ab35cb9ecaa1325a6b710fa02c45d86ba753c2d78ede",
+      "size_bytes": 570,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/CHANGELOG.md": {
+      "sha256": "8fd6e6c1dab9e695f22f3161cc4761f2707e6ff71eb8c0fd73479ddb2cc78878",
+      "size_bytes": 5796,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/CITATION.cff": {
+      "sha256": "3f4617c9ded4f8ee21f13e4a4f5066d31eb5963bd3c40a415d518cd4400bf5ab",
+      "size_bytes": 1332,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/CONTRIBUTING.md": {
+      "sha256": "e121bb3f39c5c0d8f107fc1cc0568eaf451540df470fca0b98665fbf7b925b9a",
+      "size_bytes": 2806,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/aaa.out": {
+      "sha256": "9facbfb3e89226e60123113647f0c023b36d28ed059a2d4932ebe55885e78cc8",
+      "size_bytes": 136706,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/abc.out": {
+      "sha256": "d1a1a7017763b7502767b5a5be45829ff208ec2e4b4aca0b0594eb7d44ce8254",
+      "size_bytes": 51560,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/benz.out": {
+      "sha256": "0a1838db902d1133dae97178266846bfda0232f26c4b0de404fd17831c944b20",
+      "size_bytes": 18012,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/br1.out": {
+      "sha256": "ec63447a3b43f41839a87350ba5e840678f55e4eb0585a68590bfc5fca655ec5",
+      "size_bytes": 129689,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/br2.out": {
+      "sha256": "ddaa07932710cefefa9ff9189a97a0def9aa5044e1b4d5efa74dd09dafe5f61c",
+      "size_bytes": 108167,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/GLU.OUT": {
+      "sha256": "6fed77f1963f1dc788478ce3dd70dc636a80930805b997640507bbcd9e4ae516",
+      "size_bytes": 8585,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/GLUC.OUT": {
+      "sha256": "fbb3e975dc4f1c8328414ff51aeb546b0d39fba2197f3357332be7e0e612b97c",
+      "size_bytes": 128005,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/glucuv.out": {
+      "sha256": "27b1548525b0937f69b317f04e5f26e5cd59f706a8a65f5824df658c8ed74e52",
+      "size_bytes": 164319,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/H.out": {
+      "sha256": "73c8d69801cc153f14dd53b904f75de51a48590428b9865fcb7ef38f4f220e12",
+      "size_bytes": 36468,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/H1.out": {
+      "sha256": "05ca093faeb4494d414dc9f00ad76366b64e34ceb7f0418cf0278958431ce778",
+      "size_bytes": 40861,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/in.out": {
+      "sha256": "b7d31ae6e9d885005918c91f9d95119599b1878316c99719bdb7c1be0fe607eb",
+      "size_bytes": 171592,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/inp.out": {
+      "sha256": "80dff3c9b9b1d46413fac32b137a8c020700384afef0ea3e0649468df879b550",
+      "size_bytes": 101359,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/lact.OUT": {
+      "sha256": "933828b94976f80361609fa86dd9d634a7069de0f833a250ce7b2d158945cb6a",
+      "size_bytes": 213165,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/lactuv.out": {
+      "sha256": "3c2f00411eb31c796fac6e4d3362a67e57c511f6d6487334d3918aa7f0bba232",
+      "size_bytes": 256798,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap.out": {
+      "sha256": "8b62b980a580db3e329ec821d049736128a4d4599dccdfbca6be421a42f92932",
+      "size_bytes": 109213,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap1.out": {
+      "sha256": "51e573b4d2e77b750c416d56ac8182b54273c4b0308852106f51cbf3447d5189",
+      "size_bytes": 168208,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap10.out": {
+      "sha256": "3f10d20ee4327a2405c0af2a2c044064409df0bb50a29dc4ff9f8f8867a03efe",
+      "size_bytes": 169132,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap11.out": {
+      "sha256": "fe8292d60b1756800fd8a2d7a65c84d8276739fdd9fc4bffbe711be37d0c4434",
+      "size_bytes": 173105,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap111.out": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap12.out": {
+      "sha256": "6c5f3003244834ebbbd4461ef9cac4342c2828e76dd546b04f636e16003b1177",
+      "size_bytes": 169103,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap13.out": {
+      "sha256": "6c52e706d1d88dca4384a64fa9b17c85f4f9d50a14ed8ca5fa6808654ebbd99b",
+      "size_bytes": 169103,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap14.out": {
+      "sha256": "a4c1bb781218a63c97dd43298ef06dd82afee9f3071f940d01d79f1e7213d364",
+      "size_bytes": 169102,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap1n.out": {
+      "sha256": "1702ef9120e6b555a3666ea862cf75ae5fc0cf2b82dfe903651b959497a23b02",
+      "size_bytes": 33999,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap2.out": {
+      "sha256": "18edbe94116af4171767305bc8c0754db6fe713c1f566db5eb1cc8dbb43967a5",
+      "size_bytes": 169095,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap3.out": {
+      "sha256": "e43682dc67ba5c9d9dd597983c026dbca731d436e6756ef6d10e7aafb4408a1d",
+      "size_bytes": 169122,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap4.out": {
+      "sha256": "10c349165a55503c6b44460431ebbbfef1f7d7ee6bcd03e48bb923d77ab99abf",
+      "size_bytes": 169256,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap40.out": {
+      "sha256": "e3399b1580e697a2ee09ff4fa1e224b232031b0448e3f8277d26db25471ab7ba",
+      "size_bytes": 131754,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap5.out": {
+      "sha256": "60c98d7384b604c11183463314487fb4169fdfe196320fd11c2f5df5a1f5b5f1",
+      "size_bytes": 169094,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap6.out": {
+      "sha256": "8e92a9bcc5fbe97d37dacae08d0c184494e496b3c0b0e5d562b5c1cf201be4d1",
+      "size_bytes": 169093,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap7.out": {
+      "sha256": "0d2384f7de2020f64f4652acc11e78452db3425ada78d7f008040f2214bdb040",
+      "size_bytes": 169094,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap8.out": {
+      "sha256": "672c55d0dae3fc42835e5f3054dadce92db9dffb5800ae99f9aae73c0b86589c",
+      "size_bytes": 169094,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/nap9.out": {
+      "sha256": "bd7ade36b593aeeb3bdbd1f3701ec93ac11f03a04019527543df2628ef0ed56d",
+      "size_bytes": 169175,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/napbropt.out": {
+      "sha256": "8eefac3f469e3fe0d82b3504b082bf23b5efbe3b180a6928bf88337a595bebaf",
+      "size_bytes": 565570,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/napbruv1.out": {
+      "sha256": "57ba2d9fdd2c51afe0e21d5f0b9a4bb7a280227aa109168eab0af13508589fbe",
+      "size_bytes": 177823,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/napbruv2.out": {
+      "sha256": "ece45e316fbc31b5d1c7536a6852c76595bc78f5e124d5da52db72ba0cec7cb6",
+      "size_bytes": 209807,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/napcharge.OUT": {
+      "sha256": "77029b136edfe249b78b1f3919fdf5baa542bb177985a5d58f2d0a6305c91565",
+      "size_bytes": 159562,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naph.out": {
+      "sha256": "1ff6b71bf8148c3102946bbe0f3ae782acc0513e18b4e36e3a5b3ff605bcd493",
+      "size_bytes": 153108,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naph1.out": {
+      "sha256": "6d9ac726aaded38e64a14409683e13dfa2f3f985b37f791c38523a8aa2a4e787",
+      "size_bytes": 247185,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naph10.out": {
+      "sha256": "c39692151e540b4f49249391496ed4b5a3f67816783149bc4e2e8037c47e73b0",
+      "size_bytes": 247521,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naph2.out": {
+      "sha256": "3c39753c24553d014107807d20b3934cb802675e9f57da70a1fd33a529d89214",
+      "size_bytes": 247674,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naph3.out": {
+      "sha256": "9535a67542b166b00c0a89ff19dba0c791c2940a18c4913dddcd3f7782526a17",
+      "size_bytes": 247593,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naph4.out": {
+      "sha256": "001f6be45b17cd5c091889e6188bb3dfe226ecccf005d36127cefb01a1fec78d",
+      "size_bytes": 247511,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naph5.out": {
+      "sha256": "9d843a17fac08cf66c50e8d844cd257f17b3795f425640059f7e5ad2dfb30b02",
+      "size_bytes": 247440,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naph6.out": {
+      "sha256": "d14fa20b0036304a40ec84575048042c0f816a5b1c03f6e4d1aed784bda14b54",
+      "size_bytes": 247349,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naph7.out": {
+      "sha256": "e1030b66d764e04532939232e6253e044a8fbfebcc785d6056c99391bacc70a5",
+      "size_bytes": 247348,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naph8.out": {
+      "sha256": "52c901162a5c85241ff3661dec9bfaf092b38f5ca29374df0bb6f0a7febabf16",
+      "size_bytes": 247520,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naph9.out": {
+      "sha256": "eeefa3417ad57029ab7a4fde15c7093084137c70a3bf6668ddd99830391d1731",
+      "size_bytes": 247440,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/NAPHbropt.out": {
+      "sha256": "42fdc2470f9ce1157dc51e80ca10384943fa98b1269f09e9fa8110a1cc25d9be",
+      "size_bytes": 534579,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/NAPHbruv.out": {
+      "sha256": "80fb14512b57eeca74d54c012def9f09e4efec0c492bfd3df6e720634202e4c9",
+      "size_bytes": 192981,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naphh.out": {
+      "sha256": "64a6c753654e2fc8177464f0569042e8fe3c6682182280b13ca669dc6e30db1d",
+      "size_bytes": 45227,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/NAPHHover.out": {
+      "sha256": "ed9807578f392517bccd6ea0bb9b367134f4748e7ebf777421d002f5fa9cd485",
+      "size_bytes": 41890,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naphopt.out": {
+      "sha256": "db848df8697b25a29473c0e41ac7167f4cba0787d16640c9cd32e96538de4db7",
+      "size_bytes": 479318,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/naphopt1.out": {
+      "sha256": "515785c98279792408b366fcf7594ddbadfde2bf5987ac3be6f1415694845433",
+      "size_bytes": 192418,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/NAPHover.out": {
+      "sha256": "7010e631f67398cf39aa4b0895f51a139e509200c83036f91c9e34dfa2f708f0",
+      "size_bytes": 149391,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/NAPHuv.out": {
+      "sha256": "c515dc9952dbb0544b871388a30a3377fcdd9537f73952cfe1ee12e87a40c886",
+      "size_bytes": 187399,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/nap.out": {
+      "sha256": "5671c04397d383cc98514ec3a9f293bcb162c029367326eaf8470adc1c1da842",
+      "size_bytes": 1044330,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/nap1.out": {
+      "sha256": "46528e990b7b95426fef563046ce5bc3e925e787bd043e129da90c9c1183ed4a",
+      "size_bytes": 117311,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napbrbr.out": {
+      "sha256": "4ed7ca99933572866202cc7da5c69c650d256c9d9fe9a4e776dd2cb5c9e2f6a5",
+      "size_bytes": 2382716,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napc11br.out": {
+      "sha256": "c9f13c6fe70c9e1ef59667f0b76342495c2608114122e7b1cb27b439bb883e44",
+      "size_bytes": 2582041,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napc9oxcopt.out": {
+      "sha256": "19ebe75d3ad02d73cc8cc0331343afdc75103199ad4a97b6ec926f2b47042b2f",
+      "size_bytes": 1800878,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napc9oxcopt1.out": {
+      "sha256": "50ef6b08fbfba920e4913b1039a624874ed3ab91a13e1d2ab1b4733842ef955b",
+      "size_bytes": 50391,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napc9oxcopt2.out": {
+      "sha256": "5b7b297954a2dd4923a4c34931a0a016597444a73aaa026c237d0a0604e5a9c7",
+      "size_bytes": 1499436,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napc9oxcopt3.out": {
+      "sha256": "4c4ab13476eeaf06523732c971447ca3ef66de82920b57b548273813cd7fb6ac",
+      "size_bytes": 1130522,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napc9oxcuv.out": {
+      "sha256": "48112bf109daac6d70c874328b861feb17b6a718a4309d5eb365cca026970110",
+      "size_bytes": 232921,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napc9oxcuv2.out": {
+      "sha256": "263d57b78921ba8676fef4805cb2869f38bad23835210b6be4908cf0d10ab5b9",
+      "size_bytes": 236956,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napc9oxcuv3.out": {
+      "sha256": "c103d3131eb5bb2294923aabd59c45736479cf00a30a2f348b549f157eaa4aa1",
+      "size_bytes": 216381,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napcat.out": {
+      "sha256": "52c835bd43ae0e5c5b3822208ba740240a82b5e9b33e9098d15fb5c01504a13d",
+      "size_bytes": 1124305,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napo1h.out": {
+      "sha256": "b6fdcb471a4beaaf2c587361a95df7e75072b1e49d326fc5b344c79668aa197f",
+      "size_bytes": 1569827,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca6.1/napo1h1.out": {
+      "sha256": "ddc95eb6be06315883c0af279c60a006d860e4f876b9054802cf62c771f67124",
+      "size_bytes": 1016340,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/README.md": {
+      "sha256": "17b8a122afef90baf0ed78776772122c34f2711d68f8cb836106e94bef333f32",
+      "size_bytes": 1319,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/LICENSE": {
+      "sha256": "536f0bdc5e8d45478d4647b7968246a6291b337d8c7b412f3159d85a79466423",
+      "size_bytes": 1068,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/ORCA_Parsed_Data.json": {
+      "sha256": "61fa8a9e78775e4e5bee23d1b7308ec930365a59d69acf4e71622fdc5d5507e8",
+      "size_bytes": 57494,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/pyproject.toml": {
+      "sha256": "7efc1f294b4876894aa4223138cf8da8ac3a12e9b6652a5cf766baa2026b386a",
+      "size_bytes": 2911,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/README.md": {
+      "sha256": "48fe926c7e8f37b3fa09a6262391aca9fa4ece1259859c043e49018294644815",
+      "size_bytes": 7966,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/scripts/run_mutations.py": {
+      "sha256": "b8cbab50158e632192300d71c0b1846045d6e11151f3b463eeaddf4061f06a26",
+      "size_bytes": 8102,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/scripts/validate_corpus.py": {
+      "sha256": "4ba63aa12ff9466455227a73c52ef7a82ed22a65a15849d2f16d9932c9a0959f",
+      "size_bytes": 6857,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/__init__.py": {
+      "sha256": "9c72e7cf06c02d3cbe92e26420ecba7bf37eba0c98469c74bd7f7b106791dc6b",
+      "size_bytes": 2531,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/adapters/__init__.py": {
+      "sha256": "d189456610906d4dddf73af3c8ccdd04982a98107a439f72a933a68e76932b1c",
+      "size_bytes": 854,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/adapters/web_adapter.py": {
+      "sha256": "65a05e4bbb68de0908c9f7fb0f9de68422bc2edaccfd383d4d5eea9da438a3d2",
+      "size_bytes": 18447,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/archive_validator.py": {
+      "sha256": "57fbc99111f4e355d886268f452491bd37ba47e8adee842559df06000d7ce8d8",
+      "size_bytes": 7538,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/cli.py": {
+      "sha256": "f18cc0a1769d38a6b0ac38fcecc2556b5b9e35c8f928e7eea95a88403a671716",
+      "size_bytes": 7952,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/constants.py": {
+      "sha256": "0d785fddbb6af8446c7b4884775985d6ea31e2052cb0a400aab0d72356192264",
+      "size_bytes": 610,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/experimental_spectrum.py": {
+      "sha256": "98596e46ad51ffa4e6ee11fe523c7971bbb67561ffe64c1ddf9d947fabf724f6",
+      "size_bytes": 44033,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/io.py": {
+      "sha256": "9baaffdd64cc3b6708cca294ecfbcfc28dc0cbd4193e0fbe3bc6c937d64a8472",
+      "size_bytes": 13069,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/models.py": {
+      "sha256": "07efad7c3bbe23f9a9d60258389ca5664fde7d633744cd19947215288c189988",
+      "size_bytes": 29364,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/nmr.py": {
+      "sha256": "71633c1573ddc0257a4e6cb425c438ea96d446f2dc4702fb4cfff5b212b6ac05",
+      "size_bytes": 35348,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/parser.py": {
+      "sha256": "910f77fcff4de36e4280398bdfd0b3bd41f502348ef03182e646887986d5373a",
+      "size_bytes": 38486,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/py.typed": {
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "size_bytes": 1,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/regex.py": {
+      "sha256": "a2d7daf3e13eb832d6faba3cf06b5a674f6bf2c576ec6c2606b13c81cbcc0862",
+      "size_bytes": 10611,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/reporting.py": {
+      "sha256": "a1a9f860d4edfcb34ae1788fe0efbb85fb3665af8fa47ac4a17f6b3ebfc37a7a",
+      "size_bytes": 15850,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/thermochemistry.py": {
+      "sha256": "f3d0d38a534b39f5672a90746d30bfc358bea48a459a63a745d41a0781ee7d8e",
+      "size_bytes": 38968,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/web/app.js": {
+      "sha256": "3320ac79b9c9d15e0a1f8df5f2cd60aa2984965ff36c6b71b2fac11cb0f62ee9",
+      "size_bytes": 46870,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/web/index.html": {
+      "sha256": "e3b8ad79cb73fab8d6c043f96367487ef17b50bc4cc63616e31de205f2ef6246",
+      "size_bytes": 23347,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/src/orca_engine/web/style.css": {
+      "sha256": "339715dd9d1482cae3ed25610d1af7b0a8e4166f4bd9527ac97988ea3c73dcd8",
+      "size_bytes": 17910,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/__init__.py": {
+      "sha256": "934a5a74d806c329fdbd9af3d9a2f2989022bb8716b1ac4c47c6aa6aa318e559",
+      "size_bytes": 41,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/conftest.py": {
+      "sha256": "944b11cb18c9d16e2a607e4d89e5fa02c5bbd335cbc85ae716b34c6871fd3f6a",
+      "size_bytes": 1117,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/compound_job_first_fails.out": {
+      "sha256": "4f4fcc0973a1e2e6d171a3a2f3a887f88fa76a1370275a3a217632d4ded766c5",
+      "size_bytes": 491,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/coords_bohr_only.out": {
+      "sha256": "867e87f37aff4297f9adbf31df2a54139c844bb81987e998493a75b24b98848e",
+      "size_bytes": 545,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/entropy_prose_after.out": {
+      "sha256": "48ea78c059aa8d8ac3accdc2de80ab0457a0a42f60e0686024133371ac9989dc",
+      "size_bytes": 697,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/ghost_atoms.out": {
+      "sha256": "af8ec45a82291c800579f68aaf35067dc838f6edae765130a27d1035f874b59a",
+      "size_bytes": 665,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/open_shell_empty_beta.out": {
+      "sha256": "06e853ffefe2406398714dff4d44ec9937db0245cb04982d34fb9300b7236474",
+      "size_bytes": 784,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/opt_two_orbital_blocks.out": {
+      "sha256": "d0aeec561fb8eb5404e14b17854d3a781d8e9d3e6eda407e4c78ceaff67dd793",
+      "size_bytes": 1908,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/rerun_after_error.out": {
+      "sha256": "83ad3c29a732d03553955895033d52420609ec42fa4df5c4daf48df447ddf94b",
+      "size_bytes": 356,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/rxn_h2.out": {
+      "sha256": "818cef86e2ae966ffd3e73b765477146c78fe6b6590d0e312571081be26ac8c7",
+      "size_bytes": 747,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/rxn_h2o.out": {
+      "sha256": "6b9d0511fbb0fcf1a51ba78dd4fed26b0eed363514a1584b731951ae2a3cf09f",
+      "size_bytes": 792,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/rxn_o.out": {
+      "sha256": "bd3be15ed1cce177a1e60fc70d12ed50900e2c6b1d7e9faa5f3415843f80f430",
+      "size_bytes": 708,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/tddft_orca5.out": {
+      "sha256": "b9a9cb52fcc1c58db8e3eadaf4d826546fd6054bef45088c0ea35f6079d4a4d3",
+      "size_bytes": 786,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/tddft_orca6.out": {
+      "sha256": "9a6c7524abc99a55c24f4a55ee578987e768f73a1c684f6f7aff20463dfe22bf",
+      "size_bytes": 935,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/tddft_soc.out": {
+      "sha256": "2e86d435b099edfaf32b2a7c30867ded84fde2f1d3f87acb39b6f71c166976fb",
+      "size_bytes": 1329,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/thermo.out": {
+      "sha256": "3a4352a5e7a9919a3fa4edabd70af3bbce44c47e6f720651f74f539c8ecb99e6",
+      "size_bytes": 1259,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/tight_section_boundary.out": {
+      "sha256": "bd6bede3c7b48fa002943cd0d5622c766ece0a0c114740a2884f8a4cbb191310",
+      "size_bytes": 585,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/truncated_final_orbitals.out": {
+      "sha256": "45b91a090dc585e0fea80eaa855ec07508be751986356ced0c61da3b947b84b2",
+      "size_bytes": 1092,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/unrestricted.out": {
+      "sha256": "3c99425ebdb8372687745bcab410c875838c4a23d51e9a6fbb911a33bf8e093d",
+      "size_bytes": 823,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/UPPERCASE_SUFFIX.OUT": {
+      "sha256": "b9a9cb52fcc1c58db8e3eadaf4d826546fd6054bef45088c0ea35f6079d4a4d3",
+      "size_bytes": 786,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/test_io_and_cli.py": {
+      "sha256": "adce937e1c517c6b0b9d98c804a1195c9706547ee4d722360a2fa99e9fcc3e6c",
+      "size_bytes": 10963,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/test_parser.py": {
+      "sha256": "8ccf2fec8b572187b3b81499022fc9044291c72e783f316ad914856a020a07aa",
+      "size_bytes": 24583,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/test_thermochemistry.py": {
+      "sha256": "3c0148f5df5eb6b4671a083cce6485864a5997a94c20c6c7faf71de979f866bf",
+      "size_bytes": 14469,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/test_thermochemistry_scientific_audit.py": {
+      "sha256": "ad3ca9c498d892630631f16db776101af4008c52d18325e70f11dbc1b53c5235",
+      "size_bytes": 23083,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/test_web_adapter.py": {
+      "sha256": "519dddba1e338489c6b96463ada76faab112c33c22968938bdc0e1ad41b821ac",
+      "size_bytes": 3152,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_orchestrator/__init__.py": {
+      "sha256": "3cfce6947555822b251654afb293faf5d4f716dcb50c47277dbd1dbf0b930757",
+      "size_bytes": 1109,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/account_control.py": {
+      "sha256": "d0347a10449b198c30b3f300cd3f537cdb4a004082d83b837b4c278d2b83d408",
+      "size_bytes": 3862,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/api.py": {
+      "sha256": "134cdb1e03ff7eeaf3e05fb25f19ad5f1ef8b82fd0122fbf9ab357790f7936d7",
+      "size_bytes": 12820,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/checkpoints.py": {
+      "sha256": "073786731b099108146e11f5dc0b9fa9433628286f3b5e0ec997237c042ce581",
+      "size_bytes": 20609,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/cloudflare_controller/__init__.py": {
+      "sha256": "8f6ea2b8cd8489f40bede0d64f9b32438d847dcd249f84c16e490a83232491fd",
+      "size_bytes": 1335,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/cloudflare_controller/client.py": {
+      "sha256": "24da14a5df8582c76b63f9db8d73f6c3f9341eb043634c364cd572ca5dadce6d",
+      "size_bytes": 23252,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/cloudflare_controller/config.py": {
+      "sha256": "573ad76cc4db6cf90463f6e3b4838406af0f6955debbcc7a879e636122bc9dd0",
+      "size_bytes": 893,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/cloudflare_controller/controller.py": {
+      "sha256": "db4deb2cc72121c828c1656413e5f8598ece8fe87e98972c9028954157f84e10",
+      "size_bytes": 13651,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/cloudflare_controller/models.py": {
+      "sha256": "f90341e7031b2d66cb884590a13f7aea16c6eca63815c539c8111babd1f40c4f",
+      "size_bytes": 16260,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/cloudflare_controller/reconciliation.py": {
+      "sha256": "e342fb66d460414ba9edb735b14c987728c6a64aab31fd003c03b223e24c1da4",
+      "size_bytes": 10330,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/config.py": {
+      "sha256": "557e4bb6f1d8602c1d8b1c10cd4812437df8f09191d368a241b0734968627705",
+      "size_bytes": 12970,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/credential_vault.py": {
+      "sha256": "ac75217677cfe537e5ceacb6ddb8ea3048d25461a841a74eaea7a5dd924fb998",
+      "size_bytes": 13155,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/credentials.py": {
+      "sha256": "5a070fad7984a35bab311baa1d0ee7a8c0d7a5858f1e936371d9d383d3103b38",
+      "size_bytes": 8516,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/errors.py": {
+      "sha256": "6e96d66b34d3491dfd467800a73dd2da5195c452fcf6fa69eba6c6c22489b4c2",
+      "size_bytes": 5750,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/hashing.py": {
+      "sha256": "a256e824a7c0285113ba1be7d53b87ce5a767cdf03b3996039546fc4dedfb877",
+      "size_bytes": 4561,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/kaggle_api.py": {
+      "sha256": "963cb2ee10e11fe1f7e2673d85408f7bf8b7ed296e560192ec26dcb073223039",
+      "size_bytes": 24745,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/ledger.py": {
+      "sha256": "b12360b034d962965fbc7d18128a6f972638d39dc60ffcd4c7f44f23b28fc0d1",
+      "size_bytes": 17968,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/legacy_compat.py": {
+      "sha256": "8743602a130f273a16d1333cec29782b579956753b2bd77d46b55bdd7fbbe5a8",
+      "size_bytes": 15591,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/logging_ext.py": {
+      "sha256": "819fd23b15f13f4acf3dcc6624031076e481caf214b21f498ed20217f97e03db",
+      "size_bytes": 10243,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/models.py": {
+      "sha256": "56d8d3a1cc11ffc23de2081734f8c564e9fc50e496b53ef8f54e43ffa056c039",
+      "size_bytes": 19247,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/orca_artifacts.py": {
+      "sha256": "3f2afa65e3bdedc324b0c05378befe19ed892ac4a49ef9a898cca6065eedd420",
+      "size_bytes": 40300,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/reconciler.py": {
+      "sha256": "dbb6e80cb1088f1b33631416ca60e7c2006de3fdeea3081b464a24889a84edd5",
+      "size_bytes": 45583,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/result_store.py": {
+      "sha256": "b2352f873473cc0b663e3e24d6e2d68dbd3e2ee916e8d2e91a0a5cd3ba0e4e71",
+      "size_bytes": 14393,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/retry.py": {
+      "sha256": "a3ab5fe3d6ec0288241d2236dc973182d6000060067b749c6b643a926b79e684",
+      "size_bytes": 9398,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/runner/__init__.py": {
+      "sha256": "e763d5e1898ef64f5ed165537a16d0d9fccbc7b406e4c6bb74a99e0771c05d00",
+      "size_bytes": 238,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/runner/builder.py": {
+      "sha256": "7094782ca5d8d52c01fc6cb31c58c44c21d95a84c2dcbe171e25601edb684f8c",
+      "size_bytes": 11195,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/runner/kernel_runner.py": {
+      "sha256": "519e85d5bb0cdf7968866ff41cccc7a35f07fd0015827321d50d2895c0e9b86b",
+      "size_bytes": 78971,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/service.py": {
+      "sha256": "7957e493358b33d82373299567be07e87f1afb8a77098a3d952509f52f721813",
+      "size_bytes": 38442,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/states.py": {
+      "sha256": "b417081bf71b16a4c58041ceba8cff51522329efb2f70e9ff1ebc657716ec528",
+      "size_bytes": 16978,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/store.py": {
+      "sha256": "a45deacef9733bcdbd63467abb11d4cd3bed4e3112a55ff85dc9764dc78fc96d",
+      "size_bytes": 30969,
+      "source_origin": "repo_source"
+    },
+    "orca_orchestrator/watchdog.py": {
+      "sha256": "5c68c3979911d46e8358097ab74c893e34570b3b300d6652a6abd75c4d60fbb2",
+      "size_bytes": 19189,
+      "source_origin": "repo_source"
+    },
+    "pyproject.toml": {
+      "sha256": "2c6c80f9898476b22bf82d11955ec89a27b152001e0eb5fecdf1e19f1a68282c",
+      "size_bytes": 2219,
+      "source_origin": "repo_source"
+    },
+    "pytest.ini": {
+      "sha256": "b5969337b3cf384a680d7fb4bdfc9da3ec1b262cf2d635292513fb4306455818",
+      "size_bytes": 234,
+      "source_origin": "repo_source"
+    },
+    "reaction_conditions.py": {
+      "sha256": "6a2c5e254658c10f64b02bb7eb72724b5c711e22818ff0759890729d259913b7",
+      "size_bytes": 3085,
+      "source_origin": "repo_source"
+    },
+    "README.md": {
+      "sha256": "0eb4453032766a44f7e819126bf99466bef5a4085a0b1dcf4f060448969fd18e",
+      "size_bytes": 17836,
+      "source_origin": "package_metadata"
+    },
+    "REPRODUCIBILITY.md": {
+      "sha256": "891bf9662224ed0278904006d0af18724dcde6f0a604d4ed2142e5cbf3a81474",
+      "size_bytes": 3865,
+      "source_origin": "repo_source"
+    },
+    "requirements.txt": {
+      "sha256": "2e6bde4d78b3cf1e60603b24eb714059cebcb94a75ceb92f289a0c36c50a0357",
+      "size_bytes": 737,
+      "source_origin": "repo_source"
+    },
+    "schema/canonical_scientific.schema.json": {
+      "sha256": "e83eb573750a20ab7a3efb4d98b198bdf698930928bb0a60424a3e3776bdbdd7",
+      "size_bytes": 50997,
+      "source_origin": "repo_source"
+    },
+    "scripts/analyze_manual_details.py": {
+      "sha256": "62d82edbb60326e21302589de4c55c51ea708f820f4a5fbdb424bc22c19da148",
+      "size_bytes": 974,
+      "source_origin": "repo_source"
+    },
+    "scripts/detailed_manual_extractor.py": {
+      "sha256": "dc228cb8c2b37f592c5da319994c0aaada9f6ec94d068d8d7180b8c0ccad70f0",
+      "size_bytes": 835,
+      "source_origin": "repo_source"
+    },
+    "scripts/diagnose_frontend_runtime.py": {
+      "sha256": "5a23405bcd85987475f717fdb9bfb884e8fd0845988cffad3afc04eb485093fb",
+      "size_bytes": 723,
+      "source_origin": "repo_source"
+    },
+    "scripts/extract_aux_basis.py": {
+      "sha256": "1b18f8b4b5e93bf2be1c7dcf72414181ad464eac42581d5ece87e5292f43d254",
+      "size_bytes": 263,
+      "source_origin": "repo_source"
+    },
+    "scripts/extract_dispersion.py": {
+      "sha256": "3ac83f4b5e60f387d6ca2c7bf07fe5a7483036db5d2125bfb8bc18d6ff844db8",
+      "size_bytes": 255,
+      "source_origin": "repo_source"
+    },
+    "scripts/extract_nmr.py": {
+      "sha256": "ada78706db7c0d64c8b5dd455e5793ba8a5397bd65b72d4c3b42491dcfdf5aa6",
+      "size_bytes": 252,
+      "source_origin": "repo_source"
+    },
+    "scripts/extract_solvation.py": {
+      "sha256": "a6f9244b87c340a697bee2839972af3a29c0d07dbd38ee0ead074a504222cd3b",
+      "size_bytes": 254,
+      "source_origin": "repo_source"
+    },
+    "scripts/extract_tddft.py": {
+      "sha256": "2861cfc8edfa0bd449eef38992954d640bbffbaf55d288bfbfac8d9684d6f8de",
+      "size_bytes": 251,
+      "source_origin": "repo_source"
+    },
+    "scripts/extract_toc.py": {
+      "sha256": "e4bbbd946b85bc832cbe5f386a322e42e8133281b5418d133d2f3b1ca9d3ef9a",
+      "size_bytes": 492,
+      "source_origin": "repo_source"
+    },
+    "scripts/full_browser_audit.py": {
+      "sha256": "ad02e78dca53832a21a0a0ed95da793d6cac4f07b13cd67c90f6e58ef6a33101",
+      "size_bytes": 8901,
+      "source_origin": "repo_source"
+    },
+    "scripts/generate_academic_manual.py": {
+      "sha256": "1f680a096eb294ef0d4597e99f11065b2cf1ef871b46d6aa3186d5c7ece898d6",
+      "size_bytes": 35965,
+      "source_origin": "repo_source"
+    },
+    "scripts/inspect_manual.py": {
+      "sha256": "491bd034b20937b0bb271b76106143d197442222f7a805f9b7617f540c4c0121",
+      "size_bytes": 1626,
+      "source_origin": "repo_source"
+    },
+    "scripts/search_manual_sections.py": {
+      "sha256": "eb377439e694ae3435ddc0db3479489771542c34bb67bfd3c288c239d919f2aa",
+      "size_bytes": 862,
+      "source_origin": "repo_source"
+    },
+    "scripts/search_specifics.py": {
+      "sha256": "95f0c4928f1ee45c9651ce12545cc3d5d2dac4b765edf77648efb6d451e69756",
+      "size_bytes": 1244,
+      "source_origin": "repo_source"
+    },
+    "scripts/summarize_analysis.py": {
+      "sha256": "d2f6829f60a81eb87c8e29400276f7325fd83db19695517618f08bd6d8323d67",
+      "size_bytes": 382,
+      "source_origin": "repo_source"
+    },
+    "scripts/test_browser_click.py": {
+      "sha256": "7480fff1b2a2b7062bb79c8f6a896584bcfbb0df15642f71e3669945431600fa",
+      "size_bytes": 4063,
+      "source_origin": "repo_source"
+    },
+    "scripts/test_builder_browser_flow.py": {
+      "sha256": "c95e548b36816911535b6734ae1a742b9f7c207dac16fffb909288fe78f82c47",
+      "size_bytes": 4345,
+      "source_origin": "repo_source"
+    },
+    "scripts/test_builder_manipulation_and_outputs_tab.py": {
+      "sha256": "74c7b955c493047ddd5551f9f0cf552f29e36ac8e36ae50811825467358c5f15",
+      "size_bytes": 8746,
+      "source_origin": "repo_source"
+    },
+    "scripts/test_dual_workflow_and_queue.py": {
+      "sha256": "ce476c74c854d5b3ede026c7b8d5c809e4c08363290b79840db832c56a296304",
+      "size_bytes": 11342,
+      "source_origin": "repo_source"
+    },
+    "scripts/test_opt_to_builder_flow.py": {
+      "sha256": "221c86e6b1734c9fb71b1dd200480a6a6cf08eddb24d9149aeccb42fdb795165",
+      "size_bytes": 5763,
+      "source_origin": "repo_source"
+    },
+    "scripts/test_orbital_image_engine_version.py": {
+      "sha256": "cf9566a846c97a12ce3c640a70fee335ddbd3edca6e4fee3e2afad2318e7396f",
+      "size_bytes": 5235,
+      "source_origin": "repo_source"
+    },
+    "SECURITY.md": {
+      "sha256": "04ab28946834cb6339c80fc61754fcffd5afcdf08f45b9f4508714068fc6133d",
+      "size_bytes": 4796,
+      "source_origin": "repo_source"
+    },
+    "static/css/style.css": {
+      "sha256": "3d5fe1508d4225e355302b1e98173219cd636b6ed4372a1b1ba9aefa15b2e619",
+      "size_bytes": 84676,
+      "source_origin": "repo_source"
+    },
+    "static/docs/ChemistryLab_User_Manual.docx": {
+      "sha256": "ded2e264c8d267ce959f1d8ead5e26285dd24fbc98ca0ad0a4c9e85c4d6646f8",
+      "size_bytes": 46968,
+      "source_origin": "repo_source"
+    },
+    "static/job_runtime_fix.js": {
+      "sha256": "9133e459435dfad6a353c774a92c10cf37656eb529f114ca61dec2be5a63c697",
+      "size_bytes": 1641,
+      "source_origin": "repo_source"
+    },
+    "static/js/app.js": {
+      "sha256": "6916de818d0994b16d54840c54ebc1b3f60442f328a63044f8fb50d4f10cae1c",
+      "size_bytes": 466988,
+      "source_origin": "repo_source"
+    },
+    "static/js/kaggle_credentials.js": {
+      "sha256": "afa45631bbcb3f8e4dacc676adaf39c14e06c765750c3845c5dcc24a449f27b3",
+      "size_bytes": 13632,
+      "source_origin": "repo_source"
+    },
+    "static/js/reaction-editor.js": {
+      "sha256": "10f31d07d35ef8a7450b1dfefdb5c32ec44646a962a3b22154c8d9fd753d5be2",
+      "size_bytes": 4508,
+      "source_origin": "repo_source"
+    },
+    "static/js/workers/archive-worker.js": {
+      "sha256": "447a734d7f01828c131c3bd146554372a29b390e12ab41cba35714a896624877",
+      "size_bytes": 20419,
+      "source_origin": "repo_source"
+    },
+    "templates/index.html": {
+      "sha256": "5625599f5231e799f5357cac4d572371d1512472de18ee387f2a628f3d73fc43",
+      "size_bytes": 132141,
+      "source_origin": "repo_source"
+    },
+    "tests/conftest.py": {
+      "sha256": "74102746a82b23c22cf5290651a59446d86f2475e6c35efa50932cb00f38a5c4",
+      "size_bytes": 4165,
+      "source_origin": "repo_source"
+    },
+    "tests/fake_orca.py": {
+      "sha256": "61a158fae896194453358856f312794d099fce006443ddffa13e6ca4d112103c",
+      "size_bytes": 14271,
+      "source_origin": "repo_source"
+    },
+    "tests/test_account_control.py": {
+      "sha256": "85e5ce35d00aa3f12a9da1b8c2aef5e3e595160da4c7b89fd9e58be0ce899a8a",
+      "size_bytes": 921,
+      "source_origin": "repo_source"
+    },
+    "tests/test_archive_security.py": {
+      "sha256": "c47b2cd22eceb0b787f5a3ba9cf14968cf252ac3df4daf4fd8dd2bf097cff674",
+      "size_bytes": 5236,
+      "source_origin": "repo_source"
+    },
+    "tests/test_canonical_analyzer_refinement.py": {
+      "sha256": "00cbaee6b1b60d69a6799f3bd3a76e784803f866e2cd863374959d92f5f7511d",
+      "size_bytes": 18359,
+      "source_origin": "repo_source"
+    },
+    "tests/test_canonical_scientific_schema.py": {
+      "sha256": "1028571f88562460d5f9901259b0e3e330ca3b8c8beb4c14427def64451c9f98",
+      "size_bytes": 28439,
+      "source_origin": "repo_source"
+    },
+    "tests/test_clean_ir_visualization.py": {
+      "sha256": "1d7f7fc2e2231d32eec4decc47cd195a42265ea913707822103f0fe5ff456789",
+      "size_bytes": 2279,
+      "source_origin": "repo_source"
+    },
+    "tests/test_cloudflare_controller.py": {
+      "sha256": "29abf3417a5dd6268ba6685cdca81ee06aa2510510d31695d32af01607504096",
+      "size_bytes": 20778,
+      "source_origin": "repo_source"
+    },
+    "tests/test_cloudflare_recovery.py": {
+      "sha256": "7d7694c57b2349c386294162642e9cb5ba4ad5100e82beec64e02d1e70846c19",
+      "size_bytes": 9065,
+      "source_origin": "repo_source"
+    },
+    "tests/test_cloudflare_schema_migrations.py": {
+      "sha256": "ea2484ba8fadf5075432911dba03278ecdee51997c7377f4def1a921c0816f32",
+      "size_bytes": 15779,
+      "source_origin": "repo_source"
+    },
+    "tests/test_cloudflare_worker_contract.py": {
+      "sha256": "3f5df0faddf0473e1e1d93666df491b56189ab9db72f821b0d06b1078b27e83a",
+      "size_bytes": 41225,
+      "source_origin": "repo_source"
+    },
+    "tests/test_continuation.py": {
+      "sha256": "64b79f8bf7786498b2c5e6c90963fc3eabe70f313066151284e15ac12926d4fc",
+      "size_bytes": 26734,
+      "source_origin": "repo_source"
+    },
+    "tests/test_deployment.py": {
+      "sha256": "44c14472f19e7d963a16ccc22410189560bccd0e9825b809ffe295e80b56b376",
+      "size_bytes": 7581,
+      "source_origin": "repo_source"
+    },
+    "tests/test_drawing.py": {
+      "sha256": "c27c83c7e375f3a5fffdaba84a5a18c2b41c42585233250d5124c5a452cf66e6",
+      "size_bytes": 1611,
+      "source_origin": "repo_source"
+    },
+    "tests/test_dual_workflow_and_queue.py": {
+      "sha256": "e8f047734421d7aaf661764f830f83e4b842f6611f79540bc7fbbb3e5a306faa",
+      "size_bytes": 3832,
+      "source_origin": "repo_source"
+    },
+    "tests/test_end_to_end_chain.py": {
+      "sha256": "5e36f66931cab71da4011d841d53107e64f1bde8811065f3c4b0b01f1ae0eeae",
+      "size_bytes": 24303,
+      "source_origin": "repo_source"
+    },
+    "tests/test_experimental_spectrum.py": {
+      "sha256": "54f8d7def56f43af8e889631ff7d4063dec125b6d666865e32b4511e45c971a7",
+      "size_bytes": 11017,
+      "source_origin": "repo_source"
+    },
+    "tests/test_frontend.py": {
+      "sha256": "66694fbd686e676eff58a453301b67d90030d6994e718c300890fadba20f6474",
+      "size_bytes": 17603,
+      "source_origin": "repo_source"
+    },
+    "tests/test_full_system_audit.py": {
+      "sha256": "91b3fded7e14f46e433c3c746d8178f70e4001cabb84e5e4ed30e05f3006c7ac",
+      "size_bytes": 8490,
+      "source_origin": "repo_source"
+    },
+    "tests/test_ir_spectrum.py": {
+      "sha256": "db23839e67e9393b7cc3adef1877e3fd67d20b0091e5f52f50e23b5581c2752e",
+      "size_bytes": 3553,
+      "source_origin": "repo_source"
+    },
+    "tests/test_kaggle_credential_vault.py": {
+      "sha256": "a0e83eb39b208cf36cef5528917212949a01d99d6ef249009e13ac0890fef9d4",
+      "size_bytes": 19055,
+      "source_origin": "repo_source"
+    },
+    "tests/test_kaggle_dataset_normalization.py": {
+      "sha256": "bd367eefd9566e1a649d0f1f7fedc33120726b5034a4a55d80b72ebb54de2b70",
+      "size_bytes": 3836,
+      "source_origin": "repo_source"
+    },
+    "tests/test_licensing.py": {
+      "sha256": "7388cd0d326289d85619757e234a4a016af1411b463dd59e179307711cbb0562",
+      "size_bytes": 13999,
+      "source_origin": "repo_source"
+    },
+    "tests/test_lifecycle_simulation.py": {
+      "sha256": "7d77a9d7542f25bf1723db50e108f910183fe2b380c5f1c287150101ded88ea5",
+      "size_bytes": 18558,
+      "source_origin": "repo_source"
+    },
+    "tests/test_nmr_api.py": {
+      "sha256": "e6cb967937e04db1ff99e9d1979f89eb750365bc72a3bf962e5a504a1d2e31bf",
+      "size_bytes": 4572,
+      "source_origin": "repo_source"
+    },
+    "tests/test_nmr_golden.py": {
+      "sha256": "f843c3186e8499b844dcdaad5cf001674b2c4f4f442bd9ff75f0c59b9482fa7f",
+      "size_bytes": 6758,
+      "source_origin": "repo_source"
+    },
+    "tests/test_nmr_parser.py": {
+      "sha256": "c4a87a891bf68102fc9ba93702ee20342305531e5f9c53a0be95dbead7fec374",
+      "size_bytes": 4749,
+      "source_origin": "repo_source"
+    },
+    "tests/test_nmr_spectrum.py": {
+      "sha256": "26e73202deaaa4135def4a32812f90cc8524209c45a23401385570c43b1d923c",
+      "size_bytes": 3711,
+      "source_origin": "repo_source"
+    },
+    "tests/test_orca_builder.py": {
+      "sha256": "215dbae50a5f2582ef1645883e868f01be3da9c86e00e6f8b463e7851f514fdb",
+      "size_bytes": 19467,
+      "source_origin": "repo_source"
+    },
+    "tests/test_orca_engine_api.py": {
+      "sha256": "8932b63fbabf2be1a3f4ab41e5226037f49eba2f918e0a0e89fcb53a3364c962",
+      "size_bytes": 9412,
+      "source_origin": "repo_source"
+    },
+    "tests/test_orca_input_generator.py": {
+      "sha256": "a62fa68e03828d35caae7d10b43539a51736df3f35219e1dfdf054ff1b51dfe2",
+      "size_bytes": 4529,
+      "source_origin": "repo_source"
+    },
+    "tests/test_orca_runtime_smoke.py": {
+      "sha256": "2f4efddf3a0c8bffff0540092405e9e2cd219f20b8a5291d4fcb0f2b48cb9d38",
+      "size_bytes": 5911,
+      "source_origin": "repo_source"
+    },
+    "tests/test_orca_source_and_results.py": {
+      "sha256": "9054f52527021672925f49129a847b6cec2fd0b2c5fc86cc2bf1ad715c7ecbcf",
+      "size_bytes": 5669,
+      "source_origin": "repo_source"
+    },
+    "tests/test_orchestrator.py": {
+      "sha256": "f63921ad4cc11b9287daa370bdfc362ab87f1c801bd537db6ec7032d89c74e3e",
+      "size_bytes": 37446,
+      "source_origin": "repo_source"
+    },
+    "tests/test_production_forensic_fixes.py": {
+      "sha256": "20984e0fbf54f79dfad30f471cb070c3682ae84a5f4ffb24af83f4fc099b11f0",
+      "size_bytes": 19346,
+      "source_origin": "repo_source"
+    },
+    "tests/test_production_wiring.py": {
+      "sha256": "94959856c6dc22a38c7f2259e4711cf7b7ff02d04034b1c1c635dd6fa3f10c22",
+      "size_bytes": 15894,
+      "source_origin": "repo_source"
+    },
+    "tests/test_pubchem_kaggle_thermo_fixes.py": {
+      "sha256": "59d3af1294b8bd5969ada36566040c1abf7443fb0ee52bfaf2f350fa691499ca",
+      "size_bytes": 14462,
+      "source_origin": "repo_source"
+    },
+    "tests/test_reaction.py": {
+      "sha256": "e45833dfd88aabd042f6cf2307a1170072332c5efe49157d50d51a279b28e702",
+      "size_bytes": 21892,
+      "source_origin": "repo_source"
+    },
+    "tests/test_scientific_benchmarks.py": {
+      "sha256": "e3726ac450f8c3c5d3b3c46b421aa2f7541fbf27a71671c8200d80eb77316dd9",
+      "size_bytes": 3692,
+      "source_origin": "repo_source"
+    },
+    "tests/test_scientific_result_durability.py": {
+      "sha256": "610e0869e6403535e545c93bd990ddbd4fefb9b5d4abb13cd58a3a11ac3f04b0",
+      "size_bytes": 22226,
+      "source_origin": "repo_source"
+    },
+    "tests/test_security_hardening.py": {
+      "sha256": "366c0c0d911affebc457e80f4ee5abeb2cb1c0291119ce00423eadd8020346a6",
+      "size_bytes": 11389,
+      "source_origin": "repo_source"
+    },
+    "tests/test_spectra_enhancements.py": {
+      "sha256": "b694e95b45d5dec6dd1e2d90ef43d43552e4d482acf18a820b2d7ffabe4844a1",
+      "size_bytes": 5796,
+      "source_origin": "repo_source"
+    },
+    "tests/test_thermochemistry_dual_slot.py": {
+      "sha256": "b9941981a46e1a96da437bb8feb28c9929b34cdfaa67e827c85d22b056a3a62b",
+      "size_bytes": 5452,
+      "source_origin": "repo_source"
+    },
+    "tests/test_web_routes.py": {
+      "sha256": "6bdddc484afbb859e26e167bc4df8b7cf90bd0790b0f7683fbe46ffa503ce1de",
+      "size_bytes": 26329,
+      "source_origin": "repo_source"
+    },
+    "THIRD_PARTY_LICENSES.md": {
+      "sha256": "47d41fb18b04be5bfde5c3a5c2818ee7c58f5db9af2d27f247a3f99e63b19b29",
+      "size_bytes": 9148,
+      "source_origin": "legal_document"
+    },
+    "tools/build_deployment_packages.py": {
+      "sha256": "2de9801e5acf49ffa46d8da495de0c22eb65e16a29c09c895d66bdbcc6ee592c",
+      "size_bytes": 22266,
+      "source_origin": "repo_source"
+    },
+    "tools/export_thermochemistry_json.py": {
+      "sha256": "67935274038fdd98ed60863fae016ab6d5be68d0dccc5fb8c7ebf39ef417ae54",
+      "size_bytes": 5393,
+      "source_origin": "repo_source"
+    },
+    "tools/export_training_jsonl.py": {
+      "sha256": "b58867c54cd9a6f2d30b6458a5eae9287dabdcef32522298ea0893aacf80e5f8",
+      "size_bytes": 15910,
+      "source_origin": "repo_source"
+    },
+    "tools/normalize_scientific_json.py": {
+      "sha256": "4b304bc4a92b5c83712a725a7d2746568c1899fef5b02eeb38dba976c2819f5b",
+      "size_bytes": 76152,
+      "source_origin": "repo_source"
+    },
+    "tools/verify_release.py": {
+      "sha256": "040cacb977621842a8e43fa03b261c521a492c9ac28350e6124194d794d44fa1",
+      "size_bytes": 11979,
+      "source_origin": "repo_source"
+    },
+    "FILE_MANIFEST.txt": {
+      "sha256": "d3b7a667090b1b90cdfbb216153c1b24a4a12286cd171ddd2013982bcaa2bd98",
+      "size_bytes": 39235,
+      "source_origin": "generated_manifest"
+    }
+  }
+}

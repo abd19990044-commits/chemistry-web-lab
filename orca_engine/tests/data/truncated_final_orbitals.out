@@ -1,0 +1,36 @@
+                                 * O   R   C   A *
+       Program Version 6.1.0  - RELEASE -
+ Total Charge           Charge          ....    0
+ Multiplicity           Mult            ....    1
+Your calculation utilizes the basis: def2-TZVP
+
+---------------------------------
+CARTESIAN COORDINATES (ANGSTROEM)
+---------------------------------
+  C      1.000000    0.000000    0.000000
+  H      2.000000    0.000000    0.000000
+
+----------------
+ORBITAL ENERGIES
+----------------
+  NO   OCC          E(Eh)            E(eV)
+   0   2.0000      -0.400000       -10.0000
+   1   2.0000      -0.200000        -5.5572
+   2   0.0000      -0.050000        -1.4088
+
+FINAL SINGLE POINT ENERGY      -100.100000000000
+
+---------------------------------
+CARTESIAN COORDINATES (ANGSTROEM)
+---------------------------------
+  C      1.100000    0.000000    0.000000
+  H      2.100000    0.000000    0.000000
+
+----------------
+ORBITAL ENERGIES
+----------------
+  NO   OCC          E(Eh)            E(eV)
+
+ORCA finished by error termination in SCF
+[file orca_tools/qcmsg.cpp, line 465]:
+  .... aborting the run

@@ -1,0 +1,86 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "orca-web-lab"
+version = "1.0.0"
+description = "Web lab, quantum chemistry analyzer, reaction editor, and thermochemistry workbench for ORCA"
+readme = "README.md"
+license = { text = "ORCA Web Lab Academic and Non-Commercial License v1.1" }
+requires-python = ">=3.11, <3.14"
+keywords = [
+    "computational-chemistry",
+    "quantum-chemistry",
+    "orca",
+    "thermochemistry",
+    "spectroscopy",
+    "rdkit",
+    "dft",
+]
+authors = [
+    { name = "Orca Web Lab Team" }
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+dependencies = [
+    "Flask>=3.0.3, <4.0.0",
+    "gunicorn>=22.0.0; sys_platform != 'win32'",
+    "requests>=2.32.3",
+    "rdkit>=2023.9.0",
+    "kaggle>=2.2.3",
+    "google-auth>=2.32.0",
+    "pillow>=10.0.0",
+    "rarfile>=4.0",
+    "openpyxl>=3.1.2",
+    "jsonschema>=4.20.0",
+    "cryptography>=41.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "jsonschema>=4.20.0",
+    "numpy>=1.24.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "jsonschema>=4.20.0",
+    "numpy>=1.24.0",
+    "mypy>=1.10.0",
+    "ruff>=0.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/salamhasan/orca-web-lab"
+Repository = "https://github.com/salamhasan/orca-web-lab"
+
+[tool.hatch.build.targets.wheel]
+packages = ["chem_core", "orca_orchestrator", "tools"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests", "orca_engine/tests"]
+pythonpath = [".", "orca_engine/src"]
+norecursedirs = ["scratch", ".git", "__pycache__", ".pytest_cache", ".pytest_temp", "test_job", "benchmarks", "data"]
+python_files = ["test_*.py"]
+addopts = "-v"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = [".", "orca_engine/src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

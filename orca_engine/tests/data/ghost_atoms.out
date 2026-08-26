@@ -1,0 +1,17 @@
+                                 * O   R   C   A *
+       Program Version 6.1.0  - RELEASE -
+ Total Charge           Charge          ....    0
+ Multiplicity           Mult            ....    1
+Your calculation utilizes the basis: def2-TZVP
+
+---------------------------------
+CARTESIAN COORDINATES (ANGSTROEM)
+---------------------------------
+  O      0.000000    0.000000    0.000000
+  H      0.960000    0.000000    0.000000
+  H:     3.000000    0.000000    0.000000
+  O      4.000000    0.000000    0.000000
+  H      4.960000    0.000000    0.000000
+
+FINAL SINGLE POINT ENERGY      -152.800000000000
+                             ****ORCA TERMINATED NORMALLY****

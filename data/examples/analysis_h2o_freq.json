@@ -1,0 +1,472 @@
+{
+  "schema_version": "orca-web-lab.1.0",
+  "dataset_version": "2026.1",
+  "record_type": "analysis_record",
+  "record_id": "an_freq_water_001",
+  "content_hash": "cf6e50aa983d7b47405efcdf260317ba7f674cf77335124c25f7af4d8b7b3312",
+  "split_group_key": "group_water",
+  "name": "Water Harmonic Vibrational Frequencies & Thermochemistry",
+  "created_at": "2026-08-25T12:17:13.857052+00:00",
+  "updated_at": "2026-08-25T12:17:13.857052+00:00",
+  "provenance": {
+    "source_type": "orca_analyzer",
+    "source_filename": "water_freq.out",
+    "source_job_id": null,
+    "source_result_manifest": null,
+    "result_sha256": null,
+    "source_url": null,
+    "application_version": "2026.1",
+    "orca_version": "6.1.0",
+    "parser_version": "2026.1",
+    "git_sha": null,
+    "generated_by": "ORCA Web Lab Canonical Normalizer",
+    "imported_from": null,
+    "source_artifacts": [
+      {
+        "artifact_id": "art_2aac1058_1",
+        "filename": "water_freq.out",
+        "artifact_type": "orca_output",
+        "storage_reference": "water_freq.out",
+        "sha256": null,
+        "size_bytes": null
+      }
+    ]
+  },
+  "migration_report": {
+    "mapped_fields": [
+      "analysis_results",
+      "calculations",
+      "coords_dict",
+      "electronic_structure",
+      "geometries",
+      "source_artifacts",
+      "thermochemistry",
+      "vibrational_frequencies_cm",
+      "vibrational_spectroscopy"
+    ],
+    "transformed_fields": [
+      "coordinates_to_atoms"
+    ],
+    "omitted_fields": [],
+    "missing_fields": [],
+    "warnings": [],
+    "unsupported_fields": []
+  },
+  "data_quality": {
+    "validation_status": "verified",
+    "completeness_score": 1.0,
+    "calculation_status": "COMPLETED",
+    "termination_status": "NORMAL",
+    "termination_message": "****ORCA TERMINATED NORMALLY****",
+    "had_error_termination": false,
+    "error_count": 0,
+    "stationary_point_status": "MINIMUM",
+    "thermochemistry_reliability": "RELIABLE",
+    "is_transition_state": false,
+    "parser_status": "SUCCESS",
+    "scientific_validation_status": "VERIFIED",
+    "missing_fields": [],
+    "warnings": [],
+    "errors": []
+  },
+  "molecular_system": {
+    "system_id": "sys_2aac1058",
+    "name": "Water Harmonic Vibrational Frequencies & Thermochemistry",
+    "total_charge": 0,
+    "total_multiplicity": 1,
+    "stoichiometry_formula": "H2O",
+    "atoms_count": 3,
+    "fragments": [],
+    "species": [
+      {
+        "species_id": "sp_2aac1058_1",
+        "name": "Water Harmonic Vibrational Frequencies & Thermochemistry",
+        "formula": "H2O",
+        "canonical_smiles": null,
+        "isomeric_smiles": null,
+        "inchi": null,
+        "inchikey": null,
+        "charge": 0,
+        "multiplicity": 1,
+        "atoms": [
+          {
+            "atom_id": 1,
+            "element": "O",
+            "atomic_number": 8,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.1173,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null,
+            "atomic_charges": {
+              "mulliken": null,
+              "loewdin": null,
+              "hirshfeld": null,
+              "mayer": null,
+              "mayer_valence": null
+            }
+          },
+          {
+            "atom_id": 2,
+            "element": "H",
+            "atomic_number": 1,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 0.0,
+              "y": 0.7572,
+              "z": -0.4692,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null,
+            "atomic_charges": {
+              "mulliken": null,
+              "loewdin": null,
+              "hirshfeld": null,
+              "mayer": null,
+              "mayer_valence": null
+            }
+          },
+          {
+            "atom_id": 3,
+            "element": "H",
+            "atomic_number": 1,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 0.0,
+              "y": -0.7572,
+              "z": -0.4692,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null,
+            "atomic_charges": {
+              "mulliken": null,
+              "loewdin": null,
+              "hirshfeld": null,
+              "mayer": null,
+              "mayer_valence": null
+            }
+          }
+        ],
+        "bonds": [],
+        "geometry_refs": [
+          "geo_2aac1058_1"
+        ]
+      }
+    ]
+  },
+  "geometries": [
+    {
+      "geometry_id": "geo_2aac1058_1",
+      "species_ref": "sp_2aac1058_1",
+      "geometry_type": "optimized",
+      "coordinate_units": "angstrom",
+      "coordinates": [
+        {
+          "element": "O",
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.1173
+        },
+        {
+          "element": "H",
+          "x": 0.0,
+          "y": 0.7572,
+          "z": -0.4692
+        },
+        {
+          "element": "H",
+          "x": 0.0,
+          "y": -0.7572,
+          "z": -0.4692
+        }
+      ],
+      "geometry_hash": "7d655d445639ea5197c4104dcb3e121c48f10273b3b98f6fc066e5000bd650b9",
+      "source_calculation_id": null
+    }
+  ],
+  "reaction": null,
+  "calculations": [
+    {
+      "calculation_id": "calc_2aac1058_1",
+      "calculation_type": "OPT",
+      "status": "COMPLETED",
+      "input_parameters": {
+        "method": "B3LYP",
+        "basis": "def2-TZVP",
+        "dispersion": "None",
+        "solvation": "None",
+        "solvent": "None",
+        "charge": 0,
+        "multiplicity": 1,
+        "temperature_k": null,
+        "pressure_atm": null,
+        "input_geometry_id": "geo_2aac1058_1"
+      },
+      "analysis_record_id": "an_2aac1058",
+      "orca_version": "6.1.0",
+      "input_source": null,
+      "output_source": null
+    }
+  ],
+  "workflows": [],
+  "analysis_results": {
+    "analysis_type": "OPT",
+    "status": "SUCCESS",
+    "single_point_energy_eh": -76.419948,
+    "zero_point_energy_eh": 0.02145,
+    "zero_point_corrected_energy_eh": -76.398498,
+    "total_enthalpy_eh": -76.394723,
+    "gibbs_free_energy_eh": -76.416173,
+    "entropy_cal_mol_k": 45.14,
+    "dipole_moment_debye": 1.85,
+    "homo_ev": -8.54,
+    "lumo_ev": 1.25,
+    "homo_lumo_gap_ev": 9.79,
+    "converged": true,
+    "stationary_point_status": "MINIMUM",
+    "imaginary_frequencies_count": 0
+  },
+  "electronic_structure": {
+    "status": "calculated",
+    "electronic_energy": {
+      "value": -76.419948,
+      "unit": "hartree",
+      "semantic_type": "electronic_scf",
+      "source_calculation_id": "calc_2aac1058_1",
+      "uncertainty": null
+    },
+    "frontier_orbitals": {
+      "homo": {
+        "value": -8.54,
+        "unit": "eV"
+      },
+      "lumo": {
+        "value": 1.25,
+        "unit": "eV"
+      },
+      "homo_lumo_gap": {
+        "value": 9.79,
+        "unit": "eV"
+      },
+      "alpha_homo": null,
+      "alpha_lumo": null,
+      "beta_homo": null,
+      "beta_lumo": null,
+      "orbitals_status": "restricted"
+    },
+    "conceptual_dft": {
+      "electronegativity": null,
+      "chemical_hardness": null,
+      "chemical_potential": null,
+      "chemical_softness": null,
+      "electrophilicity_index": null,
+      "electrodonating_power": null,
+      "electroaccepting_power": null,
+      "net_electrophilicity": null,
+      "ionization_potential": null,
+      "electron_affinity": null
+    },
+    "dipole_moment": {
+      "total_debye": 1.85,
+      "components_debye": null
+    },
+    "spin": {
+      "status": "not_applicable",
+      "s2_actual": null,
+      "s2_ideal": null,
+      "spin_contamination": null
+    }
+  },
+  "population_analysis": null,
+  "thermochemistry": {
+    "status": "calculated",
+    "electronic_energy": {
+      "value": -76.419948,
+      "unit": "hartree",
+      "source_calculation_id": "calc_2aac1058_1",
+      "semantic_type": "electronic_scf",
+      "uncertainty": null
+    },
+    "zero_point_energy": {
+      "value": 0.02145,
+      "unit": "hartree",
+      "source_calculation_id": "calc_2aac1058_1",
+      "uncertainty": null
+    },
+    "zpe": {
+      "value": 0.02145,
+      "unit": "hartree",
+      "source_calculation_id": "calc_2aac1058_1",
+      "uncertainty": null
+    },
+    "zero_point_corrected_energy": {
+      "value": -76.398498,
+      "unit": "hartree",
+      "formula": "E_electronic + ZPE",
+      "components": {
+        "electronic_energy": -76.419948,
+        "zero_point_energy": 0.02145
+      }
+    },
+    "thermal_correction": {
+      "value": 0.0037750000000045247,
+      "unit": "hartree",
+      "source_calculation_id": "calc_2aac1058_1",
+      "uncertainty": null
+    },
+    "enthalpy": {
+      "value": -76.394723,
+      "unit": "hartree",
+      "source_calculation_id": "calc_2aac1058_1",
+      "uncertainty": null
+    },
+    "entropy": {
+      "value": 45.14,
+      "unit": "cal/mol/K",
+      "source_calculation_id": "calc_2aac1058_1",
+      "uncertainty": null
+    },
+    "entropy_term_ts": {
+      "value": 0.02145,
+      "unit": "hartree",
+      "source_calculation_id": "calc_2aac1058_1",
+      "uncertainty": null
+    },
+    "entropy_correction_minus_ts": {
+      "value": -0.02145,
+      "unit": "hartree",
+      "source_calculation_id": "calc_2aac1058_1",
+      "uncertainty": null
+    },
+    "gibbs_free_energy": {
+      "value": -76.416173,
+      "unit": "hartree",
+      "source_calculation_id": "calc_2aac1058_1",
+      "uncertainty": null
+    },
+    "equilibrium_constant": null,
+    "temperature_k": null,
+    "pressure_atm": null,
+    "standard_state": "Gas Phase (1 atm)",
+    "stationary_point_status": "MINIMUM",
+    "numerical_consistency": {
+      "e0_relation_valid": true,
+      "e0_delta_eh": 0.0,
+      "gibbs_relation_valid": true,
+      "gibbs_delta_eh": 0.0,
+      "warnings": []
+    },
+    "composite_sources": {
+      "electronic_energy_source": null,
+      "zpe_source": null,
+      "vibrational_source": null,
+      "thermal_correction_source": null,
+      "entropy_source": null,
+      "geometry_source": null
+    }
+  },
+  "vibrational_spectroscopy": {
+    "status": "calculated",
+    "imaginary_frequencies_count": 0,
+    "imaginary_frequencies_cm": [],
+    "harmonic_modes": [
+      {
+        "mode": 1,
+        "frequency_cm": 1595.0,
+        "intensity_km_mol": 65.2,
+        "is_imaginary": false,
+        "symmetry": null
+      },
+      {
+        "mode": 2,
+        "frequency_cm": 3657.0,
+        "intensity_km_mol": 3.4,
+        "is_imaginary": false,
+        "symmetry": null
+      },
+      {
+        "mode": 3,
+        "frequency_cm": 3756.0,
+        "intensity_km_mol": 45.8,
+        "is_imaginary": false,
+        "symmetry": null
+      }
+    ],
+    "derived_spectrum": null,
+    "peak_assignments": [],
+    "experimental_spectra": []
+  },
+  "electronic_spectroscopy": null,
+  "nmr_spectroscopy": null,
+  "properties": {
+    "electronic": {
+      "homo_ev": -8.54,
+      "lumo_ev": 1.25,
+      "homo_lumo_gap_ev": 9.79,
+      "dipole_moment_debye": 1.85
+    },
+    "thermodynamic": null,
+    "spectroscopic": null,
+    "reactivity_indices": {
+      "electronegativity_ev": null,
+      "chemical_hardness_ev": null,
+      "electrophilicity_index_ev": null
+    }
+  },
+  "spectroscopy": {
+    "ir": {
+      "theoretical_modes": [
+        {
+          "mode": 1,
+          "frequency_cm": 1595.0,
+          "intensity_km_mol": 65.2
+        },
+        {
+          "mode": 2,
+          "frequency_cm": 3657.0,
+          "intensity_km_mol": 3.4
+        },
+        {
+          "mode": 3,
+          "frequency_cm": 3756.0,
+          "intensity_km_mol": 45.8
+        }
+      ],
+      "experimental_spectra": [],
+      "peak_assignments": []
+    },
+    "uv_vis": {
+      "theoretical_transitions": [],
+      "experimental_spectra": []
+    },
+    "nmr": {
+      "nuclei": []
+    }
+  },
+  "training_metadata": {
+    "task_type": "molecular_property_prediction",
+    "input_modality": "coordinates",
+    "target_modality": "energy",
+    "label": -76.416173,
+    "label_type": "float",
+    "quality_flags": [
+      "valid_geometry"
+    ],
+    "split_hint": "train"
+  }
+}

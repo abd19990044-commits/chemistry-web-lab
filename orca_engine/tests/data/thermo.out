@@ -1,0 +1,29 @@
+                                 * O   R   C   A *
+       Program Version 6.1.0  - RELEASE -
+ Total Charge           Charge          ....    0
+ Multiplicity           Mult            ....    1
+Your calculation utilizes the basis: def2-TZVP
+CPCM: Your calculation utilizes the SMD solvation module
+
+---------------------------------
+CARTESIAN COORDINATES (ANGSTROEM)
+---------------------------------
+  O      0.000000    0.000000    0.000000
+  H      0.960000    0.000000    0.000000
+  H     -0.240000    0.930000    0.000000
+
+FINAL SINGLE POINT ENERGY      -76.400000000000
+
+Temperature         ...   298.15 K
+Pressure            ...     1.00 atm
+
+Zero point energy                ...      0.02100000 Eh      13.18 kcal/mol
+Total enthalpy                   ...    -76.37000000 Eh
+Electronic entropy               ...      0.00000000 Eh      0.00 kcal/mol
+Vibrational entropy              ...      0.00010000 Eh      0.06 kcal/mol
+out the resulting rotational entropy values for sn=1,12:
+Final entropy term               ...      0.02000000 Eh      12.55 kcal/mol
+Final Gibbs free energy          ...    -76.39000000 Eh
+Total entropy correction         ...     -0.02000000 Eh     -12.55 kcal/mol
+
+                             ****ORCA TERMINATED NORMALLY****

@@ -1,0 +1,4031 @@
+
+                                 *****************
+                                 * O   R   C   A *
+                                 *****************
+
+                                            #,                                       
+                                            ###                                      
+                                            ####                                     
+                                            #####                                    
+                                            ######                                   
+                                           ########,                                 
+                                     ,,################,,,,,                         
+                               ,,#################################,,                 
+                          ,,##########################################,,             
+                       ,#########################################, ''#####,          
+                    ,#############################################,,   '####,        
+                  ,##################################################,,,,####,       
+                ,###########''''           ''''###############################       
+              ,#####''   ,,,,##########,,,,          '''####'''          '####       
+            ,##' ,,,,###########################,,,                        '##       
+           ' ,,###''''                  '''############,,,                           
+         ,,##''                                '''############,,,,        ,,,,,,###''
+      ,#''                                            '''#######################'''  
+     '                                                          ''''####''''         
+             ,#######,   #######,   ,#######,      ##                                
+            ,#'     '#,  ##    ##  ,#'     '#,    #''#        ######   ,####,        
+            ##       ##  ##   ,#'  ##            #'  '#       #        #'  '#        
+            ##       ##  #######   ##           ,######,      #####,   #    #        
+            '#,     ,#'  ##    ##  '#,     ,#' ,#      #,         ##   #,  ,#        
+             '#######'   ##     ##  '#######'  #'      '#     #####' # '####'        
+
+
+
+                  #######################################################
+                  #                        -***-                        #
+                  #          Department of theory and spectroscopy      #
+                  #    Directorship and core code : Frank Neese         #
+                  #        Max Planck Institute fuer Kohlenforschung    #
+                  #                Kaiser Wilhelm Platz 1               #
+                  #                 D-45470 Muelheim/Ruhr               #
+                  #                      Germany                        #
+                  #                                                     #
+                  #                  All rights reserved                #
+                  #                        -***-                        #
+                  #######################################################
+
+
+                         Program Version 5.0.2 -  RELEASE  -
+
+
+ With contributions from (in alphabetic order):
+   Daniel Aravena         : Magnetic Suceptibility
+   Michael Atanasov       : Ab Initio Ligand Field Theory (pilot matlab implementation)
+   Alexander A. Auer      : GIAO ZORA, VPT2 properties, NMR spectrum
+   Ute Becker             : Parallelization
+   Giovanni Bistoni       : ED, misc. LED, open-shell LED, HFLD
+   Martin Brehm           : Molecular dynamics
+   Dmytro Bykov           : SCF Hessian
+   Vijay G. Chilkuri      : MRCI spin determinant printing, contributions to CSF-ICE
+   Dipayan Datta          : RHF DLPNO-CCSD density
+   Achintya Kumar Dutta   : EOM-CC, STEOM-CC
+   Dmitry Ganyushin       : Spin-Orbit,Spin-Spin,Magnetic field MRCI
+   Miquel Garcia          : C-PCM and meta-GGA Hessian, CC/C-PCM, Gaussian charge scheme
+   Yang Guo               : DLPNO-NEVPT2, F12-NEVPT2, CIM, IAO-localization
+   Andreas Hansen         : Spin unrestricted coupled pair/coupled cluster methods
+   Benjamin Helmich-Paris : MC-RPA, TRAH-SCF, COSX integrals
+   Lee Huntington         : MR-EOM, pCC
+   Robert Izsak           : Overlap fitted RIJCOSX, COSX-SCS-MP3, EOM
+   Marcus Kettner         : VPT2
+   Christian Kollmar      : KDIIS, OOCD, Brueckner-CCSD(T), CCSD density, CASPT2, CASPT2-K
+   Simone Kossmann        : Meta GGA functionals, TD-DFT gradient, OOMP2, MP2 Hessian
+   Martin Krupicka        : Initial AUTO-CI
+   Lucas Lang             : DCDCAS
+   Marvin Lechner         : AUTO-CI (C++ implementation), FIC-MRCC
+   Dagmar Lenk            : GEPOL surface, SMD
+   Dimitrios Liakos       : Extrapolation schemes; Compound Job, initial MDCI parallelization
+   Dimitrios Manganas     : Further ROCIS development; embedding schemes
+   Dimitrios Pantazis     : SARC Basis sets
+   Anastasios Papadopoulos: AUTO-CI, single reference methods and gradients
+   Taras Petrenko         : DFT Hessian,TD-DFT gradient, ASA, ECA, R-Raman, ABS, FL, XAS/XES, NRVS
+   Peter Pinski           : DLPNO-MP2, DLPNO-MP2 Gradient
+   Christoph Reimann      : Effective Core Potentials
+   Marius Retegan         : Local ZFS, SOC
+   Christoph Riplinger    : Optimizer, TS searches, QM/MM, DLPNO-CCSD(T), (RO)-DLPNO pert. Triples
+   Tobias Risthaus        : Range-separated hybrids, TD-DFT gradient, RPA, STAB
+   Michael Roemelt        : Original ROCIS implementation
+   Masaaki Saitow         : Open-shell DLPNO-CCSD energy and density
+   Barbara Sandhoefer     : DKH picture change effects
+   Avijit Sen             : IP-ROCIS
+   Kantharuban Sivalingam : CASSCF convergence, NEVPT2, FIC-MRCI
+   Bernardo de Souza      : ESD, SOC TD-DFT
+   Georgi Stoychev        : AutoAux, RI-MP2 NMR, DLPNO-MP2 response
+   Willem Van den Heuvel  : Paramagnetic NMR
+   Boris Wezisla          : Elementary symmetry handling
+   Frank Wennmohs         : Technical directorship
+
+
+ We gratefully acknowledge several colleagues who have allowed us to
+ interface, adapt or use parts of their codes:
+   Stefan Grimme, W. Hujo, H. Kruse, P. Pracht,  : VdW corrections, initial TS optimization,
+                  C. Bannwarth, S. Ehlert          DFT functionals, gCP, sTDA/sTD-DF
+   Ed Valeev, F. Pavosevic, A. Kumar             : LibInt (2-el integral package), F12 methods
+   Garnet Chan, S. Sharma, J. Yang, R. Olivares  : DMRG
+   Ulf Ekstrom                                   : XCFun DFT Library
+   Mihaly Kallay                                 : mrcc  (arbitrary order and MRCC methods)
+   Jiri Pittner, Ondrej Demel                    : Mk-CCSD
+   Frank Weinhold                                : gennbo (NPA and NBO analysis)
+   Christopher J. Cramer and Donald G. Truhlar   : smd solvation model
+   Lars Goerigk                                  : TD-DFT with DH, B97 family of functionals
+   V. Asgeirsson, H. Jonsson                     : NEB implementation
+   FAccTs GmbH                                   : IRC, NEB, NEB-TS, DLPNO-Multilevel, CI-OPT
+                                                   MM, QMMM, 2- and 3-layer-ONIOM, Crystal-QMMM,
+                                                   LR-CPCM, SF, NACMEs, symmetry and pop. for TD-DFT,
+                                                   nearIR, NL-DFT gradient (VV10), updates on ESD,
+                                                   ML-optimized integration grids
+   S Lehtola, MJT Oliveira, MAL Marques          : LibXC Library
+   Liviu Ungur et al                             : ANISO software
+
+
+ Your calculation uses the libint2 library for the computation of 2-el integrals
+ For citations please refer to: http://libint.valeyev.net
+
+ Your ORCA version has been built with support for libXC version: 5.1.0
+ For citations please refer to: https://tddft.org/programs/libxc/
+
+ This ORCA versions uses:
+   CBLAS   interface :  Fast vector & matrix operations
+   LAPACKE interface :  Fast linear algebra routines
+   Shared memory     :  Shared parallel matrices
+
+
+Your calculation utilizes the atom-pairwise dispersion correction
+with the Becke-Johnson damping scheme (D3BJ)
+Cite in your paper:
+S.Grimme, S.Ehrlich, L.Goerigk, J Comput Chem, (2011), 32, 1456–1465 
+S.Grimme, J.Antony, S.Ehrlich and H.Krieg, J.Chem.Phys., 132, (2010), 154104 
+   
+
+================================================================================
+
+----- Orbital basis set information -----
+Your calculation utilizes the basis: def2-TZVPP
+   F. Weigend and R. Ahlrichs, Phys. Chem. Chem. Phys. 7, 3297 (2005).
+
+----- AuxJ basis set information -----
+Your calculation utilizes the auxiliary basis: def2/J
+   F. Weigend, Phys. Chem. Chem. Phys. 8, 1057 (2006).
+
+================================================================================
+                                        WARNINGS
+                       Please study these warnings very carefully!
+================================================================================
+
+
+WARNING: your system is open-shell and RHF/RKS was chosen
+  ===> : WILL SWITCH to UHF/UKS
+
+
+INFO   : the flag for use of the SHARK integral package has been found!
+
+================================================================================
+                                       INPUT FILE
+================================================================================
+NAME = C:\Users\ahmed\OneDrive\Desktop\napten\nap11.inp
+|  1> # avogadro generated ORCA input file 
+|  2> # Basic Mode
+|  3> # 
+|  4> ! BP86 D3BJ RI SP def2-QZVP def2-TZVPP 
+|  5> 
+|  6> * xyz 0 2
+|  7>    O       -4.68046       -0.21343       -0.24881
+|  8>    O        5.14775        0.70027       -0.47577
+|  9>    O        3.23806        1.27547       -1.44626
+| 10>    C        3.19924       -0.40238        0.36834
+| 11>    C        1.69442       -0.56215        0.20103
+| 12>    C       -0.57147        0.36917        0.26698
+| 13>    C       -1.10162       -0.88120       -0.11147
+| 14>    C        0.81723        0.51311        0.42034
+| 15>    C        1.15438       -1.79964       -0.17188
+| 16>    C       -0.22630       -1.95688       -0.32594
+| 17>    C        3.54902       -0.03945        1.81413
+| 18>    C       -1.44347        1.44711        0.47801
+| 19>    C       -2.49190       -1.01602       -0.26804
+| 20>    C       -3.35442        0.06441       -0.05681
+| 21>    C        3.80509        0.60592       -0.59906
+| 22>    C       -2.82436        1.29690        0.31757
+| 23>    C       -5.59437        0.85817       -0.05049
+| 24>    H        3.67271       -1.36496        0.13221
+| 25>    H        1.22125        1.48510        0.69847
+| 26>    H        1.80093       -2.65640       -0.34952
+| 27>    H       -0.61550       -2.92933       -0.62006
+| 28>    H        4.63262       -0.06166        1.97360
+| 29>    H        3.20690        0.96898        2.07330
+| 30>    H        3.09457       -0.74306        2.52041
+| 31>    H       -1.05165        2.41993        0.76692
+| 32>    H       -2.91685       -1.97325       -0.56232
+| 33>    H       -3.45251        2.16375        0.49085
+| 34>    H       -6.60239        0.47899       -0.24358
+| 35>    H       -5.40528        1.67459       -0.75553
+| 36>    H       -5.56550        1.21457        0.98462
+| 37> *
+| 38> 
+| 39> 
+| 40>                          ****END OF INPUT****
+================================================================================
+
+                       ****************************
+                       * Single Point Calculation *
+                       ****************************
+
+---------------------------------
+CARTESIAN COORDINATES (ANGSTROEM)
+---------------------------------
+  O     -4.680460   -0.213430   -0.248810
+  O      5.147750    0.700270   -0.475770
+  O      3.238060    1.275470   -1.446260
+  C      3.199240   -0.402380    0.368340
+  C      1.694420   -0.562150    0.201030
+  C     -0.571470    0.369170    0.266980
+  C     -1.101620   -0.881200   -0.111470
+  C      0.817230    0.513110    0.420340
+  C      1.154380   -1.799640   -0.171880
+  C     -0.226300   -1.956880   -0.325940
+  C      3.549020   -0.039450    1.814130
+  C     -1.443470    1.447110    0.478010
+  C     -2.491900   -1.016020   -0.268040
+  C     -3.354420    0.064410   -0.056810
+  C      3.805090    0.605920   -0.599060
+  C     -2.824360    1.296900    0.317570
+  C     -5.594370    0.858170   -0.050490
+  H      3.672710   -1.364960    0.132210
+  H      1.221250    1.485100    0.698470
+  H      1.800930   -2.656400   -0.349520
+  H     -0.615500   -2.929330   -0.620060
+  H      4.632620   -0.061660    1.973600
+  H      3.206900    0.968980    2.073300
+  H      3.094570   -0.743060    2.520410
+  H     -1.051650    2.419930    0.766920
+  H     -2.916850   -1.973250   -0.562320
+  H     -3.452510    2.163750    0.490850
+  H     -6.602390    0.478990   -0.243580
+  H     -5.405280    1.674590   -0.755530
+  H     -5.565500    1.214570    0.984620
+
+----------------------------
+CARTESIAN COORDINATES (A.U.)
+----------------------------
+  NO LB      ZA    FRAG     MASS         X           Y           Z
+   0 O     8.0000    0    15.999   -8.844788   -0.403324   -0.470183
+   1 O     8.0000    0    15.999    9.727838    1.323319   -0.899075
+   2 O     8.0000    0    15.999    6.119047    2.410289   -2.733035
+   3 C     6.0000    0    12.011    6.045687   -0.760388    0.696062
+   4 C     6.0000    0    12.011    3.201990   -1.062310    0.379892
+   5 C     6.0000    0    12.011   -1.079922    0.697630    0.504519
+   6 C     6.0000    0    12.011   -2.081760   -1.665227   -0.210648
+   7 C     6.0000    0    12.011    1.544341    0.969637    0.794327
+   8 C     6.0000    0    12.011    2.181462   -3.400827   -0.324806
+   9 C     6.0000    0    12.011   -0.427645   -3.697967   -0.615937
+  10 C     6.0000    0    12.011    6.706676   -0.074550    3.428209
+  11 C     6.0000    0    12.011   -2.727763    2.734642    0.903308
+  12 C     6.0000    0    12.011   -4.709009   -1.920000   -0.506522
+  13 C     6.0000    0    12.011   -6.338935    0.121717   -0.107355
+  14 C     6.0000    0    12.011    7.190578    1.145023   -1.132059
+  15 C     6.0000    0    12.011   -5.337267    2.450786    0.600120
+  16 C     6.0000    0    12.011  -10.571827    1.621706   -0.095412
+  17 H     1.0000    0     1.008    6.940416   -2.579401    0.249841
+  18 H     1.0000    0     1.008    2.307828    2.806432    1.319917
+  19 H     1.0000    0     1.008    3.403264   -5.019869   -0.660497
+  20 H     1.0000    0     1.008   -1.163126   -5.535631   -1.171744
+  21 H     1.0000    0     1.008    8.754383   -0.116521    3.729563
+  22 H     1.0000    0     1.008    6.060163    1.831107    3.917969
+  23 H     1.0000    0     1.008    5.847890   -1.404180    4.762885
+  24 H     1.0000    0     1.008   -1.987330    4.573005    1.449269
+  25 H     1.0000    0     1.008   -5.512048   -3.728902   -1.062631
+  26 H     1.0000    0     1.008   -6.524298    4.088895    0.927572
+  27 H     1.0000    0     1.008  -12.476709    0.905160   -0.460299
+  28 H     1.0000    0     1.008  -10.214499    3.164516   -1.427745
+  29 H     1.0000    0     1.008  -10.517271    2.295205    1.860662
+
+--------------------------------
+INTERNAL COORDINATES (ANGSTROEM)
+--------------------------------
+ O      0   0   0     0.000000000000     0.00000000     0.00000000
+ O      1   0   0     9.873199599709     0.00000000     0.00000000
+ O      2   1   0     2.218022041414    34.61303952     0.00000000
+ C      2   1   3     2.392707657592    30.52587052   192.51894780
+ C      4   2   1     1.522498709819   144.53691577    10.80002184
+ C      5   4   2     2.450706803557   150.57668281   295.37150866
+ C      6   5   4     1.409861185330    90.19581237   180.17164382
+ C      6   5   4     1.404537540687    29.27566979     0.00000000
+ C      5   4   2     1.400745005274   120.20036290   115.70167395
+ C      9   5   4     1.398118794524   120.62533001   179.89578371
+ C      4   2   1     1.531134532757    92.16925041   239.15467248
+ C      6   5   4     1.402452246781   150.57689493     0.76205491
+ C      7   6   5     1.405549385721   119.13803431   180.34043516
+ C      1   2   3     1.368371713826    11.41674207   251.12844515
+ C      3   2   1     1.219658994719    32.15910939   354.04632263
+ C     14   1  13     1.392894679471   125.88413301   179.93907723
+ C      1   2   3     1.422282978349   124.96788606   297.63913792
+ H      4   2   1     1.098404057804    88.68111676   130.99425384
+ H      8   6   5     1.088739187042   119.09712257   178.91837575
+ H      9   5   4     1.087943275038   120.66854769   359.75260208
+ H     10   9   5     1.087953223673   118.92004598   179.77170833
+ H     11   4   2     1.095496656773   111.01506044   324.39074900
+ H     11   4   2     1.095968178461   111.72078149    83.79114232
+ H     11   4   2     1.095638294785   111.20598845   204.54271559
+ H     12   6   5     1.087828411515   120.22269455   359.54321682
+ H     13   7   6     1.087875219775   120.06048464   179.83021876
+ H     16  14   1     1.084447925629   121.99305684   359.95410164
+ H     17   1   2     1.094150602477   107.83465631   170.57747914
+ H     17   1   2     1.095161196400   111.15912861    52.75455849
+ H     17   1   2     1.095128827581   111.10361693   288.37382123
+
+---------------------------
+INTERNAL COORDINATES (A.U.)
+---------------------------
+ O      0   0   0     0.000000000000     0.00000000     0.00000000
+ O      1   0   0    18.657643308992     0.00000000     0.00000000
+ O      2   1   0     4.191454217274    34.61303952     0.00000000
+ C      2   1   3     4.521562191385    30.52587052   192.51894780
+ C      4   2   1     2.877105600806   144.53691577    10.80002184
+ C      5   4   2     4.631164693260   150.57668281   295.37150866
+ C      6   5   4     2.664251527119    90.19581237   180.17164382
+ C      6   5   4     2.654191296710    29.27566979     0.00000000
+ C      5   4   2     2.647024443426   120.20036290   115.70167395
+ C      9   5   4     2.642061624338   120.62533001   179.89578371
+ C      4   2   1     2.893424941100    92.16925041   239.15467248
+ C      6   5   4     2.650250662318   150.57689493     0.76205491
+ C      7   6   5     2.656103406713   119.13803431   180.34043516
+ C      1   2   3     2.585847788536    11.41674207   251.12844515
+ C      3   2   1     2.304821476793    32.15910939   354.04632263
+ C     14   1  13     2.632189477597   125.88413301   179.93907723
+ C      1   2   3     2.687725314017   124.96788606   297.63913792
+ H      4   2   1     2.075682853637    88.68111676   130.99425384
+ H      8   6   5     2.057418894777   119.09712257   178.91837575
+ H      9   5   4     2.055914839063   120.66854769   359.75260208
+ H     10   9   5     2.055933639258   118.92004598   179.77170833
+ H     11   4   2     2.070188661927   111.01506044   324.39074900
+ H     11   4   2     2.071079708785   111.72078149    83.79114232
+ H     11   4   2     2.070456318981   111.20598845   204.54271559
+ H     12   6   5     2.055697778463   120.22269455   359.54321682
+ H     13   7   6     2.055786233254   120.06048464   179.83021876
+ H     16  14   1     2.049309585937   121.99305684   359.95410164
+ H     17   1   2     2.067644987946   107.83465631   170.57747914
+ H     17   1   2     2.069554733693   111.15912861    52.75455849
+ H     17   1   2     2.069493565491   111.10361693   288.37382123
+
+---------------------
+BASIS SET INFORMATION
+---------------------
+There are 3 groups of distinct atoms
+
+ Group   1 Type O   : 11s6p2d1f contracted to 5s3p2d1f pattern {62111/411/11/1}
+ Group   2 Type C   : 11s6p2d1f contracted to 5s3p2d1f pattern {62111/411/11/1}
+ Group   3 Type H   : 5s2p1d contracted to 3s2p1d pattern {311/11/1}
+
+Atom   0O    basis set group =>   1
+Atom   1O    basis set group =>   1
+Atom   2O    basis set group =>   1
+Atom   3C    basis set group =>   2
+Atom   4C    basis set group =>   2
+Atom   5C    basis set group =>   2
+Atom   6C    basis set group =>   2
+Atom   7C    basis set group =>   2
+Atom   8C    basis set group =>   2
+Atom   9C    basis set group =>   2
+Atom  10C    basis set group =>   2
+Atom  11C    basis set group =>   2
+Atom  12C    basis set group =>   2
+Atom  13C    basis set group =>   2
+Atom  14C    basis set group =>   2
+Atom  15C    basis set group =>   2
+Atom  16C    basis set group =>   2
+Atom  17H    basis set group =>   3
+Atom  18H    basis set group =>   3
+Atom  19H    basis set group =>   3
+Atom  20H    basis set group =>   3
+Atom  21H    basis set group =>   3
+Atom  22H    basis set group =>   3
+Atom  23H    basis set group =>   3
+Atom  24H    basis set group =>   3
+Atom  25H    basis set group =>   3
+Atom  26H    basis set group =>   3
+Atom  27H    basis set group =>   3
+Atom  28H    basis set group =>   3
+Atom  29H    basis set group =>   3
+---------------------------------
+AUXILIARY/J BASIS SET INFORMATION
+---------------------------------
+There are 3 groups of distinct atoms
+
+ Group   1 Type O   : 12s5p4d2f1g contracted to 6s4p3d1f1g pattern {711111/2111/211/2/1}
+ Group   2 Type C   : 12s5p4d2f1g contracted to 6s4p3d1f1g pattern {711111/2111/211/2/1}
+ Group   3 Type H   : 5s2p1d contracted to 3s1p1d pattern {311/2/1}
+
+Atom   0O    basis set group =>   1
+Atom   1O    basis set group =>   1
+Atom   2O    basis set group =>   1
+Atom   3C    basis set group =>   2
+Atom   4C    basis set group =>   2
+Atom   5C    basis set group =>   2
+Atom   6C    basis set group =>   2
+Atom   7C    basis set group =>   2
+Atom   8C    basis set group =>   2
+Atom   9C    basis set group =>   2
+Atom  10C    basis set group =>   2
+Atom  11C    basis set group =>   2
+Atom  12C    basis set group =>   2
+Atom  13C    basis set group =>   2
+Atom  14C    basis set group =>   2
+Atom  15C    basis set group =>   2
+Atom  16C    basis set group =>   2
+Atom  17H    basis set group =>   3
+Atom  18H    basis set group =>   3
+Atom  19H    basis set group =>   3
+Atom  20H    basis set group =>   3
+Atom  21H    basis set group =>   3
+Atom  22H    basis set group =>   3
+Atom  23H    basis set group =>   3
+Atom  24H    basis set group =>   3
+Atom  25H    basis set group =>   3
+Atom  26H    basis set group =>   3
+Atom  27H    basis set group =>   3
+Atom  28H    basis set group =>   3
+Atom  29H    basis set group =>   3
+------------------------------------------------------------------------------
+                           ORCA GTO INTEGRAL CALCULATION
+                           -- RI-GTO INTEGRALS CHOSEN --
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+                   ___                                                        
+                  /   \      - P O W E R E D   B Y -                         
+                 /     \                                                     
+                 |  |  |   _    _      __       _____    __    __             
+                 |  |  |  | |  | |    /  \     |  _  \  |  |  /  |          
+                  \  \/   | |  | |   /    \    | | | |  |  | /  /          
+                 / \  \   | |__| |  /  /\  \   | |_| |  |  |/  /          
+                |  |  |   |  __  | /  /__\  \  |    /   |      \           
+                |  |  |   | |  | | |   __   |  |    \   |  |\   \          
+                \     /   | |  | | |  |  |  |  | |\  \  |  | \   \       
+                 \___/    |_|  |_| |__|  |__|  |_| \__\ |__|  \__/        
+                                                                              
+                      - O R C A' S   B I G   F R I E N D -                    
+                                      &                                       
+                       - I N T E G R A L  F E E D E R -                       
+                                                                              
+ v1 FN, 2020, v2 2021                                                         
+------------------------------------------------------------------------------
+
+
+Reading SHARK input file C:\Users\ahmed\OneDrive\Desktop\napten\nap11.SHARKINP.tmp ... ok
+----------------------
+SHARK INTEGRAL PACKAGE
+----------------------
+
+Number of atoms                             ...     30
+Number of basis functions                   ...    709
+Number of shells                            ...    265
+Maximum angular momentum                    ...      3
+Integral batch strategy                     ... SHARK/LIBINT Hybrid
+RI-J (if used) integral strategy            ... SPLIT-RIJ (Revised 2003 algorithm where possible)
+Printlevel                                  ...      1
+Contraction scheme used                     ... SEGMENTED contraction
+Coulomb Range Separation                    ... NOT USED
+Exchange Range Separation                   ... NOT USED
+Finite Nucleus Model                        ... NOT USED
+Auxiliary Coulomb fitting basis             ... AVAILABLE
+   # of basis functions in Aux-J            ...    976
+   # of shells in Aux-J                     ...    320
+   Maximum angular momentum in Aux-J        ...      4
+Auxiliary J/K fitting basis                 ... NOT available
+Auxiliary Correlation fitting basis         ... NOT available
+Auxiliary 'external' fitting basis          ... NOT available
+Integral threshold                          ...     1.000000e-10
+Primitive cut-off                           ...     1.000000e-11
+Primitive pair pre-selection threshold      ...     1.000000e-11
+
+Calculating pre-screening integrals         ... done (  0.2 sec) Dimension = 265
+Organizing shell pair data                  ... done (  0.8 sec)
+Shell pair information
+Total number of shell pairs                 ...     35245
+Shell pairs after pre-screening             ...     24615
+Total number of primitive shell pairs       ...     99203
+Primitive shell pairs kept                  ...     48970
+          la=0 lb=0:   5341 shell pairs
+          la=1 lb=0:   6926 shell pairs
+          la=1 lb=1:   2287 shell pairs
+          la=2 lb=0:   3853 shell pairs
+          la=2 lb=1:   2535 shell pairs
+          la=2 lb=2:    712 shell pairs
+          la=3 lb=0:   1424 shell pairs
+          la=3 lb=1:    927 shell pairs
+          la=3 lb=2:    506 shell pairs
+          la=3 lb=3:    104 shell pairs
+
+Calculating one electron integrals          ... done (  0.3 sec)
+Calculating RI/J V-Matrix + Cholesky decomp.... done (  0.1 sec)
+Calculating Nuclear repulsion               ... done (  0.0 sec) ENN=   1110.272233214944 Eh
+
+SHARK setup successfully completed in   2.2 seconds
+
+Maximum memory used throughout the entire GTOINT-calculation: 342.9 MB
+-------------------------------------------------------------------------------
+                                 ORCA SCF
+-------------------------------------------------------------------------------
+
+------------
+SCF SETTINGS
+------------
+Hamiltonian:
+ Density Functional     Method          .... DFT(GTOs)
+ Exchange Functional    Exchange        .... B88
+   X-Alpha parameter    XAlpha          ....  0.666667
+   Becke's b parameter  XBeta           ....  0.004200
+ Correlation Functional Correlation     .... P86
+ LDA part of GGA corr.  LDAOpt          .... PW91-LDA
+ Gradients option       PostSCFGGA      .... off
+   Density functional embedding theory  .... OFF
+   NL short-range parameter             ....  4.400000
+ RI-approximation to the Coulomb term is turned on
+   Number of AuxJ basis functions       .... 976
+
+
+General Settings:
+ Integral files         IntName         .... C:\Users\ahmed\OneDrive\Desktop\napten\nap11
+ Hartree-Fock type      HFTyp           .... UHF
+ Total Charge           Charge          ....    0
+ Multiplicity           Mult            ....    2
+ Number of Electrons    NEL             ....  121
+ Basis Dimension        Dim             ....  709
+ Nuclear Repulsion      ENuc            ....   1110.2722332149 Eh
+
+Convergence Acceleration:
+ DIIS                   CNVDIIS         .... on
+   Start iteration      DIISMaxIt       ....    12
+   Startup error        DIISStart       ....  0.200000
+   # of expansion vecs  DIISMaxEq       ....     5
+   Bias factor          DIISBfac        ....   1.050
+   Max. coefficient     DIISMaxC        ....  10.000
+ Trust-Rad. Augm. Hess. CNVTRAH         .... auto
+   Auto Start mean grad. ratio tolernc. ....  1.125000
+   Auto Start start iteration           ....    20
+   Auto Start num. interpolation iter.  ....    10
+   Max. Number of Micro iterations      ....    16
+   Max. Number of Macro iterations      .... Maxiter - #DIIS iter
+   Number of Davidson start vectors     ....     2
+   Converg. threshold I  (grad. norm)   ....   5.000e-05
+   Converg. threshold II (energy diff.) ....   1.000e-06
+   Grad. Scal. Fac. for Micro threshold ....   0.100
+   Minimum threshold for Micro iter.    ....   0.010
+   NR start threshold (gradient norm)   ....   0.001
+   Initial trust radius                 ....   0.400
+   Minimum AH scaling param. (alpha)    ....   1.000
+   Maximum AH scaling param. (alpha)    .... 1000.000
+   Orbital update algorithm             .... Taylor
+   White noise on init. David. guess    .... on
+   Maximum white noise                  ....   0.010
+   Quad. conv. algorithm                .... NR
+ SOSCF                  CNVSOSCF        .... off
+ Level Shifting         CNVShift        .... on
+   Level shift para.    LevelShift      ....    0.2500
+   Turn off err/grad.   ShiftErr        ....    0.0010
+ Zerner damping         CNVZerner       .... off
+ Static damping         CNVDamp         .... on
+   Fraction old density DampFac         ....    0.7000
+   Max. Damping (<1)    DampMax         ....    0.9800
+   Min. Damping (>=0)   DampMin         ....    0.0000
+   Turn off err/grad.   DampErr         ....    0.1000
+ Fernandez-Rico         CNVRico         .... off
+
+SCF Procedure:
+ Maximum # iterations   MaxIter         ....   125
+ SCF integral mode      SCFMode         .... Direct
+   Integral package                     .... SHARK and LIBINT hybrid scheme
+ Reset frequency        DirectResetFreq ....    20
+ Integral Threshold     Thresh          ....  1.000e-10 Eh
+ Primitive CutOff       TCut            ....  1.000e-11 Eh
+
+Convergence Tolerance:
+ Convergence Check Mode ConvCheckMode   .... Total+1el-Energy
+ Convergence forced     ConvForced      .... 0
+ Energy Change          TolE            ....  1.000e-06 Eh
+ 1-El. energy change                    ....  1.000e-03 Eh
+ DIIS Error             TolErr          ....  1.000e-06
+
+
+Diagonalization of the overlap matrix:
+Smallest eigenvalue                        ... 5.240e-06
+Time for diagonalization                   ...    0.121 sec
+Threshold for overlap eigenvalues          ... 1.000e-08
+Number of eigenvalues below threshold      ... 0
+Time for construction of square roots      ...    0.077 sec
+Total time needed                          ...    0.199 sec
+
+Time for model grid setup =    0.769 sec
+
+------------------------------
+INITIAL GUESS: MODEL POTENTIAL
+------------------------------
+Loading Hartree-Fock densities                     ... done
+Calculating cut-offs                               ... done
+Initializing the effective Hamiltonian             ... done
+Setting up the integral package (SHARK)            ... done
+Starting the Coulomb interaction                   ... done (   2.0 sec)
+Reading the grid                                   ... done
+Mapping shells                                     ... done
+Starting the XC term evaluation                    ... done (   1.9 sec)
+  promolecular density results
+     # of electrons  =    120.999073016
+     EX              =   -100.406105742
+     EC              =     -4.431886635
+     EX+EC           =   -104.837992377
+Transforming the Hamiltonian                       ... done (   0.1 sec)
+Diagonalizing the Hamiltonian                      ... done (   0.1 sec)
+Back transforming the eigenvectors                 ... done (   0.0 sec)
+Now organizing SCF variables                       ... done
+                      ------------------
+                      INITIAL GUESS DONE (   4.9 sec)
+                      ------------------
+-------------------
+DFT GRID GENERATION
+-------------------
+
+General Integration Accuracy     IntAcc      ... 4.388
+Radial Grid Type                 RadialGrid  ... OptM3 with GC (2021)
+Angular Grid (max. ang.)         AngularGrid ... 4 (Lebedev-302)
+Angular grid pruning method      GridPruning ... 4 (adaptive)
+Weight generation scheme         WeightScheme... Becke
+Basis function cutoff            BFCut       ... 1.0000e-10
+Integration weight cutoff        WCut        ... 1.0000e-14
+Angular grids for H and He will be reduced by one unit
+Partially contracted basis set               ... off
+Rotationally invariant grid construction     ... off
+
+Total number of grid points                  ...   143421
+Total number of batches                      ...     2254
+Average number of points per batch           ...       63
+Average number of grid points per atom       ...     4781
+Time for grid setup =    3.175 sec
+
+--------------
+SCF ITERATIONS
+--------------
+ITER       Energy         Delta-E        Max-DP      RMS-DP      [F,P]     Damp
+               ***  Starting incremental Fock matrix formation  ***
+  0   -766.7374923463   0.000000000000 0.27325173  0.00122796  0.3475182 0.7000
+  1   -766.9184179530  -0.180925606701 0.10717654  0.00043673  0.0848068 0.7000
+                               ***Turning on DIIS***
+  2   -767.0156552317  -0.097237278768 0.19855329  0.00104719  0.0404894 0.0000
+  3   -767.1175768255  -0.101921593804 0.02648635  0.00011980  0.1789174 0.7000
+  4   -767.1510370611  -0.033460235580 0.01946264  0.00013020  0.1396441 0.7000
+  5   -767.1793775705  -0.028340509340 0.01451962  0.00011306  0.1012187 0.7000
+  6   -767.2004699942  -0.021092423719 0.04001698  0.00032449  0.0719174 0.0000
+  7   -767.2390930791  -0.038623084922 0.01164353  0.00006524  0.0085426 0.0000
+  8   -767.2412978979  -0.002204818741 0.01356043  0.00005632  0.0102656 0.0000
+  9   -767.2420893072  -0.000791409328 0.01627717  0.00006678  0.0092692 0.0000
+ 10   -767.2426504473  -0.000561140095 0.01389463  0.00005707  0.0077237 0.0000
+ 11   -767.2430083642  -0.000357916876 0.00771007  0.00002816  0.0023182 0.0000
+ 12   -767.2431036282  -0.000095264039 0.00507600  0.00002077  0.0031815 0.0000
+ 13   -767.2431741635  -0.000070535284 0.00899866  0.00007692  0.0005704 0.0000
+ 14   -767.2412289021   0.001945261325 0.00109024  0.00000547  0.0191405 0.0000
+ 15   -767.2414009754  -0.000172073256 0.00044097  0.00000185  0.0178334 0.0000
+ 16   -767.2414694848  -0.000068509391 0.00046105  0.00000257  0.0173557 0.0000
+ 17   -767.2414353162   0.000034168621 0.00075578  0.00000326  0.0178379 0.0000
+ 18   -767.2413986132   0.000036703015 0.02761022  0.00013561  0.0176475 0.0000
+ 19   -767.2415422355  -0.000143622328 0.00383162  0.00002827  0.0302195 0.0000
+               *** Restarting incremental Fock matrix formation ***
+                                   *** Resetting DIIS ***
+
+ WARNING: the maximum gradient error descreased on average only by a factor   0.8
+          during the last 20 iterations
+
+                      *** Initiating the TRAH-SCF procedure ***
+
+
+TRAH GRID
+---------
+
+General Integration Accuracy     IntAcc      ... 3.467
+Radial Grid Type                 RadialGrid  ... OptM3 with GC (2021)
+Angular Grid (max. ang.)         AngularGrid ... 1 (Lebedev-50)
+Angular grid pruning method      GridPruning ... 4 (adaptive)
+Weight generation scheme         WeightScheme... Becke
+Basis function cutoff            BFCut       ... 1.0000e-10
+Integration weight cutoff        WCut        ... 1.0000e-14
+Angular grids for H and He will be reduced by one unit
+Partially contracted basis set               ... off
+Rotationally invariant grid construction     ... off
+
+Total number of grid points                  ...    20963
+Total number of batches                      ...      342
+Average number of points per batch           ...       61
+Average number of grid points per atom       ...      699
+
+ --------------------------------------------------------------------------------------------
+   Iter.        energy            ||Error||_2        Shift      TRadius  Mac/Mic        Rej.
+ --------------------------------------------------------------------------------------------
+    0       -767.242632120458     3.297872e-02                     0.400 (TRAH MAcro)   No
+    0     dE    -3.954662e-04     3.469175e-02    -3.9541e-04      0.012 (TRAH MIcro)
+    0     dE    -5.016897e-04     1.759485e-02    -5.0141e-04      0.023 (TRAH MIcro)
+    0     dE    -5.819496e-04     8.280977e-03    -5.8164e-04      0.023 (TRAH MIcro)
+    0     dE    -6.267346e-04     3.175152e-03    -6.2616e-04      0.030 (TRAH MIcro)
+    1       -767.243257824351     3.153388e-03                     0.480 (TRAH MAcro)   No
+WARNING : small    HOMO - LUMO gap : (op =  beta) 0.012691
+    1     dE    -1.052128e-06     5.653176e-03    -1.0521e-06      0.000 (TRAH MIcro)
+    1     dE    -3.628869e-06     1.860784e-03    -3.6289e-06      0.002 (TRAH MIcro)
+    1     dE    -4.296699e-06     9.715104e-04    -4.2967e-06      0.002 (TRAH MIcro)
+    1     dE    -4.604364e-06     6.832368e-04    -4.6043e-06      0.002 (TRAH MIcro)
+    1     dE    -4.826688e-06     4.050630e-04    -4.8267e-06      0.003 (TRAH MIcro)
+    1     dE    -4.940707e-06     2.320762e-04    -4.9407e-06      0.003 (TRAH MIcro)
+    2       -767.243262763399     2.322667e-04                           (NR   MAcro)
+WARNING : small    HOMO - LUMO gap : (op =  beta) 0.012673
+    2     dE    -2.363132e-08     1.211549e-04                           (NR   MIcro)
+    2     dE    -3.197907e-08     8.664211e-05                           (NR   MIcro)
+    2     dE    -3.423705e-08     6.268393e-05                           (NR   MIcro)
+    2     dE    -3.621212e-08     5.419121e-05                           (NR   MIcro)
+    2     dE    -3.734314e-08     3.316316e-05                           (NR   MIcro)
+    2     dE    -3.797808e-08     1.068473e-05                           (NR   MIcro)
+    2     dE    -3.802240e-08     4.096687e-06                           (NR   MIcro)
+    3       -767.243262801857     4.238613e-06                           (NR   MAcro)
+WARNING : small    HOMO - LUMO gap : (op =  beta) 0.012672
+
+               *****************************************************
+               *                     SUCCESS                       *
+               *           SCF CONVERGED AFTER  41 CYCLES          *
+               *****************************************************
+
+
+----------------
+TOTAL SCF ENERGY
+----------------
+
+Total Energy       :         -767.24326280 Eh          -20877.75059 eV
+
+Components:
+Nuclear Repulsion  :         1110.27223321 Eh           30212.04342 eV
+Electronic Energy  :        -1877.51549602 Eh          -51089.79400 eV
+One Electron Energy:        -3245.50380377 Eh          -88314.64833 eV
+Two Electron Energy:         1367.98830775 Eh           37224.85433 eV
+
+Virial components:
+Potential Energy   :        -1531.11665568 Eh          -41663.80235 eV
+Kinetic Energy     :          763.87339288 Eh           20786.05176 eV
+Virial Ratio       :            2.00441156
+
+
+DFT components:
+N(Alpha)           :       61.000034125846 electrons
+N(Beta)            :       60.000032311477 electrons
+N(Total)           :      121.000066437324 electrons
+E(X)               :     -102.244511907006 Eh       
+E(C)               :       -4.418346510176 Eh       
+E(XC)              :     -106.662858417182 Eh       
+DFET-embed. en.    :        0.000000000000 Eh       
+
+---------------
+SCF CONVERGENCE
+---------------
+
+  Last Energy change         ...   -3.8459e-08  Tolerance :   1.0000e-06
+  Last Orbital Gradient      ...    4.2386e-06  Tolerance :   5.0000e-05
+  Last Orbital Rotation      ...    5.6022e-04
+
+             **** THE GBW FILE WAS UPDATED (C:\Users\ahmed\OneDrive\Desktop\napten\nap11.gbw) ****
+             **** DENSITY C:\Users\ahmed\OneDrive\Desktop\napten\nap11.scfp WAS UPDATED ****
+             **** ENERGY FILE WAS UPDATED (C:\Users\ahmed\OneDrive\Desktop\napten\nap11.en.tmp) ****
+----------------------
+UHF SPIN CONTAMINATION
+----------------------
+
+Warning: in a DFT calculation there is little theoretical justification to 
+         calculate <S**2> as in Hartree-Fock theory. We will do it anyways
+         but you should keep in mind that the values have only limited relevance
+
+Expectation value of <S**2>     :     0.753016
+Ideal value S*(S+1) for S=0.5   :     0.750000
+Deviation                       :     0.003016
+
+             **** THE GBW FILE WAS UPDATED (C:\Users\ahmed\OneDrive\Desktop\napten\nap11.gbw) ****
+             **** DENSITY C:\Users\ahmed\OneDrive\Desktop\napten\nap11.scfp WAS UPDATED ****
+----------------
+ORBITAL ENERGIES
+----------------
+                 SPIN UP ORBITALS
+  NO   OCC          E(Eh)            E(eV) 
+   0   1.0000     -18.832782      -512.4661 
+   1   1.0000     -18.778009      -510.9756 
+   2   1.0000     -18.764420      -510.6058 
+   3   1.0000     -10.002507      -272.1821 
+   4   1.0000      -9.986595      -271.7491 
+   5   1.0000      -9.970090      -271.2999 
+   6   1.0000      -9.932532      -270.2779 
+   7   1.0000      -9.932250      -270.2703 
+   8   1.0000      -9.930601      -270.2254 
+   9   1.0000      -9.927836      -270.1501 
+  10   1.0000      -9.926434      -270.1120 
+  11   1.0000      -9.925345      -270.0824 
+  12   1.0000      -9.925335      -270.0821 
+  13   1.0000      -9.925118      -270.0762 
+  14   1.0000      -9.924024      -270.0464 
+  15   1.0000      -9.920819      -269.9592 
+  16   1.0000      -9.899103      -269.3683 
+  17   1.0000      -1.010162       -27.4879 
+  18   1.0000      -0.982234       -26.7279 
+  19   1.0000      -0.883354       -24.0373 
+  20   1.0000      -0.828201       -22.5365 
+  21   1.0000      -0.782053       -21.2808 
+  22   1.0000      -0.739078       -20.1113 
+  23   1.0000      -0.729052       -19.8385 
+  24   1.0000      -0.691056       -18.8046 
+  25   1.0000      -0.686428       -18.6786 
+  26   1.0000      -0.645346       -17.5608 
+  27   1.0000      -0.606548       -16.5050 
+  28   1.0000      -0.589018       -16.0280 
+  29   1.0000      -0.569252       -15.4901 
+  30   1.0000      -0.559672       -15.2294 
+  31   1.0000      -0.509731       -13.8705 
+  32   1.0000      -0.492028       -13.3888 
+  33   1.0000      -0.486036       -13.2257 
+  34   1.0000      -0.463557       -12.6140 
+  35   1.0000      -0.448973       -12.2172 
+  36   1.0000      -0.447755       -12.1840 
+  37   1.0000      -0.428156       -11.6507 
+  38   1.0000      -0.423118       -11.5136 
+  39   1.0000      -0.414187       -11.2706 
+  40   1.0000      -0.411344       -11.1933 
+  41   1.0000      -0.399158       -10.8616 
+  42   1.0000      -0.392691       -10.6857 
+  43   1.0000      -0.383436       -10.4338 
+  44   1.0000      -0.382354       -10.4044 
+  45   1.0000      -0.374183       -10.1820 
+  46   1.0000      -0.369154       -10.0452 
+  47   1.0000      -0.354525        -9.6471 
+  48   1.0000      -0.347751        -9.4628 
+  49   1.0000      -0.342050        -9.3077 
+  50   1.0000      -0.333122        -9.0647 
+  51   1.0000      -0.321164        -8.7393 
+  52   1.0000      -0.314453        -8.5567 
+  53   1.0000      -0.310667        -8.4537 
+  54   1.0000      -0.297798        -8.1035 
+  55   1.0000      -0.277561        -7.5528 
+  56   1.0000      -0.258901        -7.0450 
+  57   1.0000      -0.248508        -6.7622 
+  58   1.0000      -0.242260        -6.5922 
+  59   1.0000      -0.234942        -6.3931 
+  60   1.0000      -0.208727        -5.6798 
+  61   0.0000      -0.104040        -2.8311 
+  62   0.0000      -0.058500        -1.5919 
+  63   0.0000      -0.042440        -1.1549 
+  64   0.0000      -0.024179        -0.6579 
+  65   0.0000       0.010417         0.2835 
+  66   0.0000       0.019448         0.5292 
+  67   0.0000       0.027292         0.7427 
+  68   0.0000       0.029291         0.7970 
+  69   0.0000       0.034364         0.9351 
+  70   0.0000       0.046287         1.2595 
+  71   0.0000       0.056421         1.5353 
+  72   0.0000       0.060246         1.6394 
+  73   0.0000       0.066477         1.8089 
+  74   0.0000       0.077255         2.1022 
+  75   0.0000       0.079635         2.1670 
+  76   0.0000       0.083125         2.2619 
+  77   0.0000       0.095657         2.6030 
+  78   0.0000       0.098853         2.6899 
+  79   0.0000       0.101713         2.7678 
+  80   0.0000       0.110408         3.0044 
+  81   0.0000       0.122123         3.3231 
+  82   0.0000       0.126924         3.4538 
+  83   0.0000       0.135627         3.6906 
+  84   0.0000       0.141028         3.8376 
+  85   0.0000       0.148531         4.0417 
+  86   0.0000       0.151470         4.1217 
+  87   0.0000       0.158408         4.3105 
+  88   0.0000       0.165362         4.4997 
+  89   0.0000       0.167866         4.5679 
+  90   0.0000       0.179292         4.8788 
+  91   0.0000       0.184331         5.0159 
+  92   0.0000       0.186387         5.0718 
+  93   0.0000       0.195406         5.3173 
+  94   0.0000       0.200693         5.4611 
+  95   0.0000       0.208608         5.6765 
+  96   0.0000       0.209412         5.6984 
+  97   0.0000       0.215790         5.8719 
+  98   0.0000       0.220881         6.0105 
+  99   0.0000       0.223159         6.0725 
+ 100   0.0000       0.229389         6.2420 
+ 101   0.0000       0.238752         6.4968 
+ 102   0.0000       0.248418         6.7598 
+ 103   0.0000       0.254552         6.9267 
+ 104   0.0000       0.258851         7.0437 
+ 105   0.0000       0.262675         7.1478 
+ 106   0.0000       0.264452         7.1961 
+ 107   0.0000       0.268655         7.3105 
+ 108   0.0000       0.274754         7.4764 
+ 109   0.0000       0.286604         7.7989 
+ 110   0.0000       0.291381         7.9289 
+ 111   0.0000       0.299492         8.1496 
+ 112   0.0000       0.304395         8.2830 
+ 113   0.0000       0.311961         8.4889 
+ 114   0.0000       0.316654         8.6166 
+ 115   0.0000       0.320366         8.7176 
+ 116   0.0000       0.324858         8.8398 
+ 117   0.0000       0.332352         9.0438 
+ 118   0.0000       0.334942         9.1142 
+ 119   0.0000       0.340624         9.2688 
+ 120   0.0000       0.342327         9.3152 
+ 121   0.0000       0.345853         9.4111 
+ 122   0.0000       0.358403         9.7527 
+ 123   0.0000       0.366781         9.9806 
+ 124   0.0000       0.369414        10.0523 
+ 125   0.0000       0.371002        10.0955 
+ 126   0.0000       0.374027        10.1778 
+ 127   0.0000       0.377355        10.2683 
+ 128   0.0000       0.380792        10.3619 
+ 129   0.0000       0.388670        10.5763 
+ 130   0.0000       0.394232        10.7276 
+ 131   0.0000       0.405645        11.0382 
+ 132   0.0000       0.409594        11.1456 
+ 133   0.0000       0.413546        11.2531 
+ 134   0.0000       0.416083        11.3222 
+ 135   0.0000       0.419152        11.4057 
+ 136   0.0000       0.423862        11.5339 
+ 137   0.0000       0.428465        11.6591 
+ 138   0.0000       0.431639        11.7455 
+ 139   0.0000       0.437251        11.8982 
+ 140   0.0000       0.441268        12.0075 
+ 141   0.0000       0.451658        12.2902 
+ 142   0.0000       0.457864        12.4591 
+ 143   0.0000       0.462182        12.5766 
+ 144   0.0000       0.466617        12.6973 
+ 145   0.0000       0.475423        12.9369 
+ 146   0.0000       0.480821        13.0838 
+ 147   0.0000       0.491050        13.3622 
+ 148   0.0000       0.509514        13.8646 
+ 149   0.0000       0.514326        13.9955 
+ 150   0.0000       0.520413        14.1612 
+ 151   0.0000       0.527529        14.3548 
+ 152   0.0000       0.529634        14.4121 
+ 153   0.0000       0.537667        14.6307 
+ 154   0.0000       0.544288        14.8108 
+ 155   0.0000       0.553635        15.0652 
+ 156   0.0000       0.557616        15.1735 
+ 157   0.0000       0.568512        15.4700 
+ 158   0.0000       0.582290        15.8449 
+ 159   0.0000       0.590170        16.0593 
+ 160   0.0000       0.592959        16.1352 
+ 161   0.0000       0.596021        16.2186 
+ 162   0.0000       0.599611        16.3163 
+ 163   0.0000       0.613624        16.6976 
+ 164   0.0000       0.618940        16.8422 
+ 165   0.0000       0.624381        16.9903 
+ 166   0.0000       0.631151        17.1745 
+ 167   0.0000       0.632199        17.2030 
+ 168   0.0000       0.637404        17.3446 
+ 169   0.0000       0.643356        17.5066 
+ 170   0.0000       0.659049        17.9336 
+ 171   0.0000       0.669653        18.2222 
+ 172   0.0000       0.674023        18.3411 
+ 173   0.0000       0.679544        18.4913 
+ 174   0.0000       0.692787        18.8517 
+ 175   0.0000       0.699750        19.0412 
+ 176   0.0000       0.706645        19.2288 
+ 177   0.0000       0.714751        19.4494 
+ 178   0.0000       0.728586        19.8258 
+ 179   0.0000       0.731402        19.9025 
+ 180   0.0000       0.733482        19.9591 
+ 181   0.0000       0.743774        20.2391 
+ 182   0.0000       0.748468        20.3669 
+ 183   0.0000       0.756215        20.5777 
+ 184   0.0000       0.759980        20.6801 
+ 185   0.0000       0.765923        20.8418 
+ 186   0.0000       0.771994        21.0070 
+ 187   0.0000       0.778418        21.1818 
+ 188   0.0000       0.786354        21.3978 
+ 189   0.0000       0.793673        21.5969 
+ 190   0.0000       0.805633        21.9224 
+ 191   0.0000       0.816060        22.2061 
+ 192   0.0000       0.821380        22.3509 
+ 193   0.0000       0.827850        22.5270 
+ 194   0.0000       0.832414        22.6511 
+ 195   0.0000       0.848640        23.0927 
+ 196   0.0000       0.853621        23.2282 
+ 197   0.0000       0.859959        23.4007 
+ 198   0.0000       0.871134        23.7048 
+ 199   0.0000       0.881424        23.9848 
+ 200   0.0000       0.885716        24.1016 
+ 201   0.0000       0.897422        24.4201 
+ 202   0.0000       0.901753        24.5379 
+ 203   0.0000       0.910847        24.7854 
+ 204   0.0000       0.912638        24.8341 
+ 205   0.0000       0.919412        25.0185 
+ 206   0.0000       0.925766        25.1914 
+ 207   0.0000       0.939332        25.5605 
+ 208   0.0000       0.941817        25.6281 
+ 209   0.0000       0.947271        25.7766 
+ 210   0.0000       0.948666        25.8145 
+ 211   0.0000       0.958941        26.0941 
+ 212   0.0000       0.962615        26.1941 
+ 213   0.0000       0.979768        26.6608 
+ 214   0.0000       0.985422        26.8147 
+ 215   0.0000       0.987055        26.8591 
+ 216   0.0000       0.991418        26.9779 
+ 217   0.0000       1.005782        27.3687 
+ 218   0.0000       1.016642        27.6642 
+ 219   0.0000       1.019133        27.7320 
+ 220   0.0000       1.041523        28.3413 
+ 221   0.0000       1.045190        28.4411 
+ 222   0.0000       1.051260        28.6062 
+ 223   0.0000       1.060581        28.8599 
+ 224   0.0000       1.081073        29.4175 
+ 225   0.0000       1.085601        29.5407 
+ 226   0.0000       1.089445        29.6453 
+ 227   0.0000       1.100258        29.9395 
+ 228   0.0000       1.103433        30.0259 
+ 229   0.0000       1.115223        30.3468 
+ 230   0.0000       1.127135        30.6709 
+ 231   0.0000       1.132292        30.8112 
+ 232   0.0000       1.144435        31.1417 
+ 233   0.0000       1.151291        31.3282 
+ 234   0.0000       1.163429        31.6585 
+ 235   0.0000       1.173235        31.9253 
+ 236   0.0000       1.182507        32.1776 
+ 237   0.0000       1.188440        32.3391 
+ 238   0.0000       1.191386        32.4193 
+ 239   0.0000       1.197840        32.5949 
+ 240   0.0000       1.207050        32.8455 
+ 241   0.0000       1.218928        33.1687 
+ 242   0.0000       1.229539        33.4575 
+ 243   0.0000       1.235377        33.6163 
+ 244   0.0000       1.243335        33.8329 
+ 245   0.0000       1.251697        34.0604 
+ 246   0.0000       1.259354        34.2688 
+ 247   0.0000       1.260909        34.3111 
+ 248   0.0000       1.270619        34.5753 
+ 249   0.0000       1.274696        34.6862 
+ 250   0.0000       1.281360        34.8676 
+ 251   0.0000       1.288272        35.0557 
+ 252   0.0000       1.293166        35.1888 
+ 253   0.0000       1.304763        35.5044 
+ 254   0.0000       1.316527        35.8245 
+ 255   0.0000       1.322962        35.9996 
+ 256   0.0000       1.329763        36.1847 
+ 257   0.0000       1.334795        36.3216 
+ 258   0.0000       1.338921        36.4339 
+ 259   0.0000       1.349514        36.7221 
+ 260   0.0000       1.352810        36.8118 
+ 261   0.0000       1.364457        37.1288 
+ 262   0.0000       1.377816        37.4923 
+ 263   0.0000       1.385543        37.7025 
+ 264   0.0000       1.393067        37.9073 
+ 265   0.0000       1.395665        37.9780 
+ 266   0.0000       1.402227        38.1565 
+ 267   0.0000       1.409297        38.3489 
+ 268   0.0000       1.419352        38.6225 
+ 269   0.0000       1.426078        38.8055 
+ 270   0.0000       1.437394        39.1135 
+ 271   0.0000       1.444225        39.2994 
+ 272   0.0000       1.454017        39.5658 
+ 273   0.0000       1.459051        39.7028 
+ 274   0.0000       1.473473        40.0952 
+ 275   0.0000       1.482587        40.3432 
+ 276   0.0000       1.487761        40.4840 
+ 277   0.0000       1.495073        40.6830 
+ 278   0.0000       1.497135        40.7391 
+ 279   0.0000       1.506997        41.0075 
+ 280   0.0000       1.508098        41.0374 
+ 281   0.0000       1.524656        41.4880 
+ 282   0.0000       1.528097        41.5816 
+ 283   0.0000       1.550361        42.1875 
+ 284   0.0000       1.561726        42.4967 
+ 285   0.0000       1.563183        42.5364 
+ 286   0.0000       1.567826        42.6627 
+ 287   0.0000       1.585818        43.1523 
+ 288   0.0000       1.590809        43.2881 
+ 289   0.0000       1.600250        43.5450 
+ 290   0.0000       1.608688        43.7746 
+ 291   0.0000       1.615866        43.9700 
+ 292   0.0000       1.631771        44.4028 
+ 293   0.0000       1.636613        44.5345 
+ 294   0.0000       1.663394        45.2633 
+ 295   0.0000       1.678677        45.6791 
+ 296   0.0000       1.681005        45.7425 
+ 297   0.0000       1.690244        45.9939 
+ 298   0.0000       1.695363        46.1332 
+ 299   0.0000       1.713226        46.6192 
+ 300   0.0000       1.717145        46.7259 
+ 301   0.0000       1.725092        46.9422 
+ 302   0.0000       1.743467        47.4422 
+ 303   0.0000       1.765098        48.0308 
+ 304   0.0000       1.771593        48.2075 
+ 305   0.0000       1.780890        48.4605 
+ 306   0.0000       1.799880        48.9772 
+ 307   0.0000       1.807674        49.1893 
+ 308   0.0000       1.842893        50.1477 
+ 309   0.0000       1.854048        50.4512 
+ 310   0.0000       1.860492        50.6266 
+ 311   0.0000       1.870729        50.9051 
+ 312   0.0000       1.878945        51.1287 
+ 313   0.0000       1.884995        51.2933 
+ 314   0.0000       1.909715        51.9660 
+ 315   0.0000       1.921263        52.2802 
+ 316   0.0000       1.933638        52.6170 
+ 317   0.0000       1.952681        53.1352 
+ 318   0.0000       1.954909        53.1958 
+ 319   0.0000       1.962938        53.4142 
+ 320   0.0000       1.969852        53.6024 
+ 321   0.0000       1.982817        53.9552 
+ 322   0.0000       2.002854        54.5004 
+ 323   0.0000       2.006094        54.5886 
+ 324   0.0000       2.015123        54.8343 
+ 325   0.0000       2.022621        55.0383 
+ 326   0.0000       2.029173        55.2166 
+ 327   0.0000       2.042320        55.5744 
+ 328   0.0000       2.069000        56.3004 
+ 329   0.0000       2.082238        56.6606 
+ 330   0.0000       2.087282        56.7978 
+ 331   0.0000       2.095591        57.0239 
+ 332   0.0000       2.113426        57.5092 
+ 333   0.0000       2.124627        57.8140 
+ 334   0.0000       2.158044        58.7233 
+ 335   0.0000       2.166205        58.9454 
+ 336   0.0000       2.188978        59.5651 
+ 337   0.0000       2.196019        59.7567 
+ 338   0.0000       2.213224        60.2249 
+ 339   0.0000       2.230498        60.6949 
+ 340   0.0000       2.237977        60.8985 
+ 341   0.0000       2.247709        61.1633 
+ 342   0.0000       2.252813        61.3022 
+ 343   0.0000       2.266729        61.6808 
+ 344   0.0000       2.289919        62.3119 
+ 345   0.0000       2.304335        62.7041 
+ 346   0.0000       2.310152        62.8624 
+ 347   0.0000       2.319220        63.1092 
+ 348   0.0000       2.338226        63.6264 
+ 349   0.0000       2.360239        64.2254 
+ 350   0.0000       2.374371        64.6099 
+ 351   0.0000       2.400466        65.3200 
+ 352   0.0000       2.403778        65.4101 
+ 353   0.0000       2.423948        65.9590 
+ 354   0.0000       2.447272        66.5936 
+ 355   0.0000       2.462830        67.0170 
+ 356   0.0000       2.483607        67.5824 
+ 357   0.0000       2.486895        67.6719 
+ 358   0.0000       2.492364        67.8207 
+ 359   0.0000       2.511974        68.3543 
+ 360   0.0000       2.524539        68.6962 
+ 361   0.0000       2.536667        69.0262 
+ 362   0.0000       2.560683        69.6797 
+ 363   0.0000       2.568198        69.8842 
+ 364   0.0000       2.574809        70.0641 
+ 365   0.0000       2.587435        70.4077 
+ 366   0.0000       2.593334        70.5682 
+ 367   0.0000       2.603370        70.8413 
+ 368   0.0000       2.624772        71.4237 
+ 369   0.0000       2.631851        71.6163 
+ 370   0.0000       2.637143        71.7603 
+ 371   0.0000       2.637728        71.7762 
+ 372   0.0000       2.643569        71.9352 
+ 373   0.0000       2.654217        72.2249 
+ 374   0.0000       2.666283        72.5532 
+ 375   0.0000       2.675080        72.7926 
+ 376   0.0000       2.684564        73.0507 
+ 377   0.0000       2.687911        73.1418 
+ 378   0.0000       2.701365        73.5079 
+ 379   0.0000       2.708761        73.7091 
+ 380   0.0000       2.714884        73.8758 
+ 381   0.0000       2.730365        74.2970 
+ 382   0.0000       2.734569        74.4114 
+ 383   0.0000       2.739764        74.5528 
+ 384   0.0000       2.744131        74.6716 
+ 385   0.0000       2.749427        74.8157 
+ 386   0.0000       2.755852        74.9906 
+ 387   0.0000       2.762850        75.1810 
+ 388   0.0000       2.773088        75.4596 
+ 389   0.0000       2.774191        75.4896 
+ 390   0.0000       2.782530        75.7165 
+ 391   0.0000       2.789447        75.9047 
+ 392   0.0000       2.791404        75.9580 
+ 393   0.0000       2.809405        76.4478 
+ 394   0.0000       2.821815        76.7855 
+ 395   0.0000       2.835818        77.1665 
+ 396   0.0000       2.838575        77.2416 
+ 397   0.0000       2.850786        77.5738 
+ 398   0.0000       2.863506        77.9200 
+ 399   0.0000       2.871567        78.1393 
+ 400   0.0000       2.875222        78.2388 
+ 401   0.0000       2.880266        78.3760 
+ 402   0.0000       2.881563        78.4113 
+ 403   0.0000       2.884813        78.4997 
+ 404   0.0000       2.897732        78.8513 
+ 405   0.0000       2.912319        79.2482 
+ 406   0.0000       2.914750        79.3144 
+ 407   0.0000       2.918266        79.4101 
+ 408   0.0000       2.922032        79.5125 
+ 409   0.0000       2.928008        79.6752 
+ 410   0.0000       2.939683        79.9928 
+ 411   0.0000       2.950271        80.2809 
+ 412   0.0000       2.952049        80.3293 
+ 413   0.0000       2.959393        80.5292 
+ 414   0.0000       2.961311        80.5814 
+ 415   0.0000       2.976271        80.9885 
+ 416   0.0000       2.981644        81.1347 
+ 417   0.0000       2.993686        81.4623 
+ 418   0.0000       2.994734        81.4908 
+ 419   0.0000       3.003753        81.7363 
+ 420   0.0000       3.016957        82.0956 
+ 421   0.0000       3.023969        82.2864 
+ 422   0.0000       3.028506        82.4098 
+ 423   0.0000       3.032204        82.5105 
+ 424   0.0000       3.041510        82.7637 
+ 425   0.0000       3.053855        83.0996 
+ 426   0.0000       3.068624        83.5015 
+ 427   0.0000       3.071585        83.5821 
+ 428   0.0000       3.078160        83.7610 
+ 429   0.0000       3.085848        83.9702 
+ 430   0.0000       3.091664        84.1285 
+ 431   0.0000       3.097192        84.2789 
+ 432   0.0000       3.101918        84.4075 
+ 433   0.0000       3.109715        84.6196 
+ 434   0.0000       3.122126        84.9574 
+ 435   0.0000       3.125739        85.0557 
+ 436   0.0000       3.136721        85.3545 
+ 437   0.0000       3.140001        85.4438 
+ 438   0.0000       3.151643        85.7606 
+ 439   0.0000       3.158686        85.9522 
+ 440   0.0000       3.172684        86.3331 
+ 441   0.0000       3.176407        86.4344 
+ 442   0.0000       3.192870        86.8824 
+ 443   0.0000       3.197413        87.0060 
+ 444   0.0000       3.205648        87.2301 
+ 445   0.0000       3.211957        87.4018 
+ 446   0.0000       3.213772        87.4512 
+ 447   0.0000       3.218597        87.5825 
+ 448   0.0000       3.226864        87.8074 
+ 449   0.0000       3.234520        88.0158 
+ 450   0.0000       3.239980        88.1643 
+ 451   0.0000       3.250849        88.4601 
+ 452   0.0000       3.258567        88.6701 
+ 453   0.0000       3.267641        88.9170 
+ 454   0.0000       3.278702        89.2180 
+ 455   0.0000       3.284179        89.3671 
+ 456   0.0000       3.293295        89.6151 
+ 457   0.0000       3.300820        89.8199 
+ 458   0.0000       3.310981        90.0964 
+ 459   0.0000       3.317166        90.2647 
+ 460   0.0000       3.319404        90.3256 
+ 461   0.0000       3.328291        90.5674 
+ 462   0.0000       3.342346        90.9499 
+ 463   0.0000       3.345885        91.0462 
+ 464   0.0000       3.349937        91.1564 
+ 465   0.0000       3.352781        91.2338 
+ 466   0.0000       3.364366        91.5491 
+ 467   0.0000       3.370206        91.7080 
+ 468   0.0000       3.385260        92.1176 
+ 469   0.0000       3.391871        92.2975 
+ 470   0.0000       3.394063        92.3572 
+ 471   0.0000       3.399333        92.5006 
+ 472   0.0000       3.402491        92.5865 
+ 473   0.0000       3.416728        92.9739 
+ 474   0.0000       3.422056        93.1189 
+ 475   0.0000       3.433049        93.4180 
+ 476   0.0000       3.442922        93.6867 
+ 477   0.0000       3.458301        94.1052 
+ 478   0.0000       3.468962        94.3953 
+ 479   0.0000       3.472471        94.4907 
+ 480   0.0000       3.479840        94.6913 
+ 481   0.0000       3.489684        94.9591 
+ 482   0.0000       3.496158        95.1353 
+ 483   0.0000       3.504365        95.3586 
+ 484   0.0000       3.509486        95.4980 
+ 485   0.0000       3.527189        95.9797 
+ 486   0.0000       3.532790        96.1321 
+ 487   0.0000       3.541144        96.3594 
+ 488   0.0000       3.550516        96.6144 
+ 489   0.0000       3.571462        97.1844 
+ 490   0.0000       3.597829        97.9019 
+ 491   0.0000       3.603865        98.0662 
+ 492   0.0000       3.610815        98.2553 
+ 493   0.0000       3.614004        98.3421 
+ 494   0.0000       3.620512        98.5191 
+ 495   0.0000       3.624153        98.6182 
+ 496   0.0000       3.642675        99.1222 
+ 497   0.0000       3.648546        99.2820 
+ 498   0.0000       3.654384        99.4408 
+ 499   0.0000       3.665880        99.7537 
+ 500   0.0000       3.680972       100.1643 
+ 501   0.0000       3.688216       100.3615 
+ 502   0.0000       3.693986       100.5185 
+ 503   0.0000       3.701149       100.7134 
+ 504   0.0000       3.713156       101.0401 
+ 505   0.0000       3.720406       101.2374 
+ 506   0.0000       3.736608       101.6783 
+ 507   0.0000       3.750371       102.0528 
+ 508   0.0000       3.752055       102.0986 
+ 509   0.0000       3.760215       102.3206 
+ 510   0.0000       3.772556       102.6565 
+ 511   0.0000       3.776016       102.7506 
+ 512   0.0000       3.794152       103.2441 
+ 513   0.0000       3.813288       103.7649 
+ 514   0.0000       3.829954       104.2184 
+ 515   0.0000       3.835296       104.3637 
+ 516   0.0000       3.838626       104.4543 
+ 517   0.0000       3.852120       104.8215 
+ 518   0.0000       3.857354       104.9639 
+ 519   0.0000       3.867797       105.2481 
+ 520   0.0000       3.880789       105.6016 
+ 521   0.0000       3.883457       105.6742 
+ 522   0.0000       3.888637       105.8152 
+ 523   0.0000       3.897382       106.0532 
+ 524   0.0000       3.906810       106.3097 
+ 525   0.0000       3.913910       106.5029 
+ 526   0.0000       3.924609       106.7940 
+ 527   0.0000       3.927431       106.8708 
+ 528   0.0000       3.934919       107.0746 
+ 529   0.0000       3.960161       107.7615 
+ 530   0.0000       3.964579       107.8817 
+ 531   0.0000       3.982944       108.3814 
+ 532   0.0000       3.990180       108.5783 
+ 533   0.0000       3.993709       108.6744 
+ 534   0.0000       4.002568       108.9154 
+ 535   0.0000       4.004341       108.9637 
+ 536   0.0000       4.014008       109.2267 
+ 537   0.0000       4.029222       109.6407 
+ 538   0.0000       4.030352       109.6714 
+ 539   0.0000       4.037068       109.8542 
+ 540   0.0000       4.047930       110.1498 
+ 541   0.0000       4.056994       110.3964 
+ 542   0.0000       4.066659       110.6594 
+ 543   0.0000       4.068348       110.7054 
+ 544   0.0000       4.085765       111.1793 
+ 545   0.0000       4.090352       111.3041 
+ 546   0.0000       4.106536       111.7445 
+ 547   0.0000       4.111053       111.8674 
+ 548   0.0000       4.119918       112.1087 
+ 549   0.0000       4.127760       112.3221 
+ 550   0.0000       4.137010       112.5738 
+ 551   0.0000       4.150400       112.9381 
+ 552   0.0000       4.158448       113.1571 
+ 553   0.0000       4.166521       113.3768 
+ 554   0.0000       4.171048       113.5000 
+ 555   0.0000       4.182364       113.8079 
+ 556   0.0000       4.201910       114.3398 
+ 557   0.0000       4.217945       114.7761 
+ 558   0.0000       4.219181       114.8098 
+ 559   0.0000       4.234256       115.2200 
+ 560   0.0000       4.239031       115.3499 
+ 561   0.0000       4.255351       115.7940 
+ 562   0.0000       4.259548       115.9082 
+ 563   0.0000       4.270867       116.2162 
+ 564   0.0000       4.284564       116.5889 
+ 565   0.0000       4.288395       116.6932 
+ 566   0.0000       4.300854       117.0322 
+ 567   0.0000       4.318794       117.5204 
+ 568   0.0000       4.327993       117.7707 
+ 569   0.0000       4.351790       118.4182 
+ 570   0.0000       4.358011       118.5875 
+ 571   0.0000       4.375341       119.0591 
+ 572   0.0000       4.393089       119.5420 
+ 573   0.0000       4.406875       119.9172 
+ 574   0.0000       4.410837       120.0250 
+ 575   0.0000       4.418020       120.2204 
+ 576   0.0000       4.432825       120.6233 
+ 577   0.0000       4.449732       121.0834 
+ 578   0.0000       4.462406       121.4282 
+ 579   0.0000       4.476160       121.8025 
+ 580   0.0000       4.490672       122.1974 
+ 581   0.0000       4.505075       122.5893 
+ 582   0.0000       4.519322       122.9770 
+ 583   0.0000       4.549071       123.7865 
+ 584   0.0000       4.567790       124.2959 
+ 585   0.0000       4.580327       124.6370 
+ 586   0.0000       4.594495       125.0226 
+ 587   0.0000       4.612676       125.5173 
+ 588   0.0000       4.617334       125.6440 
+ 589   0.0000       4.621275       125.7513 
+ 590   0.0000       4.634562       126.1128 
+ 591   0.0000       4.651919       126.5852 
+ 592   0.0000       4.679247       127.3288 
+ 593   0.0000       4.685862       127.5088 
+ 594   0.0000       4.703768       127.9960 
+ 595   0.0000       4.722921       128.5172 
+ 596   0.0000       4.747045       129.1737 
+ 597   0.0000       4.747598       129.1887 
+ 598   0.0000       4.771225       129.8316 
+ 599   0.0000       4.789339       130.3245 
+ 600   0.0000       4.796986       130.5326 
+ 601   0.0000       4.815028       131.0236 
+ 602   0.0000       4.823950       131.2664 
+ 603   0.0000       4.832735       131.5054 
+ 604   0.0000       4.840802       131.7249 
+ 605   0.0000       4.864244       132.3628 
+ 606   0.0000       4.872995       132.6009 
+ 607   0.0000       4.894730       133.1924 
+ 608   0.0000       4.896771       133.2479 
+ 609   0.0000       4.933469       134.2465 
+ 610   0.0000       4.947819       134.6370 
+ 611   0.0000       4.975501       135.3903 
+ 612   0.0000       4.987803       135.7250 
+ 613   0.0000       4.995706       135.9401 
+ 614   0.0000       5.019494       136.5874 
+ 615   0.0000       5.021255       136.6353 
+ 616   0.0000       5.022448       136.6678 
+ 617   0.0000       5.027486       136.8048 
+ 618   0.0000       5.044135       137.2579 
+ 619   0.0000       5.045442       137.2935 
+ 620   0.0000       5.063283       137.7789 
+ 621   0.0000       5.070188       137.9668 
+ 622   0.0000       5.082429       138.2999 
+ 623   0.0000       5.093679       138.6060 
+ 624   0.0000       5.099454       138.7632 
+ 625   0.0000       5.111958       139.1034 
+ 626   0.0000       5.131301       139.6298 
+ 627   0.0000       5.144967       140.0017 
+ 628   0.0000       5.157452       140.3414 
+ 629   0.0000       5.161367       140.4479 
+ 630   0.0000       5.168201       140.6339 
+ 631   0.0000       5.180688       140.9737 
+ 632   0.0000       5.193235       141.3151 
+ 633   0.0000       5.212835       141.8484 
+ 634   0.0000       5.228605       142.2776 
+ 635   0.0000       5.263617       143.2303 
+ 636   0.0000       5.265972       143.2944 
+ 637   0.0000       5.291407       143.9865 
+ 638   0.0000       5.305069       144.3583 
+ 639   0.0000       5.306757       144.4042 
+ 640   0.0000       5.336978       145.2266 
+ 641   0.0000       5.353663       145.6806 
+ 642   0.0000       5.363549       145.9496 
+ 643   0.0000       5.369558       146.1131 
+ 644   0.0000       5.392592       146.7399 
+ 645   0.0000       5.430634       147.7751 
+ 646   0.0000       5.445308       148.1744 
+ 647   0.0000       5.454604       148.4273 
+ 648   0.0000       5.456122       148.4686 
+ 649   0.0000       5.465631       148.7274 
+ 650   0.0000       5.474610       148.9717 
+ 651   0.0000       5.485113       149.2575 
+ 652   0.0000       5.540386       150.7616 
+ 653   0.0000       5.550766       151.0440 
+ 654   0.0000       5.572596       151.6381 
+ 655   0.0000       5.586080       152.0050 
+ 656   0.0000       5.610578       152.6716 
+ 657   0.0000       5.631874       153.2511 
+ 658   0.0000       5.644364       153.5909 
+ 659   0.0000       5.658049       153.9633 
+ 660   0.0000       5.702808       155.1813 
+ 661   0.0000       5.732780       155.9969 
+ 662   0.0000       5.775569       157.1612 
+ 663   0.0000       5.802311       157.8889 
+ 664   0.0000       5.834459       158.7637 
+ 665   0.0000       5.899387       160.5305 
+ 666   0.0000       5.928706       161.3283 
+ 667   0.0000       5.937465       161.5666 
+ 668   0.0000       5.958419       162.1368 
+ 669   0.0000       6.085799       165.6030 
+ 670   0.0000       6.088800       165.6847 
+ 671   0.0000       6.143698       167.1785 
+ 672   0.0000       6.194483       168.5604 
+ 673   0.0000       6.197580       168.6447 
+ 674   0.0000       6.281205       170.9203 
+ 675   0.0000       6.300975       171.4583 
+ 676   0.0000       6.354537       172.9157 
+ 677   0.0000       6.370210       173.3422 
+ 678   0.0000       6.417396       174.6262 
+ 679   0.0000       6.552378       178.2993 
+ 680   0.0000       6.593114       179.4077 
+ 681   0.0000       6.636896       180.5991 
+ 682   0.0000       6.655970       181.1181 
+ 683   0.0000       6.719199       182.8387 
+ 684   0.0000       6.771841       184.2711 
+ 685   0.0000       6.771977       184.2749 
+ 686   0.0000       6.776274       184.3918 
+ 687   0.0000       6.908331       187.9852 
+ 688   0.0000       6.973630       189.7621 
+ 689   0.0000       7.004044       190.5897 
+ 690   0.0000       7.151041       194.5897 
+ 691   0.0000       7.353740       200.1054 
+ 692   0.0000      22.266384       605.8991 
+ 693   0.0000      22.761507       619.3721 
+ 694   0.0000      22.764735       619.4599 
+ 695   0.0000      22.807965       620.6363 
+ 696   0.0000      22.877199       622.5202 
+ 697   0.0000      22.900950       623.1665 
+ 698   0.0000      22.955022       624.6379 
+ 699   0.0000      22.991932       625.6423 
+ 700   0.0000      23.044601       627.0755 
+ 701   0.0000      23.130167       629.4039 
+ 702   0.0000      23.268581       633.1703 
+ 703   0.0000      23.376043       636.0945 
+ 704   0.0000      23.417239       637.2155 
+ 705   0.0000      23.950165       651.7171 
+ 706   0.0000      43.381974      1180.4835 
+ 707   0.0000      43.490792      1183.4446 
+ 708   0.0000      43.907174      1194.7750 
+
+                 SPIN DOWN ORBITALS
+  NO   OCC          E(Eh)            E(eV) 
+   0   1.0000     -18.832065      -512.4465 
+   1   1.0000     -18.765282      -510.6293 
+   2   1.0000     -18.759320      -510.4670 
+   3   1.0000     -10.003060      -272.1971 
+   4   1.0000      -9.986206      -271.7385 
+   5   1.0000      -9.970112      -271.3005 
+   6   1.0000      -9.931660      -270.2542 
+   7   1.0000      -9.931626      -270.2533 
+   8   1.0000      -9.930683      -270.2276 
+   9   1.0000      -9.927984      -270.1542 
+  10   1.0000      -9.926540      -270.1149 
+  11   1.0000      -9.925393      -270.0837 
+  12   1.0000      -9.924444      -270.0578 
+  13   1.0000      -9.924223      -270.0518 
+  14   1.0000      -9.923188      -270.0237 
+  15   1.0000      -9.921063      -269.9659 
+  16   1.0000      -9.899032      -269.3664 
+  17   1.0000      -1.008966       -27.4554 
+  18   1.0000      -0.970791       -26.4166 
+  19   1.0000      -0.861210       -23.4347 
+  20   1.0000      -0.827214       -22.5096 
+  21   1.0000      -0.780649       -21.2425 
+  22   1.0000      -0.737824       -20.0772 
+  23   1.0000      -0.727791       -19.8042 
+  24   1.0000      -0.690521       -18.7900 
+  25   1.0000      -0.685449       -18.6520 
+  26   1.0000      -0.643972       -17.5234 
+  27   1.0000      -0.605622       -16.4798 
+  28   1.0000      -0.588003       -16.0004 
+  29   1.0000      -0.568369       -15.4661 
+  30   1.0000      -0.558198       -15.1893 
+  31   1.0000      -0.509099       -13.8533 
+  32   1.0000      -0.490256       -13.3405 
+  33   1.0000      -0.485011       -13.1978 
+  34   1.0000      -0.461899       -12.5689 
+  35   1.0000      -0.447730       -12.1833 
+  36   1.0000      -0.446848       -12.1594 
+  37   1.0000      -0.422855       -11.5065 
+  38   1.0000      -0.420415       -11.4401 
+  39   1.0000      -0.410701       -11.1757 
+  40   1.0000      -0.408123       -11.1056 
+  41   1.0000      -0.396496       -10.7892 
+  42   1.0000      -0.391301       -10.6478 
+  43   1.0000      -0.381929       -10.3928 
+  44   1.0000      -0.380762       -10.3611 
+  45   1.0000      -0.369604       -10.0574 
+  46   1.0000      -0.368157       -10.0181 
+  47   1.0000      -0.353058        -9.6072 
+  48   1.0000      -0.344809        -9.3827 
+  49   1.0000      -0.339082        -9.2269 
+  50   1.0000      -0.332306        -9.0425 
+  51   1.0000      -0.319407        -8.6915 
+  52   1.0000      -0.312691        -8.5087 
+  53   1.0000      -0.309777        -8.4295 
+  54   1.0000      -0.295500        -8.0410 
+  55   1.0000      -0.271681        -7.3928 
+  56   1.0000      -0.241911        -6.5827 
+  57   1.0000      -0.237557        -6.4642 
+  58   1.0000      -0.225968        -6.1489 
+  59   1.0000      -0.207338        -5.6419 
+  60   0.0000      -0.194665        -5.2971 
+  61   0.0000      -0.100019        -2.7217 
+  62   0.0000      -0.056580        -1.5396 
+  63   0.0000      -0.039153        -1.0654 
+  64   0.0000      -0.022074        -0.6007 
+  65   0.0000       0.010541         0.2868 
+  66   0.0000       0.019769         0.5379 
+  67   0.0000       0.029526         0.8035 
+  68   0.0000       0.030461         0.8289 
+  69   0.0000       0.034605         0.9416 
+  70   0.0000       0.046674         1.2701 
+  71   0.0000       0.056631         1.5410 
+  72   0.0000       0.060822         1.6551 
+  73   0.0000       0.066632         1.8132 
+  74   0.0000       0.077481         2.1084 
+  75   0.0000       0.080043         2.1781 
+  76   0.0000       0.083699         2.2776 
+  77   0.0000       0.096220         2.6183 
+  78   0.0000       0.099399         2.7048 
+  79   0.0000       0.102945         2.8013 
+  80   0.0000       0.110858         3.0166 
+  81   0.0000       0.122804         3.3417 
+  82   0.0000       0.127798         3.4776 
+  83   0.0000       0.136551         3.7157 
+  84   0.0000       0.142438         3.8759 
+  85   0.0000       0.149479         4.0675 
+  86   0.0000       0.152288         4.1440 
+  87   0.0000       0.159352         4.3362 
+  88   0.0000       0.166343         4.5264 
+  89   0.0000       0.169007         4.5989 
+  90   0.0000       0.180193         4.9033 
+  91   0.0000       0.185412         5.0453 
+  92   0.0000       0.187510         5.1024 
+  93   0.0000       0.196074         5.3354 
+  94   0.0000       0.201975         5.4960 
+  95   0.0000       0.210066         5.7162 
+  96   0.0000       0.210670         5.7326 
+  97   0.0000       0.216471         5.8905 
+  98   0.0000       0.221670         6.0320 
+  99   0.0000       0.223978         6.0948 
+ 100   0.0000       0.230605         6.2751 
+ 101   0.0000       0.239504         6.5172 
+ 102   0.0000       0.249490         6.7890 
+ 103   0.0000       0.255345         6.9483 
+ 104   0.0000       0.260131         7.0785 
+ 105   0.0000       0.263780         7.1778 
+ 106   0.0000       0.265552         7.2260 
+ 107   0.0000       0.269820         7.3422 
+ 108   0.0000       0.276112         7.5134 
+ 109   0.0000       0.287847         7.8327 
+ 110   0.0000       0.292253         7.9526 
+ 111   0.0000       0.300257         8.1704 
+ 112   0.0000       0.305122         8.3028 
+ 113   0.0000       0.312994         8.5170 
+ 114   0.0000       0.317966         8.6523 
+ 115   0.0000       0.321301         8.7430 
+ 116   0.0000       0.326034         8.8718 
+ 117   0.0000       0.333527         9.0757 
+ 118   0.0000       0.336503         9.1567 
+ 119   0.0000       0.342330         9.3153 
+ 120   0.0000       0.344326         9.3696 
+ 121   0.0000       0.346573         9.4307 
+ 122   0.0000       0.359159         9.7732 
+ 123   0.0000       0.368621        10.0307 
+ 124   0.0000       0.370667        10.0864 
+ 125   0.0000       0.372119        10.1259 
+ 126   0.0000       0.374685        10.1957 
+ 127   0.0000       0.378549        10.3008 
+ 128   0.0000       0.381248        10.3743 
+ 129   0.0000       0.389024        10.5859 
+ 130   0.0000       0.394892        10.7456 
+ 131   0.0000       0.406496        11.0613 
+ 132   0.0000       0.410167        11.1612 
+ 133   0.0000       0.414204        11.2711 
+ 134   0.0000       0.416709        11.3392 
+ 135   0.0000       0.419607        11.4181 
+ 136   0.0000       0.424419        11.5490 
+ 137   0.0000       0.429084        11.6760 
+ 138   0.0000       0.433125        11.7859 
+ 139   0.0000       0.438324        11.9274 
+ 140   0.0000       0.442166        12.0320 
+ 141   0.0000       0.452817        12.3218 
+ 142   0.0000       0.458481        12.4759 
+ 143   0.0000       0.463830        12.6214 
+ 144   0.0000       0.467402        12.7186 
+ 145   0.0000       0.476369        12.9627 
+ 146   0.0000       0.482272        13.1233 
+ 147   0.0000       0.495006        13.4698 
+ 148   0.0000       0.510957        13.9039 
+ 149   0.0000       0.515885        14.0380 
+ 150   0.0000       0.521238        14.1836 
+ 151   0.0000       0.529106        14.3977 
+ 152   0.0000       0.530756        14.4426 
+ 153   0.0000       0.539031        14.6678 
+ 154   0.0000       0.546396        14.8682 
+ 155   0.0000       0.555059        15.1039 
+ 156   0.0000       0.558838        15.2068 
+ 157   0.0000       0.570792        15.5320 
+ 158   0.0000       0.583031        15.8651 
+ 159   0.0000       0.591087        16.0843 
+ 160   0.0000       0.593392        16.1470 
+ 161   0.0000       0.597621        16.2621 
+ 162   0.0000       0.601535        16.3686 
+ 163   0.0000       0.618922        16.8417 
+ 164   0.0000       0.622215        16.9313 
+ 165   0.0000       0.626328        17.0432 
+ 166   0.0000       0.632114        17.2007 
+ 167   0.0000       0.633426        17.2364 
+ 168   0.0000       0.638657        17.3787 
+ 169   0.0000       0.644401        17.5350 
+ 170   0.0000       0.659792        17.9539 
+ 171   0.0000       0.670359        18.2414 
+ 172   0.0000       0.674846        18.3635 
+ 173   0.0000       0.680537        18.5184 
+ 174   0.0000       0.694115        18.8878 
+ 175   0.0000       0.701511        19.0891 
+ 176   0.0000       0.707651        19.2561 
+ 177   0.0000       0.715449        19.4684 
+ 178   0.0000       0.729381        19.8475 
+ 179   0.0000       0.732518        19.9328 
+ 180   0.0000       0.734503        19.9868 
+ 181   0.0000       0.745125        20.2759 
+ 182   0.0000       0.749492        20.3947 
+ 183   0.0000       0.759052        20.6549 
+ 184   0.0000       0.761408        20.7190 
+ 185   0.0000       0.766469        20.8567 
+ 186   0.0000       0.772919        21.0322 
+ 187   0.0000       0.779525        21.2120 
+ 188   0.0000       0.787763        21.4361 
+ 189   0.0000       0.795704        21.6522 
+ 190   0.0000       0.806777        21.9535 
+ 191   0.0000       0.816671        22.2228 
+ 192   0.0000       0.822403        22.3787 
+ 193   0.0000       0.828632        22.5482 
+ 194   0.0000       0.833058        22.6687 
+ 195   0.0000       0.849654        23.1203 
+ 196   0.0000       0.854284        23.2463 
+ 197   0.0000       0.860727        23.4216 
+ 198   0.0000       0.871894        23.7254 
+ 199   0.0000       0.882265        24.0077 
+ 200   0.0000       0.886778        24.1305 
+ 201   0.0000       0.898204        24.4414 
+ 202   0.0000       0.903061        24.5735 
+ 203   0.0000       0.912249        24.8236 
+ 204   0.0000       0.914500        24.8848 
+ 205   0.0000       0.920177        25.0393 
+ 206   0.0000       0.926880        25.2217 
+ 207   0.0000       0.940213        25.5845 
+ 208   0.0000       0.942534        25.6476 
+ 209   0.0000       0.948098        25.7991 
+ 210   0.0000       0.949461        25.8361 
+ 211   0.0000       0.960837        26.1457 
+ 212   0.0000       0.963473        26.2174 
+ 213   0.0000       0.980832        26.6898 
+ 214   0.0000       0.987194        26.8629 
+ 215   0.0000       0.987980        26.8843 
+ 216   0.0000       0.992267        27.0010 
+ 217   0.0000       1.006270        27.3820 
+ 218   0.0000       1.017426        27.6856 
+ 219   0.0000       1.019955        27.7544 
+ 220   0.0000       1.042482        28.3674 
+ 221   0.0000       1.046647        28.4807 
+ 222   0.0000       1.053291        28.6615 
+ 223   0.0000       1.061825        28.8937 
+ 224   0.0000       1.081975        29.4420 
+ 225   0.0000       1.086222        29.5576 
+ 226   0.0000       1.090481        29.6735 
+ 227   0.0000       1.101446        29.9719 
+ 228   0.0000       1.105156        30.0728 
+ 229   0.0000       1.116373        30.3780 
+ 230   0.0000       1.127841        30.6901 
+ 231   0.0000       1.132835        30.8260 
+ 232   0.0000       1.145184        31.1620 
+ 233   0.0000       1.152398        31.3583 
+ 234   0.0000       1.164506        31.6878 
+ 235   0.0000       1.173858        31.9423 
+ 236   0.0000       1.183269        32.1984 
+ 237   0.0000       1.189313        32.3628 
+ 238   0.0000       1.191954        32.4347 
+ 239   0.0000       1.199081        32.6286 
+ 240   0.0000       1.208693        32.8902 
+ 241   0.0000       1.219794        33.1923 
+ 242   0.0000       1.231157        33.5015 
+ 243   0.0000       1.236468        33.6460 
+ 244   0.0000       1.244306        33.8593 
+ 245   0.0000       1.252720        34.0883 
+ 246   0.0000       1.260336        34.2955 
+ 247   0.0000       1.261825        34.3360 
+ 248   0.0000       1.272283        34.6206 
+ 249   0.0000       1.276604        34.7382 
+ 250   0.0000       1.281904        34.8824 
+ 251   0.0000       1.288990        35.0752 
+ 252   0.0000       1.294235        35.2179 
+ 253   0.0000       1.306023        35.5387 
+ 254   0.0000       1.318647        35.8822 
+ 255   0.0000       1.324655        36.0457 
+ 256   0.0000       1.331744        36.2386 
+ 257   0.0000       1.335926        36.3524 
+ 258   0.0000       1.339538        36.4507 
+ 259   0.0000       1.350925        36.7605 
+ 260   0.0000       1.353714        36.8364 
+ 261   0.0000       1.365782        37.1648 
+ 262   0.0000       1.379177        37.5293 
+ 263   0.0000       1.386374        37.7251 
+ 264   0.0000       1.394516        37.9467 
+ 265   0.0000       1.396466        37.9998 
+ 266   0.0000       1.403369        38.1876 
+ 267   0.0000       1.411206        38.4009 
+ 268   0.0000       1.422389        38.7052 
+ 269   0.0000       1.427685        38.8493 
+ 270   0.0000       1.438654        39.1478 
+ 271   0.0000       1.445695        39.3394 
+ 272   0.0000       1.455785        39.6139 
+ 273   0.0000       1.461747        39.7762 
+ 274   0.0000       1.474053        40.1110 
+ 275   0.0000       1.485029        40.4097 
+ 276   0.0000       1.491057        40.5737 
+ 277   0.0000       1.497046        40.7367 
+ 278   0.0000       1.503440        40.9107 
+ 279   0.0000       1.508788        41.0562 
+ 280   0.0000       1.511098        41.1191 
+ 281   0.0000       1.528394        41.5897 
+ 282   0.0000       1.530190        41.6386 
+ 283   0.0000       1.552559        42.2473 
+ 284   0.0000       1.562816        42.5264 
+ 285   0.0000       1.565499        42.5994 
+ 286   0.0000       1.568942        42.6931 
+ 287   0.0000       1.587155        43.1887 
+ 288   0.0000       1.593766        43.3686 
+ 289   0.0000       1.602115        43.5958 
+ 290   0.0000       1.611284        43.8453 
+ 291   0.0000       1.617919        44.0258 
+ 292   0.0000       1.633067        44.4380 
+ 293   0.0000       1.640218        44.6326 
+ 294   0.0000       1.666000        45.3342 
+ 295   0.0000       1.681299        45.7505 
+ 296   0.0000       1.685248        45.8579 
+ 297   0.0000       1.692336        46.0508 
+ 298   0.0000       1.698234        46.2113 
+ 299   0.0000       1.714984        46.6671 
+ 300   0.0000       1.718782        46.7704 
+ 301   0.0000       1.732123        47.1335 
+ 302   0.0000       1.745290        47.4917 
+ 303   0.0000       1.767556        48.0976 
+ 304   0.0000       1.772767        48.2394 
+ 305   0.0000       1.782694        48.5096 
+ 306   0.0000       1.800957        49.0065 
+ 307   0.0000       1.812797        49.3287 
+ 308   0.0000       1.844883        50.2018 
+ 309   0.0000       1.856089        50.5067 
+ 310   0.0000       1.863285        50.7026 
+ 311   0.0000       1.873164        50.9714 
+ 312   0.0000       1.881291        51.1925 
+ 313   0.0000       1.886371        51.3308 
+ 314   0.0000       1.911337        52.0101 
+ 315   0.0000       1.922632        52.3175 
+ 316   0.0000       1.935744        52.6743 
+ 317   0.0000       1.954587        53.1870 
+ 318   0.0000       1.956764        53.2463 
+ 319   0.0000       1.964499        53.4567 
+ 320   0.0000       1.972429        53.6725 
+ 321   0.0000       1.984784        54.0087 
+ 322   0.0000       2.004414        54.5429 
+ 323   0.0000       2.009319        54.6763 
+ 324   0.0000       2.019282        54.9475 
+ 325   0.0000       2.025021        55.1036 
+ 326   0.0000       2.030256        55.2461 
+ 327   0.0000       2.044794        55.6417 
+ 328   0.0000       2.070576        56.3432 
+ 329   0.0000       2.084555        56.7236 
+ 330   0.0000       2.089854        56.8678 
+ 331   0.0000       2.098173        57.0942 
+ 332   0.0000       2.116492        57.5927 
+ 333   0.0000       2.127557        57.8938 
+ 334   0.0000       2.161482        58.8169 
+ 335   0.0000       2.168108        58.9972 
+ 336   0.0000       2.189874        59.5895 
+ 337   0.0000       2.198215        59.8165 
+ 338   0.0000       2.214268        60.2533 
+ 339   0.0000       2.231632        60.7258 
+ 340   0.0000       2.242818        61.0302 
+ 341   0.0000       2.250954        61.2516 
+ 342   0.0000       2.256621        61.4058 
+ 343   0.0000       2.269562        61.7579 
+ 344   0.0000       2.292283        62.3762 
+ 345   0.0000       2.306336        62.7586 
+ 346   0.0000       2.315951        63.0202 
+ 347   0.0000       2.321869        63.1813 
+ 348   0.0000       2.339685        63.6661 
+ 349   0.0000       2.361749        64.2664 
+ 350   0.0000       2.375957        64.6531 
+ 351   0.0000       2.401278        65.3421 
+ 352   0.0000       2.404577        65.4319 
+ 353   0.0000       2.427683        66.0606 
+ 354   0.0000       2.449682        66.6592 
+ 355   0.0000       2.464539        67.0635 
+ 356   0.0000       2.483802        67.5877 
+ 357   0.0000       2.491101        67.7863 
+ 358   0.0000       2.496340        67.9289 
+ 359   0.0000       2.514069        68.4113 
+ 360   0.0000       2.526025        68.7366 
+ 361   0.0000       2.538250        69.0693 
+ 362   0.0000       2.561967        69.7147 
+ 363   0.0000       2.572394        69.9984 
+ 364   0.0000       2.578699        70.1700 
+ 365   0.0000       2.588871        70.4468 
+ 366   0.0000       2.595364        70.6234 
+ 367   0.0000       2.604963        70.8847 
+ 368   0.0000       2.627257        71.4913 
+ 369   0.0000       2.635471        71.7148 
+ 370   0.0000       2.639603        71.8272 
+ 371   0.0000       2.641575        71.8809 
+ 372   0.0000       2.644885        71.9710 
+ 373   0.0000       2.655949        72.2720 
+ 374   0.0000       2.667281        72.5804 
+ 375   0.0000       2.676183        72.8227 
+ 376   0.0000       2.686025        73.0904 
+ 377   0.0000       2.689220        73.1774 
+ 378   0.0000       2.701986        73.5248 
+ 379   0.0000       2.709548        73.7305 
+ 380   0.0000       2.715660        73.8969 
+ 381   0.0000       2.731372        74.3244 
+ 382   0.0000       2.735695        74.4421 
+ 383   0.0000       2.740522        74.5734 
+ 384   0.0000       2.745599        74.7115 
+ 385   0.0000       2.750203        74.8368 
+ 386   0.0000       2.757063        75.0235 
+ 387   0.0000       2.763980        75.2117 
+ 388   0.0000       2.774896        75.5088 
+ 389   0.0000       2.775264        75.5188 
+ 390   0.0000       2.783742        75.7495 
+ 391   0.0000       2.791028        75.9477 
+ 392   0.0000       2.792950        76.0000 
+ 393   0.0000       2.810918        76.4890 
+ 394   0.0000       2.822649        76.8082 
+ 395   0.0000       2.837635        77.2160 
+ 396   0.0000       2.841342        77.3168 
+ 397   0.0000       2.852100        77.6096 
+ 398   0.0000       2.865087        77.9630 
+ 399   0.0000       2.872823        78.1735 
+ 400   0.0000       2.877223        78.2932 
+ 401   0.0000       2.882177        78.4280 
+ 402   0.0000       2.884026        78.4783 
+ 403   0.0000       2.886644        78.5496 
+ 404   0.0000       2.898680        78.8771 
+ 405   0.0000       2.914537        79.3086 
+ 406   0.0000       2.916206        79.3540 
+ 407   0.0000       2.920046        79.4585 
+ 408   0.0000       2.923297        79.5469 
+ 409   0.0000       2.929861        79.7256 
+ 410   0.0000       2.940890        80.0257 
+ 411   0.0000       2.951601        80.3172 
+ 412   0.0000       2.954258        80.3895 
+ 413   0.0000       2.960423        80.5572 
+ 414   0.0000       2.962877        80.6240 
+ 415   0.0000       2.978719        81.0551 
+ 416   0.0000       2.983245        81.1782 
+ 417   0.0000       2.994652        81.4886 
+ 418   0.0000       2.995641        81.5155 
+ 419   0.0000       3.005567        81.7856 
+ 420   0.0000       3.020100        82.1811 
+ 421   0.0000       3.025126        82.3179 
+ 422   0.0000       3.031488        82.4910 
+ 423   0.0000       3.033488        82.5454 
+ 424   0.0000       3.042745        82.7973 
+ 425   0.0000       3.055649        83.1484 
+ 426   0.0000       3.070256        83.5459 
+ 427   0.0000       3.072763        83.6141 
+ 428   0.0000       3.079794        83.8055 
+ 429   0.0000       3.088181        84.0337 
+ 430   0.0000       3.094623        84.2090 
+ 431   0.0000       3.099443        84.3401 
+ 432   0.0000       3.103464        84.4496 
+ 433   0.0000       3.111730        84.6745 
+ 434   0.0000       3.124286        85.0161 
+ 435   0.0000       3.127657        85.1079 
+ 436   0.0000       3.138786        85.4107 
+ 437   0.0000       3.143163        85.5298 
+ 438   0.0000       3.155917        85.8769 
+ 439   0.0000       3.161529        86.0296 
+ 440   0.0000       3.176276        86.4309 
+ 441   0.0000       3.181195        86.5647 
+ 442   0.0000       3.194534        86.9277 
+ 443   0.0000       3.199527        87.0636 
+ 444   0.0000       3.207135        87.2706 
+ 445   0.0000       3.213635        87.4474 
+ 446   0.0000       3.215363        87.4945 
+ 447   0.0000       3.220726        87.6404 
+ 448   0.0000       3.229963        87.8918 
+ 449   0.0000       3.236011        88.0563 
+ 450   0.0000       3.243594        88.2627 
+ 451   0.0000       3.252306        88.4998 
+ 452   0.0000       3.262659        88.7815 
+ 453   0.0000       3.270288        88.9891 
+ 454   0.0000       3.279749        89.2465 
+ 455   0.0000       3.285809        89.4114 
+ 456   0.0000       3.295124        89.6649 
+ 457   0.0000       3.302040        89.8531 
+ 458   0.0000       3.312247        90.1308 
+ 459   0.0000       3.318908        90.3121 
+ 460   0.0000       3.322396        90.4070 
+ 461   0.0000       3.329704        90.6059 
+ 462   0.0000       3.344260        91.0019 
+ 463   0.0000       3.347148        91.0805 
+ 464   0.0000       3.351135        91.1890 
+ 465   0.0000       3.354941        91.2926 
+ 466   0.0000       3.366328        91.6024 
+ 467   0.0000       3.371689        91.7483 
+ 468   0.0000       3.386428        92.1494 
+ 469   0.0000       3.393105        92.3311 
+ 470   0.0000       3.395052        92.3841 
+ 471   0.0000       3.401337        92.5551 
+ 472   0.0000       3.404369        92.6376 
+ 473   0.0000       3.417747        93.0016 
+ 474   0.0000       3.423302        93.1528 
+ 475   0.0000       3.434753        93.4644 
+ 476   0.0000       3.444492        93.7294 
+ 477   0.0000       3.459527        94.1385 
+ 478   0.0000       3.470421        94.4350 
+ 479   0.0000       3.473600        94.5215 
+ 480   0.0000       3.481562        94.7381 
+ 481   0.0000       3.491525        95.0092 
+ 482   0.0000       3.497009        95.1585 
+ 483   0.0000       3.505178        95.3807 
+ 484   0.0000       3.510309        95.5204 
+ 485   0.0000       3.527997        96.0017 
+ 486   0.0000       3.534215        96.1709 
+ 487   0.0000       3.542229        96.3889 
+ 488   0.0000       3.551984        96.6544 
+ 489   0.0000       3.572616        97.2158 
+ 490   0.0000       3.598893        97.9309 
+ 491   0.0000       3.604889        98.0940 
+ 492   0.0000       3.612134        98.2911 
+ 493   0.0000       3.615436        98.3810 
+ 494   0.0000       3.621604        98.5489 
+ 495   0.0000       3.625267        98.6485 
+ 496   0.0000       3.643921        99.1561 
+ 497   0.0000       3.649415        99.3056 
+ 498   0.0000       3.655126        99.4610 
+ 499   0.0000       3.667090        99.7866 
+ 500   0.0000       3.681419       100.1765 
+ 501   0.0000       3.688917       100.3805 
+ 502   0.0000       3.694680       100.5374 
+ 503   0.0000       3.701756       100.7299 
+ 504   0.0000       3.713675       101.0542 
+ 505   0.0000       3.721135       101.2572 
+ 506   0.0000       3.737372       101.6991 
+ 507   0.0000       3.751200       102.0753 
+ 508   0.0000       3.752547       102.1120 
+ 509   0.0000       3.761633       102.3592 
+ 510   0.0000       3.773557       102.6837 
+ 511   0.0000       3.776466       102.7629 
+ 512   0.0000       3.795082       103.2694 
+ 513   0.0000       3.814107       103.7871 
+ 514   0.0000       3.830449       104.2318 
+ 515   0.0000       3.835847       104.3787 
+ 516   0.0000       3.839173       104.4692 
+ 517   0.0000       3.852822       104.8406 
+ 518   0.0000       3.858327       104.9904 
+ 519   0.0000       3.869046       105.2821 
+ 520   0.0000       3.881599       105.6237 
+ 521   0.0000       3.884093       105.6915 
+ 522   0.0000       3.889347       105.8345 
+ 523   0.0000       3.897968       106.0691 
+ 524   0.0000       3.907452       106.3272 
+ 525   0.0000       3.914452       106.5176 
+ 526   0.0000       3.925437       106.8166 
+ 527   0.0000       3.927979       106.8857 
+ 528   0.0000       3.935205       107.0824 
+ 529   0.0000       3.961056       107.7858 
+ 530   0.0000       3.965551       107.9081 
+ 531   0.0000       3.983751       108.4034 
+ 532   0.0000       3.991095       108.6032 
+ 533   0.0000       3.994515       108.6963 
+ 534   0.0000       4.003146       108.9311 
+ 535   0.0000       4.005688       109.0003 
+ 536   0.0000       4.014901       109.2510 
+ 537   0.0000       4.029837       109.6574 
+ 538   0.0000       4.031275       109.6966 
+ 539   0.0000       4.037579       109.8681 
+ 540   0.0000       4.048508       110.1655 
+ 541   0.0000       4.057862       110.4200 
+ 542   0.0000       4.068069       110.6978 
+ 543   0.0000       4.069538       110.7377 
+ 544   0.0000       4.086674       111.2040 
+ 545   0.0000       4.091217       111.3277 
+ 546   0.0000       4.107312       111.7657 
+ 547   0.0000       4.112261       111.9003 
+ 548   0.0000       4.120695       112.1298 
+ 549   0.0000       4.128415       112.3399 
+ 550   0.0000       4.137684       112.5921 
+ 551   0.0000       4.151559       112.9697 
+ 552   0.0000       4.159479       113.1852 
+ 553   0.0000       4.167297       113.3979 
+ 554   0.0000       4.172418       113.5373 
+ 555   0.0000       4.183184       113.8302 
+ 556   0.0000       4.202469       114.3550 
+ 557   0.0000       4.219277       114.8124 
+ 558   0.0000       4.219787       114.8262 
+ 559   0.0000       4.234904       115.2376 
+ 560   0.0000       4.240435       115.3881 
+ 561   0.0000       4.255991       115.8114 
+ 562   0.0000       4.260755       115.9410 
+ 563   0.0000       4.271696       116.2388 
+ 564   0.0000       4.285555       116.6159 
+ 565   0.0000       4.290246       116.7435 
+ 566   0.0000       4.302925       117.0885 
+ 567   0.0000       4.319843       117.5489 
+ 568   0.0000       4.328788       117.7923 
+ 569   0.0000       4.352171       118.4286 
+ 570   0.0000       4.358393       118.5979 
+ 571   0.0000       4.376798       119.0987 
+ 572   0.0000       4.393940       119.5652 
+ 573   0.0000       4.408024       119.9484 
+ 574   0.0000       4.411560       120.0447 
+ 575   0.0000       4.420795       120.2960 
+ 576   0.0000       4.433963       120.6543 
+ 577   0.0000       4.452290       121.1530 
+ 578   0.0000       4.463847       121.4674 
+ 579   0.0000       4.477049       121.8267 
+ 580   0.0000       4.492395       122.2443 
+ 581   0.0000       4.506399       122.6253 
+ 582   0.0000       4.520655       123.0133 
+ 583   0.0000       4.550178       123.8166 
+ 584   0.0000       4.569177       124.3336 
+ 585   0.0000       4.580909       124.6529 
+ 586   0.0000       4.595060       125.0379 
+ 587   0.0000       4.613205       125.5317 
+ 588   0.0000       4.619205       125.6950 
+ 589   0.0000       4.622263       125.7782 
+ 590   0.0000       4.635744       126.1450 
+ 591   0.0000       4.652727       126.6071 
+ 592   0.0000       4.680000       127.3493 
+ 593   0.0000       4.686781       127.5338 
+ 594   0.0000       4.704626       128.0194 
+ 595   0.0000       4.723862       128.5428 
+ 596   0.0000       4.748341       129.2089 
+ 597   0.0000       4.748748       129.2200 
+ 598   0.0000       4.773052       129.8814 
+ 599   0.0000       4.790040       130.3436 
+ 600   0.0000       4.798745       130.5805 
+ 601   0.0000       4.816677       131.0684 
+ 602   0.0000       4.824816       131.2899 
+ 603   0.0000       4.833860       131.5360 
+ 604   0.0000       4.841975       131.7568 
+ 605   0.0000       4.865620       132.4002 
+ 606   0.0000       4.873580       132.6169 
+ 607   0.0000       4.895480       133.2128 
+ 608   0.0000       4.897382       133.2645 
+ 609   0.0000       4.934277       134.2685 
+ 610   0.0000       4.948281       134.6496 
+ 611   0.0000       4.976986       135.4307 
+ 612   0.0000       4.990415       135.7961 
+ 613   0.0000       4.998640       136.0199 
+ 614   0.0000       5.021663       136.6464 
+ 615   0.0000       5.023280       136.6904 
+ 616   0.0000       5.026748       136.7848 
+ 617   0.0000       5.044366       137.2642 
+ 618   0.0000       5.050661       137.4355 
+ 619   0.0000       5.059812       137.6845 
+ 620   0.0000       5.071071       137.9909 
+ 621   0.0000       5.088731       138.4714 
+ 622   0.0000       5.092548       138.5753 
+ 623   0.0000       5.097099       138.6991 
+ 624   0.0000       5.110155       139.0544 
+ 625   0.0000       5.116631       139.2306 
+ 626   0.0000       5.138036       139.8131 
+ 627   0.0000       5.147846       140.0800 
+ 628   0.0000       5.158610       140.3729 
+ 629   0.0000       5.164623       140.5365 
+ 630   0.0000       5.173581       140.7803 
+ 631   0.0000       5.182224       141.0155 
+ 632   0.0000       5.198640       141.4622 
+ 633   0.0000       5.214610       141.8967 
+ 634   0.0000       5.229619       142.3052 
+ 635   0.0000       5.264181       143.2456 
+ 636   0.0000       5.266969       143.3215 
+ 637   0.0000       5.292954       144.0286 
+ 638   0.0000       5.306306       144.3919 
+ 639   0.0000       5.307788       144.4323 
+ 640   0.0000       5.338049       145.2557 
+ 641   0.0000       5.354693       145.7086 
+ 642   0.0000       5.367552       146.0585 
+ 643   0.0000       5.387544       146.6025 
+ 644   0.0000       5.397109       146.8628 
+ 645   0.0000       5.431250       147.7918 
+ 646   0.0000       5.455085       148.4404 
+ 647   0.0000       5.456706       148.4845 
+ 648   0.0000       5.457119       148.4958 
+ 649   0.0000       5.469816       148.8413 
+ 650   0.0000       5.484300       149.2354 
+ 651   0.0000       5.486107       149.2846 
+ 652   0.0000       5.540826       150.7735 
+ 653   0.0000       5.552075       151.0796 
+ 654   0.0000       5.573635       151.6663 
+ 655   0.0000       5.587090       152.0324 
+ 656   0.0000       5.612981       152.7370 
+ 657   0.0000       5.636542       153.3781 
+ 658   0.0000       5.654570       153.8687 
+ 659   0.0000       5.666405       154.1907 
+ 660   0.0000       5.704172       155.2184 
+ 661   0.0000       5.734535       156.0446 
+ 662   0.0000       5.779977       157.2812 
+ 663   0.0000       5.803367       157.9177 
+ 664   0.0000       5.836993       158.8327 
+ 665   0.0000       5.901129       160.5779 
+ 666   0.0000       5.930419       161.3749 
+ 667   0.0000       5.953332       161.9984 
+ 668   0.0000       5.959822       162.1750 
+ 669   0.0000       6.086727       165.6283 
+ 670   0.0000       6.106429       166.1644 
+ 671   0.0000       6.144676       167.2051 
+ 672   0.0000       6.210223       168.9888 
+ 673   0.0000       6.226043       169.4192 
+ 674   0.0000       6.322747       172.0507 
+ 675   0.0000       6.336088       172.4137 
+ 676   0.0000       6.355562       172.9436 
+ 677   0.0000       6.390854       173.9040 
+ 678   0.0000       6.418860       174.6661 
+ 679   0.0000       6.555178       178.3755 
+ 680   0.0000       6.625885       180.2995 
+ 681   0.0000       6.645856       180.8429 
+ 682   0.0000       6.658128       181.1769 
+ 683   0.0000       6.723351       182.9517 
+ 684   0.0000       6.772558       184.2907 
+ 685   0.0000       6.778881       184.4627 
+ 686   0.0000       6.785914       184.6541 
+ 687   0.0000       6.927210       188.4990 
+ 688   0.0000       6.987685       190.1446 
+ 689   0.0000       7.037276       191.4940 
+ 690   0.0000       7.151519       194.6027 
+ 691   0.0000       7.354444       200.1246 
+ 692   0.0000      22.266960       605.9148 
+ 693   0.0000      22.761935       619.3837 
+ 694   0.0000      22.764895       619.4643 
+ 695   0.0000      22.808587       620.6532 
+ 696   0.0000      22.877509       622.5287 
+ 697   0.0000      22.901862       623.1913 
+ 698   0.0000      22.955159       624.6416 
+ 699   0.0000      22.992069       625.6460 
+ 700   0.0000      23.044902       627.0837 
+ 701   0.0000      23.131019       629.4270 
+ 702   0.0000      23.268655       633.1723 
+ 703   0.0000      23.376164       636.0978 
+ 704   0.0000      23.417917       637.2339 
+ 705   0.0000      23.950526       651.7270 
+ 706   0.0000      43.398575      1180.9353 
+ 707   0.0000      43.497545      1183.6284 
+ 708   0.0000      43.908103      1194.8002 
+
+                    ********************************
+                    * MULLIKEN POPULATION ANALYSIS *
+                    ********************************
+
+--------------------------------------------
+MULLIKEN ATOMIC CHARGES AND SPIN POPULATIONS
+--------------------------------------------
+   0 O :   -0.220101    0.027416
+   1 O :   -0.279611    0.550761
+   2 O :   -0.241084    0.208032
+   3 C :   -0.048503    0.013251
+   4 C :    0.054735    0.045325
+   5 C :   -0.040961   -0.013052
+   6 C :   -0.034497   -0.011941
+   7 C :   -0.086509    0.061732
+   8 C :   -0.140261   -0.020413
+   9 C :   -0.125021    0.067781
+  10 C :   -0.328628    0.001113
+  11 C :   -0.145632    0.047001
+  12 C :   -0.118289    0.065866
+  13 C :    0.220784    0.025595
+  14 C :    0.261215   -0.047046
+  15 C :   -0.187038   -0.013091
+  16 C :   -0.218981   -0.001086
+  17 H :    0.093363   -0.001740
+  18 H :    0.134340   -0.001053
+  19 H :    0.139996    0.000423
+  20 H :    0.142810   -0.003849
+  21 H :    0.127038    0.000593
+  22 H :    0.104998   -0.000065
+  23 H :    0.111717    0.000385
+  24 H :    0.148564   -0.002669
+  25 H :    0.135499   -0.003117
+  26 H :    0.139571    0.000005
+  27 H :    0.141771   -0.000082
+  28 H :    0.130187    0.001942
+  29 H :    0.128528    0.001987
+Sum of atomic charges         :   -0.0000000
+Sum of atomic spin populations:    1.0000000
+
+-----------------------------------------------------
+MULLIKEN REDUCED ORBITAL CHARGES AND SPIN POPULATIONS
+-----------------------------------------------------
+CHARGE
+  0 O s       :     3.772172  s :     3.772172
+      pz      :     1.704794  p :     4.405260
+      px      :     1.201740
+      py      :     1.498726
+      dz2     :     0.004608  d :     0.040731
+      dxz     :     0.007764
+      dyz     :     0.004233
+      dx2y2   :     0.011437
+      dxy     :     0.012689
+      f0      :     0.000256  f :     0.001938
+      f+1     :     0.000341
+      f-1     :     0.000165
+      f+2     :     0.000181
+      f-2     :     0.000169
+      f+3     :     0.000417
+      f-3     :     0.000408
+  1 O s       :     3.876191  s :     3.876191
+      pz      :     1.493771  p :     4.378179
+      px      :     1.349866
+      py      :     1.534542
+      dz2     :     0.003043  d :     0.023966
+      dxz     :     0.006103
+      dyz     :     0.000358
+      dx2y2   :     0.008348
+      dxy     :     0.006115
+      f0      :     0.000125  f :     0.001274
+      f+1     :     0.000210
+      f-1     :     0.000029
+      f+2     :     0.000235
+      f-2     :     0.000024
+      f+3     :     0.000337
+      f-3     :     0.000313
+  2 O s       :     3.823892  s :     3.823892
+      pz      :     1.417127  p :     4.386703
+      px      :     1.506601
+      py      :     1.462975
+      dz2     :     0.008095  d :     0.028786
+      dxz     :     0.005551
+      dyz     :     0.005918
+      dx2y2   :     0.004912
+      dxy     :     0.004310
+      f0      :     0.000257  f :     0.001703
+      f+1     :     0.000254
+      f-1     :     0.000251
+      f+2     :     0.000349
+      f-2     :     0.000286
+      f+3     :     0.000153
+      f-3     :     0.000154
+  3 C s       :     3.170321  s :     3.170321
+      pz      :     0.905549  p :     2.748061
+      px      :     0.854457
+      py      :     0.988055
+      dz2     :     0.021931  d :     0.123125
+      dxz     :     0.032628
+      dyz     :     0.025139
+      dx2y2   :     0.018497
+      dxy     :     0.024929
+      f0      :     0.001381  f :     0.006996
+      f+1     :     0.001053
+      f-1     :     0.001136
+      f+2     :     0.000947
+      f-2     :     0.000666
+      f+3     :     0.000862
+      f-3     :     0.000949
+  4 C s       :     3.289120  s :     3.289120
+      pz      :     0.901352  p :     2.508888
+      px      :     0.764212
+      py      :     0.843324
+      dz2     :     0.011121  d :     0.138022
+      dxz     :     0.023010
+      dyz     :     0.020777
+      dx2y2   :     0.040715
+      dxy     :     0.042398
+      f0      :     0.001110  f :     0.009235
+      f+1     :     0.000826
+      f-1     :     0.000927
+      f+2     :     0.000906
+      f-2     :     0.001114
+      f+3     :     0.001542
+      f-3     :     0.002810
+  5 C s       :     3.239745  s :     3.239745
+      pz      :     0.927180  p :     2.649877
+      px      :     0.842210
+      py      :     0.880487
+      dz2     :     0.009231  d :     0.141359
+      dxz     :     0.026524
+      dyz     :     0.020746
+      dx2y2   :     0.041757
+      dxy     :     0.043102
+      f0      :     0.001342  f :     0.009980
+      f+1     :     0.000671
+      f-1     :     0.000980
+      f+2     :     0.001097
+      f-2     :     0.001061
+      f+3     :     0.001658
+      f-3     :     0.003172
+  6 C s       :     3.234159  s :     3.234159
+      pz      :     0.920122  p :     2.647740
+      px      :     0.850824
+      py      :     0.876795
+      dz2     :     0.009736  d :     0.142596
+      dxz     :     0.028356
+      dyz     :     0.021253
+      dx2y2   :     0.041877
+      dxy     :     0.041374
+      f0      :     0.001321  f :     0.010001
+      f+1     :     0.000687
+      f-1     :     0.000981
+      f+2     :     0.001136
+      f-2     :     0.001073
+      f+3     :     0.001653
+      f-3     :     0.003150
+  7 C s       :     3.145983  s :     3.145983
+      pz      :     0.936239  p :     2.838561
+      px      :     0.916775
+      py      :     0.985547
+      dz2     :     0.004013  d :     0.094887
+      dxz     :     0.022368
+      dyz     :     0.010531
+      dx2y2   :     0.028836
+      dxy     :     0.029139
+      f0      :     0.001097  f :     0.007078
+      f+1     :     0.000548
+      f-1     :     0.000563
+      f+2     :     0.000829
+      f-2     :     0.000688
+      f+3     :     0.001147
+      f-3     :     0.002207
+  8 C s       :     3.183549  s :     3.183549
+      pz      :     0.952562  p :     2.855033
+      px      :     0.961654
+      py      :     0.940817
+      dz2     :     0.007093  d :     0.094637
+      dxz     :     0.017286
+      dyz     :     0.010366
+      dx2y2   :     0.017090
+      dxy     :     0.042802
+      f0      :     0.000960  f :     0.007043
+      f+1     :     0.000536
+      f-1     :     0.000842
+      f+2     :     0.001048
+      f-2     :     0.000445
+      f+3     :     0.001040
+      f-3     :     0.002171
+  9 C s       :     3.199332  s :     3.199332
+      pz      :     0.946632  p :     2.819796
+      px      :     0.900265
+      py      :     0.972900
+      dz2     :     0.004869  d :     0.098965
+      dxz     :     0.022828
+      dyz     :     0.010652
+      dx2y2   :     0.029422
+      dxy     :     0.031193
+      f0      :     0.001118  f :     0.006928
+      f+1     :     0.000506
+      f-1     :     0.000536
+      f+2     :     0.000774
+      f-2     :     0.000765
+      f+3     :     0.001140
+      f-3     :     0.002089
+ 10 C s       :     3.266001  s :     3.266001
+      pz      :     0.891352  p :     2.991529
+      px      :     1.069717
+      py      :     1.030459
+      dz2     :     0.011435  d :     0.067774
+      dxz     :     0.013633
+      dyz     :     0.020911
+      dx2y2   :     0.016469
+      dxy     :     0.005327
+      f0      :     0.000864  f :     0.003324
+      f+1     :     0.000673
+      f-1     :     0.000798
+      f+2     :     0.000288
+      f-2     :     0.000270
+      f+3     :     0.000367
+      f-3     :     0.000065
+ 11 C s       :     3.208626  s :     3.208626
+      pz      :     0.935824  p :     2.830399
+      px      :     0.908268
+      py      :     0.986308
+      dz2     :     0.004727  d :     0.099550
+      dxz     :     0.024518
+      dyz     :     0.010891
+      dx2y2   :     0.028963
+      dxy     :     0.030451
+      f0      :     0.001131  f :     0.007056
+      f+1     :     0.000541
+      f-1     :     0.000537
+      f+2     :     0.000822
+      f-2     :     0.000778
+      f+3     :     0.001138
+      f-3     :     0.002109
+ 12 C s       :     3.192300  s :     3.192300
+      pz      :     0.981536  p :     2.838514
+      px      :     0.877205
+      py      :     0.979773
+      dz2     :     0.004982  d :     0.080255
+      dxz     :     0.020811
+      dyz     :     0.010313
+      dx2y2   :     0.018125
+      dxy     :     0.026025
+      f0      :     0.001174  f :     0.007220
+      f+1     :     0.000592
+      f-1     :     0.000606
+      f+2     :     0.000814
+      f-2     :     0.000732
+      f+3     :     0.001101
+      f-3     :     0.002201
+ 13 C s       :     3.104147  s :     3.104147
+      pz      :     0.924948  p :     2.485934
+      px      :     0.689019
+      py      :     0.871967
+      dz2     :     0.011118  d :     0.174225
+      dxz     :     0.044951
+      dyz     :     0.024029
+      dx2y2   :     0.043286
+      dxy     :     0.050841
+      f0      :     0.001768  f :     0.014909
+      f+1     :     0.001509
+      f-1     :     0.001076
+      f+2     :     0.002130
+      f-2     :     0.001503
+      f+3     :     0.002478
+      f-3     :     0.004446
+ 14 C s       :     3.064093  s :     3.064093
+      pz      :     0.819959  p :     2.396916
+      px      :     0.756593
+      py      :     0.820363
+      dz2     :     0.048508  d :     0.256509
+      dxz     :     0.067016
+      dyz     :     0.025724
+      dx2y2   :     0.053985
+      dxy     :     0.061276
+      f0      :     0.003233  f :     0.021267
+      f+1     :     0.002435
+      f-1     :     0.002772
+      f+2     :     0.004478
+      f-2     :     0.002075
+      f+3     :     0.002285
+      f-3     :     0.003988
+ 15 C s       :     3.206251  s :     3.206251
+      pz      :     1.006082  p :     2.893374
+      px      :     0.949904
+      py      :     0.937388
+      dz2     :     0.008394  d :     0.080451
+      dxz     :     0.015264
+      dyz     :     0.011069
+      dx2y2   :     0.015415
+      dxy     :     0.030310
+      f0      :     0.001001  f :     0.006962
+      f+1     :     0.000566
+      f-1     :     0.000897
+      f+2     :     0.001062
+      f-2     :     0.000441
+      f+3     :     0.000973
+      f-3     :     0.002022
+ 16 C s       :     3.257525  s :     3.257525
+      pz      :     1.071189  p :     2.851761
+      px      :     0.930077
+      py      :     0.850495
+      dz2     :     0.013814  d :     0.101487
+      dxz     :     0.013141
+      dyz     :     0.031257
+      dx2y2   :     0.027284
+      dxy     :     0.015990
+      f0      :     0.001235  f :     0.008208
+      f+1     :     0.000569
+      f-1     :     0.000923
+      f+2     :     0.000192
+      f-2     :     0.001735
+      f+3     :     0.001621
+      f-3     :     0.001933
+ 17 H s       :     0.865193  s :     0.865193
+      pz      :     0.012171  p :     0.039373
+      px      :     0.012777
+      py      :     0.014424
+      dz2     :     0.000175  d :     0.002071
+      dxz     :     0.000180
+      dyz     :     0.000661
+      dx2y2   :     0.000634
+      dxy     :     0.000422
+ 18 H s       :     0.825798  s :     0.825798
+      pz      :     0.012464  p :     0.038111
+      px      :     0.011430
+      py      :     0.014217
+      dz2     :     0.000148  d :     0.001752
+      dxz     :     0.000161
+      dyz     :     0.000456
+      dx2y2   :     0.000486
+      dxy     :     0.000501
+ 19 H s       :     0.823126  s :     0.823126
+      pz      :     0.012825  p :     0.035241
+      px      :     0.010089
+      py      :     0.012328
+      dz2     :     0.000049  d :     0.001638
+      dxz     :     0.000262
+      dyz     :     0.000419
+      dx2y2   :     0.000852
+      dxy     :     0.000056
+ 20 H s       :     0.821396  s :     0.821396
+      pz      :     0.012625  p :     0.034174
+      px      :     0.009426
+      py      :     0.012124
+      dz2     :     0.000142  d :     0.001620
+      dxz     :     0.000148
+      dyz     :     0.000436
+      dx2y2   :     0.000451
+      dxy     :     0.000444
+ 21 H s       :     0.836447  s :     0.836447
+      pz      :     0.010998  p :     0.034940
+      px      :     0.013519
+      py      :     0.010423
+      dz2     :     0.000094  d :     0.001575
+      dxz     :     0.000750
+      dyz     :     0.000024
+      dx2y2   :    -0.000008
+      dxy     :     0.000715
+ 22 H s       :     0.859413  s :     0.859413
+      pz      :     0.011010  p :     0.034017
+      px      :     0.011491
+      py      :     0.011516
+      dz2     :     0.000173  d :     0.001571
+      dxz     :     0.000080
+      dyz     :     0.000560
+      dx2y2   :     0.000310
+      dxy     :     0.000447
+ 23 H s       :     0.852753  s :     0.852753
+      pz      :     0.011505  p :     0.033970
+      px      :     0.011160
+      py      :     0.011305
+      dz2     :     0.000669  d :     0.001559
+      dxz     :     0.000184
+      dyz     :     0.000063
+      dx2y2   :     0.000443
+      dxy     :     0.000200
+ 24 H s       :     0.815374  s :     0.815374
+      pz      :     0.012395  p :     0.034455
+      px      :     0.009675
+      py      :     0.012384
+      dz2     :     0.000135  d :     0.001608
+      dxz     :     0.000146
+      dyz     :     0.000431
+      dx2y2   :     0.000458
+      dxy     :     0.000438
+ 25 H s       :     0.828123  s :     0.828123
+      pz      :     0.012623  p :     0.034685
+      px      :     0.010858
+      py      :     0.011204
+      dz2     :     0.000151  d :     0.001693
+      dxz     :     0.000168
+      dyz     :     0.000440
+      dx2y2   :     0.000492
+      dxy     :     0.000442
+ 26 H s       :     0.820996  s :     0.820996
+      pz      :     0.014096  p :     0.037764
+      px      :     0.011444
+      py      :     0.012225
+      dz2     :     0.000056  d :     0.001668
+      dxz     :     0.000256
+      dyz     :     0.000441
+      dx2y2   :     0.000821
+      dxy     :     0.000094
+ 27 H s       :     0.828032  s :     0.828032
+      pz      :     0.012071  p :     0.028623
+      px      :     0.007701
+      py      :     0.008851
+      dz2     :     0.000103  d :     0.001573
+      dxz     :     0.000573
+      dyz     :     0.000136
+      dx2y2   :     0.000256
+      dxy     :     0.000504
+ 28 H s       :     0.838582  s :     0.838582
+      pz      :     0.011552  p :     0.029627
+      px      :     0.009680
+      py      :     0.008395
+      dz2     :     0.000649  d :     0.001605
+      dxz     :     0.000235
+      dyz     :    -0.000025
+      dx2y2   :     0.000223
+      dxy     :     0.000522
+ 29 H s       :     0.840234  s :     0.840234
+      pz      :     0.011239  p :     0.029633
+      px      :     0.009805
+      py      :     0.008589
+      dz2     :     0.000201  d :     0.001606
+      dxz     :     0.000664
+      dyz     :     0.000480
+      dx2y2   :     0.000086
+      dxy     :     0.000175
+
+SPIN
+  0 O s       :     0.001216  s :     0.001216
+      pz      :     0.023275  p :     0.026098
+      px      :     0.000961
+      py      :     0.001861
+      dz2     :    -0.000012  d :     0.000119
+      dxz     :     0.000101
+      dyz     :     0.000004
+      dx2y2   :     0.000014
+      dxy     :     0.000012
+      f0      :    -0.000007  f :    -0.000017
+      f+1     :    -0.000006
+      f-1     :    -0.000004
+      f+2     :    -0.000000
+      f-2     :    -0.000000
+      f+3     :    -0.000000
+      f-3     :    -0.000000
+  1 O s       :     0.012821  s :     0.012821
+      pz      :     0.294344  p :     0.538037
+      px      :     0.015321
+      py      :     0.228371
+      dz2     :     0.000000  d :     0.000098
+      dxz     :     0.000042
+      dyz     :     0.000069
+      dx2y2   :    -0.000039
+      dxy     :     0.000026
+      f0      :    -0.000030  f :    -0.000195
+      f+1     :    -0.000055
+      f-1     :     0.000005
+      f+2     :     0.000002
+      f-2     :    -0.000004
+      f+3     :    -0.000071
+      f-3     :    -0.000042
+  2 O s       :     0.005429  s :     0.005429
+      pz      :     0.002693  p :     0.202680
+      px      :     0.191099
+      py      :     0.008888
+      dz2     :    -0.000029  d :    -0.000010
+      dxz     :     0.000031
+      dyz     :     0.000008
+      dx2y2   :    -0.000049
+      dxy     :     0.000030
+      f0      :    -0.000014  f :    -0.000068
+      f+1     :    -0.000013
+      f-1     :    -0.000003
+      f+2     :    -0.000000
+      f-2     :    -0.000011
+      f+3     :    -0.000020
+      f-3     :    -0.000007
+  3 C s       :     0.009663  s :     0.009663
+      pz      :    -0.001687  p :     0.003089
+      px      :     0.005106
+      py      :    -0.000330
+      dz2     :    -0.000232  d :     0.000318
+      dxz     :     0.000231
+      dyz     :    -0.000131
+      dx2y2   :     0.000444
+      dxy     :     0.000007
+      f0      :     0.000045  f :     0.000181
+      f+1     :     0.000007
+      f-1     :     0.000010
+      f+2     :     0.000101
+      f-2     :    -0.000001
+      f+3     :     0.000001
+      f-3     :     0.000018
+  4 C s       :    -0.001059  s :    -0.001059
+      pz      :     0.039397  p :     0.045282
+      px      :     0.003560
+      py      :     0.002325
+      dz2     :    -0.000033  d :     0.001132
+      dxz     :     0.000784
+      dyz     :     0.000110
+      dx2y2   :     0.000152
+      dxy     :     0.000118
+      f0      :    -0.000033  f :    -0.000031
+      f+1     :    -0.000027
+      f-1     :    -0.000034
+      f+2     :    -0.000007
+      f-2     :     0.000049
+      f+3     :     0.000016
+      f-3     :     0.000005
+  5 C s       :    -0.001076  s :    -0.001076
+      pz      :    -0.005039  p :    -0.013430
+      px      :    -0.004802
+      py      :    -0.003589
+      dz2     :    -0.000073  d :     0.001306
+      dxz     :     0.001642
+      dyz     :    -0.000080
+      dx2y2   :    -0.000195
+      dxy     :     0.000012
+      f0      :     0.000009  f :     0.000149
+      f+1     :     0.000012
+      f-1     :     0.000015
+      f+2     :     0.000065
+      f-2     :     0.000022
+      f+3     :     0.000004
+      f-3     :     0.000022
+  6 C s       :    -0.001453  s :    -0.001453
+      pz      :    -0.002842  p :    -0.012456
+      px      :    -0.005461
+      py      :    -0.004153
+      dz2     :    -0.000013  d :     0.001814
+      dxz     :     0.001659
+      dyz     :     0.000117
+      dx2y2   :    -0.000128
+      dxy     :     0.000179
+      f0      :     0.000006  f :     0.000154
+      f+1     :     0.000014
+      f-1     :     0.000011
+      f+2     :     0.000062
+      f-2     :     0.000039
+      f+3     :     0.000006
+      f-3     :     0.000016
+  7 C s       :     0.007821  s :     0.007821
+      pz      :     0.043568  p :     0.052864
+      px      :     0.002080
+      py      :     0.007216
+      dz2     :    -0.000138  d :     0.001134
+      dxz     :     0.000347
+      dyz     :     0.000339
+      dx2y2   :     0.000312
+      dxy     :     0.000273
+      f0      :    -0.000052  f :    -0.000087
+      f+1     :    -0.000037
+      f-1     :    -0.000032
+      f+2     :    -0.000011
+      f-2     :     0.000029
+      f+3     :     0.000002
+      f-3     :     0.000015
+  8 C s       :    -0.004074  s :    -0.004074
+      pz      :    -0.013687  p :    -0.018391
+      px      :    -0.002618
+      py      :    -0.002087
+      dz2     :     0.000280  d :     0.001876
+      dxz     :     0.001018
+      dyz     :     0.000690
+      dx2y2   :    -0.000164
+      dxy     :     0.000052
+      f0      :     0.000017  f :     0.000176
+      f+1     :     0.000012
+      f-1     :     0.000024
+      f+2     :     0.000104
+      f-2     :     0.000007
+      f+3     :     0.000008
+      f-3     :     0.000004
+  9 C s       :     0.006137  s :     0.006137
+      pz      :     0.053085  p :     0.061708
+      px      :     0.003526
+      py      :     0.005097
+      dz2     :    -0.000160  d :     0.000105
+      dxz     :    -0.000013
+      dyz     :    -0.000039
+      dx2y2   :     0.000122
+      dxy     :     0.000196
+      f0      :    -0.000066  f :    -0.000169
+      f+1     :    -0.000041
+      f-1     :    -0.000039
+      f+2     :    -0.000017
+      f-2     :     0.000001
+      f+3     :    -0.000005
+      f-3     :    -0.000003
+ 10 C s       :    -0.000924  s :    -0.000924
+      pz      :    -0.000835  p :     0.002173
+      px      :     0.003130
+      py      :    -0.000122
+      dz2     :    -0.000088  d :    -0.000132
+      dxz     :    -0.000001
+      dyz     :    -0.000010
+      dx2y2   :    -0.000050
+      dxy     :     0.000017
+      f0      :    -0.000004  f :    -0.000004
+      f+1     :     0.000000
+      f-1     :    -0.000001
+      f+2     :     0.000001
+      f-2     :    -0.000001
+      f+3     :     0.000002
+      f-3     :    -0.000002
+ 11 C s       :     0.004525  s :     0.004525
+      pz      :     0.034712  p :     0.042540
+      px      :     0.002561
+      py      :     0.005266
+      dz2     :    -0.000115  d :     0.000061
+      dxz     :     0.000001
+      dyz     :    -0.000044
+      dx2y2   :     0.000081
+      dxy     :     0.000138
+      f0      :    -0.000047  f :    -0.000125
+      f+1     :    -0.000030
+      f-1     :    -0.000028
+      f+2     :    -0.000011
+      f-2     :    -0.000005
+      f+3     :    -0.000003
+      f-3     :    -0.000002
+ 12 C s       :     0.008731  s :     0.008731
+      pz      :     0.048460  p :     0.056105
+      px      :     0.002424
+      py      :     0.005221
+      dz2     :    -0.000116  d :     0.001150
+      dxz     :     0.000605
+      dyz     :     0.000182
+      dx2y2   :     0.000203
+      dxy     :     0.000275
+      f0      :    -0.000058  f :    -0.000119
+      f+1     :    -0.000034
+      f-1     :    -0.000034
+      f+2     :    -0.000004
+      f-2     :     0.000009
+      f+3     :     0.000000
+      f-3     :     0.000001
+ 13 C s       :    -0.000012  s :    -0.000012
+      pz      :     0.023101  p :     0.024431
+      px      :    -0.000830
+      py      :     0.002160
+      dz2     :    -0.000043  d :     0.001148
+      dxz     :     0.000957
+      dyz     :     0.000310
+      dx2y2   :    -0.000089
+      dxy     :     0.000013
+      f0      :    -0.000040  f :     0.000028
+      f+1     :    -0.000003
+      f-1     :    -0.000028
+      f+2     :     0.000024
+      f-2     :     0.000066
+      f+3     :     0.000003
+      f-3     :     0.000006
+ 14 C s       :    -0.005425  s :    -0.005425
+      pz      :    -0.017336  p :    -0.047928
+      px      :    -0.014140
+      py      :    -0.016452
+      dz2     :     0.001058  d :     0.002915
+      dxz     :    -0.000235
+      dyz     :     0.000788
+      dx2y2   :     0.000659
+      dxy     :     0.000646
+      f0      :     0.000272  f :     0.003391
+      f+1     :     0.000071
+      f-1     :     0.000480
+      f+2     :     0.001466
+      f-2     :     0.000015
+      f+3     :     0.000016
+      f-3     :     0.001070
+ 15 C s       :    -0.002351  s :    -0.002351
+      pz      :    -0.008152  p :    -0.011950
+      px      :    -0.002063
+      py      :    -0.001735
+      dz2     :     0.000193  d :     0.001101
+      dxz     :     0.000702
+      dyz     :     0.000348
+      dx2y2   :    -0.000090
+      dxy     :    -0.000052
+      f0      :     0.000011  f :     0.000110
+      f+1     :     0.000007
+      f-1     :     0.000014
+      f+2     :     0.000064
+      f-2     :     0.000003
+      f+3     :     0.000004
+      f-3     :     0.000006
+ 16 C s       :    -0.000453  s :    -0.000453
+      pz      :    -0.000422  p :    -0.001466
+      px      :    -0.000303
+      py      :    -0.000741
+      dz2     :     0.000120  d :     0.000787
+      dxz     :     0.000063
+      dyz     :     0.000594
+      dx2y2   :     0.000026
+      dxy     :    -0.000016
+      f0      :     0.000014  f :     0.000045
+      f+1     :     0.000001
+      f-1     :     0.000005
+      f+2     :     0.000000
+      f-2     :     0.000025
+      f+3     :     0.000002
+      f-3     :    -0.000001
+ 17 H s       :    -0.001354  s :    -0.001354
+      pz      :    -0.000002  p :    -0.000382
+      px      :    -0.000050
+      py      :    -0.000331
+      dz2     :    -0.000002  d :    -0.000003
+      dxz     :    -0.000000
+      dyz     :    -0.000001
+      dx2y2   :     0.000001
+      dxy     :    -0.000001
+ 18 H s       :    -0.001741  s :    -0.001741
+      pz      :     0.000438  p :     0.000627
+      px      :    -0.000013
+      py      :     0.000202
+      dz2     :     0.000008  d :     0.000061
+      dxz     :     0.000006
+      dyz     :     0.000040
+      dx2y2   :     0.000005
+      dxy     :     0.000003
+ 19 H s       :     0.000673  s :     0.000673
+      pz      :    -0.000197  p :    -0.000238
+      px      :    -0.000033
+      py      :    -0.000009
+      dz2     :    -0.000001  d :    -0.000012
+      dxz     :    -0.000002
+      dyz     :    -0.000006
+      dx2y2   :    -0.000002
+      dxy     :    -0.000001
+ 20 H s       :    -0.004451  s :    -0.004451
+      pz      :     0.000538  p :     0.000556
+      px      :    -0.000056
+      py      :     0.000075
+      dz2     :     0.000009  d :     0.000046
+      dxz     :     0.000005
+      dyz     :     0.000026
+      dx2y2   :     0.000005
+      dxy     :     0.000001
+ 21 H s       :     0.000472  s :     0.000472
+      pz      :     0.000125  p :     0.000118
+      px      :    -0.000019
+      py      :     0.000012
+      dz2     :     0.000003  d :     0.000003
+      dxz     :    -0.000001
+      dyz     :     0.000000
+      dx2y2   :     0.000000
+      dxy     :     0.000001
+ 22 H s       :    -0.000103  s :    -0.000103
+      pz      :    -0.000004  p :     0.000029
+      px      :     0.000011
+      py      :     0.000023
+      dz2     :    -0.000000  d :     0.000008
+      dxz     :     0.000001
+      dyz     :    -0.000000
+      dx2y2   :     0.000004
+      dxy     :     0.000004
+ 23 H s       :     0.000317  s :     0.000317
+      pz      :    -0.000010  p :     0.000060
+      px      :     0.000051
+      py      :     0.000019
+      dz2     :     0.000001  d :     0.000008
+      dxz     :     0.000000
+      dyz     :     0.000001
+      dx2y2   :     0.000004
+      dxy     :     0.000002
+ 24 H s       :    -0.003089  s :    -0.003089
+      pz      :     0.000381  p :     0.000388
+      px      :    -0.000033
+      py      :     0.000040
+      dz2     :     0.000007  d :     0.000032
+      dxz     :     0.000003
+      dyz     :     0.000019
+      dx2y2   :     0.000002
+      dxy     :     0.000001
+ 25 H s       :    -0.003657  s :    -0.003657
+      pz      :     0.000506  p :     0.000496
+      px      :    -0.000014
+      py      :     0.000004
+      dz2     :     0.000008  d :     0.000043
+      dxz     :     0.000004
+      dyz     :     0.000027
+      dx2y2   :     0.000002
+      dxy     :     0.000002
+ 26 H s       :     0.000185  s :     0.000185
+      pz      :    -0.000121  p :    -0.000174
+      px      :    -0.000029
+      py      :    -0.000023
+      dz2     :    -0.000001  d :    -0.000006
+      dxz     :     0.000001
+      dyz     :    -0.000004
+      dx2y2   :    -0.000002
+      dxy     :    -0.000001
+ 27 H s       :    -0.000063  s :    -0.000063
+      pz      :     0.000003  p :    -0.000018
+      px      :    -0.000008
+      py      :    -0.000013
+      dz2     :     0.000000  d :    -0.000001
+      dxz     :    -0.000000
+      dyz     :     0.000000
+      dx2y2   :    -0.000000
+      dxy     :    -0.000001
+ 28 H s       :     0.001913  s :     0.001913
+      pz      :     0.000019  p :     0.000029
+      px      :     0.000008
+      py      :     0.000002
+      dz2     :     0.000000  d :     0.000000
+      dxz     :     0.000000
+      dyz     :     0.000000
+      dx2y2   :    -0.000001
+      dxy     :     0.000001
+ 29 H s       :     0.001955  s :     0.001955
+      pz      :     0.000028  p :     0.000031
+      px      :     0.000008
+      py      :    -0.000005
+      dz2     :     0.000000  d :     0.000000
+      dxz     :     0.000000
+      dyz     :    -0.000001
+      dx2y2   :    -0.000000
+      dxy     :     0.000000
+
+
+                     *******************************
+                     * LOEWDIN POPULATION ANALYSIS *
+                     *******************************
+
+-------------------------------------------
+LOEWDIN ATOMIC CHARGES AND SPIN POPULATIONS
+-------------------------------------------
+   0 O :    0.308184    0.025327
+   1 O :    0.090094    0.506045
+   2 O :    0.163477    0.187867
+   3 C :   -0.092470    0.002617
+   4 C :   -0.041949    0.042470
+   5 C :   -0.070070    0.003134
+   6 C :   -0.068271    0.005798
+   7 C :    0.061877    0.046029
+   8 C :    0.012481   -0.001226
+   9 C :    0.032440    0.043926
+  10 C :    0.021890    0.004084
+  11 C :    0.038701    0.030200
+  12 C :    0.038069    0.044857
+  13 C :   -0.205853    0.025907
+  14 C :   -0.507343    0.018779
+  15 C :   -0.017785   -0.000596
+  16 C :   -0.058588    0.002185
+  17 H :    0.047269    0.000190
+  18 H :    0.032308    0.001872
+  19 H :    0.024420   -0.000743
+  20 H :    0.025529    0.002615
+  21 H :    0.022299    0.002045
+  22 H :    0.018838    0.000144
+  23 H :    0.017767    0.000872
+  24 H :    0.029268    0.001764
+  25 H :    0.029067    0.002256
+  26 H :    0.019463   -0.000502
+  27 H :    0.016249   -0.000065
+  28 H :    0.006627    0.001080
+  29 H :    0.006014    0.001071
+
+----------------------------------------------------
+LOEWDIN REDUCED ORBITAL CHARGES AND SPIN POPULATIONS
+----------------------------------------------------
+CHARGE
+  0 O s       :     3.253114  s :     3.253114
+      pz      :     1.586912  p :     4.325167
+      px      :     1.256037
+      py      :     1.482219
+      dz2     :     0.010641  d :     0.107194
+      dxz     :     0.020553
+      dyz     :     0.008579
+      dx2y2   :     0.033627
+      dxy     :     0.033795
+      f0      :     0.000588  f :     0.006341
+      f+1     :     0.000817
+      f-1     :     0.000313
+      f+2     :     0.000624
+      f-2     :     0.000772
+      f+3     :     0.001493
+      f-3     :     0.001734
+  1 O s       :     3.520341  s :     3.520341
+      pz      :     1.418908  p :     4.334932
+      px      :     1.453628
+      py      :     1.462395
+      dz2     :     0.007369  d :     0.050828
+      dxz     :     0.011308
+      dyz     :     0.000433
+      dx2y2   :     0.020491
+      dxy     :     0.011226
+      f0      :     0.000368  f :     0.003805
+      f+1     :     0.000702
+      f-1     :     0.000069
+      f+2     :     0.000653
+      f-2     :     0.000039
+      f+3     :     0.001108
+      f-3     :     0.000867
+  2 O s       :     3.419016  s :     3.419016
+      pz      :     1.447485  p :     4.344109
+      px      :     1.450422
+      py      :     1.446202
+      dz2     :     0.013466  d :     0.067313
+      dxz     :     0.015157
+      dyz     :     0.017957
+      dx2y2   :     0.010110
+      dxy     :     0.010623
+      f0      :     0.000644  f :     0.006085
+      f+1     :     0.000860
+      f-1     :     0.001020
+      f+2     :     0.001149
+      f-2     :     0.001442
+      f+3     :     0.000440
+      f-3     :     0.000530
+  3 C s       :     2.691787  s :     2.691787
+      pz      :     0.953030  p :     2.875690
+      px      :     0.938273
+      py      :     0.984386
+      dz2     :     0.099666  d :     0.475005
+      dxz     :     0.101156
+      dyz     :     0.093117
+      dx2y2   :     0.091417
+      dxy     :     0.089649
+      f0      :     0.008131  f :     0.049988
+      f+1     :     0.007778
+      f-1     :     0.007169
+      f+2     :     0.007180
+      f-2     :     0.007330
+      f+3     :     0.006563
+      f-3     :     0.005838
+  4 C s       :     2.709275  s :     2.709275
+      pz      :     0.822359  p :     2.786752
+      px      :     0.950372
+      py      :     1.014021
+      dz2     :     0.041032  d :     0.492401
+      dxz     :     0.070839
+      dyz     :     0.071759
+      dx2y2   :     0.159633
+      dxy     :     0.149138
+      f0      :     0.003863  f :     0.053521
+      f+1     :     0.004534
+      f-1     :     0.004258
+      f+2     :     0.006047
+      f-2     :     0.007208
+      f+3     :     0.009618
+      f-3     :     0.017993
+  5 C s       :     2.679027  s :     2.679027
+      pz      :     0.850211  p :     2.814659
+      px      :     0.984926
+      py      :     0.979523
+      dz2     :     0.041635  d :     0.517030
+      dxz     :     0.078787
+      dyz     :     0.069406
+      dx2y2   :     0.162789
+      dxy     :     0.164413
+      f0      :     0.004171  f :     0.059354
+      f+1     :     0.004751
+      f-1     :     0.004501
+      f+2     :     0.007334
+      f-2     :     0.007167
+      f+3     :     0.011130
+      f-3     :     0.020302
+  6 C s       :     2.680306  s :     2.680306
+      pz      :     0.839244  p :     2.805365
+      px      :     0.984099
+      py      :     0.982021
+      dz2     :     0.041814  d :     0.523180
+      dxz     :     0.085659
+      dyz     :     0.070330
+      dx2y2   :     0.163379
+      dxy     :     0.161997
+      f0      :     0.004106  f :     0.059420
+      f+1     :     0.004778
+      f-1     :     0.004514
+      f+2     :     0.007715
+      f-2     :     0.007202
+      f+3     :     0.010994
+      f-3     :     0.020112
+  7 C s       :     2.714961  s :     2.714961
+      pz      :     0.827881  p :     2.798403
+      px      :     0.991555
+      py      :     0.978967
+      dz2     :     0.025632  d :     0.383370
+      dxz     :     0.069681
+      dyz     :     0.032640
+      dx2y2   :     0.127230
+      dxy     :     0.128188
+      f0      :     0.003037  f :     0.041388
+      f+1     :     0.004284
+      f-1     :     0.002373
+      f+2     :     0.005115
+      f-2     :     0.004567
+      f+3     :     0.008505
+      f-3     :     0.013507
+  8 C s       :     2.722058  s :     2.722058
+      pz      :     0.854733  p :     2.838773
+      px      :     1.003462
+      py      :     0.980578
+      dz2     :     0.031407  d :     0.384936
+      dxz     :     0.056956
+      dyz     :     0.038335
+      dx2y2   :     0.107092
+      dxy     :     0.151145
+      f0      :     0.002734  f :     0.041752
+      f+1     :     0.003549
+      f-1     :     0.003574
+      f+2     :     0.006791
+      f-2     :     0.003264
+      f+3     :     0.008428
+      f-3     :     0.013413
+  9 C s       :     2.720931  s :     2.720931
+      pz      :     0.840802  p :     2.821182
+      px      :     1.007415
+      py      :     0.972964
+      dz2     :     0.024775  d :     0.384191
+      dxz     :     0.071613
+      dyz     :     0.031512
+      dx2y2   :     0.127163
+      dxy     :     0.129128
+      f0      :     0.003085  f :     0.041257
+      f+1     :     0.004143
+      f-1     :     0.002375
+      f+2     :     0.004774
+      f-2     :     0.004846
+      f+3     :     0.008707
+      f-3     :     0.013328
+ 10 C s       :     2.708038  s :     2.708038
+      pz      :     0.927717  p :     2.953790
+      px      :     1.014564
+      py      :     1.011509
+      dz2     :     0.070924  d :     0.287128
+      dxz     :     0.052713
+      dyz     :     0.076060
+      dx2y2   :     0.063232
+      dxy     :     0.024200
+      f0      :     0.005466  f :     0.029155
+      f+1     :     0.005683
+      f-1     :     0.005128
+      f+2     :     0.003000
+      f-2     :     0.004833
+      f+3     :     0.004113
+      f-3     :     0.000932
+ 11 C s       :     2.720080  s :     2.720080
+      pz      :     0.833029  p :     2.809980
+      px      :     1.001140
+      py      :     0.975811
+      dz2     :     0.024456  d :     0.389532
+      dxz     :     0.077260
+      dyz     :     0.031982
+      dx2y2   :     0.128409
+      dxy     :     0.127425
+      f0      :     0.003062  f :     0.041707
+      f+1     :     0.004218
+      f-1     :     0.002375
+      f+2     :     0.005049
+      f-2     :     0.004973
+      f+3     :     0.008591
+      f-3     :     0.013439
+ 12 C s       :     2.718146  s :     2.718146
+      pz      :     0.865881  p :     2.832850
+      px      :     0.992016
+      py      :     0.974952
+      dz2     :     0.025863  d :     0.369400
+      dxz     :     0.068318
+      dyz     :     0.032182
+      dx2y2   :     0.112627
+      dxy     :     0.130410
+      f0      :     0.003358  f :     0.041534
+      f+1     :     0.004332
+      f-1     :     0.002496
+      f+2     :     0.004927
+      f-2     :     0.004791
+      f+3     :     0.008653
+      f-3     :     0.012977
+ 13 C s       :     2.710942  s :     2.710942
+      pz      :     0.865289  p :     2.741698
+      px      :     0.829915
+      py      :     1.046493
+      dz2     :     0.056596  d :     0.661168
+      dxz     :     0.131612
+      dyz     :     0.078875
+      dx2y2   :     0.192576
+      dxy     :     0.201508
+      f0      :     0.006438  f :     0.092046
+      f+1     :     0.009896
+      f-1     :     0.004789
+      f+2     :     0.014276
+      f-2     :     0.010073
+      f+3     :     0.017110
+      f-3     :     0.029465
+ 14 C s       :     2.775296  s :     2.775296
+      pz      :     0.885149  p :     2.665201
+      px      :     0.917903
+      py      :     0.862150
+      dz2     :     0.167089  d :     0.932222
+      dxz     :     0.226336
+      dyz     :     0.121078
+      dx2y2   :     0.217046
+      dxy     :     0.200673
+      f0      :     0.020993  f :     0.134624
+      f+1     :     0.017250
+      f-1     :     0.015198
+      f+2     :     0.024939
+      f-2     :     0.013008
+      f+3     :     0.018449
+      f-3     :     0.024787
+ 15 C s       :     2.719855  s :     2.719855
+      pz      :     0.894436  p :     2.881160
+      px      :     1.005335
+      py      :     0.981390
+      dz2     :     0.031981  d :     0.374218
+      dxz     :     0.054340
+      dyz     :     0.040423
+      dx2y2   :     0.102147
+      dxy     :     0.145328
+      f0      :     0.002917  f :     0.042551
+      f+1     :     0.003640
+      f-1     :     0.003922
+      f+2     :     0.007020
+      f-2     :     0.003510
+      f+3     :     0.008683
+      f-3     :     0.012860
+ 16 C s       :     2.733215  s :     2.733215
+      pz      :     1.043560  p :     2.855946
+      px      :     0.917491
+      py      :     0.894896
+      dz2     :     0.072065  d :     0.409642
+      dxz     :     0.034907
+      dyz     :     0.107795
+      dx2y2   :     0.105121
+      dxy     :     0.089754
+      f0      :     0.007160  f :     0.059785
+      f+1     :     0.005828
+      f-1     :     0.005968
+      f+2     :     0.004616
+      f-2     :     0.011110
+      f+3     :     0.013058
+      f-3     :     0.012046
+ 17 H s       :     0.772107  s :     0.772107
+      pz      :     0.042724  p :     0.149913
+      px      :     0.042117
+      py      :     0.065072
+      dz2     :     0.003481  d :     0.030711
+      dxz     :     0.001911
+      dyz     :     0.007900
+      dx2y2   :     0.009049
+      dxy     :     0.008370
+ 18 H s       :     0.791114  s :     0.791114
+      pz      :     0.041747  p :     0.147505
+      px      :     0.038816
+      py      :     0.066942
+      dz2     :     0.003254  d :     0.029073
+      dxz     :     0.001801
+      dyz     :     0.007154
+      dx2y2   :     0.008420
+      dxy     :     0.008445
+ 19 H s       :     0.798221  s :     0.798221
+      pz      :     0.041870  p :     0.148414
+      px      :     0.048436
+      py      :     0.058108
+      dz2     :     0.002916  d :     0.028945
+      dxz     :     0.003275
+      dyz     :     0.005366
+      dx2y2   :     0.009012
+      dxy     :     0.008377
+ 20 H s       :     0.797890  s :     0.797890
+      pz      :     0.043467  p :     0.147706
+      px      :     0.038989
+      py      :     0.065250
+      dz2     :     0.003307  d :     0.028875
+      dxz     :     0.001816
+      dyz     :     0.007190
+      dx2y2   :     0.008391
+      dxy     :     0.008171
+ 21 H s       :     0.798530  s :     0.798530
+      pz      :     0.038429  p :     0.149795
+      px      :     0.070653
+      py      :     0.040713
+      dz2     :     0.002930  d :     0.029377
+      dxz     :     0.009175
+      dyz     :     0.000152
+      dx2y2   :     0.007513
+      dxy     :     0.009608
+ 22 H s       :     0.803879  s :     0.803879
+      pz      :     0.039056  p :     0.148099
+      px      :     0.044119
+      py      :     0.064924
+      dz2     :     0.003259  d :     0.029185
+      dxz     :     0.001149
+      dyz     :     0.008217
+      dx2y2   :     0.008345
+      dxy     :     0.008216
+ 23 H s       :     0.804544  s :     0.804544
+      pz      :     0.050099  p :     0.148478
+      px      :     0.046411
+      py      :     0.051967
+      dz2     :     0.007165  d :     0.029211
+      dxz     :     0.004867
+      dyz     :     0.006551
+      dx2y2   :     0.006019
+      dxy     :     0.004609
+ 24 H s       :     0.795253  s :     0.795253
+      pz      :     0.042609  p :     0.146647
+      px      :     0.038499
+      py      :     0.065538
+      dz2     :     0.003264  d :     0.028831
+      dxz     :     0.001805
+      dyz     :     0.007137
+      dx2y2   :     0.008467
+      dxy     :     0.008159
+ 25 H s       :     0.793208  s :     0.793208
+      pz      :     0.045003  p :     0.148279
+      px      :     0.038229
+      py      :     0.065048
+      dz2     :     0.003414  d :     0.029446
+      dxz     :     0.002037
+      dyz     :     0.007339
+      dx2y2   :     0.008399
+      dxy     :     0.008256
+ 26 H s       :     0.794341  s :     0.794341
+      pz      :     0.046774  p :     0.156608
+      px      :     0.050006
+      py      :     0.059828
+      dz2     :     0.002950  d :     0.029587
+      dxz     :     0.003271
+      dyz     :     0.005854
+      dx2y2   :     0.009112
+      dxy     :     0.008401
+ 27 H s       :     0.814441  s :     0.814441
+      pz      :     0.042181  p :     0.140406
+      px      :     0.062757
+      py      :     0.035468
+      dz2     :     0.003362  d :     0.028905
+      dxz     :     0.008379
+      dyz     :     0.001570
+      dx2y2   :     0.007928
+      dxy     :     0.007666
+ 28 H s       :     0.819316  s :     0.819316
+      pz      :     0.053521  p :     0.145011
+      px      :     0.035432
+      py      :     0.056058
+      dz2     :     0.007452  d :     0.029046
+      dxz     :     0.003105
+      dyz     :     0.008118
+      dx2y2   :     0.004832
+      dxy     :     0.005539
+ 29 H s       :     0.819859  s :     0.819859
+      pz      :     0.071386  p :     0.145075
+      px      :     0.035032
+      py      :     0.038657
+      dz2     :     0.010169  d :     0.029052
+      dxz     :     0.007762
+      dyz     :     0.009053
+      dx2y2   :     0.000804
+      dxy     :     0.001264
+
+SPIN
+  0 O s       :     0.000430  s :     0.000430
+      pz      :     0.022167  p :     0.024392
+      px      :     0.000460
+      py      :     0.001765
+      dz2     :     0.000036  d :     0.000469
+      dxz     :     0.000405
+      dyz     :     0.000032
+      dx2y2   :    -0.000011
+      dxy     :     0.000007
+      f0      :     0.000019  f :     0.000035
+      f+1     :    -0.000002
+      f-1     :    -0.000001
+      f+2     :     0.000020
+      f-2     :    -0.000001
+      f+3     :    -0.000001
+      f-3     :     0.000002
+  1 O s       :     0.005029  s :     0.005029
+      pz      :     0.274230  p :     0.500717
+      px      :     0.012775
+      py      :     0.213713
+      dz2     :    -0.000029  d :     0.000365
+      dxz     :     0.000317
+      dyz     :     0.000065
+      dx2y2   :    -0.000243
+      dxy     :     0.000255
+      f0      :     0.000003  f :    -0.000066
+      f+1     :    -0.000062
+      f-1     :     0.000013
+      f+2     :     0.000049
+      f-2     :    -0.000004
+      f+3     :    -0.000086
+      f-3     :     0.000022
+  2 O s       :     0.002276  s :     0.002276
+      pz      :     0.002631  p :     0.186251
+      px      :     0.175403
+      py      :     0.008216
+      dz2     :    -0.000233  d :    -0.000557
+      dxz     :    -0.000125
+      dyz     :    -0.000055
+      dx2y2   :    -0.000001
+      dxy     :    -0.000142
+      f0      :    -0.000019  f :    -0.000103
+      f+1     :    -0.000029
+      f-1     :    -0.000004
+      f+2     :     0.000002
+      f-2     :    -0.000029
+      f+3     :    -0.000024
+      f-3     :    -0.000000
+  3 C s       :    -0.000528  s :    -0.000528
+      pz      :    -0.000600  p :     0.001129
+      px      :     0.002583
+      py      :    -0.000853
+      dz2     :    -0.000677  d :     0.001144
+      dxz     :     0.000453
+      dyz     :     0.000292
+      dx2y2   :     0.001385
+      dxy     :    -0.000309
+      f0      :     0.000180  f :     0.000871
+      f+1     :     0.000012
+      f-1     :     0.000052
+      f+2     :     0.000577
+      f-2     :     0.000006
+      f+3     :    -0.000013
+      f-3     :     0.000057
+  4 C s       :     0.001422  s :     0.001422
+      pz      :     0.030761  p :     0.038616
+      px      :     0.004044
+      py      :     0.003811
+      dz2     :    -0.000108  d :     0.002209
+      dxz     :     0.001649
+      dyz     :     0.000578
+      dx2y2   :     0.000055
+      dxy     :     0.000035
+      f0      :    -0.000031  f :     0.000223
+      f+1     :     0.000012
+      f-1     :    -0.000066
+      f+2     :    -0.000020
+      f-2     :     0.000315
+      f+3     :     0.000017
+      f-3     :    -0.000003
+  5 C s       :    -0.000278  s :    -0.000278
+      pz      :    -0.003006  p :    -0.004262
+      px      :    -0.000699
+      py      :    -0.000557
+      dz2     :    -0.000041  d :     0.006774
+      dxz     :     0.005851
+      dyz     :     0.000015
+      dx2y2   :     0.000247
+      dxy     :     0.000702
+      f0      :     0.000053  f :     0.000900
+      f+1     :     0.000085
+      f-1     :     0.000049
+      f+2     :     0.000434
+      f-2     :     0.000138
+      f+3     :     0.000025
+      f-3     :     0.000116
+  6 C s       :    -0.000266  s :    -0.000266
+      pz      :    -0.001181  p :    -0.002404
+      px      :    -0.000718
+      py      :    -0.000505
+      dz2     :    -0.000047  d :     0.007502
+      dxz     :     0.006150
+      dyz     :     0.000642
+      dx2y2   :     0.000290
+      dxy     :     0.000468
+      f0      :     0.000054  f :     0.000965
+      f+1     :     0.000109
+      f-1     :     0.000036
+      f+2     :     0.000414
+      f-2     :     0.000245
+      f+3     :     0.000034
+      f-3     :     0.000074
+  7 C s       :     0.001006  s :     0.001006
+      pz      :     0.037620  p :     0.042322
+      px      :     0.000675
+      py      :     0.004027
+      dz2     :    -0.000160  d :     0.002511
+      dxz     :     0.001132
+      dyz     :     0.001136
+      dx2y2   :     0.000404
+      dxy     :    -0.000001
+      f0      :    -0.000065  f :     0.000189
+      f+1     :    -0.000015
+      f-1     :    -0.000023
+      f+2     :    -0.000015
+      f-2     :     0.000211
+      f+3     :     0.000015
+      f-3     :     0.000081
+  8 C s       :    -0.000478  s :    -0.000478
+      pz      :    -0.008625  p :    -0.010468
+      px      :    -0.000837
+      py      :    -0.001006
+      dz2     :     0.001372  d :     0.008711
+      dxz     :     0.003704
+      dyz     :     0.002197
+      dx2y2   :     0.000178
+      dxy     :     0.001260
+      f0      :     0.000064  f :     0.001008
+      f+1     :     0.000030
+      f-1     :     0.000152
+      f+2     :     0.000617
+      f-2     :     0.000037
+      f+3     :     0.000080
+      f-3     :     0.000029
+  9 C s       :     0.001064  s :     0.001064
+      pz      :     0.040443  p :     0.044547
+      px      :     0.000816
+      py      :     0.003288
+      dz2     :    -0.000203  d :    -0.001376
+      dxz     :    -0.000670
+      dyz     :    -0.000162
+      dx2y2   :    -0.000165
+      dxy     :    -0.000177
+      f0      :    -0.000096  f :    -0.000309
+      f+1     :    -0.000042
+      f-1     :    -0.000034
+      f+2     :    -0.000070
+      f-2     :    -0.000012
+      f+3     :    -0.000028
+      f-3     :    -0.000027
+ 10 C s       :    -0.000259  s :    -0.000259
+      pz      :    -0.000265  p :     0.004275
+      px      :     0.004579
+      py      :    -0.000039
+      dz2     :    -0.000124  d :     0.000049
+      dxz     :     0.000167
+      dyz     :     0.000044
+      dx2y2   :    -0.000042
+      dxy     :     0.000004
+      f0      :    -0.000009  f :     0.000020
+      f+1     :    -0.000005
+      f-1     :     0.000001
+      f+2     :     0.000037
+      f-2     :    -0.000004
+      f+3     :     0.000003
+      f-3     :    -0.000002
+ 11 C s       :     0.000738  s :     0.000738
+      pz      :     0.027797  p :     0.030806
+      px      :     0.000814
+      py      :     0.002195
+      dz2     :    -0.000148  d :    -0.001099
+      dxz     :    -0.000521
+      dyz     :    -0.000159
+      dx2y2   :    -0.000127
+      dxy     :    -0.000145
+      f0      :    -0.000068  f :    -0.000245
+      f+1     :    -0.000035
+      f-1     :    -0.000024
+      f+2     :    -0.000047
+      f-2     :    -0.000029
+      f+3     :    -0.000020
+      f-3     :    -0.000022
+ 12 C s       :     0.000920  s :     0.000920
+      pz      :     0.038056  p :     0.041953
+      px      :     0.000863
+      py      :     0.003033
+      dz2     :    -0.000145  d :     0.001967
+      dxz     :     0.001612
+      dyz     :     0.000482
+      dx2y2   :    -0.000026
+      dxy     :     0.000044
+      f0      :    -0.000065  f :     0.000017
+      f+1     :    -0.000001
+      f-1     :    -0.000030
+      f+2     :     0.000025
+      f-2     :     0.000095
+      f+3     :    -0.000007
+      f-3     :     0.000001
+ 13 C s       :     0.000321  s :     0.000321
+      pz      :     0.018706  p :     0.019926
+      px      :    -0.000119
+      py      :     0.001339
+      dz2     :    -0.000053  d :     0.004821
+      dxz     :     0.003128
+      dyz     :     0.001241
+      dx2y2   :     0.000297
+      dxy     :     0.000209
+      f0      :     0.000002  f :     0.000839
+      f+1     :     0.000146
+      f-1     :    -0.000047
+      f+2     :     0.000191
+      f-2     :     0.000447
+      f+3     :     0.000040
+      f-3     :     0.000061
+ 14 C s       :    -0.002660  s :    -0.002660
+      pz      :    -0.005047  p :    -0.017999
+      px      :    -0.006536
+      py      :    -0.006416
+      dz2     :     0.004196  d :     0.017244
+      dxz     :     0.001387
+      dyz     :     0.003777
+      dx2y2   :     0.004484
+      dxy     :     0.003400
+      f0      :     0.002136  f :     0.022194
+      f+1     :     0.000649
+      f-1     :     0.002648
+      f+2     :     0.009036
+      f-2     :     0.000124
+      f+3     :     0.000288
+      f-3     :     0.007313
+ 15 C s       :    -0.000284  s :    -0.000284
+      pz      :    -0.005090  p :    -0.006316
+      px      :    -0.000582
+      py      :    -0.000645
+      dz2     :     0.000758  d :     0.005363
+      dxz     :     0.002825
+      dyz     :     0.001313
+      dx2y2   :     0.000147
+      dxy     :     0.000320
+      f0      :     0.000038  f :     0.000641
+      f+1     :     0.000018
+      f-1     :     0.000092
+      f+2     :     0.000399
+      f-2     :     0.000020
+      f+3     :     0.000030
+      f-3     :     0.000043
+ 16 C s       :    -0.000103  s :    -0.000103
+      pz      :     0.000094  p :    -0.000498
+      px      :    -0.000272
+      py      :    -0.000320
+      dz2     :     0.000321  d :     0.002446
+      dxz     :     0.000259
+      dyz     :     0.001681
+      dx2y2   :     0.000138
+      dxy     :     0.000046
+      f0      :     0.000094  f :     0.000340
+      f+1     :     0.000011
+      f-1     :     0.000026
+      f+2     :     0.000003
+      f-2     :     0.000171
+      f+3     :     0.000030
+      f-3     :     0.000005
+ 17 H s       :     0.000476  s :     0.000476
+      pz      :    -0.000074  p :    -0.000298
+      px      :    -0.000134
+      py      :    -0.000090
+      dz2     :    -0.000005  d :     0.000012
+      dxz     :    -0.000007
+      dyz     :    -0.000004
+      dx2y2   :     0.000041
+      dxy     :    -0.000012
+ 18 H s       :    -0.000898  s :    -0.000898
+      pz      :     0.001889  p :     0.002115
+      px      :     0.000009
+      py      :     0.000216
+      dz2     :     0.000079  d :     0.000656
+      dxz     :     0.000079
+      dyz     :     0.000441
+      dx2y2   :     0.000031
+      dxy     :     0.000025
+ 19 H s       :     0.000206  s :     0.000206
+      pz      :    -0.000604  p :    -0.000797
+      px      :    -0.000067
+      py      :    -0.000126
+      dz2     :    -0.000010  d :    -0.000152
+      dxz     :    -0.000038
+      dyz     :    -0.000067
+      dx2y2   :    -0.000027
+      dxy     :    -0.000010
+ 20 H s       :    -0.001097  s :    -0.001097
+      pz      :     0.002633  p :     0.003085
+      px      :     0.000048
+      py      :     0.000404
+      dz2     :     0.000115  d :     0.000627
+      dxz     :     0.000069
+      dyz     :     0.000356
+      dx2y2   :     0.000055
+      dxy     :     0.000031
+ 21 H s       :     0.001690  s :     0.001690
+      pz      :     0.000242  p :     0.000296
+      px      :     0.000065
+      py      :    -0.000011
+      dz2     :     0.000019  d :     0.000059
+      dxz     :     0.000025
+      dyz     :     0.000001
+      dx2y2   :     0.000009
+      dxy     :     0.000005
+ 22 H s       :    -0.000075  s :    -0.000075
+      pz      :    -0.000024  p :     0.000153
+      px      :     0.000138
+      py      :     0.000039
+      dz2     :     0.000001  d :     0.000066
+      dxz     :     0.000000
+      dyz     :    -0.000006
+      dx2y2   :     0.000041
+      dxy     :     0.000030
+ 23 H s       :     0.000801  s :     0.000801
+      pz      :    -0.000048  p :     0.000007
+      px      :     0.000020
+      py      :     0.000035
+      dz2     :     0.000009  d :     0.000063
+      dxz     :    -0.000002
+      dyz     :     0.000021
+      dx2y2   :     0.000030
+      dxy     :     0.000004
+ 24 H s       :    -0.000793  s :    -0.000793
+      pz      :     0.001793  p :     0.002121
+      px      :     0.000050
+      py      :     0.000278
+      dz2     :     0.000078  d :     0.000436
+      dxz     :     0.000048
+      dyz     :     0.000254
+      dx2y2   :     0.000027
+      dxy     :     0.000029
+ 25 H s       :    -0.001024  s :    -0.001024
+      pz      :     0.002255  p :     0.002679
+      px      :     0.000055
+      py      :     0.000369
+      dz2     :     0.000112  d :     0.000601
+      dxz     :     0.000051
+      dyz     :     0.000359
+      dx2y2   :     0.000042
+      dxy     :     0.000036
+ 26 H s       :     0.000104  s :     0.000104
+      pz      :    -0.000393  p :    -0.000522
+      px      :    -0.000056
+      py      :    -0.000073
+      dz2     :    -0.000006  d :    -0.000084
+      dxz     :    -0.000012
+      dyz     :    -0.000044
+      dx2y2   :    -0.000016
+      dxy     :    -0.000005
+ 27 H s       :    -0.000018  s :    -0.000018
+      pz      :    -0.000006  p :    -0.000043
+      px      :    -0.000016
+      py      :    -0.000020
+      dz2     :     0.000001  d :    -0.000004
+      dxz     :    -0.000001
+      dyz     :     0.000004
+      dx2y2   :    -0.000004
+      dxy     :    -0.000003
+ 28 H s       :     0.001104  s :     0.001104
+      pz      :     0.000000  p :    -0.000013
+      px      :    -0.000007
+      py      :    -0.000006
+      dz2     :    -0.000003  d :    -0.000010
+      dxz     :    -0.000002
+      dyz     :    -0.000001
+      dx2y2   :    -0.000004
+      dxy     :     0.000000
+ 29 H s       :     0.001094  s :     0.001094
+      pz      :     0.000014  p :    -0.000013
+      px      :    -0.000006
+      py      :    -0.000020
+      dz2     :    -0.000003  d :    -0.000010
+      dxz     :    -0.000002
+      dyz     :    -0.000004
+      dx2y2   :    -0.000000
+      dxy     :    -0.000000
+
+
+                      *****************************
+                      * MAYER POPULATION ANALYSIS *
+                      *****************************
+
+  NA   - Mulliken gross atomic population
+  ZA   - Total nuclear charge
+  QA   - Mulliken gross atomic charge
+  VA   - Mayer's total valence
+  BVA  - Mayer's bonded valence
+  FA   - Mayer's free valence
+
+  ATOM       NA         ZA         QA         VA         BVA        FA
+  0 O      8.2201     8.0000    -0.2201     2.2196     2.2189     0.0007
+  1 O      8.2796     8.0000    -0.2796     2.2488     1.9797     0.2692
+  2 O      8.2411     8.0000    -0.2411     2.3036     2.2637     0.0399
+  3 C      6.0485     6.0000    -0.0485     3.7552     3.7551     0.0001
+  4 C      5.9453     6.0000     0.0547     3.7566     3.7542     0.0024
+  5 C      6.0410     6.0000    -0.0410     3.9878     3.9878     0.0001
+  6 C      6.0345     6.0000    -0.0345     3.9645     3.9644     0.0001
+  7 C      6.0865     6.0000    -0.0865     3.9416     3.9385     0.0031
+  8 C      6.1403     6.0000    -0.1403     3.9924     3.9921     0.0002
+  9 C      6.1250     6.0000    -0.1250     3.9683     3.9652     0.0031
+ 10 C      6.3286     6.0000    -0.3286     3.9100     3.9099     0.0000
+ 11 C      6.1456     6.0000    -0.1456     3.9847     3.9832     0.0015
+ 12 C      6.1183     6.0000    -0.1183     3.9452     3.9423     0.0029
+ 13 C      5.7792     6.0000     0.2208     3.9302     3.9294     0.0008
+ 14 C      5.7388     6.0000     0.2612     4.3604     4.3589     0.0016
+ 15 C      6.1870     6.0000    -0.1870     3.8739     3.8738     0.0001
+ 16 C      6.2190     6.0000    -0.2190     3.8675     3.8675     0.0000
+ 17 H      0.9066     1.0000     0.0934     1.0220     1.0220     0.0000
+ 18 H      0.8657     1.0000     0.1343     1.0206     1.0206     0.0000
+ 19 H      0.8600     1.0000     0.1400     1.0034     1.0034     0.0000
+ 20 H      0.8572     1.0000     0.1428     1.0045     1.0045     0.0000
+ 21 H      0.8730     1.0000     0.1270     1.0121     1.0121     0.0000
+ 22 H      0.8950     1.0000     0.1050     1.0004     1.0004     0.0000
+ 23 H      0.8883     1.0000     0.1117     0.9975     0.9975     0.0000
+ 24 H      0.8514     1.0000     0.1486     1.0068     1.0068     0.0000
+ 25 H      0.8645     1.0000     0.1355     1.0210     1.0210     0.0000
+ 26 H      0.8604     1.0000     0.1396     1.0140     1.0140     0.0000
+ 27 H      0.8582     1.0000     0.1418     0.9881     0.9881     0.0000
+ 28 H      0.8698     1.0000     0.1302     0.9822     0.9822     0.0000
+ 29 H      0.8715     1.0000     0.1285     0.9823     0.9823     0.0000
+
+  Mayer bond orders larger than 0.100000
+B(  0-O , 13-C ) :   1.1437 B(  0-O , 16-C ) :   0.9376 B(  1-O ,  2-O ) :   0.2121 
+B(  1-O , 14-C ) :   1.4619 B(  2-O , 14-C ) :   1.9017 B(  3-C ,  4-C ) :   0.8896 
+B(  3-C , 10-C ) :   0.9310 B(  3-C , 14-C ) :   0.9391 B(  3-C , 17-H ) :   0.9660 
+B(  4-C ,  7-C ) :   1.3917 B(  4-C ,  8-C ) :   1.2876 B(  5-C ,  6-C ) :   1.2188 
+B(  5-C ,  7-C ) :   1.3163 B(  5-C , 11-C ) :   1.2851 B(  6-C ,  9-C ) :   1.2625 
+B(  6-C , 12-C ) :   1.3349 B(  7-C , 18-H ) :   0.9181 B(  8-C ,  9-C ) :   1.5458 
+B(  8-C , 19-H ) :   0.9413 B(  9-C , 20-H ) :   0.9395 B( 10-C , 21-H ) :   0.9610 
+B( 10-C , 22-H ) :   0.9711 B( 10-C , 23-H ) :   0.9712 B( 11-C , 15-C ) :   1.4977 
+B( 11-C , 24-H ) :   0.9270 B( 12-C , 13-C ) :   1.4172 B( 12-C , 25-H ) :   0.9386 
+B( 13-C , 15-C ) :   1.2402 B( 15-C , 26-H ) :   0.9433 B( 16-C , 27-H ) :   0.9688 
+B( 16-C , 28-H ) :   0.9599 B( 16-C , 29-H ) :   0.9600 
+
+-------
+TIMINGS
+-------
+
+Total SCF time: 0 days 0 hours 8 min 56 sec 
+
+Total time                  ....     536.332 sec
+Sum of individual times     ....     531.770 sec  ( 99.1%)
+
+Fock matrix formation       ....     510.961 sec  ( 95.3%)
+  Split-RI-J                ....     195.280 sec  ( 38.2% of F)
+  XC integration            ....     314.734 sec  ( 61.6% of F)
+    Basis function eval.    ....      38.289 sec  ( 12.2% of XC)
+    Density eval.           ....     122.910 sec  ( 39.1% of XC)
+    XC-Functional eval.     ....       3.172 sec  (  1.0% of XC)
+    XC-Potential eval.      ....     140.337 sec  ( 44.6% of XC)
+Diagonalization             ....       5.663 sec  (  1.1%)
+Density matrix formation    ....       0.981 sec  (  0.2%)
+Population analysis         ....       0.209 sec  (  0.0%)
+Initial guess               ....       4.152 sec  (  0.8%)
+Orbital Transformation      ....       3.174 sec  (  0.6%)
+Orbital Orthonormalization  ....       0.000 sec  (  0.0%)
+DIIS solution               ....       2.679 sec  (  0.5%)
+Grid generation             ....       3.944 sec  (  0.7%)
+
+Maximum memory used throughout the entire SCF-calculation: 449.0 MB
+
+
+-------------------------------------------------------------------------------
+                          DFT DISPERSION CORRECTION                            
+                                                                               
+                              DFTD3 V3.1  Rev 1                                
+                          USING Becke-Johnson damping                          
+-------------------------------------------------------------------------------
+The BP86 functional is recognized
+Active option DFTDOPT                   ...         4   
+
+molecular C6(AA) [au] = 10168.877650 
+
+
+            DFT-D V3
+ parameters
+ s6 scaling factor         :     1.0000 
+ a1 scaling factor         :     0.3946 
+ s8 scaling factor         :     3.2822 
+ a2 scaling factor         :     4.8516 
+ ad hoc parameters k1-k3   :    16.0000     1.3333    -4.0000 
+
+ Edisp/kcal,au: -36.311942138546  -0.057866757023 
+ E6   /kcal   : -13.645378565 
+ E8   /kcal   : -22.666563574 
+ % E8         :  62.421788092 
+
+-------------------------   ----------------
+Dispersion correction           -0.057866757
+-------------------------   ----------------
+
+
+-------------------------   --------------------
+FINAL SINGLE POINT ENERGY      -767.301129558880
+-------------------------   --------------------
+
+
+                            ***************************************
+                            *     ORCA property calculations      *
+                            ***************************************
+
+                                    ---------------------
+                                    Active property flags
+                                    ---------------------
+   (+) Dipole Moment
+
+
+------------------------------------------------------------------------------
+                       ORCA ELECTRIC PROPERTIES CALCULATION
+------------------------------------------------------------------------------
+
+Dipole Moment Calculation                       ... on
+Quadrupole Moment Calculation                   ... off
+Polarizability Calculation                      ... off
+GBWName                                         ... C:\Users\ahmed\OneDrive\Desktop\napten\nap11.gbw
+Electron density                                ... C:\Users\ahmed\OneDrive\Desktop\napten\nap11.scfp
+The origin for moment calculation is the CENTER OF MASS  = ( 0.086861,  0.089239 -0.001215)
+
+-------------
+DIPOLE MOMENT
+-------------
+                                X             Y             Z
+Electronic contribution:      4.98949      -0.58904      -5.53984
+Nuclear contribution   :     -7.99515       0.08340       6.64561
+                        -----------------------------------------
+Total Dipole Moment    :     -3.00566      -0.50564       1.10577
+                        -----------------------------------------
+Magnitude (a.u.)       :      3.24228
+Magnitude (Debye)      :      8.24121
+
+
+
+--------------------
+Rotational spectrum 
+--------------------
+ 
+Rotational constants in cm-1:     0.046505     0.006817     0.006456 
+Rotational constants in MHz :  1394.187241   204.379020   193.549055 
+
+ Dipole components along the rotational axes: 
+x,y,z [a.u.] :    -3.009811     0.518679     1.088289 
+x,y,z [Debye]:    -7.650331     1.318377     2.766210 
+
+ 
+
+Timings for individual modules:
+
+Sum of individual times         ...      539.472 sec (=   8.991 min)
+GTO integral calculation        ...        2.811 sec (=   0.047 min)   0.5 %
+SCF iterations                  ...      536.661 sec (=   8.944 min)  99.5 %
+                             ****ORCA TERMINATED NORMALLY****
+TOTAL RUN TIME: 0 days 0 hours 9 minutes 1 seconds 290 msec

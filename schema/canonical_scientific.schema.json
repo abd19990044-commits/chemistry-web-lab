@@ -1,0 +1,2348 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orca-web-lab.org/schemas/canonical_scientific.schema.json",
+  "title": "OrcaWebLabCanonicalScientificRecord",
+  "description": "Canonical, versioned, machine-readable scientific data model for ORCA Web Lab analysis records, reaction definitions, calculation workflows, thermochemistry, and spectroscopy.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "dataset_version",
+    "record_type",
+    "record_id",
+    "content_hash",
+    "created_at",
+    "provenance",
+    "data_quality"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": [
+        "orca-web-lab.1.0"
+      ]
+    },
+    "dataset_version": {
+      "type": "string"
+    },
+    "record_type": {
+      "type": "string",
+      "enum": [
+        "analysis_record",
+        "reaction_definition",
+        "workflow_record",
+        "calculation_record",
+        "molecule",
+        "multi_fragment_system",
+        "reaction",
+        "calculation",
+        "workflow",
+        "spectroscopy_dataset",
+        "thermochemistry_dataset"
+      ]
+    },
+    "record_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_hash": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "split_group_key": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "source_type"
+      ],
+      "properties": {
+        "source_type": {
+          "type": "string",
+          "enum": [
+            "orca_analyzer",
+            "orca_output_parser",
+            "reaction_definition",
+            "workflow_engine",
+            "user_defined",
+            "editor_wizard",
+            "3d_builder",
+            "reaction_editor",
+            "kaggle_job",
+            "pubchem_import",
+            "file_import",
+            "synthetic_fixture"
+          ]
+        },
+        "source_filename": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_job_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_result_manifest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "result_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "application_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orca_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parser_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "git_sha": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "generated_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "imported_from": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_artifacts": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "required": [
+              "artifact_id",
+              "filename",
+              "artifact_type"
+            ],
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "filename": {
+                "type": "string"
+              },
+              "artifact_type": {
+                "type": "string"
+              },
+              "storage_reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sha256": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "size_bytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "migration_report": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "mapped_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "transformed_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "omitted_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unsupported_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "missing_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "analysis_results": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "analysis_type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "single_point_energy_eh": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "zero_point_energy_eh": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "zero_point_corrected_energy_eh": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "total_enthalpy_eh": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gibbs_free_energy_eh": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "entropy_cal_mol_k": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "dipole_moment_debye": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "homo_ev": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "lumo_ev": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "homo_lumo_gap_ev": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "converged": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "stationary_point_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "imaginary_frequencies_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "molecular_system": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "system_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "total_charge": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "total_multiplicity": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stoichiometry_formula": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "atoms_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "fragments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "fragment_id",
+              "name"
+            ],
+            "properties": {
+              "fragment_id": {
+                "type": [
+                  "integer",
+                  "string"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "role": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "color": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "molecule_ref": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "species": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Species"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "reaction": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "reaction_id": {
+          "type": "string"
+        },
+        "equation": {
+          "type": "string"
+        },
+        "reaction_smiles": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "conditions": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "temperature_k": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "pressure_atm": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "solvent": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "catalyst": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "standard_state": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "reactants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReactionParticipant"
+          }
+        },
+        "products": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReactionParticipant"
+          }
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReactionParticipant"
+          }
+        },
+        "balance": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "balanced": {
+              "type": "boolean"
+            },
+            "atom_delta": {
+              "type": "object"
+            },
+            "charge_delta": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "balance_status": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "geometries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Geometry"
+      }
+    },
+    "calculations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Calculation"
+      }
+    },
+    "workflows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Workflow"
+      }
+    },
+    "electronic_structure": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "calculated",
+            "not_calculated",
+            "not_available",
+            "not_applicable",
+            "failed"
+          ]
+        },
+        "electronic_energy": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "frontier_orbitals": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "homo": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "lumo": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "homo_lumo_gap": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "alpha_homo": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "alpha_lumo": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "beta_homo": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "beta_lumo": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "orbitals_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "conceptual_dft": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "electronegativity": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "chemical_hardness": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "chemical_potential": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "chemical_softness": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "electrophilicity_index": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "electrodonating_power": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "electroaccepting_power": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "net_electrophilicity": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "ionization_potential": {
+              "$ref": "#/$defs/Quantity"
+            },
+            "electron_affinity": {
+              "$ref": "#/$defs/Quantity"
+            }
+          },
+          "additionalProperties": false
+        },
+        "dipole_moment": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "total_debye": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "components_debye": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "z": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "spin": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "status": {
+              "type": "string"
+            },
+            "s2_actual": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "s2_ideal": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "spin_contamination": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "population_analysis": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "methods": {
+          "type": "object",
+          "properties": {
+            "mulliken": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string"
+                },
+                "charges": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "loewdin": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string"
+                },
+                "charges": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "hirshfeld": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string"
+                },
+                "charges": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "mayer": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string"
+                },
+                "charges": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "valences": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "thermochemistry": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "electronic_energy": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "zero_point_energy": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "zpe": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "zero_point_corrected_energy": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "value": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "unit": {
+              "type": "string"
+            },
+            "formula": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "components": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "electronic_energy": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "zero_point_energy": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "thermal_correction": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "enthalpy": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "entropy": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "entropy_term_ts": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "entropy_correction_minus_ts": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "gibbs_free_energy": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "equilibrium_constant": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "temperature_k": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "pressure_atm": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "standard_state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stationary_point_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "numerical_consistency": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "e0_relation_valid": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "e0_delta_eh": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "gibbs_relation_valid": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "gibbs_delta_eh": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "composite_sources": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "electronic_energy_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "zpe_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "vibrational_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "thermal_correction_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "entropy_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "geometry_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "vibrational_spectroscopy": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "imaginary_frequencies_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "imaginary_frequencies_cm": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number"
+          }
+        },
+        "harmonic_modes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "mode",
+              "frequency_cm"
+            ],
+            "properties": {
+              "mode": {
+                "type": "integer"
+              },
+              "frequency_cm": {
+                "type": "number"
+              },
+              "intensity_km_mol": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "is_imaginary": {
+                "type": "boolean"
+              },
+              "symmetry": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "derived_spectrum": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "spectrum_type": {
+              "type": "string"
+            },
+            "x_label": {
+              "type": "string"
+            },
+            "x_unit": {
+              "type": "string"
+            },
+            "y_label": {
+              "type": "string"
+            },
+            "broadening_model": {
+              "type": "string"
+            },
+            "broadening_parameter": {
+              "type": "object"
+            },
+            "data_points": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "wavenumber_cm": {
+                    "type": "number"
+                  },
+                  "absorbance": {
+                    "type": "number"
+                  },
+                  "absorbance_norm": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "transmittance_pct": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "peak_assignments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/IRPeakAssignment"
+          }
+        },
+        "experimental_spectra": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExperimentalSpectrum"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "electronic_spectroscopy": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "transitions_count": {
+          "type": "integer"
+        },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "state",
+              "energy_cm",
+              "oscillator_strength"
+            ],
+            "properties": {
+              "state": {
+                "type": "integer"
+              },
+              "energy_cm": {
+                "type": "number"
+              },
+              "energy_ev": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "wavelength_nm": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "oscillator_strength": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "derived_spectrum": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "spectrum_type": {
+              "type": "string"
+            },
+            "x_label": {
+              "type": "string"
+            },
+            "x_unit": {
+              "type": "string"
+            },
+            "y_label": {
+              "type": "string"
+            },
+            "broadening_model": {
+              "type": "string"
+            },
+            "broadening_parameter": {
+              "type": "object"
+            },
+            "data_points": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "wavelength_nm": {
+                    "type": "number"
+                  },
+                  "intensity": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "experimental_spectra": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExperimentalSpectrum"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "nmr_spectroscopy": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "nuclei": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "references": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "h1_spectrum": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "c13_spectrum": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "properties": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "electronic": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "thermodynamic": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "spectroscopic": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "reactivity_indices": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "spectroscopy": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "ir": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "theoretical_modes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "mode",
+                  "frequency_cm"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "integer"
+                  },
+                  "frequency_cm": {
+                    "type": "number"
+                  },
+                  "intensity_km_mol": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            },
+            "experimental_spectra": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExperimentalSpectrum"
+              }
+            },
+            "peak_assignments": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/IRPeakAssignment"
+              }
+            }
+          }
+        },
+        "uv_vis": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "theoretical_transitions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "transition_index",
+                  "wavenumber_cm",
+                  "oscillator_strength"
+                ],
+                "properties": {
+                  "transition_index": {
+                    "type": "integer"
+                  },
+                  "wavenumber_cm": {
+                    "type": "number"
+                  },
+                  "wavelength_nm": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "oscillator_strength": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "experimental_spectra": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExperimentalSpectrum"
+              }
+            }
+          }
+        },
+        "nmr": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "nuclei": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "object",
+                "required": [
+                  "atom_index",
+                  "element",
+                  "chemical_shift_ppm"
+                ],
+                "properties": {
+                  "atom_index": {
+                    "type": "integer"
+                  },
+                  "element": {
+                    "type": "string"
+                  },
+                  "isotropic_shielding": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "chemical_shift_ppm": {
+                    "type": "number"
+                  },
+                  "nucleus": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "training_metadata": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "task_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "input_modality": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_modality": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "type": [
+            "number",
+            "string",
+            "array",
+            "object",
+            "null"
+          ]
+        },
+        "label_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quality_flags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "split_hint": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "train",
+            "val",
+            "test",
+            null
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "data_quality": {
+      "type": "object",
+      "required": [
+        "validation_status",
+        "completeness_score"
+      ],
+      "properties": {
+        "validation_status": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "partially_verified",
+            "unverified",
+            "invalid"
+          ]
+        },
+        "completeness_score": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "calculation_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "termination_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "termination_message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "had_error_termination": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "error_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stationary_point_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "thermochemistry_reliability": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "is_transition_state": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "parser_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scientific_validation_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "missing_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "Quantity": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "value",
+        "unit"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "unit": {
+          "type": "string"
+        },
+        "source_calculation_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "semantic_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uncertainty": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Species": {
+      "type": "object",
+      "required": [
+        "species_id",
+        "name"
+      ],
+      "properties": {
+        "species_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "formula": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "canonical_smiles": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "isomeric_smiles": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inchi": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inchikey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "charge": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "multiplicity": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "atoms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Atom"
+          }
+        },
+        "bonds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Bond"
+          }
+        },
+        "geometry_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Atom": {
+      "type": "object",
+      "required": [
+        "atom_id",
+        "element"
+      ],
+      "properties": {
+        "atom_id": {
+          "type": "integer"
+        },
+        "element": {
+          "type": "string"
+        },
+        "atomic_number": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "formal_charge": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "isotope": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "coordinates": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "x",
+            "y",
+            "z",
+            "unit"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "angstrom",
+                "bohr"
+              ]
+            }
+          }
+        },
+        "fragment_id": {
+          "type": [
+            "integer",
+            "string",
+            "null"
+          ]
+        },
+        "aromatic": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "hybridization": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "partial_charge": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "atomic_charges": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "mulliken": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "loewdin": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "hirshfeld": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "mayer": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "mayer_valence": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "Bond": {
+      "type": "object",
+      "required": [
+        "atom_i",
+        "atom_j",
+        "order"
+      ],
+      "properties": {
+        "atom_i": {
+          "type": "integer"
+        },
+        "atom_j": {
+          "type": "integer"
+        },
+        "order": {
+          "type": "number"
+        },
+        "aromatic": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "conjugated": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "ring": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Geometry": {
+      "type": "object",
+      "required": [
+        "geometry_id",
+        "geometry_type",
+        "coordinate_units",
+        "coordinates"
+      ],
+      "properties": {
+        "geometry_id": {
+          "type": "string"
+        },
+        "species_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "geometry_type": {
+          "type": "string",
+          "enum": [
+            "input",
+            "optimized",
+            "transition_state",
+            "trajectory_frame",
+            "scan_point"
+          ]
+        },
+        "coordinate_units": {
+          "type": "string",
+          "enum": [
+            "angstrom",
+            "bohr"
+          ]
+        },
+        "coordinates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "element",
+              "x",
+              "y",
+              "z"
+            ],
+            "properties": {
+              "element": {
+                "type": "string"
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "z": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "geometry_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_calculation_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Calculation": {
+      "type": "object",
+      "required": [
+        "calculation_id",
+        "calculation_type",
+        "status",
+        "input_parameters"
+      ],
+      "properties": {
+        "calculation_id": {
+          "type": "string"
+        },
+        "calculation_type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "RUNNING",
+            "COMPLETED",
+            "FAILED",
+            "ABORTED",
+            "SUCCESS"
+          ]
+        },
+        "input_parameters": {
+          "type": "object",
+          "required": [
+            "method",
+            "basis"
+          ],
+          "properties": {
+            "method": {
+              "type": "string"
+            },
+            "basis": {
+              "type": "string"
+            },
+            "dispersion": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "solvation": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "solvent": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "charge": {
+              "type": "integer"
+            },
+            "multiplicity": {
+              "type": "integer"
+            },
+            "temperature_k": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "pressure_atm": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "input_geometry_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "analysis_record_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orca_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "input_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "output_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Workflow": {
+      "type": "object",
+      "required": [
+        "workflow_id",
+        "name",
+        "status",
+        "steps"
+      ],
+      "properties": {
+        "workflow_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "step_id",
+              "step_index",
+              "calculation_type",
+              "calculation_id"
+            ],
+            "properties": {
+              "step_id": {
+                "type": "string"
+              },
+              "step_index": {
+                "type": "integer"
+              },
+              "calculation_type": {
+                "type": "string"
+              },
+              "calculation_id": {
+                "type": "string"
+              },
+              "depends_on": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "input_geometry_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "output_geometry_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "analysis_record_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ReactionParticipant": {
+      "type": "object",
+      "required": [
+        "species_id",
+        "species_name",
+        "stoichiometric_coefficient",
+        "role"
+      ],
+      "properties": {
+        "species_id": {
+          "type": "string"
+        },
+        "species_name": {
+          "type": "string"
+        },
+        "stoichiometric_coefficient": {
+          "type": "number"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "reactant",
+            "product",
+            "catalyst",
+            "solvent",
+            "reagent"
+          ]
+        },
+        "species_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExperimentalSpectrum": {
+      "type": "object",
+      "required": [
+        "spectrum_id",
+        "file_name",
+        "x_unit",
+        "y_unit",
+        "raw_points",
+        "raw_hash"
+      ],
+      "properties": {
+        "spectrum_id": {
+          "type": "string"
+        },
+        "file_name": {
+          "type": "string"
+        },
+        "series_label": {
+          "type": "string"
+        },
+        "x_unit": {
+          "type": "string"
+        },
+        "y_unit": {
+          "type": "string"
+        },
+        "raw_points": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "raw_hash": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "IRPeakAssignment": {
+      "type": "object",
+      "required": [
+        "peak_wavenumber_cm",
+        "functional_group",
+        "confidence",
+        "evidence_rationale"
+      ],
+      "properties": {
+        "peak_wavenumber_cm": {
+          "type": "number"
+        },
+        "intensity_level": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signal_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "assignment_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "functional_group": {
+          "type": "string"
+        },
+        "subgroup": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bond_or_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "High",
+            "Medium",
+            "Low",
+            "Ambiguous"
+          ]
+        },
+        "confidence_score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "evidence_rationale": {
+          "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "structural_support": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "database_record_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matched_theoretical": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "mode": {
+              "type": "integer"
+            },
+            "frequency_raw_cm": {
+              "type": "number"
+            },
+            "frequency_scaled_cm": {
+              "type": "number"
+            },
+            "intensity_km_mol": {
+              "type": "number"
+            },
+            "delta_cm": {
+              "type": "number"
+            },
+            "percent_diff": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,478 @@
+{
+  "schema_version": "orca-web-lab.1.0",
+  "dataset_version": "2026.1",
+  "record_type": "molecule",
+  "record_id": "mol_acetone_001",
+  "content_hash": "b532493b6d852c2ccf4b6f40d992ee1541c4424b95d5a0d78d8067ccaca048cb",
+  "split_group_key": "CC(=O)C",
+  "name": "Acetone",
+  "created_at": "2026-08-24T21:48:35.921057+00:00",
+  "updated_at": "2026-08-25T12:17:15.065004+00:00",
+  "provenance": {
+    "source_type": "user_defined",
+    "source_filename": null,
+    "source_job_id": null,
+    "source_result_manifest": null,
+    "result_sha256": null,
+    "source_url": null,
+    "application_version": "2026.1",
+    "orca_version": "6.1.0",
+    "parser_version": "2026.1",
+    "git_sha": null,
+    "generated_by": "ORCA Web Lab Canonical Normalizer",
+    "imported_from": null
+  },
+  "migration_report": {
+    "mapped_fields": [
+      "canonical_record_preserved"
+    ],
+    "transformed_fields": [],
+    "omitted_fields": [],
+    "missing_fields": [],
+    "warnings": [],
+    "unsupported_fields": []
+  },
+  "analysis_results": {
+    "analysis_type": "OPT_FREQ",
+    "status": "SUCCESS",
+    "single_point_energy_eh": -193.185204,
+    "zero_point_energy_eh": 0.08412,
+    "total_enthalpy_eh": -193.09452,
+    "gibbs_free_energy_eh": -193.12984,
+    "entropy_cal_mol_k": 71.42,
+    "dipole_moment_debye": 2.88,
+    "homo_ev": -9.82,
+    "lumo_ev": 0.45,
+    "homo_lumo_gap_ev": 10.27,
+    "converged": true,
+    "stationary_point_status": "MINIMUM",
+    "imaginary_frequencies_count": 0
+  },
+  "molecular_system": {
+    "system_id": "sys_mol_acet",
+    "name": "Acetone",
+    "total_charge": 0,
+    "total_multiplicity": 1,
+    "stoichiometry_formula": "C3H6O",
+    "fragments": [],
+    "species": [
+      {
+        "species_id": "sp_mol_acet_1",
+        "name": "Acetone",
+        "formula": "C3H6O",
+        "canonical_smiles": "CC(=O)C",
+        "isomeric_smiles": null,
+        "inchi": null,
+        "inchikey": null,
+        "charge": 0,
+        "multiplicity": 1,
+        "atoms": [
+          {
+            "atom_id": 1,
+            "element": "C",
+            "atomic_number": 6,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 0.0,
+              "y": 0.1873,
+              "z": 0.0,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          },
+          {
+            "atom_id": 2,
+            "element": "O",
+            "atomic_number": 8,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 0.0,
+              "y": 1.4077,
+              "z": 0.0,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          },
+          {
+            "atom_id": 3,
+            "element": "C",
+            "atomic_number": 6,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 1.2842,
+              "y": -0.6214,
+              "z": 0.0,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          },
+          {
+            "atom_id": 4,
+            "element": "C",
+            "atomic_number": 6,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": -1.2842,
+              "y": -0.6214,
+              "z": 0.0,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          },
+          {
+            "atom_id": 5,
+            "element": "H",
+            "atomic_number": 1,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 1.2587,
+              "y": -1.2688,
+              "z": 0.8823,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          },
+          {
+            "atom_id": 6,
+            "element": "H",
+            "atomic_number": 1,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 1.2587,
+              "y": -1.2688,
+              "z": -0.8823,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          },
+          {
+            "atom_id": 7,
+            "element": "H",
+            "atomic_number": 1,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": 2.1554,
+              "y": 0.0381,
+              "z": 0.0,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          },
+          {
+            "atom_id": 8,
+            "element": "H",
+            "atomic_number": 1,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": -1.2587,
+              "y": -1.2688,
+              "z": 0.8823,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          },
+          {
+            "atom_id": 9,
+            "element": "H",
+            "atomic_number": 1,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": -1.2587,
+              "y": -1.2688,
+              "z": -0.8823,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          },
+          {
+            "atom_id": 10,
+            "element": "H",
+            "atomic_number": 1,
+            "formal_charge": 0,
+            "isotope": null,
+            "coordinates": {
+              "x": -2.1554,
+              "y": 0.0381,
+              "z": 0.0,
+              "unit": "angstrom"
+            },
+            "fragment_id": 1,
+            "aromatic": null,
+            "hybridization": null,
+            "partial_charge": null
+          }
+        ],
+        "bonds": [],
+        "geometry_refs": [
+          "geo_mol_acet_1"
+        ]
+      }
+    ]
+  },
+  "reaction": null,
+  "geometries": [
+    {
+      "geometry_id": "geo_mol_acet_1",
+      "species_ref": "sp_mol_acet_1",
+      "geometry_type": "optimized",
+      "coordinate_units": "angstrom",
+      "coordinates": [
+        {
+          "element": "C",
+          "x": 0.0,
+          "y": 0.1873,
+          "z": 0.0
+        },
+        {
+          "element": "O",
+          "x": 0.0,
+          "y": 1.4077,
+          "z": 0.0
+        },
+        {
+          "element": "C",
+          "x": 1.2842,
+          "y": -0.6214,
+          "z": 0.0
+        },
+        {
+          "element": "C",
+          "x": -1.2842,
+          "y": -0.6214,
+          "z": 0.0
+        },
+        {
+          "element": "H",
+          "x": 1.2587,
+          "y": -1.2688,
+          "z": 0.8823
+        },
+        {
+          "element": "H",
+          "x": 1.2587,
+          "y": -1.2688,
+          "z": -0.8823
+        },
+        {
+          "element": "H",
+          "x": 2.1554,
+          "y": 0.0381,
+          "z": 0.0
+        },
+        {
+          "element": "H",
+          "x": -1.2587,
+          "y": -1.2688,
+          "z": 0.8823
+        },
+        {
+          "element": "H",
+          "x": -1.2587,
+          "y": -1.2688,
+          "z": -0.8823
+        },
+        {
+          "element": "H",
+          "x": -2.1554,
+          "y": 0.0381,
+          "z": 0.0
+        }
+      ],
+      "geometry_hash": "0e8ee136c4e4280a2d79bbf67d4453172e172a5c4c194f13453f2273343e541c",
+      "source_calculation_id": null
+    }
+  ],
+  "calculations": [
+    {
+      "calculation_id": "calc_mol_acet_1",
+      "calculation_type": "OPT_FREQ",
+      "status": "COMPLETED",
+      "input_parameters": {
+        "method": "B3LYP",
+        "basis": "def2-SVP",
+        "dispersion": "D3BJ",
+        "solvation": "None",
+        "solvent": "None",
+        "charge": 0,
+        "multiplicity": 1,
+        "temperature_k": null,
+        "pressure_atm": null,
+        "input_geometry_id": "geo_mol_acet_1"
+      },
+      "analysis_record_id": null,
+      "orca_version": "6.1.0",
+      "input_source": null,
+      "output_source": null
+    }
+  ],
+  "workflows": [],
+  "thermochemistry": {
+    "electronic_energy": {
+      "value": -193.185204,
+      "unit": "hartree",
+      "source_calculation_id": "calc_mol_acet_1",
+      "uncertainty": null
+    },
+    "zpe": {
+      "value": 0.08412,
+      "unit": "hartree",
+      "source_calculation_id": "calc_mol_acet_1",
+      "uncertainty": null
+    },
+    "thermal_correction": null,
+    "enthalpy": {
+      "value": -193.09452,
+      "unit": "hartree",
+      "source_calculation_id": "calc_mol_acet_1",
+      "uncertainty": null
+    },
+    "entropy": {
+      "value": 71.42,
+      "unit": "cal/mol/K",
+      "source_calculation_id": "calc_mol_acet_1",
+      "uncertainty": null
+    },
+    "gibbs_free_energy": {
+      "value": -193.12984,
+      "unit": "hartree",
+      "source_calculation_id": "calc_mol_acet_1",
+      "uncertainty": null
+    },
+    "equilibrium_constant": null,
+    "temperature_k": null,
+    "pressure_atm": null,
+    "standard_state": "Gas Phase (1 atm)",
+    "stationary_point_status": "MINIMUM",
+    "composite_sources": {
+      "electronic_energy_source": null,
+      "zpe_source": null,
+      "vibrational_source": null,
+      "thermal_correction_source": null,
+      "entropy_source": null,
+      "geometry_source": null
+    }
+  },
+  "properties": {
+    "electronic": {
+      "homo_ev": -9.82,
+      "lumo_ev": 0.45,
+      "homo_lumo_gap_ev": 10.27,
+      "dipole_moment_debye": 2.88
+    },
+    "thermodynamic": null,
+    "spectroscopic": null,
+    "reactivity_indices": {
+      "electronegativity_ev": 4.685,
+      "chemical_hardness_ev": 5.135,
+      "electrophilicity_index_ev": 2.137
+    }
+  },
+  "spectroscopy": {
+    "ir": {
+      "theoretical_modes": [
+        {
+          "mode": 1,
+          "frequency_cm": 530.2,
+          "intensity_km_mol": 8.5
+        },
+        {
+          "mode": 8,
+          "frequency_cm": 1220.0,
+          "intensity_km_mol": 45.0
+        },
+        {
+          "mode": 12,
+          "frequency_cm": 1365.0,
+          "intensity_km_mol": 62.0
+        },
+        {
+          "mode": 16,
+          "frequency_cm": 1715.0,
+          "intensity_km_mol": 280.0
+        },
+        {
+          "mode": 20,
+          "frequency_cm": 2960.0,
+          "intensity_km_mol": 55.0
+        }
+      ],
+      "experimental_spectra": [],
+      "peak_assignments": [
+        {
+          "peak_wavenumber_cm": 1715.0,
+          "functional_group": "Ketone",
+          "subgroup": "Aliphatic Ketone",
+          "bond_or_mode": "C=O stretch",
+          "confidence": "High",
+          "confidence_score": 1.495,
+          "evidence_rationale": "Excellent match within typical range (1705-1725 cm\u207b\u00b9) with confirmed structural presence of Ketone.",
+          "source": "Silverstein et al. (2005), Spectrometric Identification of Organic Compounds, 7th Ed., Ch. 3",
+          "source_type": "VERIFIED",
+          "structural_support": true,
+          "database_record_id": "IR_CARB_KETONE_ALIPHATIC"
+        }
+      ]
+    },
+    "uv_vis": {
+      "theoretical_transitions": [],
+      "experimental_spectra": []
+    },
+    "nmr": {
+      "nuclei": []
+    }
+  },
+  "training_metadata": {
+    "task_type": "molecular_property_prediction",
+    "input_modality": "coordinates",
+    "target_modality": "energy",
+    "label": -193.12984,
+    "label_type": "float",
+    "quality_flags": [
+      "valid_geometry"
+    ],
+    "split_hint": "train"
+  },
+  "data_quality": {
+    "validation_status": "verified",
+    "completeness_score": 1.0,
+    "missing_fields": [],
+    "warnings": [],
+    "errors": []
+  }
+}
