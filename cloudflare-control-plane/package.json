@@ -1,6 +1,6 @@
 {
   "name": "orca-cloudflare-control-plane",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Chemistry Lab Cloudflare Control Plane (Workers + D1)",
   "main": "src/index.ts",
   "scripts": {

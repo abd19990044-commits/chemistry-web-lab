@@ -303,7 +303,7 @@ def api_license():
         "ok": True,
         "product_name": "Chemistry Lab",
         "application": "chemistry-lab",
-        "version": "1.0.2",
+        "version": "1.0.3",
         "license_name": "ORCA Web Lab Academic and Non-Commercial License v1.1",
         "license_type": "Source-Available Academic & Non-Commercial",
         "copyright": "Copyright (c) 2026 Abdulsalam S. Hasan. All rights reserved.",
@@ -1436,7 +1436,7 @@ def api_orca_engine_status():
     return jsonify({
         "ok": True,
         "available": ORCA_ENGINE_AVAILABLE,
-        "version": "1.0.2" if ORCA_ENGINE_AVAILABLE else None,
+        "version": "1.0.3" if ORCA_ENGINE_AVAILABLE else None,
         "features": [
             "streaming_output_parser",
             "3d_structure_geometry",

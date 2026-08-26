@@ -59,7 +59,7 @@ export default {
         return jsonResponse({
           ok: true,
           service: "orca-cloudflare-control-plane",
-          version: "1.0.2",
+          version: "1.0.3",
           database_available: true,
           type: "http",
         });
@@ -68,7 +68,7 @@ export default {
           {
             ok: false,
             service: "orca-cloudflare-control-plane",
-            version: "1.0.2",
+            version: "1.0.3",
             database_available: false,
             error: err.message,
           },

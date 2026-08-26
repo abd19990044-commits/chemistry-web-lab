@@ -298,7 +298,7 @@ If you use Chemistry Lab in your academic research, teaching, or computational m
   author  = {Hasan, Abdulsalam S.},
   title   = {{Chemistry Lab: A Web-Based Computational Chemistry Platform}},
   year    = {2026},
-  version = {1.0.2},
+  version = {1.0.3},
   url     = {https://github.com/abd19990044-commits/chemistry-web-lab},
   note    = {Academic and Non-Commercial Research Platform}
 }

@@ -1,14 +1,14 @@
 cff-version: 1.2.0
 title: "orca-engine: a streaming parser and thermochemistry engine for ORCA output files"
-message: "If you use this software, please cite it using these metadata."
+message: "If you use this software, please cite it using these metadata (ORCA Web Lab Academic and Non-Commercial License v1.1)."
 type: software
 authors:
   - family-names: Hasan
     given-names: Salam
     email: salamhasan199904@gmail.com
 repository-code: "https://github.com/salamhasan/orca-engine"
-license: "ORCA-Web-Lab-Academic-and-Non-Commercial-License-v1.1"
-version: 1.0.2
+license-url: "https://github.com/abd19990044-commits/chemistry-web-lab/blob/main/LICENSE"
+version: 1.0.3
 date-released: "2026-08-27"
 keywords:
   - computational chemistry
