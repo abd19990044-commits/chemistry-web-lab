@@ -1597,6 +1597,90 @@
         }
       },
       "additionalProperties": false
+    },
+    "calculation_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "molecule": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "geometry": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "graph": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "calculation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "electronic_properties": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "vibrational_properties": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "charges": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "quality": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "duplicate_status": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "source_artifacts": {
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "derived_features": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "targets": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "dataset": {
+      "type": [
+        "object",
+        "null"
+      ]
     }
   },
   "$defs": {

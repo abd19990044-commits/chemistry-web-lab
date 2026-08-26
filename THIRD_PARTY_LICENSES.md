@@ -14,6 +14,9 @@ or interfaced with by ORCA Web Lab.
 > proprietary materials owned or controlled by the author and copyright holder,
 > **Abdulsalam S. Hasan**.
 >
+> This includes all proprietary application modules, orchestration engines, web interfaces,
+> schemas, tools, and the integrated `orca_engine` parser and thermochemistry engine.
+>
 > Third-party libraries, runtime dependencies, web fonts, external programs, datasets,
 > and cloud APIs remain subject to their own respective licenses, terms of service, and
 > conditions as detailed below. Nothing in the ORCA Web Lab license modifies, replaces,

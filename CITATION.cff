@@ -1,53 +1,28 @@
 cff-version: 1.2.0
-
 title: "ORCA Web Lab: Fault-Tolerant Web Orchestration & Quantum Chemistry Platform"
-
-message: "If you use ORCA Web Lab in research, please cite this software and the associated scientific documentation."
-
 type: software
-
+version: 1.0.0
+date-released: 2026-08-25
+message: "If you use ORCA Web Lab in research, please cite the software and the associated scientific documentation."
 authors:
   - family-names: Hasan
     given-names: Abdulsalam S.
-    email: salamhasan199904@gmail.com
-
 repository-code: "https://github.com/abd19990044-commits/chemistry-web-lab"
-
 url: "https://github.com/abd19990044-commits/chemistry-web-lab"
-
-license: "ORCA Web Lab Academic and Non-Commercial License v1.1"
-
-version: "1.0.0"
-
-date-released: "2026-08-25"
-
+license: NOASSERTION
 keywords:
   - ORCA
-  - ORCA Web Lab
   - computational chemistry
   - quantum chemistry
-  - density functional theory
-  - molecular modeling
-  - scientific computing
-  - workflow orchestration
+  - Kaggle
   - fault tolerance
   - checkpointing
-  - Kaggle
+  - workflow orchestration
   - RDKit
-  - Python
-  - reproducible research
-
 abstract: >-
-  ORCA Web Lab is a web-based computational chemistry platform designed for
-  molecular structure exploration, ORCA input generation, quantum-chemistry
-  calculations, result analysis, and fault-tolerant orchestration of
-  long-running computational workflows. The platform integrates molecular
-  structure tools with ORCA-based quantum-chemistry workflows and supports
-  execution through user-owned Kaggle computational environments. Its
-  orchestration architecture is designed to tolerate hosted-notebook session
-  limits and web-service interruptions through explicit workflow state
-  management, verified checkpoints, idempotent operations, execution leases,
-  reconciliation, and watchdog-based recovery. The platform also provides
-  tools for preparing computational inputs, managing calculation workflows,
-  monitoring execution, and analyzing ORCA results in a reproducible
-  research-oriented environment.
+  Chemistry Lab is a web-based research-software platform for molecular
+  structure exploration, ORCA input generation, and fault-tolerant execution
+  of long-running ORCA calculations through user-owned Kaggle notebooks.
+  The orchestration layer uses an explicit finite-state machine, verified
+  checkpoints, idempotent operations, leases, reconciliation, and watchdog
+  recovery to survive hosted-notebook session limits and web-service restarts.

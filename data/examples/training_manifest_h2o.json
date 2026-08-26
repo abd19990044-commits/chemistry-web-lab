@@ -1,0 +1,15 @@
+{
+  "manifest_version": "1.0",
+  "schema_version": "orca-web-lab.1.0",
+  "dataset_version": "2026.1",
+  "dataset_file": "training_dataset_h2o.jsonl",
+  "task_type": "molecular_property_prediction",
+  "record_count": 1,
+  "example_count": 1,
+  "records_sha256": "0b56898fdbd457bc1f9dc84359f319d0ce01e5038ab69d18d60a5b0f551072c4",
+  "dataset_sha256": "0b56898fdbd457bc1f9dc84359f319d0ce01e5038ab69d18d60a5b0f551072c4",
+  "line_hashes": [
+    "d790d2315a161e7bfac73c1ead6b624ab723d95deb64986b7bb2d9f33665997a"
+  ],
+  "exported_at": "2026-08-26T19:08:49.132571+00:00"
+}

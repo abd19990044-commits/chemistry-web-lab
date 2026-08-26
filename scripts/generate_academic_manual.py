@@ -223,7 +223,7 @@ def create_manual(output_path: str):
         ("Platform Architecture: ", True, NAVY),
         ("Three Unified Studios (Draw Chemistry • ORCA Calculations & Jobs • Quantum Engine & Thermochemistry)\n", False, DARK),
         ("License & Access: ", True, NAVY),
-        ("Open-Access Academic Research Suite (MIT License) • Zero Server Retention Policy\n", False, DARK),
+        ("Academic and Non-Commercial Research Suite (ORCA Web Lab License v1.1) • Zero Server Retention Policy\n", False, DARK),
         ("Manual Release: ", True, NAVY),
         ("Version 2.5 (Comprehensive Academic Edition) | Last Updated: August 2026", False, DARK),
     ]

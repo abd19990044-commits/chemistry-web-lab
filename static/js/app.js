@@ -464,6 +464,83 @@
     }
   });
 
+  async function copyElementForWord(imgEl, titleText, subtitleText, plainTextFallback) {
+    if (!imgEl || !imgEl.src) {
+      showToast("No visual drawing is available to copy.");
+      return;
+    }
+    try {
+      const res = await fetch(imgEl.src);
+      const blob = await res.blob();
+      
+      const width = imgEl.naturalWidth || imgEl.clientWidth || 560;
+      const height = imgEl.naturalHeight || imgEl.clientHeight || 420;
+
+      const htmlPayload = `<div style="font-family: Calibri, Arial, sans-serif; text-align: center; margin: 10px 0;">` +
+        `<img src="${imgEl.src}" width="${width}" height="${height}" alt="${titleText || ''}" style="max-width: 100%; height: auto;" />` +
+        (titleText ? `<div style="font-weight: bold; font-size: 11pt; margin-top: 4px;">${titleText}</div>` : "") +
+        (subtitleText ? `<div style="font-size: 9.5pt; color: #555555; margin-top: 2px;">${subtitleText}</div>` : "") +
+        `</div>`;
+
+      const plainText = plainTextFallback || (titleText ? `${titleText}\n${subtitleText || ''}` : "");
+
+      if (navigator.clipboard && window.ClipboardItem) {
+        let pngBlob = blob;
+        if (blob.type !== "image/png") {
+          pngBlob = await new Promise((resolve) => {
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, width);
+            canvas.height = Math.max(1, height);
+            const ctx = canvas.getContext("2d");
+            const tempImg = new Image();
+            tempImg.crossOrigin = "anonymous";
+            tempImg.onload = () => {
+              ctx.drawImage(tempImg, 0, 0, canvas.width, canvas.height);
+              canvas.toBlob((b) => resolve(b || blob), "image/png");
+            };
+            tempImg.onerror = () => resolve(blob);
+            tempImg.src = imgEl.src;
+          });
+        }
+
+        const clipData = {
+          "text/html": new Blob([htmlPayload], { type: "text/html" }),
+          "text/plain": new Blob([plainText], { type: "text/plain" }),
+        };
+        if (pngBlob && pngBlob.type === "image/png") {
+          clipData["image/png"] = pngBlob;
+        }
+
+        await navigator.clipboard.write([new ClipboardItem(clipData)]);
+        showToast("Structure copied for Microsoft Word (paste directly into Word).");
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(plainText);
+        showToast("Structure text copied to clipboard.");
+      }
+    } catch (err) {
+      console.warn("Word copy clipboard error:", err);
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(plainTextFallback || titleText || "");
+          showToast("Copied text representation to clipboard.");
+        }
+      } catch (_e) {
+        showToast("Clipboard access was denied by browser.");
+      }
+    }
+  }
+
+  document.getElementById("explorer-copy-word")?.addEventListener("click", () => {
+    const img = document.getElementById("explorer-image");
+    const title = document.getElementById("explorer-title-out")?.textContent || "Chemical Structure";
+    const formula = document.getElementById("explorer-formula")?.textContent || "";
+    const smiles = document.getElementById("explorer-smiles")?.textContent || "";
+    const iupac = document.getElementById("explorer-iupac-val")?.textContent || "";
+    const subtitle = [formula ? `Formula: ${formula}` : "", iupac && iupac !== "-" && !iupac.includes("Unavailable") ? `IUPAC: ${iupac}` : "", smiles ? `SMILES: ${smiles}` : ""].filter(Boolean).join(" | ");
+    const plain = `${title} (${formula})\nSMILES: ${smiles}` + (iupac ? `\nIUPAC: ${iupac}` : "");
+    copyElementForWord(img, title, subtitle, plain);
+  });
+
   document.getElementById("explorer-query")?.addEventListener("input", () => {
     const iupacValEl = document.getElementById("explorer-iupac-val");
     if (iupacValEl) {
@@ -675,6 +752,14 @@
     document.getElementById("reaction-products").value = "12 CO2 + 6 H2O";
     document.getElementById("reaction-help").open = false;
     document.getElementById("reaction-form").requestSubmit();
+  });
+
+  document.getElementById("reaction-copy-word")?.addEventListener("click", () => {
+    const img = document.getElementById("reaction-image");
+    const eq = document.getElementById("reaction-equation")?.textContent || "Chemical Reaction Scheme";
+    const smiles = document.getElementById("reaction-smiles")?.textContent || "";
+    const plain = `${eq}` + (smiles ? `\nReaction SMILES: ${smiles}` : "");
+    copyElementForWord(img, eq, smiles ? `Reaction SMILES: ${smiles}` : "", plain);
   });
 
   // ───────────────────────────────────────────────

@@ -18,7 +18,7 @@
     "control-plane"
   ],
   "author": "ORCA Web Lab Team",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240903.0",
     "typescript": "^5.5.4",

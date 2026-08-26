@@ -79,4 +79,4 @@ through `missing_references` or a consistency warning instead.
 
 ## License
 
-Contributions are accepted under the MIT License.
+Contributions are accepted under the ORCA Web Lab Academic and Non-Commercial License v1.1.

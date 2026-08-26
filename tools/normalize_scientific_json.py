@@ -208,7 +208,7 @@ def compute_chemical_formula(elements: Sequence[str]) -> str:
 def compute_content_hash(record_dict: dict[str, Any]) -> str:
     """Compute a deterministic SHA-256 fingerprint of scientific content.
     
-    Excludes volatile metadata, timestamps, and randomized ID references.
+    Excludes volatile metadata, timestamps, randomized ID references, and migration logs.
     Normalizes floats to 8 decimal places for cross-platform hashing determinism
     without altering the stored full-precision scientific values.
     """
@@ -249,6 +249,231 @@ def compute_content_hash(record_dict: dict[str, Any]) -> str:
     hashable_payload = _clean_for_hash(record_dict)
     canonical_json = json.dumps(hashable_payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+
+def compute_deterministic_calculation_id(calc_dict: dict[str, Any], geometry_hash: str | None = None) -> str:
+    """Compute a deterministic, reproducible calculation ID from scientific parameters.
+    
+    Distinguishes:
+    - geometry / coordinates fingerprint (geometry_hash)
+    - chemical formula and elements
+    - charge and spin multiplicity
+    - quantum chemical method and DFT functional
+    - basis set and auxiliary basis set
+    - dispersion correction and solvation model
+    - relativistic treatment
+    - calculation type (OPT, FREQ, NUMFREQ, SP, TDDFT)
+    - temperature and pressure
+    - ORCA major/minor engine version
+    - workflow stage
+    """
+    elements = calc_dict.get("elements") or []
+    if isinstance(elements, list):
+        elem_str = ",".join(str(e).upper() for e in elements)
+    else:
+        elem_str = str(elements).upper()
+
+    identity_components = [
+        f"geo={geometry_hash or 'no_geom'}",
+        f"formula={calc_dict.get('formula') or '-'}",
+        f"elements={elem_str}",
+        f"charge={int(calc_dict.get('charge', 0)) if calc_dict.get('charge') is not None else 0}",
+        f"mult={int(calc_dict.get('multiplicity', 1)) if calc_dict.get('multiplicity') is not None else 1}",
+        f"method={str(calc_dict.get('method') or '').strip().upper()}",
+        f"functional={str(calc_dict.get('dft_functional') or calc_dict.get('functional') or '').strip().upper()}",
+        f"basis={str(calc_dict.get('basis_set') or calc_dict.get('basis') or '').strip().upper()}",
+        f"aux_basis={str(calc_dict.get('auxiliary_basis') or '').strip().upper()}",
+        f"dispersion={str(calc_dict.get('dispersion') or '').strip().upper()}",
+        f"solvation={str(calc_dict.get('solvation') or '').strip().upper()}",
+        f"relativistic={str(calc_dict.get('relativistic') or '').strip().upper()}",
+        f"calc_type={str(calc_dict.get('calc_type') or calc_dict.get('calculation_type') or 'SP').strip().upper()}",
+        f"temp={(float(calc_dict['temperature_k']) if calc_dict.get('temperature_k') is not None else 298.15):.2f}",
+        f"press={(float(calc_dict['pressure_atm']) if calc_dict.get('pressure_atm') is not None else 1.0):.4f}",
+        f"orca_ver={str(calc_dict.get('orca_version') or '6.1').strip()}",
+        f"stage={str(calc_dict.get('stage') or calc_dict.get('step_name') or '1').strip()}",
+    ]
+    raw_sig = "|".join(identity_components)
+    digest = hashlib.sha256(raw_sig.encode("utf-8")).hexdigest()
+    return f"calc_{digest[:16]}"
+
+
+def compute_split_group_key(clean_input: dict[str, Any], geometry_hash: str | None = None) -> str:
+    """Compute a deterministic, scientifically grounded split_group_key for ML dataset segregation.
+    
+    Priority:
+    1. InChIKey (exact molecular connectivity and stereochemistry)
+    2. Canonical SMILES (standardized 2D graph)
+    3. Reaction SMILES / equation (for reaction datasets)
+    4. Formula + geometry hash (for quantum structures without SMILES)
+    """
+    inchikey = clean_input.get("inchikey") or clean_input.get("inchi_key")
+    if inchikey and isinstance(inchikey, str) and len(inchikey.strip()) == 27:
+        return inchikey.strip()
+        
+    smiles = clean_input.get("smiles") or clean_input.get("canonical_smiles")
+    if smiles and isinstance(smiles, str) and smiles.strip():
+        return smiles.strip()
+        
+    rxn_smi = clean_input.get("reaction_smiles") or clean_input.get("equation")
+    if rxn_smi and isinstance(rxn_smi, str) and rxn_smi.strip():
+        return rxn_smi.strip()
+        
+    formula = clean_input.get("formula") or clean_input.get("chemical_formula")
+    if formula and isinstance(formula, str) and formula.strip() and formula.strip() != "-":
+        if geometry_hash:
+            return f"grp_{formula.strip()}_{geometry_hash[:12]}"
+        return f"grp_{formula.strip()}"
+        
+    if geometry_hash:
+        return f"grp_geom_{geometry_hash[:12]}"
+        
+    name = clean_input.get("name") or clean_input.get("title") or "sample"
+    return str(name)
+
+
+def extract_molecular_graph(
+    clean_input: dict[str, Any],
+    raw_atoms: list[dict[str, Any]],
+    smiles: str | None = None,
+    mol_block: str | None = None
+) -> dict[str, Any]:
+    """Generate GNN-compatible molecular graph representation with explicit graph_source.
+    
+    Includes node features, edge lists, adjacency matrix, bond orders, formal charges,
+    and aromaticity flags without inventing arbitrary bonds.
+    """
+    nodes = []
+    for idx, a in enumerate(raw_atoms):
+        elem = a.get("element", "C")
+        z = a.get("atomic_number") or ELEMENT_TO_Z.get(elem.upper(), 6)
+        nodes.append({
+            "atom_index": idx,
+            "element": elem,
+            "atomic_number": z,
+            "formal_charge": int(a.get("formal_charge", 0)),
+            "is_aromatic": bool(a.get("aromatic", False)),
+        })
+    
+    num_nodes = len(nodes)
+    edges: list[dict[str, Any]] = []
+    adj_matrix = [[0] * num_nodes for _ in range(num_nodes)]
+    graph_source = "unavailable"
+
+    rdkit_mol = None
+    if smiles:
+        try:
+            from rdkit import Chem
+            rdkit_mol = Chem.MolFromSmiles(smiles)
+            if rdkit_mol and rdkit_mol.GetNumAtoms() == num_nodes:
+                graph_source = "rdkit"
+            else:
+                rdkit_mol = None
+        except Exception:
+            rdkit_mol = None
+
+    if not rdkit_mol and mol_block:
+        try:
+            from rdkit import Chem
+            rdkit_mol = Chem.MolFromMolBlock(mol_block, removeHs=False)
+            if rdkit_mol and rdkit_mol.GetNumAtoms() == num_nodes:
+                graph_source = "rdkit"
+            else:
+                rdkit_mol = None
+        except Exception:
+            rdkit_mol = None
+
+    if rdkit_mol and graph_source == "rdkit":
+        for b in rdkit_mol.GetBonds():
+            u = b.GetBeginAtomIdx()
+            v = b.GetEndAtomIdx()
+            btype = str(b.GetBondType())
+            border = float(b.GetBondTypeAsDouble())
+            is_arom = bool(b.GetIsAromatic())
+            edges.append({
+                "source": u,
+                "target": v,
+                "bond_type": btype,
+                "bond_order": border,
+                "is_aromatic": is_arom,
+            })
+            if u < num_nodes and v < num_nodes:
+                adj_matrix[u][v] = 1
+                adj_matrix[v][u] = 1
+    elif isinstance(clean_input.get("bonds"), list) and clean_input["bonds"]:
+        for b in clean_input["bonds"]:
+            if isinstance(b, dict):
+                u = int(b.get("atom_i", b.get("atom1", b.get("source", 0))))
+                v = int(b.get("atom_j", b.get("atom2", b.get("target", 0))))
+                order = float(b.get("order", b.get("bond_order", 1.0)))
+                edges.append({
+                    "source": u,
+                    "target": v,
+                    "bond_type": b.get("type", "SINGLE"),
+                    "bond_order": order,
+                    "is_aromatic": bool(b.get("aromatic", False)),
+                })
+                if u < num_nodes and v < num_nodes:
+                    adj_matrix[u][v] = 1
+                    adj_matrix[v][u] = 1
+        if edges:
+            graph_source = "parser"
+
+    return {
+        "graph_source": graph_source,
+        "nodes": nodes,
+        "edges": edges,
+        "adjacency_matrix": adj_matrix if graph_source != "unavailable" else None,
+        "num_nodes": num_nodes,
+        "num_edges": len(edges),
+    }
+
+
+def check_duplicate_status(
+    record_dict: dict[str, Any],
+    existing_registry: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Perform exact-content, scientific-content, and calculation-identity duplicate detection.
+    
+    Returns structured duplicate status:
+    - exact_duplicate: identical content_hash
+    - same_calculation: identical calculation_id
+    - distinct: independent calculation
+    """
+    if not existing_registry:
+        return {
+            "is_duplicate": False,
+            "duplicate_type": None,
+            "duplicate_of": None,
+            "distinction_reason": "First instance in registry"
+        }
+    
+    c_hash = record_dict.get("content_hash")
+    calc_id = record_dict.get("calculation_id")
+    
+    if c_hash and c_hash in existing_registry.get("by_content_hash", {}):
+        orig_id = existing_registry["by_content_hash"][c_hash]
+        return {
+            "is_duplicate": True,
+            "duplicate_type": "EXACT_SCIENTIFIC_CONTENT",
+            "duplicate_of": orig_id,
+            "distinction_reason": f"Matches content hash {c_hash}"
+        }
+        
+    if calc_id and calc_id in existing_registry.get("by_calc_id", {}):
+        orig_id = existing_registry["by_calc_id"][calc_id]
+        return {
+            "is_duplicate": True,
+            "duplicate_type": "SAME_CALCULATION_PARAMETERS",
+            "duplicate_of": orig_id,
+            "distinction_reason": f"Matches calculation identity {calc_id}"
+        }
+        
+    return {
+        "is_duplicate": False,
+        "duplicate_type": None,
+        "duplicate_of": None,
+        "distinction_reason": "Unique scientific parameters and content hash"
+    }
 
 
 def normalize_to_canonical_schema(
@@ -444,12 +669,15 @@ def normalize_with_report(
     elif isinstance(raw_data, Mapping):
         # Check if it's a multi-molecule dictionary from ORCA_Parsed_Data.json
         if "molecules" in raw_data and isinstance(raw_data["molecules"], dict) and len(raw_data["molecules"]) > 0:
-            first_key = next(iter(raw_data["molecules"]))
+            first_key = str(next(iter(raw_data["molecules"])))
             mol_item = raw_data["molecules"][first_key]
             if isinstance(mol_item, dict) and "jobs" in mol_item and len(mol_item["jobs"]) > 0:
                 latest_job = mol_item["jobs"][-1]
                 clean_input = {
                     "name": first_key,
+                    "filename": mol_item.get("filename") or (mol_item.get("sources", [None])[0] if isinstance(mol_item.get("sources"), list) and mol_item.get("sources") else None),
+                    "job_id": mol_item.get("job_id") or raw_data.get("job_id"),
+                    "available_files": mol_item.get("available_files") or raw_data.get("available_files", []),
                     "sources": mol_item.get("sources", []),
                     "had_error_termination": mol_item.get("had_error_termination", False),
                     **latest_job
@@ -457,11 +685,31 @@ def normalize_with_report(
             else:
                 clean_input = dict(raw_data)
         elif "latest_job" in raw_data and isinstance(raw_data["latest_job"], dict):
+            raw_mol = raw_data.get("molecule")
+            mol_name = raw_mol.get("name") if isinstance(raw_mol, dict) else (raw_mol if isinstance(raw_mol, str) else None)
             clean_input = {
-                "name": raw_data.get("name") or raw_data.get("molecule") or "orca_job",
+                "name": raw_data.get("name") if isinstance(raw_data.get("name"), str) else (mol_name or "orca_job"),
+                "filename": raw_data.get("filename"),
+                "job_id": raw_data.get("job_id"),
+                "available_files": raw_data.get("available_files", []),
                 "sources": raw_data.get("sources", []),
                 **raw_data["latest_job"]
             }
+        elif "jobs" in raw_data and isinstance(raw_data["jobs"], list) and len(raw_data["jobs"]) > 0:
+            latest_job = raw_data["jobs"][-1]
+            if isinstance(latest_job, dict):
+                raw_mol = raw_data.get("molecule")
+                mol_name = raw_mol.get("name") if isinstance(raw_mol, dict) else (raw_mol if isinstance(raw_mol, str) else None)
+                clean_input = {
+                    "name": raw_data.get("name") if isinstance(raw_data.get("name"), str) else (mol_name or latest_job.get("molecule") if isinstance(latest_job.get("molecule"), str) else "orca_job"),
+                    "filename": raw_data.get("filename"),
+                    "job_id": raw_data.get("job_id"),
+                    "available_files": raw_data.get("available_files", []),
+                    "sources": raw_data.get("sources", []),
+                    **latest_job
+                }
+            else:
+                clean_input = dict(raw_data)
         else:
             clean_input = dict(raw_data)
     else:
@@ -505,8 +753,62 @@ def normalize_with_report(
         else:
             record_type = "analysis_record" if "energy" in clean_input or "e_elec_eh" in clean_input else "molecule"
 
-    record_id = clean_input.get("record_id") or str(uuid.uuid4())
-    record_name = clean_input.get("name") or clean_input.get("title") or (f"Record_{record_id[:8]}")
+    # Pre-parse coordinates for deterministic identity computation
+    raw_coords_str = ""
+    for candidate in [
+        clean_input.get("xyz_structure"),
+        clean_input.get("xyz"),
+        clean_input.get("opt_coords"),
+        clean_input.get("coordinates"),
+        clean_input.get("coords"),
+    ]:
+        if isinstance(candidate, str) and candidate.strip():
+            raw_coords_str = candidate
+            break
+
+    parsed_coords = parse_xyz_string(raw_coords_str) if raw_coords_str else []
+    elements_input = clean_input.get("elements")
+    coords_input = clean_input.get("coords") or clean_input.get("coordinates")
+    if not parsed_coords and isinstance(coords_input, list):
+        for idx, item in enumerate(coords_input):
+            if isinstance(item, (list, tuple)) and len(item) >= 3:
+                elem_val = "C"
+                if isinstance(elements_input, list) and idx < len(elements_input):
+                    elem_val = str(elements_input[idx])
+                parsed_coords.append({"element": elem_val.capitalize(), "x": float(item[0]), "y": float(item[1]), "z": float(item[2])})
+                transformed_fields.append("coords_tuple_to_object")
+            elif isinstance(item, dict) and "x" in item and "y" in item and "z" in item:
+                elem_val = item.get("elem") or item.get("element")
+                if not elem_val and isinstance(elements_input, list) and idx < len(elements_input):
+                    elem_val = str(elements_input[idx])
+                elem_val = (elem_val or "C").capitalize()
+                parsed_coords.append({
+                    "element": elem_val,
+                    "x": float(item["x"]),
+                    "y": float(item["y"]),
+                    "z": float(item["z"])
+                })
+                mapped_fields.append("coords_dict")
+
+    # If coordinates exist with elements array
+    if not parsed_coords and isinstance(clean_input.get("elements"), list) and isinstance(clean_input.get("coords"), list):
+        for el, pt in zip(clean_input["elements"], clean_input["coords"], strict=False):
+            if isinstance(pt, (list, tuple)) and len(pt) >= 3:
+                parsed_coords.append({"element": el.capitalize(), "x": float(pt[0]), "y": float(pt[1]), "z": float(pt[2])})
+                mapped_fields.append("elements_coords_parallel")
+
+    geo_hash = compute_geometry_hash(parsed_coords) if parsed_coords else None
+    calc_id = clean_input.get("calculation_id") or compute_deterministic_calculation_id(clean_input, geo_hash)
+    id_tag = calc_id.replace("calc_", "")[:8]
+
+    record_id = clean_input.get("record_id") or f"rec_{id_tag}"
+    raw_rec_name = clean_input.get("name") or clean_input.get("title")
+    if isinstance(raw_rec_name, str) and raw_rec_name.strip():
+        record_name = raw_rec_name.strip()
+    elif isinstance(raw_rec_name, dict):
+        record_name = str(raw_rec_name.get("name") or f"Record_{id_tag}")
+    else:
+        record_name = f"Record_{id_tag}"
 
     # 3. Build Provenance & Source Artifacts
     default_src = "orca_analyzer" if record_type == "analysis_record" else ("reaction_definition" if record_type == "reaction_definition" else "user_defined")
@@ -519,7 +821,7 @@ def normalize_with_report(
             if isinstance(src, str) and src.strip():
                 filename = src.replace("\\", "/").split("/")[-1]
                 source_artifacts.append({
-                    "artifact_id": f"art_{record_id[:8]}_{idx + 1}",
+                    "artifact_id": f"art_{id_tag}_{idx + 1}",
                     "filename": filename,
                     "artifact_type": "orca_output" if filename.endswith((".out", ".log", ".txt")) else ("orca_input" if filename.endswith(".inp") else "generic_data"),
                     "storage_reference": src,
@@ -556,38 +858,6 @@ def normalize_with_report(
     species_list: list[dict[str, Any]] = []
     fragments_list: list[dict[str, Any]] = []
     raw_atoms: list[dict[str, Any]] = []
-
-    raw_coords_str = (
-        clean_input.get("xyz_structure")
-        or clean_input.get("coords")
-        or clean_input.get("opt_coords")
-        or clean_input.get("coordinates")
-        or clean_input.get("xyz")
-        or ""
-    )
-
-    parsed_coords = parse_xyz_string(raw_coords_str) if isinstance(raw_coords_str, str) else []
-    if not parsed_coords and isinstance(clean_input.get("coords"), list):
-        for item in clean_input["coords"]:
-            if isinstance(item, (list, tuple)) and len(item) >= 3:
-                parsed_coords.append({"element": "C", "x": float(item[0]), "y": float(item[1]), "z": float(item[2])})
-                transformed_fields.append("coords_tuple_to_object")
-            elif isinstance(item, dict) and "x" in item and "y" in item and "z" in item:
-                elem_val = item.get("elem") or item.get("element") or "C"
-                parsed_coords.append({
-                    "element": elem_val.capitalize(),
-                    "x": float(item["x"]),
-                    "y": float(item["y"]),
-                    "z": float(item["z"])
-                })
-                mapped_fields.append("coords_dict")
-
-    # If coordinates exist with elements array
-    if not parsed_coords and isinstance(clean_input.get("elements"), list) and isinstance(clean_input.get("coords"), list):
-        for el, pt in zip(clean_input["elements"], clean_input["coords"], strict=False):
-            if isinstance(pt, (list, tuple)) and len(pt) >= 3:
-                parsed_coords.append({"element": el.capitalize(), "x": float(pt[0]), "y": float(pt[1]), "z": float(pt[2])})
-                mapped_fields.append("elements_coords_parallel")
 
     # Population charges maps by index
     mulliken_arr = clean_input.get("mulliken_charges")
@@ -833,7 +1103,7 @@ def normalize_with_report(
     calculations_list: list[dict[str, Any]] = []
     workflows_list: list[dict[str, Any]] = []
 
-    calc_id = clean_input.get("calculation_id") or f"calc_{record_id[:8]}_1"
+    calc_id = clean_input.get("calculation_id") or compute_deterministic_calculation_id(clean_input, geo_hash)
     calc_type = clean_input.get("calc_type") or clean_input.get("calculation_type") or "OPT"
 
     calculations_list.append({
@@ -1355,12 +1625,119 @@ def normalize_with_report(
         }
 
     # Split Group Key (for molecular grouping without train/val/test data leakage)
-    split_key = (
-        clean_input.get("inchikey")
-        or clean_input.get("smiles")
-        or formula_str
-        or f"group_{record_id[:8]}"
+    split_key = compute_split_group_key(clean_input, geo_hash)
+
+    # ML-Ready Molecule representation
+    molecule_obj = {
+        "formula": formula_str,
+        "canonical_smiles": clean_input.get("smiles") or clean_input.get("canonical_smiles"),
+        "isomeric_smiles": clean_input.get("isomeric_smiles"),
+        "inchi": clean_input.get("inchi"),
+        "inchikey": clean_input.get("inchikey"),
+        "charge": int(clean_input.get("charge", 0)) if clean_input.get("charge") is not None else 0,
+        "multiplicity": int(clean_input.get("multiplicity", 1)) if clean_input.get("multiplicity") is not None else 1,
+        "num_atoms": len(raw_atoms) if raw_atoms else clean_input.get("atoms_count", 0),
+        "elements": [a["element"] for a in raw_atoms] if raw_atoms else [],
+        "atomic_numbers": [a["atomic_number"] for a in raw_atoms if a.get("atomic_number") is not None] if raw_atoms else [],
+    }
+
+    # ML-Ready Geometry representation
+    geom_coords = [[float(a["coordinates"]["x"]), float(a["coordinates"]["y"]), float(a["coordinates"]["z"])] for a in raw_atoms] if raw_atoms else []
+    geometry_obj = {
+        "atomic_numbers": [a["atomic_number"] for a in raw_atoms if a.get("atomic_number") is not None],
+        "elements": [a["element"] for a in raw_atoms],
+        "coordinates": {
+            "values": geom_coords,
+            "unit": "angstrom"
+        },
+        "geometry_type": "optimized" if "opt" in str(clean_input.get("calc_type", "")).lower() or record_type == "analysis_record" else "input",
+        "geometry_hash": geo_hash,
+        "num_atoms": len(raw_atoms)
+    } if raw_atoms else None
+
+    # ML-Ready Molecular Graph (GNN representation)
+    graph_obj = extract_molecular_graph(
+        clean_input,
+        raw_atoms,
+        smiles=clean_input.get("smiles") or clean_input.get("canonical_smiles"),
+        mol_block=clean_input.get("mol_block") or clean_input.get("mol_file")
     )
+
+    # ML-Ready Calculation definition
+    calculation_obj = {
+        "calculation_id": calc_id,
+        "engine": "ORCA",
+        "orca_version": prov.get("orca_version", "6.1.0"),
+        "calculation_type": calc_type,
+        "method": clean_input.get("method") or "DFT",
+        "functional": clean_input.get("dft_functional") or clean_input.get("functional") or "B3LYP",
+        "basis_set": clean_input.get("basis") or clean_input.get("basis_set") or "def2-SVP",
+        "auxiliary_basis": clean_input.get("auxiliary_basis"),
+        "dispersion": clean_input.get("dispersion", "None"),
+        "solvation": {
+            "model": clean_input.get("solvation", "None"),
+            "solvent": clean_input.get("solvent", "None")
+        } if clean_input.get("solvation") and clean_input.get("solvation") != "None" else None,
+        "charge": int(clean_input.get("charge", 0)) if clean_input.get("charge") is not None else 0,
+        "multiplicity": int(clean_input.get("multiplicity", 1)) if clean_input.get("multiplicity") is not None else 1,
+        "temperature": {
+            "value": float(clean_input["temperature_k"]) if clean_input.get("temperature_k") is not None else 298.15,
+            "unit": "kelvin"
+        },
+        "pressure": {
+            "value": float(clean_input["pressure_atm"]) if clean_input.get("pressure_atm") is not None else 1.0,
+            "unit": "atm"
+        },
+    }
+
+    # Electronic properties with explicit units
+    cdft_en = _extract_quantity(clean_input.get("electronegativity_ev"))
+    cdft_hard = _extract_quantity(clean_input.get("chemical_hardness_ev"))
+    cdft_pot = _extract_quantity(clean_input.get("chemical_potential_ev"))
+    cdft_soft = _extract_quantity(clean_input.get("chemical_softness_ev"))
+    cdft_w = _extract_quantity(clean_input.get("electrophilicity_index_ev"))
+
+    electronic_props_obj = {
+        "total_energy": {"value": float(e_elec), "unit": "hartree"} if e_elec is not None else None,
+        "homo": {"value": float(homo_val), "unit": "eV"} if homo_val is not None else None,
+        "lumo": {"value": float(lumo_val), "unit": "eV"} if lumo_val is not None else None,
+        "homo_lumo_gap": {"value": float(gap_val), "unit": "eV"} if gap_val is not None else None,
+        "dipole_moment": {"value": float(dipole_val), "unit": "debye"} if dipole_val is not None else None,
+        "conceptual_dft": {
+            "electronegativity": {"value": float(cdft_en), "unit": "eV"} if cdft_en is not None else None,
+            "chemical_hardness": {"value": float(cdft_hard), "unit": "eV"} if cdft_hard is not None else None,
+            "chemical_potential": {"value": float(cdft_pot), "unit": "eV"} if cdft_pot is not None else None,
+            "chemical_softness": {"value": float(cdft_soft), "unit": "eV^-1"} if cdft_soft is not None else None,
+            "electrophilicity_index": {"value": float(cdft_w), "unit": "eV"} if cdft_w is not None else None,
+        } if any(x is not None for x in [cdft_en, cdft_hard, cdft_pot, cdft_soft, cdft_w]) else None
+    } if any(x is not None for x in [e_elec, homo_val, lumo_val, gap_val, dipole_val]) else None
+
+    # Vibrational properties with explicit units
+    vibrational_props_obj = {
+        "harmonic_modes": [
+            {
+                "mode_number": int(m.get("mode", idx + 1)),
+                "frequency": {"value": float(m["frequency_cm"]), "unit": "cm^-1"},
+                "ir_intensity": {"value": float(m.get("intensity_km_mol", 0.0)), "unit": "km/mol"} if m.get("intensity_km_mol") is not None else None
+            }
+            for idx, m in enumerate(v_modes)
+        ] if v_modes else [],
+        "imaginary_frequencies_count": int(clean_input.get("imaginary_frequencies_count", 0)),
+        "stationary_point_status": clean_input.get("stationary_point_status", "MINIMUM"),
+    } if v_modes or clean_input.get("stationary_point_status") else None
+
+    # Structured Charges by method
+    charges_obj = {
+        "mulliken": [{"atom_index": idx, "element": a["element"], "value": float(mulliken_arr[idx]), "unit": "elementary_charge"} for idx, a in enumerate(raw_atoms) if mulliken_arr and idx < len(mulliken_arr) and mulliken_arr[idx] is not None] if mulliken_arr else [],
+        "loewdin": [{"atom_index": idx, "element": a["element"], "value": float(loewdin_arr[idx]), "unit": "elementary_charge"} for idx, a in enumerate(raw_atoms) if loewdin_arr and idx < len(loewdin_arr) and loewdin_arr[idx] is not None] if loewdin_arr else [],
+        "hirshfeld": [{"atom_index": idx, "element": a["element"], "value": float(hirshfeld_arr[idx]), "unit": "elementary_charge"} for idx, a in enumerate(raw_atoms) if hirshfeld_arr and idx < len(hirshfeld_arr) and hirshfeld_arr[idx] is not None] if hirshfeld_arr else [],
+        "mayer": [{"atom_index": idx, "element": a["element"], "charge": float(mayer_arr[idx]) if mayer_arr and idx < len(mayer_arr) and mayer_arr[idx] is not None else None, "valence": float(mayer_val_arr[idx]) if mayer_val_arr and idx < len(mayer_val_arr) and mayer_val_arr[idx] is not None else None} for idx, a in enumerate(raw_atoms) if (mayer_arr and idx < len(mayer_arr)) or (mayer_val_arr and idx < len(mayer_val_arr))] if (mayer_arr or mayer_val_arr) else [],
+    } if (mulliken_arr or loewdin_arr or hirshfeld_arr or mayer_arr or mayer_val_arr) else None
+
+    # Available artifacts
+    available_arts = clean_input.get("available_files") or clean_input.get("source_artifacts") or []
+    if not isinstance(available_arts, list):
+        available_arts = [str(available_arts)]
 
     # Assemble canonical record
     canonical: dict[str, Any] = {
@@ -1368,12 +1745,30 @@ def normalize_with_report(
         "dataset_version": DATASET_VERSION,
         "record_type": record_type,
         "record_id": record_id,
+        "calculation_id": calc_id,
         "content_hash": "0" * 64,
         "split_group_key": split_key,
         "name": record_name,
         "created_at": clean_input.get("created_at") or now_iso,
         "updated_at": now_iso,
         "provenance": prov,
+        "molecule": molecule_obj,
+        "geometry": geometry_obj,
+        "graph": graph_obj,
+        "calculation": calculation_obj,
+        "electronic_properties": electronic_props_obj,
+        "vibrational_properties": vibrational_props_obj,
+        "charges": charges_obj,
+        "quality": data_quality_obj,
+        "duplicate_status": clean_input.get("duplicate_status") or {
+            "is_duplicate": False,
+            "duplicate_type": None,
+            "duplicate_of": None,
+            "distinction_reason": "Primary canonical instance"
+        },
+        "source_artifacts": available_arts,
+        "derived_features": clean_input.get("derived_features"),
+        "targets": clean_input.get("targets"),
         "migration_report": {
             "mapped_fields": sorted(list(set(mapped_fields))),
             "transformed_fields": sorted(list(set(transformed_fields))),

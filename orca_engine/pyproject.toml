@@ -7,7 +7,7 @@ name = "orca-engine"
 version = "1.0.0"
 description = "Streaming parser and thermochemistry engine for ORCA quantum chemistry output files"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = { text = "ORCA Web Lab Academic and Non-Commercial License v1.1" }
 requires-python = ">=3.10"
 keywords = [
     "computational-chemistry",
