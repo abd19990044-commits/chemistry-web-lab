@@ -1,4 +1,4 @@
-# Security Policy: ORCA Web Lab Cloudflare Control Plane
+# Security Policy: Chemistry Lab Cloudflare Control Plane
 
 ## 1. Supported Versions
 

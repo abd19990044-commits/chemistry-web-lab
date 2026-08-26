@@ -1,5 +1,5 @@
 ---
-title: Orca Web Lab & Quantum Engine
+title: Chemistry Lab: Computational Chemistry Platform
 emoji: ⚛️
 colorFrom: blue
 colorTo: indigo
@@ -8,7 +8,7 @@ app_port: 7860
 pinned: false
 ---
 
-# Orca Web Lab & Quantum Chemistry Engine ⚛️🧪
+# Chemistry Lab: Computational Chemistry & Quantum Analysis Suite ⚛️🧪
 ### Production-Grade Quantum Chemistry Web Platform & Interactive ORCA 6 Studio
 
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
@@ -35,7 +35,7 @@ pinned: false
 
 ## 🔬 Executive Overview
 
-**Orca Web Lab** is a production-grade scientific computing and quantum chemistry web platform. It seamlessly unifies modern interactive molecular visualization, chemistry toolsets, automated ORCA 6 input generation, an embedded quantum analysis engine (`orca_engine`), and a self-healing multi-session Kaggle orchestrator (`orca_orchestrator`).
+**Chemistry Lab** is a web-based computational chemistry platform for molecular structure exploration, ORCA quantum-chemistry workflows, scientific result analysis, spectroscopy visualization, thermochemistry, and fault-tolerant execution of long-running computational jobs. It seamlessly unifies modern interactive molecular visualization, chemistry toolsets, automated ORCA 6 input generation, an embedded quantum analysis engine (`orca_engine`), and a self-healing multi-session Kaggle orchestrator (`orca_orchestrator`).
 
 The platform bridges the gap between raw quantum chemistry output files and interactive scientific insights, allowing researchers to explore geometries in WebGL 3D, inspect frontier orbitals, examine conceptual DFT reactivity indices, generate broadened UV-Vis absorption spectra, and evaluate reaction thermochemistry in a single browser window.
 
@@ -45,7 +45,7 @@ The platform bridges the gap between raw quantum chemistry output files and inte
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           ORCA WEB LAB ARCHITECTURE                             │
+│                            CHEMISTRY LAB ARCHITECTURE                           │
 ├────────────────────────┬──────────────────────────┬─────────────────────────────┤
 │   MOLECULAR STUDIO     │    QUANTUM CALCULATOR    │    ORCA RESULTS ANALYZER    │
 │  • 2D Molecule Drawer  │  • ORCA 6 Input Builder  │  • WebGL 3D Molecular View  │
@@ -205,7 +205,7 @@ Open your browser and navigate to: **`http://127.0.0.1:7860`**
 
 ## 🧪 Testing & Quality Assurance
 
-Orca Web Lab includes a comprehensive, 100% automated test suite with full mock harnesses and zero external dependencies:
+Chemistry Lab includes a comprehensive, 100% automated test suite with full mock harnesses and zero external dependencies:
 
 ```bash
 # 1. Run full test suite with detailed reporting
@@ -235,10 +235,10 @@ The repository includes a production-ready `Dockerfile`:
 
 ```bash
 # Build the Docker container
-docker build -t orca-web-lab:latest .
+docker build -t chemistry-lab:latest .
 
 # Run the container on port 7860
-docker run -p 7860:7860 --name orca-web-lab orca-web-lab:latest
+docker run -p 7860:7860 --name chemistry-lab chemistry-lab:latest
 ```
 
 ### Hugging Face Spaces Deployment
@@ -254,7 +254,7 @@ To deploy as a Hugging Face Space:
 ## 📜 License, Commercial Terms & Citation
 
 ### Proprietary Source-Available Software
-ORCA Web Lab is proprietary software owned solely by **Abdulsalam S. Hasan**.
+Chemistry Lab is proprietary software owned solely by **Abdulsalam S. Hasan**.
 
 The software is available free of charge for permitted academic, educational, personal, and other non-commercial uses under the **ORCA Web Lab Academic and Non-Commercial License v1.1**.
 
@@ -288,15 +288,15 @@ For commercial licensing, Enterprise editions, cloud deployment permissions, or 
 
 ### Third-Party Software & ORCA Boundary
 - **Third-Party Components:** External libraries (RDKit, Flask, Cryptography, 3Dmol.js, etc.) remain governed by their respective open-source licenses. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for the complete dependency inventory.
-- **ORCA Notice:** ORCA is a proprietary quantum chemistry package developed by Frank Neese et al. (Max Planck Institute für Kohlenforschung / FACCTs GmbH). ORCA Web Lab is an independent software tool that interfaces with ORCA and does NOT bundle or distribute ORCA binaries. Users must independently obtain an authorized license directly from the official ORCA forum (https://orcaforum.kofo.mpg.de/).
+- **ORCA Notice:** ORCA is a proprietary quantum chemistry package developed by Frank Neese et al. (Max Planck Institute für Kohlenforschung / FACCTs GmbH). Chemistry Lab is an independent software tool that interfaces with ORCA and does NOT bundle or distribute ORCA binaries. Users must independently obtain an authorized license directly from the official ORCA forum (https://orcaforum.kofo.mpg.de/).
 
 ### Citation
-If you use ORCA Web Lab in your academic research, teaching, or computational modeling, please cite:
+If you use Chemistry Lab in your academic research, teaching, or computational modeling, please cite:
 
 ```bibtex
-@software{Hasan2026OrcaWebLab,
+@software{Hasan2026ChemistryLab,
   author  = {Hasan, Abdulsalam S.},
-  title   = {{ORCA Web Lab: An Interactive Web-Based Computational Chemistry and Quantum Analysis Suite}},
+  title   = {{Chemistry Lab: A Web-Based Computational Chemistry Platform}},
   year    = {2026},
   version = {1.0.0},
   url     = {https://github.com/abd19990044-commits/chemistry-web-lab},

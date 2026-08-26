@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Deterministic and Truthful Deployment Package Builder for ORCA Web Lab.
+Deterministic and Truthful Deployment Package Builder for Chemistry Lab.
 
 Builds two distinct, purpose-specific distribution packages:
 1. HuggingFace/  -> Minimal runtime closure for Docker Space deployment.

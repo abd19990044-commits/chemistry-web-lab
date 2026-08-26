@@ -1,4 +1,4 @@
-"""Release Synchronization and Deployment Manager for ORCA Web Lab.
+"""Release Synchronization and Deployment Manager for Chemistry Lab.
 
 Synchronizes:
     Main Project (Authoritative Source of Truth)

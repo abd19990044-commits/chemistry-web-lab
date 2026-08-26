@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Canonical Scientific Data Model Normalization Engine for ORCA Web Lab.
+"""Canonical Scientific Data Model Normalization Engine for Chemistry Lab.
 
 Translates ORCA output parser results, reaction definitions, calculation workflows,
 and legacy editor states into normalized, versioned, machine-readable canonical records.

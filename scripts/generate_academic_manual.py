@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 Comprehensive Academic User Manual & Technical Reference Guide Generator (.docx)
-for ORCA Web Lab & Quantum Chemistry Computational Suite.
+for Chemistry Lab: Computational Chemistry Platform.
 Author: ABDULSALAM S. HASAN (Mosul, Iraq)
-Version: 2.5 (Comprehensive Academic Edition, August 2026)
+Version: 1.0 (Comprehensive Academic Edition, August 2026)
 """
 
 import os
@@ -54,7 +54,7 @@ def create_manual(output_path: str):
         header = section.header
         hp = header.paragraphs[0]
         hp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        hrun = hp.add_run("ORCA Web Lab - Academic User Manual & Technical Reference Guide")
+        hrun = hp.add_run("Chemistry Lab - Academic User Manual & Technical Reference Guide")
         hrun.font.name = "Calibri"
         hrun.font.size = Pt(8.5)
         hrun.font.color.rgb = RGBColor(110, 110, 110)
@@ -63,7 +63,7 @@ def create_manual(output_path: str):
         footer = section.footer
         fp = footer.paragraphs[0]
         fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        frun = fp.add_run("ORCA Web Lab • Developed by ABDULSALAM S. HASAN • Compatible with ORCA 6.1")
+        frun = fp.add_run("Chemistry Lab • Developed by ABDULSALAM S. HASAN • Compatible with ORCA 6.1")
         frun.font.name = "Calibri"
         frun.font.size = Pt(8.5)
         frun.font.color.rgb = RGBColor(110, 110, 110)
@@ -190,7 +190,7 @@ def create_manual(output_path: str):
     title_p = doc.add_paragraph()
     title_p.paragraph_format.space_before = Pt(0)
     title_p.paragraph_format.space_after = Pt(4)
-    title_run = title_p.add_run("ORCA Web Lab & Quantum Chemistry Computational Suite")
+    title_run = title_p.add_run("Chemistry Lab: Computational Chemistry Suite")
     title_run.font.name = "Calibri"
     title_run.font.size = Pt(22)
     title_run.font.bold = True
@@ -225,7 +225,7 @@ def create_manual(output_path: str):
         ("License & Access: ", True, NAVY),
         ("Academic and Non-Commercial Research Suite (ORCA Web Lab License v1.1) • Zero Server Retention Policy\n", False, DARK),
         ("Manual Release: ", True, NAVY),
-        ("Version 2.5 (Comprehensive Academic Edition) | Last Updated: August 2026", False, DARK),
+        ("Version 1.0 (Comprehensive Academic Edition) | Last Updated: August 2026", False, DARK),
     ]
     for text, bold, col in runs_data:
         r = mp.add_run(text)
@@ -241,7 +241,7 @@ def create_manual(output_path: str):
     # ─────────────────────────────────────────────────────────────
     add_heading_1("1. Platform Overview & The Three Unified Studios")
     add_body(
-        "ORCA Web Lab is a full-stack, cloud-orchestrated computational chemistry suite developed to bridge the gap between "
+        "Chemistry Lab is a full-stack, cloud-orchestrated computational chemistry suite developed to bridge the gap between "
         "advanced ab initio quantum chemical software (ORCA 6.1) and intuitive, publication-grade web exploration. The platform "
         "eliminates traditional command-line configuration hurdles while maintaining strict physical rigor, standard spectroscopic "
         "conventions, and reproducible quantum mechanical workflows."
@@ -269,7 +269,7 @@ def create_manual(output_path: str):
         bold_prefix="Studio 3: Quantum Engine & Thermochemistry (Spectroscopy & Scientific Audit):"
     )
     add_callout(
-        "ORCA Web Lab operates under a strict Zero-Retention Privacy Policy. All Kaggle API credentials, inputs, coordinates, and "
+        "Chemistry Lab operates under a strict Zero-Retention Privacy Policy. All Kaggle API credentials, inputs, coordinates, and "
         "computation results remain in transient browser storage (localStorage/sessionStorage). No user data or credentials are "
         "stored or monetized on any server database.",
         title="PRIVACY & EPHEMERAL ARCHITECTURE"
@@ -358,7 +358,7 @@ def create_manual(output_path: str):
     # ─────────────────────────────────────────────────────────────
     add_heading_1("4. Studio 2: Multi-Stage Chained Workflows & Cloud Orchestration")
     add_body(
-        "A flagship capability of ORCA Web Lab is the automated execution of chained multi-step computational workflows "
+        "A flagship capability of Chemistry Lab is the automated execution of chained multi-step computational workflows "
         "across remote Kaggle GPU/CPU instances with full fault tolerance and lossless coordinate inheritance."
     )
 
@@ -379,7 +379,7 @@ def create_manual(output_path: str):
         "If Stage 4 attempts to extract coordinates from Stage 3 (Freq), the job chain would fail."
     )
     add_body(
-        "ORCA Web Lab implements the Latest-OPT Stage Inheritance Algorithm (getWorkflowOptimizedCoords):",
+        "Chemistry Lab implements the Latest-OPT Stage Inheritance Algorithm (getWorkflowOptimizedCoords):",
         bold_prefix="Algorithmic Solution: "
     )
     add_bullet("When Stage N is promoted from the waiting dependency queue, the system inspects all predecessor stages (Stage N-1 down to Stage 1).")
@@ -390,7 +390,7 @@ def create_manual(output_path: str):
     add_heading_2("4.3 Lossless Full Decimal Precision Preservation (10+ Decimals)")
     add_body(
         "Standard web tools round coordinates to 6 decimal places (`12.6f`), causing artificial structural strain and gradient spikes "
-        "in subsequent high-level coupled-cluster or tight SCF runs. ORCA Web Lab eliminates all coordinate truncation: Cartesian tokens "
+        "in subsequent high-level coupled-cluster or tight SCF runs. Chemistry Lab eliminates all coordinate truncation: Cartesian tokens "
         "are extracted verbatim from ORCA logs and `.xyz` files with 10 to 14 decimal places (e.g., `0.117289123456 Å`), preserving "
         "complete quantum geometric fidelity across the entire chain."
     )
@@ -488,18 +488,18 @@ def create_manual(output_path: str):
     # ─────────────────────────────────────────────────────────────
     add_heading_1("7. Academic Citation Guide & Scientific Attribution")
     add_body(
-        "When publishing research, articles, or computational datasets obtained using ORCA Web Lab, "
+        "When publishing research, articles, or computational datasets obtained using Chemistry Lab, "
         "please include the following academic citations for the platform and the underlying software packages:"
     )
 
-    add_heading_2("7.1 How to Cite ORCA Web Lab")
+    add_heading_2("7.1 How to Cite Chemistry Lab")
     add_body("BibTeX Entry:", bold_prefix="1. ")
     add_code_box(
-        "@software{Hasan2026OrcaWebLab,\n"
+        "@software{Hasan2026ChemistryLab,\n"
         "  author       = {Hasan, Abdulsalam S.},\n"
-        "  title        = {{ORCA Web Lab: An Interactive Web-Based Computational Chemistry and Quantum Analysis Suite}},\n"
+        "  title        = {{Chemistry Lab: A Web-Based Computational Chemistry Platform}},\n"
         "  year         = {2026},\n"
-        "  version      = {2.5},\n"
+        "  version      = {1.0.0},\n"
         "  url          = {https://github.com/abd19990044-commits/chemistry-web-lab},\n"
         "  note         = {Compatible with ORCA 6.1 program system}\n"
         "}"
@@ -507,13 +507,13 @@ def create_manual(output_path: str):
 
     add_body("ACS / Vancouver Chemistry Format:", bold_prefix="2. ")
     add_body(
-        "Hasan, A. S. ORCA Web Lab, version 2.5; Advanced Quantum Chemical Modeling & Spectroscopic Analysis Platform, 2026. https://github.com/abd19990044-commits/chemistry-web-lab",
+        "Hasan, A. S. Chemistry Lab, version 1.0.0; Advanced Computational Chemistry & Spectroscopic Analysis Platform, 2026. https://github.com/abd19990044-commits/chemistry-web-lab",
         space_after=8
     )
 
     add_body("APA 7th Edition Format:", bold_prefix="3. ")
     add_body(
-        "Hasan, A. S. (2026). ORCA Web Lab: An Interactive Web-Based Computational Chemistry Suite (Version 2.5) [Computer software]. Retrieved from https://github.com/abd19990044-commits/chemistry-web-lab",
+        "Hasan, A. S. (2026). Chemistry Lab: A Web-Based Computational Chemistry Platform (Version 1.0.0) [Computer software]. Retrieved from https://github.com/abd19990044-commits/chemistry-web-lab",
         space_after=8
     )
 

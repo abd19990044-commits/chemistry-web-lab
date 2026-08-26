@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Release and Package Provenance Verifier for ORCA Web Lab.
+Release and Package Provenance Verifier for Chemistry Lab.
 
 Performs deterministic, multi-layer verification:
 1. Python runtime environment (3.11, 3.12, 3.13)

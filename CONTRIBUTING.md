@@ -1,14 +1,14 @@
-# Contributing to ORCA Web Lab
+# Contributing to Chemistry Lab
 
-Thank you for your interest in ORCA Web Lab.
+Thank you for your interest in Chemistry Lab.
 
 ---
 
 ## 1. Ownership & Intellectual Property Policy
 
-ORCA Web Lab is proprietary software authored and owned solely by **Abdulsalam S. Hasan**.
+Chemistry Lab is proprietary software authored and owned solely by **Abdulsalam S. Hasan**.
 
-- **Current Ownership State:** The repository currently has a single rights holder. There are no external contributors, co-owners, employees, contractors, or third-party developers who hold proprietary intellectual property rights in the ORCA Web Lab codebase.
+- **Current Ownership State:** The repository currently has a single rights holder. There are no external contributors, co-owners, employees, contractors, or third-party developers who hold proprietary intellectual property rights in the Chemistry Lab codebase.
 - **Future External Contributions:** If external code contributions, pull requests, or feature enhancements are considered for integration into official releases in the future, contributors will be required to execute an appropriate Contributor License Agreement (CLA) or intellectual property assignment agreement as established by the rights holder prior to merging. This policy ensures clean chain of title and long-term legal sustainability.
 
 ---
@@ -17,7 +17,7 @@ ORCA Web Lab is proprietary software authored and owned solely by **Abdulsalam S
 
 You are welcome to inspect, study, fork, and locally modify the code for permitted academic, educational, and personal non-commercial research under the terms of the **ORCA Web Lab Academic and Non-Commercial License v1.1** (see `LICENSE`).
 
-If you publish scholarly work based on your modifications or computational workflows using this platform, please cite ORCA Web Lab as described in `README.md`.
+If you publish scholarly work based on your modifications or computational workflows using this platform, please cite Chemistry Lab as described in `README.md`.
 
 ---
 

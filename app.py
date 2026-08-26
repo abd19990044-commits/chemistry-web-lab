@@ -298,10 +298,11 @@ def download_academic_manual():
         )
 @app.route("/api/license")
 def api_license():
-    """Returns license metadata and permissions summary for ORCA Web Lab."""
+    """Returns license metadata and permissions summary for Chemistry Lab."""
     return jsonify({
         "ok": True,
-        "application": "orca-web-lab",
+        "product_name": "Chemistry Lab",
+        "application": "chemistry-lab",
         "version": "1.0.0",
         "license_name": "ORCA Web Lab Academic and Non-Commercial License v1.1",
         "license_type": "Source-Available Academic & Non-Commercial",
@@ -338,7 +339,7 @@ def api_third_party_licenses():
             "authors": "Frank Neese et al. (Max Planck Institute für Kohlenforschung / FACCTs GmbH)",
             "bundled": False,
             "license_type": "Proprietary Academic EULA / Commercial via FACCTs GmbH",
-            "notice": "ORCA is NOT bundled or distributed with ORCA Web Lab. Users must obtain their own license directly from the official ORCA forum.",
+            "notice": "ORCA is NOT bundled or distributed with Chemistry Lab. Users must obtain their own license directly from the official ORCA forum.",
         },
         "python_dependencies": [
             {"name": "Flask", "license": "BSD-3-Clause", "url": "https://github.com/pallets/flask"},

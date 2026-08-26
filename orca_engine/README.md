@@ -207,7 +207,7 @@ If this software contributes to work you publish, please cite it. See
 
 ## License
 
-The proprietary source code of `orca_engine` is part of the ORCA Web Lab suite and is governed by the [ORCA Web Lab Academic and Non-Commercial License v1.1](LICENSE).
+The proprietary source code of `orca_engine` is part of the Chemistry Lab suite and is governed by the [ORCA Web Lab Academic and Non-Commercial License v1.1](LICENSE).
 
 Copyright (c) 2026 Abdulsalam S. Hasan. All rights reserved.
 

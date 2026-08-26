@@ -1,5 +1,5 @@
 /**
- * ORCA Web Lab - Client-Side Archive & File Processing Web Worker
+ * Chemistry Lab - Client-Side Archive & File Processing Web Worker
  * ===============================================================
  * Offloads archive extraction (ZIP, TAR, GZ), SHA-256 hashing, and
  * 6-tier file classification from the main UI thread to prevent UI freezes.

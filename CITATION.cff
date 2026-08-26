@@ -1,9 +1,9 @@
 cff-version: 1.2.0
-title: "ORCA Web Lab: Fault-Tolerant Web Orchestration & Quantum Chemistry Platform"
+title: "Chemistry Lab: A Web-Based Computational Chemistry Platform"
 type: software
 version: 1.0.0
 date-released: 2026-08-25
-message: "If you use ORCA Web Lab in research, please cite the software and the associated scientific documentation."
+message: "If you use Chemistry Lab in research, please cite the software and the associated scientific documentation."
 authors:
   - family-names: Hasan
     given-names: Abdulsalam S.

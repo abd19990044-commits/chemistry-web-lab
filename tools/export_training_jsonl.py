@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Deterministic Machine-Learning Dataset JSONL Exporter for ORCA Web Lab.
+"""Deterministic Machine-Learning Dataset JSONL Exporter for Chemistry Lab.
 
 Enforces strict input/target separation, fail-closed target leakage protection
 (covering numeric, string, categorical, and nested structures), molecular grouping

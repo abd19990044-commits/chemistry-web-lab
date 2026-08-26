@@ -1,7 +1,7 @@
 {
   "name": "orca-cloudflare-control-plane",
   "version": "1.0.0",
-  "description": "ORCA Web Lab Cloudflare Control Plane (Workers + D1)",
+  "description": "Chemistry Lab Cloudflare Control Plane (Workers + D1)",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
@@ -17,7 +17,7 @@
     "d1",
     "control-plane"
   ],
-  "author": "ORCA Web Lab Team",
+  "author": "Chemistry Lab Team",
   "license": "SEE LICENSE IN LICENSE",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240903.0",

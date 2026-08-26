@@ -1,4 +1,4 @@
-# Security Policy: ORCA Web Lab
+# Security Policy: Chemistry Lab
 
 ## 1. Supported Versions
 
@@ -13,7 +13,7 @@ Security updates and critical patches are actively provided for the following re
 
 ## 2. Reporting a Vulnerability
 
-If you discover a security vulnerability within ORCA Web Lab, please report it privately:
+If you discover a security vulnerability within Chemistry Lab, please report it privately:
 
 - **Security Disclosure Email:** `abd.19990044@gmail.com` (or repository security advisory)
 - **Response SLA:** Initial acknowledgment within 24 hours; severity assessment and fix timeline within 72 hours.
@@ -47,7 +47,7 @@ If you discover a security vulnerability within ORCA Web Lab, please report it p
 - **Zero Plaintext Persistence in Cloudflare:** Cloudflare D1 stores only high-entropy ciphertext, 12-byte random IVs (nonces), and 16-byte AEAD authentication tags. Plaintext Kaggle credentials never touch Cloudflare storage or Cloudflare logs.
 - **Fail-Closed Master Key:** The encryption key is a 256-bit (32-byte) secret passed via the environment variable `KAGGLE_CREDENTIALS_ENCRYPTION_KEY`. The Cloudflare Worker never possesses this master key and cannot decrypt stored records.
 - **Owner-Bound Associated Authenticated Data (AAD):** Encryption binds the user's canonical owner ID into the AEAD authenticated payload (`owner:<owner_id>`). Any cross-tenant substitution, record swapping, or tampering triggers immediate cryptographic authentication tag verification failure (`InvalidTag`).
-- **Memory-Only In-Process Decryption:** Decryption occurs strictly in process RAM on Hugging Face / ORCA Web Lab backend. When a Space sleeps or restarts, credentials are reconstituted in memory on demand for background reconciliation and watchdog sweeps.
+- **Memory-Only In-Process Decryption:** Decryption occurs strictly in process RAM on Hugging Face / Chemistry Lab backend. When a Space sleeps or restarts, credentials are reconstituted in memory on demand for background reconciliation and watchdog sweeps.
 - **Strict Multi-Tenant Isolation:** When User B visits or wakes a shared Space, background recovery processes User A's stalled jobs without exposing User A's credentials, tokens, or job outputs to User B's session or browser.
 
 ---

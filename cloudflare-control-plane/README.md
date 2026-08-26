@@ -1,6 +1,6 @@
-# ORCA Web Lab - Cloudflare Persistent Control Plane
+# Chemistry Lab - Cloudflare Persistent Control Plane
 
-A high-availability, serverless metadata and control plane for **ORCA Web Lab** built on **Cloudflare Workers** and **Cloudflare D1**.
+A high-availability, serverless metadata and control plane for **Chemistry Lab** built on **Cloudflare Workers** and **Cloudflare D1**.
 
 ---
 
@@ -8,7 +8,7 @@ A high-availability, serverless metadata and control plane for **ORCA Web Lab** 
 
 ```text
                   Hugging Face Space
-                  (ORCA Web Lab App)
+                  (Chemistry Lab App)
                          │
                          │ HTTPS (REST API)
                          │ Headers:
@@ -153,7 +153,7 @@ npx wrangler deploy
 
 ---
 
-## 5. Configuring ORCA Web Lab (Python Application)
+## 5. Configuring Chemistry Lab (Python Application)
 
 In your Hugging Face Space settings or local `.env`:
 
