@@ -19,7 +19,10 @@ import time
 from pathlib import Path
 import pytest
 
-MIGRATIONS_DIR = Path("g:/orca web lab/cloudflare-control-plane/migrations")
+# Resolve repository root dynamically so the suite runs on Windows, Linux,
+# macOS, and GitHub Actions without machine-specific absolute paths.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+MIGRATIONS_DIR = REPO_ROOT / "cloudflare-control-plane" / "migrations"
 
 
 def get_fresh_db() -> sqlite3.Connection:
