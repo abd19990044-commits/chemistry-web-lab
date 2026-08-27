@@ -2086,16 +2086,44 @@ if needs_continue and restart_kind == "scf":
 
 
 # ── 7. Result packaging (curated + budgeted, never fatal) ─────────────────
-# Generate Molden representation via orca_2mkl if GBW wavefunction exists
+# Molden artifact: run orca_2mkl over the final GBW and record an honest
+# status in JOB_NOTE.txt. The old code never checked the exit code, never
+# verified that an output file appeared, and silently skipped generation
+# when ANY *.molden* file existed - so a failed conversion was announced as
+# "generated" and a stale file could stand in for this run's orbitals.
+_molden_status, _molden_detail = "MOLDEN_UNAVAILABLE", ""
 try:
     _gbw_cand = _wp(BASENAME + ".gbw")
-    if os.path.isfile(_gbw_cand) and not glob.glob(_wp("*.molden*")):
+    if not os.path.isfile(_gbw_cand):
+        _molden_status, _molden_detail = "MOLDEN_UNAVAILABLE", "no .gbw wavefunction was produced by this window"
+    else:
         _orca_2mkl = shutil.which("orca_2mkl") or (os.path.join(orca_dir, "orca_2mkl") if "orca_dir" in locals() and os.path.isfile(os.path.join(orca_dir, "orca_2mkl")) else None)
-        if _orca_2mkl:
-            subprocess.run([_orca_2mkl, BASENAME, "-molden"], cwd=WORKDIR, capture_output=True, timeout=90)
-            log("[orca-molden] Generated Molden file via orca_2mkl")
-except Exception:
-    pass
+        if not _orca_2mkl:
+            _molden_status, _molden_detail = "MOLDEN_UNAVAILABLE", "orca_2mkl was not found in the ORCA package or PATH"
+        else:
+            _t0 = time.time()
+            try:
+                _proc = subprocess.run([_orca_2mkl, BASENAME, "-molden"], cwd=WORKDIR,
+                                       capture_output=True, text=True, timeout=90)
+                _outs = sorted(glob.glob(_wp(BASENAME + ".molden.input")) + glob.glob(_wp(BASENAME + ".molden")))
+                _fresh = [p for p in _outs if os.path.getsize(p) > 0 and os.path.getmtime(p) >= _t0 - 1]
+                if _proc.returncode != 0:
+                    for _p in _fresh:
+                        try: os.remove(_p)
+                        except OSError: pass
+                    _tail = ((_proc.stderr or _proc.stdout or "").strip().splitlines() or [""])[-1]
+                    _molden_status, _molden_detail = "MOLDEN_FAILED", "orca_2mkl exited %d: %s" % (_proc.returncode, _tail[:160])
+                elif not _fresh:
+                    _molden_status, _molden_detail = "MOLDEN_FAILED", "orca_2mkl exited 0 but produced no fresh Molden file"
+                else:
+                    _molden_status, _molden_detail = "MOLDEN_GENERATED", os.path.basename(_fresh[0])
+            except subprocess.TimeoutExpired:
+                _molden_status, _molden_detail = "MOLDEN_FAILED", "orca_2mkl timed out after 90s"
+            except OSError as _exc:
+                _molden_status, _molden_detail = "MOLDEN_FAILED", "could not launch orca_2mkl: %s" % _exc
+except Exception as _exc:
+    _molden_status, _molden_detail = "MOLDEN_FAILED", "unexpected: %s" % _exc
+log("[orca-molden] %s%s" % (_molden_status, (": " + _molden_detail) if _molden_detail else ""))
 
 # Scratch files ORCA can regenerate but which are routinely GB-sized. They are
 # removed only AFTER the restart checkpoints have been captured, both to free
@@ -2222,8 +2250,9 @@ def _package_results(note=""):
                 "Files in results.zip (%d, %s total):\n%s%s"
                 % (included, _gb(total), "\n".join(manifest),
                    ("\n\nLeft out:\n" + "\n".join(skipped)) if skipped else ""))
-    if note:
-        _write_text(os.path.join(OUTPUT_DIR, "JOB_NOTE.txt"), note)
+    _molden_note = "Molden artifact: %s%s." % (_molden_status, (": " + _molden_detail) if _molden_detail else "")
+    _write_text(os.path.join(OUTPUT_DIR, "JOB_NOTE.txt"),
+                (note + "\n\n" + _molden_note) if note else _molden_note)
     if zip_path and os.path.exists(zip_path):
         log("[results] Packaged %d file(s) into %s (%s on disk)."
             % (included, zip_path, _gb(os.path.getsize(zip_path))))

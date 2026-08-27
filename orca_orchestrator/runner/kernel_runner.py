@@ -1521,17 +1521,81 @@ def purge_scratch():
     return freed
 
 
-def package_results(note=""):
-    try:
-        gbw_cand = wp(BASENAME + ".gbw")
-        if os.path.isfile(gbw_cand) and not glob.glob(wp("*.molden*")):
-            orca_2mkl_exe = shutil.which("orca_2mkl") or (os.path.join(orca_dir, "orca_2mkl") if "orca_dir" in globals() and os.path.isfile(os.path.join(orca_dir, "orca_2mkl")) else None)
-            if orca_2mkl_exe:
-                subprocess.run([orca_2mkl_exe, BASENAME, "-molden"], cwd=WORKDIR, capture_output=True, timeout=90)
-                emit("molden_generated", "generated Molden file from GBW")
-    except Exception:
-        pass
+def generate_molden_artifact(started=None):
+    """Converts this window's final GBW to Molden via `orca_2mkl -molden` and
+    verifies the artifact.
 
+    Status contract (surfaced in the run log and JOB_NOTE.txt):
+      MOLDEN_GENERATED   orca_2mkl exited 0 AND a fresh, non-empty
+                         <base>.molden.input / <base>.molden exists that was
+                         written by THIS invocation
+      MOLDEN_UNAVAILABLE no .gbw was produced (normal for jobs without a
+                         wavefunction) or no orca_2mkl executable exists
+      MOLDEN_FAILED      orca_2mkl ran but exited non-zero, timed out, or
+                         produced no fresh output; partial outputs from the
+                         failed attempt are removed so a stale or partial
+                         file can never masquerade as this run's orbitals
+
+    Regeneration is deliberate: the previous behaviour SKIPPED orca_2mkl
+    whenever any *.molden* file existed, which could archive a stale artifact
+    in place of the current calculation's orbitals.
+    """
+    gbw = wp(BASENAME + ".gbw")
+    if not os.path.isfile(gbw):
+        return {"status": "MOLDEN_UNAVAILABLE",
+                "detail": "no .gbw wavefunction was produced by this window"}
+    if started is None:
+        started = time.time()
+
+    exe = shutil.which("orca_2mkl")
+    orca_dir = globals().get("orca_dir")
+    if not exe and orca_dir and os.path.isfile(os.path.join(orca_dir, "orca_2mkl")):
+        exe = os.path.join(orca_dir, "orca_2mkl")
+    if not exe:
+        return {"status": "MOLDEN_UNAVAILABLE",
+                "detail": "orca_2mkl was not found in the ORCA package or PATH"}
+
+    try:
+        proc = subprocess.run([exe, BASENAME, "-molden"], cwd=WORKDIR,
+                              capture_output=True, text=True, timeout=90)
+    except subprocess.TimeoutExpired:
+        return {"status": "MOLDEN_FAILED",
+                "detail": "orca_2mkl timed out after 90s"}
+    except OSError as exc:
+        return {"status": "MOLDEN_FAILED", "detail": "could not launch orca_2mkl: %s" % exc}
+
+    outputs = sorted(glob.glob(wp(BASENAME + ".molden.input"))
+                     + glob.glob(wp(BASENAME + ".molden")))
+    fresh = [p for p in outputs
+             if os.path.getsize(p) > 0 and os.path.getmtime(p) >= started - 1]
+    if proc.returncode != 0:
+        for p in fresh:                      # a failed run's partial output
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+        tail = ((proc.stderr or proc.stdout or "").strip().splitlines() or [""])[-1]
+        return {"status": "MOLDEN_FAILED",
+                "detail": "orca_2mkl exited %d: %s" % (proc.returncode, tail[:160])}
+    if not fresh:
+        return {"status": "MOLDEN_FAILED",
+                "detail": "orca_2mkl exited 0 but produced no fresh Molden file"}
+    name = os.path.basename(fresh[0])
+    return {"status": "MOLDEN_GENERATED",
+            "detail": "%s (%s)" % (name, art.DiskAccountant.human(os.path.getsize(fresh[0])))}
+
+
+def package_results(note=""):
+    # Molden artifact: run orca_2mkl over the final GBW and record an honest
+    # status. The result is reported in the run log AND appended to JOB_NOTE
+    # so an unavailable/failed orbital artifact is never silently presented
+    # as this calculation's output.
+    molden = generate_molden_artifact()
+    emit("molden_artifact", "Molden artifact status: %s" % molden["status"],
+         **molden)
+    if molden["status"] != "MOLDEN_GENERATED":
+        molden_note = "Molden artifact: %s (%s)." % (molden["status"], molden["detail"])
+        note = (note + "\n\n" + molden_note) if note else molden_note
     keep = (BASENAME + ".out", "*.inp", BASENAME + ".property.txt", BASENAME + ".xyz",
             BASENAME + "_trj.xyz", "*.allxyz", "*.hess", "*.engrad",
             BASENAME + ".[0-9][0-9][0-9].xyz", BASENAME + ".res.*",

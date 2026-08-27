@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-08-27T20:28:31Z
+# Generated: 2026-08-27T21:45:50Z
 # Package Mode: RELEASE_FROM_COMMIT
 # Source State: clean_commit
-# Source Git SHA: 90a2353983a040519acbb351ba028abb01059ba5
-# Package Tree Hash: f2d99a1bd08ee333949d2d2a426a190d4796d2e9a4b99c9cabbd6be6e4c8cbb6
-# Total Files: 305
-# Total Size: 30,601,579 bytes (29.18 MB)
+# Source Git SHA: a0ec4bd0f397121683877129653df32f0cbc2fee
+# Package Tree Hash: a743c255703ce6e8b3617c032f092641c6f7376aca8bd8482de6a297188b8e2d
+# Total Files: 306
+# Total Size: 30,612,316 bytes (29.19 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -57,7 +57,7 @@ DEPLOY.md                                          |      9,495 B | d58aa1bed817
 Dockerfile                                         |      1,426 B | 9a5808b6a195f52988d4c2ac06b4b73761a032f124a58756a8cb088366cfa2e1
 docs/SCIENTIFIC_JSON_SCHEMA.md                     |     20,598 B | 3a5efcca4e91af8f364de87ac0ff635146d25f6715ad1b32c0d3a28bceaab2d6
 kaggle_runner/__init__.py                          |      1,347 B | 73d30fc6625d564f90a6698b681178df4c4f8a389e7ea1507994c8be03f0de3a
-kaggle_runner.py                                   |    179,779 B | b03f0bb35d480d65e82b52686a7f44d45e80b2f292e7aa3688119b77edcb59d8
+kaggle_runner.py                                   |    181,923 B | 6b93e7310513f5c8f3d6fca3c1b4b530d7ac26671a369a25603b69d35eefe62c
 LICENSE                                            |     21,091 B | 5be6f2b9d34c8d3d2ca7d26e91013abe150c6070ed5ec976dd95745c444d268e
 LICENSE.txt                                        |     21,091 B | 5be6f2b9d34c8d3d2ca7d26e91013abe150c6070ed5ec976dd95745c444d268e
 orca_engine/.github/workflows/ci.yml               |      2,261 B | 95001c5859975b25297ba894df9ea49201aded1a0be4d5b0dbe898f4b98f052e
@@ -210,7 +210,7 @@ orca_orchestrator/result_store.py                  |     14,393 B | b2352f873473
 orca_orchestrator/retry.py                         |      9,398 B | a3ab5fe3d6ec0288241d2236dc973182d6000060067b749c6b643a926b79e684
 orca_orchestrator/runner/__init__.py               |        238 B | e763d5e1898ef64f5ed165537a16d0d9fccbc7b406e4c6bb74a99e0771c05d00
 orca_orchestrator/runner/builder.py                |     11,195 B | 7094782ca5d8d52c01fc6cb31c58c44c21d95a84c2dcbe171e25601edb684f8c
-orca_orchestrator/runner/kernel_runner.py          |     95,097 B | 8fcc5ad7a049b36aab6a0bad17870d34ff3440d8c56e1721d76f8f2c85812d5e
+orca_orchestrator/runner/kernel_runner.py          |     98,191 B | b33bd440bec51b109668f58fa510654c363c351204ec868098146b6d0f48107c
 orca_orchestrator/service.py                       |     40,468 B | 058da4e96a5fd9d8460eec849bf5696cddb960a3a6011ae655f43ae4d0f1ca68
 orca_orchestrator/states.py                        |     16,978 B | b417081bf71b16a4c58041ceba8cff51522329efb2f70e9ff1ebc657716ec528
 orca_orchestrator/store.py                         |     30,969 B | a45deacef9733bcdbd63467abb11d4cd3bed4e3112a55ff85dc9764dc78fc96d
@@ -282,6 +282,7 @@ tests/test_kaggle_dataset_normalization.py         |      3,836 B | bd367eefd956
 tests/test_licensing.py                            |     13,999 B | 7388cd0d326289d85619757e234a4a016af1411b463dd59e179307711cbb0562
 tests/test_licensing_compliance.py                 |      7,884 B | 74698183b03a43a4ae37c6dfbe69ec1d2ccd12b04d959480d678601086d3cb73
 tests/test_lifecycle_simulation.py                 |     18,558 B | 7d77a9d7542f25bf1723db50e108f910183fe2b380c5f1c287150101ded88ea5
+tests/test_molden_artifact.py                      |      5,499 B | c389dc021761cbd5888aa243f0981460c93c287b57f7bfeb93cf994ae1984caa
 tests/test_navigation_routes.py                    |      2,936 B | 6b3ccfd45a8339f7bb7fbf0fd888d9789b3252d9f5e632ce30606a520bbc8641
 tests/test_nmr_api.py                              |      4,572 B | e6cb967937e04db1ff99e9d1979f89eb750365bc72a3bf962e5a504a1d2e31bf
 tests/test_nmr_golden.py                           |      6,758 B | f843c3186e8499b844dcdaad5cf001674b2c4f4f442bd9ff75f0c59b9482fa7f
