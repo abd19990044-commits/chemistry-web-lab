@@ -1,6 +1,5 @@
 ---
 title: Chemistry Lab: Computational Chemistry Platform
-DOI:[(https://zenodo.org/badge/DOI/10.5281/zenodo.22119038.svg)](https://doi.org/10.5281/zenodo.22119038)
 emoji: ⚛️
 colorFrom: blue
 colorTo: indigo

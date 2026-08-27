@@ -156,10 +156,28 @@ def tail(text: str, lines: int = 25) -> str:
 # ---------------------------------------------------------------------------
 # Job kind
 # ---------------------------------------------------------------------------
+def _mask_comments(text: str) -> str:
+    """Blanks `#`-comment text while PRESERVING every character position.
+
+    ORCA treats `#` as end-of-line comment. Classification and block parsing
+    must read the keyword line and the block headers, never prose -- a comment
+    reading `# scan of the Fe complex` used to classify a finished single
+    point as a scan and send it down the continuation path over and over.
+    Masking (instead of deleting) keeps every index valid in the original
+    string, so spans found here can slice the unmodified text."""
+    return re.sub(r"(?m)#.*$", lambda m: " " * len(m.group(0)), text or "")
+
+
 def detect_job_kind(input_text: str) -> str:
     """Classifies an ORCA input. Determines what "finished" means, and whether
-    the job leaves a text checkpoint that can be resumed at all."""
-    low = _normalize(input_text)
+    the job leaves a text checkpoint that can be resumed at all.
+
+    Comment text is masked before matching: only what ORCA itself parses (the
+    `!` keyword line and the `%block` headers) may decide the job kind. A
+    misclassification here is not cosmetic -- classify_outcome() uses the kind
+    to decide what "complete" means, and the continuation logic uses it to
+    decide whether another pass can make progress."""
+    low = _normalize(_mask_comments(input_text))
     has_opt = bool(re.search(r"(?<![a-z])opt(ts|h)?(?![a-z])", low)) or "%geom" in low
     has_freq = bool(re.search(r"(?<![a-z])(num)?freq(?![a-z])", low)) or "%freq" in low
     # Order matters: the more specific driver wins. A NEB input also contains
@@ -772,15 +790,30 @@ def ensure_simple_keyword(text: str, keyword: str) -> str:
     return "! " + keyword + "\n" + (text or "")
 
 
-def set_geometry(text: str, xyz_name: str, charge: str, mult: str) -> str:
+def place_geometry(text: str, xyz_name: str, charge: str, mult: str) -> tuple[str, bool]:
+    """Points the input at `xyz_name` as its geometry; reports placement.
+
+    The `placed` flag is the whole point: a substitution that quietly does
+    nothing is worse than an error. Internal-coordinate blocks (`* gzmt`,
+    `* int`) are deliberately NOT matched, and a caller that ignores `placed`
+    will continue the job from the ORIGINAL geometry while believing it
+    resumed -- re-running the same calculation forever. Callers must treat
+    placed=False as a refusal to continue."""
     replacement = f"* xyzfile {charge} {mult} {xyz_name}"
     new, n = re.subn(r"\*\s*xyz\s+-?\d+\s+-?\d+.*?\*", lambda _m: replacement,
                      text or "", flags=re.IGNORECASE | re.DOTALL)
     if n:
-        return new
+        return new, True
     new, n = re.subn(r"\*\s*xyzfile\s+-?\d+\s+-?\d+\s+\S+", lambda _m: replacement,
                      text or "", flags=re.IGNORECASE)
-    return new if n else text
+    return (new, True) if n else (text, False)
+
+
+def set_geometry(text: str, xyz_name: str, charge: str, mult: str) -> str:
+    """Compatibility wrapper: place_geometry() without the placement flag.
+    New code should call place_geometry() and refuse to continue when the
+    geometry was not placed."""
+    return place_geometry(text, xyz_name, charge, mult)[0]
 
 
 def strip_moread(text: str) -> str:
@@ -791,6 +824,47 @@ def strip_moread(text: str) -> str:
     return text
 
 
+# Sub-block openers that must be balanced when locating a block's true `end`.
+# Mirrors ORCA's documented nesting keywords: a regex that stops at the first
+# `end` truncates `%geom Constraints ... end ... end` at the inner `end`.
+_NEST_TOKEN_RE = re.compile(
+    r"(?i)\b(end|constraints|scan|potentials|connect|"
+    r"modifyinternal|invertconstraints|frozenatoms)\b")
+
+
+def find_block_span(text: str, name: str):
+    """Locates `%name ... end` honouring nesting. Returns
+    (start, body_start, body_end) indices into `text`, or None.
+
+    Comment text is masked, not removed, so the indices are valid in the
+    ORIGINAL string. A nested sub-block's keys are not this block's keys."""
+    masked = _mask_comments(text or "")
+    m = re.search(r"(?im)^[ \t]*%\s*" + name + r"\b", masked)
+    if not m:
+        return None
+    depth = 1
+    for tm in _NEST_TOKEN_RE.finditer(masked, m.end()):
+        if tm.group(1).lower() == "end":
+            depth -= 1
+            if depth == 0:
+                return m.start(), m.end(), tm.start()
+        else:
+            depth += 1
+    return None
+
+
+def _mask_nested_blocks(body: str) -> str:
+    """Same-length copy of `body` with every nested sub-block blanked, so a
+    key search can only match at the block's own depth."""
+    masked = list(body)
+    for m in re.finditer(
+            r"(?is)\b(constraints|scan|potentials|connect|modifyinternal|"
+            r"invertconstraints|frozenatoms)\b.*?\bend\b", body):
+        for i in range(*m.span()):
+            masked[i] = " "
+    return "".join(masked)
+
+
 def set_geom_maxiter(text: str, maxiter: int) -> str:
     """Guarantees each window gets a full optimisation budget.
 
@@ -799,14 +873,25 @@ def set_geom_maxiter(text: str, maxiter: int) -> str:
     make one window's worth of progress and then stall in exactly the same
     place -- forever. The cumulative-cycle budget in config.py, not this value,
     is what eventually stops a genuinely non-converging system.
-    """
+
+    The rewrite is scoped to the %geom block's OWN depth: a global
+    `maxiter` match used to rewrite `%scf MaxIter 500` to the geometry budget
+    while never touching %geom at all -- silently changing the SCF convergence
+    path AND leaving the optimiser with ORCA's default."""
     text = text or ""
-    if re.search(r"(?is)%\s*geom\b.*?\bend\b", text):
-        if re.search(r"(?i)\bmaxiter\b", text):
-            return re.sub(r"(?i)(\bmaxiter\s+)(\d+)", lambda m: m.group(1) + str(maxiter), text)
-        return re.sub(r"(?i)(%\s*geom\b)", lambda m: m.group(0) + f"\n  MaxIter {maxiter}",
-                      text, count=1)
-    return text.rstrip() + f"\n%geom\n  MaxIter {maxiter}\nend\n"
+    span = find_block_span(text, "geom")
+    if not span:
+        return text.rstrip() + "\n%%geom\n  MaxIter %d\nend\n" % int(maxiter)
+    start, body_start, body_end = span
+    body = text[body_start:body_end]
+    own_depth = _mask_nested_blocks(body)
+    km = re.search(r"(?i)\bmaxiter\s+\d+", own_depth)
+    if km:
+        s, e = km.span()
+        body = body[:s] + "MaxIter %d" % int(maxiter) + body[e:]
+    else:
+        body = "\n  MaxIter %d\n" % int(maxiter) + body.lstrip("\n")
+    return text[:body_start] + body + text[body_end:]
 
 
 def requested_nprocs(text: str) -> int:

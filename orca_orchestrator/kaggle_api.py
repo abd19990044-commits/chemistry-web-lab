@@ -40,7 +40,8 @@ from typing import Sequence
 
 from .config import CONFIG
 from .credentials import KaggleCredentials, kaggle_environment
-from .errors import (NotFoundError, OrchestratorError, TimeoutError_, ValidationError)
+from .errors import (NotFoundError, OrchestratorError, TimeoutError_, TransientError,
+                     ValidationError)
 from .logging_ext import get_logger, log_event, redact
 from .retry import RetryPolicy, classify_subprocess_failure
 
@@ -280,7 +281,46 @@ class KaggleClient:
                 raise classify_subprocess_failure(1, combined)
             return combined
 
-        combined = self.retry.call("kaggle kernels push", attempt, slug=expected_slug)
+        # A kernel push is NOT idempotent across replays: a CLI that dies
+        # reading the response AFTER Kaggle accepted the version leaves the
+        # push landed, and a blind retry saves a SECOND version, which Kaggle
+        # then executes as another run of this window. Verification therefore
+        # sits BETWEEN attempts: only a probe that finds no active kernel at
+        # the deterministic slug permits the next push.
+        combined = None
+        started = time.monotonic()
+        for number in range(1, self.retry.max_attempts + 1):
+            try:
+                combined = attempt(number)
+                break
+            except TransientError as exc:
+                try:
+                    existing = self.kernel_exists(expected_slug)
+                except OrchestratorError:
+                    existing = None
+                if existing is not None and existing.is_active:
+                    log_event(log, "push_accepted_despite_error",
+                              "the push attempt failed at transport level, but the "
+                              "kernel already exists and is active at the deterministic "
+                              "slug; treating the push as landed instead of pushing a "
+                              "duplicate version",
+                              slug=expected_slug, kaggle_status=existing.status)
+                    combined = "verified active after transport error"
+                    break
+                if number >= self.retry.max_attempts:
+                    raise
+                delay = self.retry.delay_for(
+                    number, retry_after=getattr(exc, "retry_after", None))
+                if (self.retry.deadline_seconds is not None
+                        and (time.monotonic() - started) + delay
+                        >= self.retry.deadline_seconds):
+                    raise
+                log_event(log, "push_retry",
+                          "attempt %d/%d failed transiently and the slug is not "
+                          "active; pushing again" % (number, self.retry.max_attempts),
+                          slug=expected_slug, delay_seconds=round(delay, 2))
+                time.sleep(delay)
+        assert combined is not None  # the loop either returns output or raises
 
         match = _PUSH_URL_RE.search(combined)
         owner = (match.group(1) if match else self.creds.username).lower()

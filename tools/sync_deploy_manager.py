@@ -25,7 +25,7 @@ import sys
 import time
 import requests
 
-REPO_ROOT = Path("g:/orca web lab").resolve()
+REPO_ROOT = Path(__file__).resolve().parents[1]
 GH_DIR = REPO_ROOT / "GitHub"
 HF_DIR = REPO_ROOT / "HuggingFace"
 
@@ -37,14 +37,22 @@ HF_SPACE_URL = f"https://huggingface.co/spaces/{HF_SPACE_SLUG}"
 
 
 def get_hf_token() -> str:
-    """Retrieve Hugging Face access token from environment or local secure vault."""
+    """Retrieve Hugging Face access token from the environment or a token file.
+
+    The token file location is configurable via ``HF_TOKEN_FILE`` so no
+    machine-specific path is ever hardcoded here.
+    """
     token = os.environ.get("HF_TOKEN")
     if token:
         return token.strip()
-    scratch_token = Path(r"C:\Users\ahmed\.gemini\antigravity\brain\6115e406-f410-4889-9eba-32cefb380dc7\scratch\hf_token.txt")
-    if scratch_token.exists():
-        return scratch_token.read_text(encoding="utf-8").strip()
-    raise RuntimeError("HF_TOKEN could not be retrieved from environment or secure vault.")
+    token_file = os.environ.get("HF_TOKEN_FILE")
+    if token_file:
+        p = Path(token_file)
+        if p.exists():
+            return p.read_text(encoding="utf-8").strip()
+    raise RuntimeError(
+        "HF_TOKEN could not be retrieved. Set the HF_TOKEN environment variable "
+        "(or HF_TOKEN_FILE pointing at a token file).")
 
 
 # Directories to always ignore from synchronization
@@ -417,13 +425,9 @@ def upload_to_huggingface() -> tuple[bool, str]:
         raise RuntimeError(f"Hugging Face Space API check failed (HTTP {r.status_code}): {r.text}")
     print(f"[PASS] Connected to Hugging Face Space: {HF_SPACE_SLUG}")
 
-    temp_work_dir = Path(r"C:\Users\ahmed\.gemini\antigravity\brain\6115e406-f410-4889-9eba-32cefb380dc7\scratch\hf_upload_workspace")
-    if temp_work_dir.exists():
-        def _err(f, path, exc):
-            import stat
-            os.chmod(path, stat.S_IWRITE)
-            f(path)
-        shutil.rmtree(temp_work_dir, onerror=_err)
+    import tempfile
+
+    temp_work_dir = Path(tempfile.mkdtemp(prefix="hf_upload_workspace"))
     temp_work_dir.mkdir(parents=True, exist_ok=True)
 
     auth_hf_url = f"https://mc2hf1999:{token}@huggingface.co/spaces/{HF_SPACE_SLUG}.git"

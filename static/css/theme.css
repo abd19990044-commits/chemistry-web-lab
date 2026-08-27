@@ -1,0 +1,123 @@
+/* ==========================================================================
+   Chemistry Lab - UI refresh: design tokens (light/dark), primary
+   navigation, and responsive rules.
+
+   This file is loaded AFTER style.css. style.css defines the dark palette
+   as :root variables and every component reads them through var(--…), so
+   the light theme is a pure token redefinition on html[data-theme="light"]:
+   all 600+ var() call sites re-skin automatically. No component CSS is
+   duplicated here.
+   ========================================================================== */
+
+/* ── Light theme: same token names, light values ───────────────────────── */
+html[data-theme="light"] {
+  --ink:            #F4F7FB;
+  --ink-2:          #EDF2F9;
+  --panel:          #FFFFFF;
+  --panel-2:        #F1F5FB;
+  --surface-sunken: #E8EEF6;
+  --border:         rgba(15, 23, 42, 0.14);
+  --border-strong:  rgba(15, 23, 42, 0.28);
+
+  --teal:           #0E9488;
+  --teal-dim:       #0F766E;
+  --violet:         #5A67D8;
+  --violet-dim:     #4338CA;
+  --amber:          #B45309;
+  --amber-dim:      #92400E;
+  --cyan:           #0369A1;
+
+  --text:           #101828;
+  --text-muted:     #51607A;
+  --text-faint:     #7C8AA5;
+
+  --danger:         #C02626;
+  --danger-bg:      rgba(192, 38, 38, 0.10);
+  --success-bg:     rgba(14, 148, 136, 0.12);
+  --info-bg:        rgba(90, 103, 216, 0.12);
+}
+
+/* Respect an explicit user choice made through the toggle; the toggle sets
+   data-theme="dark" as well, so both themes are always explicit. */
+html[data-theme="dark"] {
+  /* tokens already defined at :root - redeclared for explicitness */
+}
+
+/* ── Primary navigation ────────────────────────────────────────────────── */
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-inline: 0.75rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.topnav::-webkit-scrollbar { display: none; }
+
+.topnav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.85rem;
+  border-radius: 999px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+.topnav-link:hover { color: var(--text); background: var(--panel-2); }
+.topnav-link:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+.topnav-link.is-active {
+  color: var(--text);
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+.topnav-link.is-active .topnav-dot { background: var(--teal); }
+.topnav-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-faint);
+  display: inline-block;
+}
+
+#theme-toggle {
+  flex: 0 0 auto;
+  min-width: 2.4rem;
+}
+
+/* Keep the brand as a link-like control without changing its behaviour */
+.topbar .brand { cursor: pointer; }
+.topbar .brand:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+/* ── Responsive: the topbar keeps one row on desktop and wraps compactly on
+      small screens; the nav scrolls horizontally rather than overflowing. ── */
+@media (max-width: 720px) {
+  .topbar { flex-wrap: wrap; row-gap: 0.4rem; }
+  .topnav {
+    order: 3;
+    flex-basis: 100%;
+    margin-inline: 0;
+    padding-bottom: 0.15rem;
+  }
+  .topnav-link { font-size: 0.88rem; padding: 0.4rem 0.7rem; }
+  .brand-tag { display: none; }
+}
+@media (max-width: 380px) {
+  .topnav-link { padding: 0.36rem 0.55rem; font-size: 0.84rem; }
+}
+
+/* ── Reduced motion: honour the OS setting for the smooth scrolling and
+      transitions the UI already uses. ──────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}

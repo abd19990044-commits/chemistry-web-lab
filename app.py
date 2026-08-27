@@ -246,8 +246,37 @@ def error_response(message: str, status: int = 400):
 # ─────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
+    return _render_lab_index("home")
+
+
+@app.route("/lab")
+def lab_view():
+    """Primary section 1 - structure/reaction drawing and ORCA setup."""
+    return _render_lab_index("draw")
+
+
+@app.route("/calculations")
+def calculations_view():
+    """Primary section 2 - Kaggle sign-in, submission and job management."""
+    return _render_lab_index("orca")
+
+
+@app.route("/analysis")
+def analysis_view():
+    """Primary section 3 - quantum results, spectra, thermochemistry."""
+    return _render_lab_index("quantum")
+
+
+def _render_lab_index(initial_view: str):
+    """Renders the single-page app with one studio pre-activated.
+
+    Each primary section (/lab, /calculations, /analysis) is a REAL Flask
+    route, so deep links, refreshes and back/forward navigation all work
+    without a client-side router; the template activates the requested view
+    through the existing showView() switcher."""
     return render_template(
         "index.html",
+        initial_view=initial_view,
         calc_types=core.CALC_TYPES,
         composite_methods=core.COMPOSITE_METHODS,
         dft_functionals=core.DFT_FUNCTIONALS,

@@ -191,6 +191,7 @@ class OrchestratorService:
                 replayed=True,
             )
 
+        job = None
         try:
             job_id = make_job_id(job_name, input_filename)
             with log_context(correlation_id=correlation_id, job_id=job_id):
@@ -264,6 +265,39 @@ class OrchestratorService:
                           job_id=job.job_id, slug=result.slug, job_kind=job.job_kind)
                 return response
         except BaseException:
+            # A failure here used to release the idempotency claim, which let a
+            # retry build a NEW random job id -- a second, differently-named
+            # kernel for the same calculation whenever the first push had
+            # actually landed remotely but the call still raised. Probe Kaggle
+            # first: if the kernel exists, persist this job's identity as the
+            # idempotent result so a retry REPLAYS it instead of duplicating.
+            # If the probe itself cannot be answered, the claim is KEPT (a
+            # retry then hits the in-progress guard instead of ever creating a
+            # second kernel); the orchestrator store's claim TTL bounds the
+            # wait, and reconciliation drives the existing kernel regardless.
+            landed = None
+            if job is not None:
+                try:
+                    landed = KaggleClient(creds).kernel_exists(job_id)
+                except Exception as probe_exc:  # noqa: BLE001
+                    log.warning(
+                        "could not verify whether kernel %s landed after a submit "
+                        "failure (%s); keeping the idempotency claim so a retry "
+                        "cannot create a duplicate kernel",
+                        job_id, probe_exc)
+            if landed is not None:
+                response = SubmitResult(
+                    job_id=job.job_id,
+                    slug=job.current_slug or job_id,
+                    url=job.current_url or "https://www.kaggle.com/code/%s/%s"
+                        % (job.owner, job_id),
+                    title=job.title)
+                self.store.complete_idempotent(key, response.to_dict())
+                log_event(log, "submit_recovered",
+                          "the push landed despite the local failure; the idempotency "
+                          "key now replays the real job instead of pushing a duplicate",
+                          job_id=job.job_id, slug=response.slug)
+                raise
             # Release the claim so a corrected retry is not blocked for a day
             # by a key that never produced a job.
             self.store.abandon_idempotent(key)

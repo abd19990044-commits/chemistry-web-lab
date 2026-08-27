@@ -9,10 +9,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" defer></script>
 {% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
 </head>
-<body>
+<body data-initial-view="{{ initial_view or 'home' }}">
 
 <div class="bg-orbit-field" aria-hidden="true"></div>
 
@@ -32,6 +33,13 @@
       <span class="brand-tag">Computational chemistry lab</span>
     </div>
   </div>
+
+  <nav class="topnav" aria-label="Primary">
+    <a class="topnav-link{% if initial_view == 'draw' %} is-active{% endif %}" href="/lab"{% if initial_view == 'draw' %} aria-current="page"{% endif %}><span class="topnav-dot" aria-hidden="true"></span>Lab</a>
+    <a class="topnav-link{% if initial_view == 'orca' %} is-active{% endif %}" href="/calculations"{% if initial_view == 'orca' %} aria-current="page"{% endif %}><span class="topnav-dot" aria-hidden="true"></span>Calculations</a>
+    <a class="topnav-link{% if initial_view == 'quantum' %} is-active{% endif %}" href="/analysis"{% if initial_view == 'quantum' %} aria-current="page"{% endif %}><span class="topnav-dot" aria-hidden="true"></span>Analysis</a>
+  </nav>
+  <button type="button" id="theme-toggle" class="btn btn-ghost btn-small" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">🌙</button>
 
   <div class="topbar-actions">
     <button type="button" id="back-home-btn" class="btn btn-ghost btn-small hidden">← Home</button>
@@ -2020,7 +2028,7 @@ Products:   12 CO2 + 6 H2O</pre>
   "scf_options": {{ scf_options | tojson }}
 }
 </script>
-<script src="{{ url_for('static', filename='js/app.js') }}?v=20260819a"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=20260827a"></script>
 <script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
 <script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
 <script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>

@@ -47,6 +47,8 @@ EXCLUDE_DIRS = {
     'htmlcov',
     'HuggingFace',
     'GitHub',
+    'temp_pytest_run',
+    '.pytest_temp',
 }
 
 EXCLUDE_EXTS = {

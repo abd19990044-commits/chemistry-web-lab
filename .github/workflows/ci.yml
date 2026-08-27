@@ -1,5 +1,18 @@
 name: CI
 
+# Single authoritative workflow (merged from the deployed variant and the
+# source tree; see FULL_PROJECT_REPAIR_PLAN.md P1-4).
+#
+# Gating policy:
+#   * ruff findings are tracked as a documented, NON-blocking baseline
+#     (legacy lint debt; must not be allowed to hide correctness failures).
+#     Blocking correctness is enforced by the compileall syntax gate and the
+#     full test matrix instead.
+#   * The security scan is ALWAYS blocking. Known-synthetic credential
+#     fixtures under tests/ are exempt from the KGAT_ token pattern only -
+#     every other pattern (legacy 32-hex keys, Cloudflare tokens, personal
+#     machine paths) applies to the whole tree, tests included.
+
 on:
   push:
     branches: [main, master]
@@ -30,6 +43,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install ruff jsonschema
 
+      # Documented baseline (667 legacy findings as of v1.0.3). Informational
+      # by explicit decision - the blocking correctness gate for source code
+      # is the compileall step below plus the full test matrix.
       - name: Run Ruff Baseline Audit
         continue-on-error: true
         run: |
@@ -119,7 +135,17 @@ jobs:
               re.compile(r"C:[\\/]Users[\\/][a-zA-Z0-9_-]+", re.IGNORECASE),
           ]
 
-          ignored = {'.git', '__pycache__', '.pytest_cache', 'node_modules', '.venv', 'venv'}
+          # Synthetic credential fixtures under tests/ are exempt from the
+          # KGAT_ pattern ONLY (they are deliberately fake strings declared
+          # in tests/test_kaggle_credential_vault.py). Every other secret
+          # pattern and both personal-path patterns still apply everywhere.
+          kgat_test_exemption = re.compile(r"^tests[\\/]")
+          # Third-party-generated ORCA outputs kept as parser fixtures quote
+          # the original machine paths inside the calculation log itself;
+          # they are scientific data, not configuration. Path patterns are
+          # disabled for the corpus only - secret patterns still apply.
+          fixture_corpus = re.compile(r"^orca_engine/data/")
+          ignored = {'.git', '__pycache__', '.pytest_cache', 'node_modules', '.venv', 'venv', 'temp_pytest_run'}
           violations = []
 
           for root, dirs, files in os.walk('.'):
@@ -128,11 +154,19 @@ jobs:
                   if filename.endswith(('.pyc', '.png', '.jpg', '.jpeg', '.tar', '.gz', '.zip', '.rar', '.out', '.db')):
                       continue
                   path = os.path.join(root, filename)
+                  rel = path.replace('\\', '/').lstrip('./')
                   try:
                       with open(path, 'r', encoding='utf-8', errors='ignore') as handle:
                           for line_no, line in enumerate(handle, 1):
-                              for pattern in secret_patterns + path_patterns:
+                              for pattern in secret_patterns:
                                   if pattern.search(line):
+                                      if pattern.pattern.startswith("KGAT_") and kgat_test_exemption.match(rel):
+                                          continue
+                                      violations.append(f"{path}:{line_no} -> {line.strip()[:120]}")
+                              for pattern in path_patterns:
+                                  if pattern.search(line):
+                                      if fixture_corpus.match(rel):
+                                          continue
                                       violations.append(f"{path}:{line_no} -> {line.strip()[:120]}")
                   except (OSError, UnicodeError):
                       continue

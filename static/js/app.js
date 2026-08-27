@@ -153,6 +153,17 @@
   window.showChemistryView = showView;
 
 
+  // Deep-link support: /lab, /calculations and /analysis are real Flask
+  // routes that render this page with the requested studio preselected.
+  // Level-1 navigation only - the workspace tabs inside each studio (level 2)
+  // keep their own behaviour untouched.
+  const initialView = (document.body && document.body.dataset)
+    ? document.body.dataset.initialView : '';
+  if (['draw', 'orca', 'quantum'].indexOf(initialView) !== -1) {
+    try { showView(initialView); } catch (err) { console.warn('initial view activation failed:', err); }
+  }
+
+
   // Robust global event delegation for navigation & modals
   document.addEventListener("click", (e) => {
     // 1. Choice cards on landing view
@@ -4233,8 +4244,17 @@
     });
   }
 
+  // Double-submission guard (Phase 13): a second submit while one is already
+  // in flight is ignored, and the submit button is disabled for the duration.
+  // The backend Idempotency-Key + orchestrator idempotency store remain the
+  // final authority; this only prevents the obvious double click.
+  let kaggleSubmitInFlight = false;
+  const kaggleSubmitBtn = kaggleForm.querySelector('button[type="submit"]');
   kaggleForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (kaggleSubmitInFlight) return;
+    kaggleSubmitInFlight = true;
+    if (kaggleSubmitBtn) kaggleSubmitBtn.disabled = true;
     hide(kaggleError); hide(kaggleResult); show(kaggleLoading);
 
     if (!currentKaggle) {
@@ -4431,6 +4451,8 @@
     } catch (err) {
       showError(kaggleError, err.message);
     } finally {
+      kaggleSubmitInFlight = false;
+      if (kaggleSubmitBtn) kaggleSubmitBtn.disabled = false;
       hide(kaggleLoading);
     }
   });
@@ -5309,8 +5331,13 @@
       lastIsolatedUser = username;
       try { saveJobs(loadJobs().filter(j => !j.kaggleUsername || j.kaggleUsername.toLowerCase() === username.toLowerCase())); renderJobs(); } catch (_) {}
     }
-    const observer = new MutationObserver(() => { if (currentKaggle?.username) isolateLocalJobsTo(currentKaggle.username); });
-    if (kaggleSignedInAs) observer.observe(kaggleSignedInAs, {childList:true, characterData:true, subtree:true});
+    // Guarded for non-DOM environments (static analysis, server-side imports):
+    // MutationObserver only exists in browsers, and the static test loads this
+    // file under plain Node. Behaviour in the browser is unchanged.
+    if (typeof MutationObserver === "function" && kaggleSignedInAs) {
+      const observer = new MutationObserver(() => { if (currentKaggle?.username) isolateLocalJobsTo(currentKaggle.username); });
+      observer.observe(kaggleSignedInAs, {childList:true, characterData:true, subtree:true});
+    }
 
     const jobsToolbar = document.querySelector('.jobs-toolbar');
     if (jobsToolbar && !document.getElementById('jobs-account-refresh-btn')) {
@@ -10791,3 +10818,32 @@
 })();
 
 
+
+
+/* ─── Theme toggle (light/dark) - Chemistry Lab UI refresh ────────────────
+   style.css defines the dark palette on :root via design tokens; theme.css
+   redefines those tokens for html[data-theme="light"]. The choice persists
+   in localStorage; first visit follows the OS preference. */
+(function () {
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    var btn = document.getElementById('theme-toggle');
+    if (btn) {
+      btn.textContent = theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
+      btn.setAttribute('aria-pressed', String(theme === 'dark'));
+    }
+  }
+  var saved = null;
+  try { saved = localStorage.getItem('chemlab_theme'); } catch (_) {}
+  var prefersDark = false;
+  try { prefersDark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); } catch (_) {}
+  applyTheme(saved === 'dark' || saved === 'light' ? saved : (prefersDark ? 'dark' : 'light'));
+  var btn = document.getElementById('theme-toggle');
+  if (btn) {
+    btn.addEventListener('click', function () {
+      var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try { localStorage.setItem('chemlab_theme', next); } catch (_) {}
+    });
+  }
+})();

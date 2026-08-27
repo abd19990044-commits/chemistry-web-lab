@@ -322,7 +322,7 @@ _LEGACY_KEY_RE = re.compile(r"^[0-9a-f]{32}$")
 
 def _looks_like_new_api_token(value: str) -> bool:
     """Kaggle's legacy API key has always been a 32-character lowercase hex
-    string (e.g. '1567b3980e493ca3640f3400530c55a3'). The new single API
+    string (e.g. '0102030405060708090a0b0c0d0e0f10'  # (synthetic example - never a real key)). The new single API
     token issued by default from Settings -> API has a different, longer
     shape (commonly prefixed, e.g. 'KGAT_...'). Rather than guessing at the
     new format's exact prefix (which Kaggle could change), anything that

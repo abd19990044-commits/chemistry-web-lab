@@ -54,6 +54,7 @@ whole restart and five idle hours on exactly that case.
 import base64
 import glob
 import gzip
+import hashlib
 import json
 import os
 import random
@@ -77,7 +78,10 @@ except ImportError:                     # running from the package, e.g. in test
 START_TIME = time.time()
 RUN_TOKEN = uuid.uuid4().hex
 
-OUTPUT_DIR = "/kaggle/working"
+# Test hook: a test process can point the runner at throwaway directories by
+# exporting ORCA_RUNNER_OUTPUT_DIR / ORCA_RUNNER_SCRATCH_ROOT before import.
+# Kaggle never sets either variable, so production behaviour is unchanged.
+OUTPUT_DIR = os.environ.get("ORCA_RUNNER_OUTPUT_DIR") or "/kaggle/working"
 STATE_FILE = os.path.join(OUTPUT_DIR, "STATE.json")
 CHECKPOINT_FILE = os.path.join(OUTPUT_DIR, "CHECKPOINT.json")
 CHECKPOINT_BUNDLE = os.path.join(OUTPUT_DIR, "CHECKPOINT_BUNDLE.zip")
@@ -131,6 +135,12 @@ RESULT_BUDGET = int(B.get("result_budget_bytes", 9 << 30))
 MAX_EPOCHS = int(B.get("max_epochs", 24))
 MAX_DISK_EPOCHS = int(B.get("max_disk_epochs", 6))
 MAX_TOTAL_OPT_CYCLES = int(B.get("max_total_opt_cycles", 1500))
+# Backstop for the in-session loop, not the primary stop: a pass may only be
+# followed by another when the scientific state actually moved forward (see
+# fingerprint_progressed). 48 passes at any real per-pass cost is far past
+# anything legitimate; the budget exists so a pathological fast-failing ORCA
+# cannot spin a pass per second until the session clock runs out.
+MAX_IN_SESSION_PASSES = int(B.get("max_in_session_passes", 48))
 PER_WINDOW_MAXITER = int(B.get("per_window_opt_maxiter", 200))
 HEARTBEAT_SECONDS = int(B.get("heartbeat_seconds", 45))
 WATCHDOG_POLL = int(B.get("watchdog_poll_seconds", 10))
@@ -330,8 +340,12 @@ def pick_scratch_root():
     return candidates or [OUTPUT_DIR]
 
 
-SCRATCH_ROOTS = pick_scratch_root()
-SCRATCH_ROOT = SCRATCH_ROOTS[0]
+_OVERRIDE_SCRATCH = os.environ.get("ORCA_RUNNER_SCRATCH_ROOT")
+if _OVERRIDE_SCRATCH:
+    SCRATCH_ROOTS, SCRATCH_ROOT = [_OVERRIDE_SCRATCH], _OVERRIDE_SCRATCH
+else:
+    SCRATCH_ROOTS = pick_scratch_root()
+    SCRATCH_ROOT = SCRATCH_ROOTS[0]
 WORKDIR = os.path.join(SCRATCH_ROOT, "orca_job")
 ORCA_PKG_DIR = os.path.join(SCRATCH_ROOT, "orca_pkg")
 os.makedirs(WORKDIR, exist_ok=True)
@@ -878,10 +892,118 @@ def time_remaining():
 
 
 # ---------------------------------------------------------------------------
+# Scientific progress identity
+#
+# The duplicate-computation guard. A checkpoint id, a timestamp, a run token
+# and a renumbered MaxIter are METADATA; none of them is progress. Progress
+# means the science moved: the geometry changed, an optimisation cycle was
+# added, a scan point, a Hessian column or a path image was completed. A
+# continuation whose fingerprint equals the state that was just run is a
+# duplicate computation and must never be launched -- in-session or in a
+# successor.
+# ---------------------------------------------------------------------------
+_GEOM_INLINE_RE = re.compile(r"\*\s*(?:xyz|gzmt|int|internal)\s+-?\d+\s+-?\d+(.*?)\*",
+                             re.IGNORECASE | re.DOTALL)
+_GEOM_FILE_RE = re.compile(r"\*\s*xyzfile\s+-?\d+\s+-?\d+\s+(\S+)", re.IGNORECASE)
+
+
+def _file_size(path):
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
+def _geometry_identity(input_text):
+    """A content identity for the geometry a continuation input would run.
+
+    An inline coordinate block is normalised and hashed. A `* xyzfile`
+    reference is resolved against WORKDIR and the FILE CONTENT is hashed, not
+    the filename: `last_geometry.xyz` is the same name in every window while
+    its content is what actually moves. A referenced file that is missing gets
+    its own identity, so 'the geometry is gone' can never masquerade as 'the
+    geometry is unchanged'."""
+    m = _GEOM_INLINE_RE.search(input_text or "")
+    if m:
+        coords = re.sub(r"\s+", " ", m.group(1)).strip()
+        return "inline:" + hashlib.sha256(coords.encode("utf-8")).hexdigest()
+    m = _GEOM_FILE_RE.search(input_text or "")
+    if m:
+        name = os.path.basename(m.group(1).strip().strip('"'))
+        path = wp(name)
+        if os.path.exists(path):
+            # Hash the COORDINATES, not the file bytes: `last_geometry.xyz`
+            # carries a freshly-written comment line in every window, and a
+            # byte hash would call the identical geometry "progress" because
+            # the comment changed. Unparseable files fall back to a byte hash.
+            frames = art.read_trajectory_frames(path)
+            if frames:
+                coords = re.sub(r"\s+", " ", "\n".join(frames[-1].split("\n")[2:])).strip()
+                return "coords:" + hashlib.sha256(coords.encode("utf-8")).hexdigest()
+            return "file:" + art.sha256_file(path)
+        return "missing:" + name
+    return "no-geometry"
+
+
+def _neb_image_count():
+    mep = sorted(glob.glob(wp("*_MEP.allxyz")))
+    if not mep:
+        return 0
+    result = art.validate_allxyz(mep[0])
+    return int(result.detail.get("images", 0)) if result.ok else 0
+
+
+def scientific_fingerprint(job_kind, input_text, *, cumulative, outcome=None):
+    """The verifiable scientific state a given input would run from.
+
+    Pure in its text argument except for cheap reads of the small ASCII
+    artefacts already in WORKDIR (a NumFreq column count, the MD restart
+    size, the NEB path image count). No large file is hashed here; the only
+    full-hash target is the one geometry file the input points at."""
+    return {
+        "job_kind": job_kind,
+        "geometry": _geometry_identity(input_text),
+        "cumulative_opt_cycles": int(cumulative),
+        "scan_steps": (int(outcome.scan_steps) if outcome is not None
+                       else len(glob.glob(wp(BASENAME + ".[0-9][0-9][0-9].xyz")))),
+        "freq_columns": len(glob.glob(wp(BASENAME + ".res.*"))),
+        "neb_images": _neb_image_count(),
+        "mdrestart_size": _file_size(wp(BASENAME + ".mdrestart")),
+        "last_energy": (outcome.energy if outcome is not None else None),
+    }
+
+
+def fingerprint_progressed(previous, current):
+    """True only when the scientific state moved FORWARD.
+
+    Recorded but deliberately NOT treated as progress: `last_energy`. An SCF
+    re-iteration on the same geometry changes the energy without moving the
+    calculation anywhere. Every component that IS compared is a completion
+    marker: a new geometry, another optimisation cycle, another scan point,
+    another Hessian column, another path image, a rewritten MD restart."""
+    if previous is None or current is None:
+        return True
+    return (current["geometry"] != previous["geometry"]
+            or current["cumulative_opt_cycles"] > previous["cumulative_opt_cycles"]
+            or current["scan_steps"] > previous["scan_steps"]
+            or current["freq_columns"] > previous["freq_columns"]
+            or current["neb_images"] > previous["neb_images"]
+            or current["mdrestart_size"] > previous["mdrestart_size"])
+
+
+# ---------------------------------------------------------------------------
 # 4. Continuation input
 # ---------------------------------------------------------------------------
 def build_continuation(original_text, out_text, job_kind, outcome):
     """Produces the input the successor will run, plus the files it needs.
+
+    Returns (next_text, carried_paths, notes, refusal). A non-empty
+    `refusal` means the input cannot be repointed at the new state -- the
+    only continuation that could be built would silently re-run the ORIGINAL
+    geometry -- and the caller must stop instead of launching it. Building a
+    refusal is honest; running a silent no-op continuation is what produced
+    a production failure in which one calculation was launched over and over
+    from the same coordinates while every window claimed it had resumed.
 
     Restart is driven from ASCII artefacts, never from the binary `.gbw`. A
     force-killed ORCA can leave the wavefunction half-written; AutoStart then
@@ -893,6 +1015,7 @@ def build_continuation(original_text, out_text, job_kind, outcome):
     charge, mult = art.extract_charge_mult(original_text)
     text = art.strip_moread(original_text)
     carried, notes = [], []
+    refusal = ""
 
     def carry(path, priority=50):
         if not os.path.exists(path):
@@ -946,9 +1069,16 @@ def build_continuation(original_text, out_text, job_kind, outcome):
             step = (end - start) / (npts - 1)
             resumed = "%s%g, %g, %d" % (match.group(1), start + done * step, end, npts - done)
             text = text[:match.start()] + resumed + text[match.end():]
-            text = art.set_geometry(text, os.path.basename(steps[-1]), charge, mult)
-            carry(steps[-1], 10)
-            notes.append("scan resumed at point %d of %d" % (done, npts))
+            text, placed = art.place_geometry(text, os.path.basename(steps[-1]),
+                                              charge, mult)
+            if not placed:
+                refusal = ("the scan's coordinate block is in a form this restart "
+                           "cannot repoint, so the next pass would silently redo "
+                           "this one from the original geometry")
+                notes.append(refusal)
+            else:
+                carry(steps[-1], 10)
+                notes.append("scan resumed at point %d of %d" % (done, npts))
         else:
             notes.append("scan restarts from its first point")
 
@@ -967,24 +1097,36 @@ def build_continuation(original_text, out_text, job_kind, outcome):
                 carry(path, 20)
 
     elif job_kind == "freq" or (job_kind == "opt_freq" and outcome.opt_converged):
-        block = re.search(r"(?is)%\s*freq\b.*?\bend\b", text)
-        if block and "restart" not in block.group(0).lower():
-            text = re.sub(r"(?i)(%\s*freq\b)", lambda m: m.group(0) + "\n  Restart true",
-                          text, count=1)
-        elif not block and re.search(r"(?i)\bnumfreq\b", text):
-            text = re.sub(r"(?i)(![^\n]*\bnumfreq\b[^\n]*)",
-                          lambda m: m.group(0) + "\n%freq Restart true end", text, count=1)
-        for path in sorted(glob.glob(wp(BASENAME + ".res.*"))):
-            carry(path, 15)
+        # A numerical Hessian must be assembled from displaced gradients taken
+        # at ONE geometry and ONE level of theory, so the successor may only
+        # reuse the .res.* columns when its geometry is pinned. If the pin
+        # cannot be placed, the columns are DISCARDED (the Hessian is
+        # recomputed from scratch) rather than combined into a meaningless
+        # Hessian -- one wasted window is far cheaper than frequencies, ZPE
+        # and a Gibbs energy that are quietly wrong by a few kcal/mol.
+        pin_ok = True
         if outcome.opt_converged and os.path.exists(wp(BASENAME + ".xyz")):
-            # The optimisation is done; drop it and continue with frequencies
-            # only, so the successor does not redo a converged geometry.
-            text = re.sub(r"(?i)\bopt(ts)?\b", "", text, count=1)
-            text = art.set_geometry(text, BASENAME + ".xyz", charge, mult)
-            carry(wp(BASENAME + ".xyz"), 10)
-            notes.append("optimisation converged; continuing with frequencies only")
-        else:
-            notes.append("frequency calculation resumed from its partial Hessian columns")
+            text, pin_ok = art.place_geometry(text, BASENAME + ".xyz", charge, mult)
+            if pin_ok:
+                text = re.sub(r"(?i)\bopt(ts)?\b", "", text, count=1)
+                carry(wp(BASENAME + ".xyz"), 10)
+                notes.append("optimisation converged; continuing with frequencies only")
+            else:
+                notes.append("the converged geometry could not be pinned into the "
+                             "input; the partial Hessian columns are discarded and "
+                             "the Hessian will be recomputed from scratch")
+        if pin_ok:
+            block = re.search(r"(?is)%\s*freq\b.*?\bend\b", text)
+            if block and "restart" not in block.group(0).lower():
+                text = re.sub(r"(?i)(%\s*freq\b)", lambda m: m.group(0) + "\n  Restart true",
+                              text, count=1)
+            elif not block and re.search(r"(?i)\bnumfreq\b", text):
+                text = re.sub(r"(?i)(![^\n]*\bnumfreq\b[^\n]*)",
+                              lambda m: m.group(0) + "\n%freq Restart true end", text, count=1)
+            for path in sorted(glob.glob(wp(BASENAME + ".res.*"))):
+                carry(path, 15)
+            if not (outcome.opt_converged and os.path.exists(wp(BASENAME + ".xyz"))):
+                notes.append("frequency calculation resumed from its partial Hessian columns")
 
     else:
         if frames:
@@ -995,15 +1137,37 @@ def build_continuation(original_text, out_text, job_kind, outcome):
             atomic_write_bytes(geometry, (
                 "%s\nrestart geometry after %d optimisation step(s)\n%s\n"
                 % (natoms, len(frames), coords)).encode("utf-8"))
-            text = art.set_geometry(text, "last_geometry.xyz", charge, mult)
-            carry(geometry, 10)
-            notes.append("resumed from optimisation step %d" % len(frames))
+            text, placed = art.place_geometry(text, "last_geometry.xyz", charge, mult)
+            if not placed:
+                refusal = ("the input's coordinate block is in a form this restart "
+                           "cannot repoint (* gzmt / * internal are not converted), "
+                           "so the next pass would start from the ORIGINAL geometry "
+                           "and repeat this pass exactly. Resubmit with a Cartesian "
+                           "(* xyz / * xyzfile) coordinate block to make the job "
+                           "continuable")
+                notes.append(refusal)
+            else:
+                carry(geometry, 10)
+                notes.append("resumed from optimisation step %d" % len(frames))
         elif os.path.exists(wp(BASENAME + ".xyz")):
-            text = art.set_geometry(text, BASENAME + ".xyz", charge, mult)
-            carry(wp(BASENAME + ".xyz"), 10)
-            notes.append("resumed from the last written geometry")
+            text, placed = art.place_geometry(text, BASENAME + ".xyz", charge, mult)
+            if not placed:
+                refusal = ("the input's coordinate block is in a form this restart "
+                           "cannot repoint, so the next pass would start from the "
+                           "ORIGINAL geometry and repeat this pass exactly")
+                notes.append(refusal)
+            else:
+                carry(wp(BASENAME + ".xyz"), 10)
+                notes.append("resumed from the last written geometry")
         else:
-            notes.append("no completed step yet; restarting from the original geometry")
+            # Nothing completed in this window is resumable. A continuation
+            # built now would run the ORIGINAL geometry from zero -- the exact
+            # shape of the production failure that relaunched one calculation
+            # dozens of times. Refuse instead of launching it.
+            refusal = ("no completed optimisation step exists to resume from (no "
+                       "trajectory frames and no final geometry file), so the "
+                       "continuation would re-run the ORIGINAL geometry from zero")
+            notes.append(refusal)
 
         if hess_ok and not re.search(r"(?i)inhess", text):
             if carry(hess_path, 30):
@@ -1029,7 +1193,7 @@ def build_continuation(original_text, out_text, job_kind, outcome):
 
     text = art.ensure_simple_keyword(text, "NoAutoStart")
     carried.sort(key=lambda item: (item[0], item[1]))
-    return text, [path for _p, path in carried], notes
+    return text, [path for _p, path in carried], notes, refusal
 
 
 # ---------------------------------------------------------------------------
@@ -1209,6 +1373,20 @@ def encode_inline_payload(manifest):
     return blob
 
 
+def _kernel_status(username, slug, deadline):
+    """Asks Kaggle for a kernel's status word; "" when it cannot be told."""
+    ok, out = run_cli(["kaggle", "kernels", "status", "%s/%s" % (username, slug)],
+                      timeout=45, retries=1, deadline=deadline)
+    if not ok:
+        return ""
+    m = re.search(r'status\s+"([^"]+)"', out or "")
+    return m.group(1) if m else (out or "").strip()
+
+
+def _status_is_active(status):
+    return bool(re.search(r"RUNNING|QUEUED", status or "", re.IGNORECASE))
+
+
 def push_successor(manifest, next_epoch, job_kind, cumulative_cycles, disk_epochs):
     """RESTARTING. Builds and pushes the next window.
 
@@ -1223,10 +1401,8 @@ def push_successor(manifest, next_epoch, job_kind, cumulative_cycles, disk_epoch
 
     # Duplicate-launch guard. Pushing over a kernel that is already running
     # makes Kaggle schedule a second run against the same output directory.
-    ok, out = run_cli(["kaggle", "kernels", "status",
-                       "%s/%s" % (H["kaggle_username"], slug)],
-                      timeout=45, retries=2, deadline=deadline)
-    if ok and re.search(r'status\s+"[^"]*(RUNNING|QUEUED)', out, re.IGNORECASE):
+    status = _kernel_status(H["kaggle_username"], slug, deadline)
+    if _status_is_active(status):
         emit("successor_already_active",
              "the successor window already exists and is active; not pushing a duplicate",
              slug=slug)
@@ -1279,13 +1455,35 @@ def push_successor(manifest, next_epoch, job_kind, cumulative_cycles, disk_epoch
     with open(os.path.join(job_dir, "script.py"), "w", encoding="utf-8") as fh:
         fh.write(script)
 
-    ok, out = run_cli(["kaggle", "kernels", "push", "-p", job_dir],
-                      timeout=180, retries=5, base_delay=12.0, deadline=deadline)
+    # The push is NOT safe to replay blindly: a CLI that dies reading the
+    # response AFTER Kaggle accepted the version leaves the push LANDED, and a
+    # retry queues a SECOND execution of this window (the production failure
+    # the legacy runner already documented). Every failed attempt is therefore
+    # followed by a verification probe before another push is allowed.
+    pushed_output = None
+    out = ""
+    for attempt in range(1, 5):
+        ok, out = run_cli(["kaggle", "kernels", "push", "-p", job_dir],
+                          timeout=180, retries=1, base_delay=12.0, deadline=deadline)
+        if ok and "error" not in (out or "").lower():
+            pushed_output = out
+            break
+        status = _kernel_status(H["kaggle_username"], slug, deadline)
+        if _status_is_active(status):
+            emit("successor_push_verified_after_error",
+                 "the push reported a transport error, but Kaggle confirms the "
+                 "successor already exists and is active; not pushing a duplicate",
+                 slug=slug, attempt=attempt, observed_status=status)
+            pushed_output = out or ""
+            break
+        if attempt < 4 and deadline is not None and time.time() < deadline - 10:
+            time.sleep(min(30.0, 6.0 * attempt))
     shutil.rmtree(job_dir, ignore_errors=True)
-    if not ok:
+    if pushed_output is None:
         raise RuntimeError("kaggle kernels push failed: " + _scrub(out.strip()[-400:]))
 
-    match = re.search(r"https?://(?:www\.)?kaggle\.com/(?:code/)?([\w.-]+)/([\w.-]+)", out)
+    match = re.search(r"https?://(?:www\.)?kaggle\.com/(?:code/)?([\w.-]+)/([\w.-]+)",
+                      pushed_output)
     real_slug = match.group(2) if match else slug
     url = (match.group(0) if match
            else "https://www.kaggle.com/code/%s/%s" % (H["kaggle_username"], real_slug))
@@ -1550,22 +1748,44 @@ def main():
         text = art.set_geom_maxiter(text, PER_WINDOW_MAXITER)
     atomic_write_bytes(inp_path, text.encode("utf-8"))
 
-    cumulative = int(H.get("cumulative_opt_cycles") or 0)
+    cumulative_header = int(H.get("cumulative_opt_cycles") or 0)
+    cumulative = cumulative_header
+    session_cycles = 0
     disk_epochs = int(H.get("disk_epochs_used") or 0)
     outcome = None
     passes = 0
+    ran_fp = None
 
     # ------------------------------------------------------------------
     # The in-session loop.
     #
-    # ORCA can exit at MaxIter after six hours of a twelve-hour session. The old
-    # design ran ORCA exactly once, so that case burned an entire restart AND
-    # left five hours of paid-for compute idle. Continuing inside the same
-    # session is strictly better: no push, no queue wait, no re-extraction of a
-    # multi-gigabyte ORCA package.
+    # ORCA can exit at MaxIter after six hours of a twelve-hour session. The
+    # old design ran ORCA exactly once, so that case burned an entire restart
+    # AND left five hours of paid-for compute idle. Continuing inside the same
+    # session is strictly better: no push, no queue wait, no re-extraction of
+    # a multi-gigabyte ORCA package.
+    #
+    # Two hard rules bound this loop. Both come from a production failure in
+    # which a single window executed one calculation dozens of times and left
+    # ~136 output files in the archive:
+    #
+    #   * Another pass is started ONLY when the continuation carries the
+    #     scientific state forward -- the geometry, the completed cycle count,
+    #     a scan point, a Hessian column or a path image actually changed.
+    #     Metadata-only edits (NoAutoStart, a renumbered MaxIter, a fresh
+    #     checkpoint id, a new run token) are not progress, and an identical
+    #     input is never launched a second time.
+    #   * The cumulative-cycle budget is measured across ALL passes of this
+    #     window. The old code re-derived `cumulative` from the header after
+    #     every pass, so the budget could never fire inside a session.
+    #
+    # A job kind that leaves no resumable checkpoint at all (a single point)
+    # is refused outright: the MPI serial retry above is the only permitted
+    # second launch, exactly as the window wrap-up already treated it.
     # ------------------------------------------------------------------
     while True:
         passes += 1
+        ran_fp = scientific_fingerprint(job_kind, text, cumulative=cumulative)
         write_heartbeat("RUNNING", pass_number=passes)
         emit("orca_start", "starting ORCA",
              pass_number=passes, nprocs=nprocs, cores=cores, job_kind=job_kind,
@@ -1578,12 +1798,14 @@ def main():
         out_text = read_output(out_path)
         outcome = art.classify_outcome(out_text, job_kind=job_kind,
                                        killed_by=execution.stop_reason)
-        cumulative = int(H.get("cumulative_opt_cycles") or 0) + outcome.opt_cycles
+        session_cycles += outcome.opt_cycles
+        cumulative = cumulative_header + session_cycles
 
         emit("orca_outcome", outcome.reason,
              pass_number=passes, **outcome.to_dict(),
              stopped_by=execution.stop_reason,
-             cumulative_opt_cycles=cumulative)
+             cumulative_opt_cycles=cumulative,
+             session_opt_cycles=session_cycles)
 
         # A parallel start-up failure normally happens within minutes and leaves
         # an MPI fingerprint. Retrying serially in the same session turns a
@@ -1612,26 +1834,51 @@ def main():
                  "the cumulative optimisation-cycle budget across all windows is spent",
                  cumulative_opt_cycles=cumulative, budget=MAX_TOTAL_OPT_CYCLES)
             break
+        if not art.is_iterative(job_kind):
+            # A single point or analytic frequency leaves no text checkpoint a
+            # second run could resume from: relaunching it in this session
+            # would repeat the identical calculation. This is the gate that
+            # keeps an SP job out of the loop -- the production failure kept
+            # one running for ~8 hours in dozens of identical passes.
+            emit("in_session_stop",
+                 "this job kind leaves no checkpoint a second in-session run could "
+                 "resume from; stopping instead of repeating the same calculation",
+                 job_kind=job_kind, pass_number=passes)
+            break
+        if time_remaining() <= 1800 or passes >= MAX_IN_SESSION_PASSES:
+            break
 
         # MaxIter exhausted (or an unexplained stop) with real time left: build
         # the continuation and run it right here rather than paying for a whole
-        # session handover.
-        if time_remaining() > 1800:
-            next_text, carried, notes = build_continuation(
-                original_text, out_text, job_kind, outcome)
-            emit("in_session_continue",
-                 "continuing in this same session instead of spending a restart",
-                 pass_number=passes, reason=outcome.kind,
-                 time_remaining=round(time_remaining()), notes=notes)
-            try:
-                shutil.copyfile(out_path, wp("%s.pass%d.out" % (BASENAME, passes)))
-                os.remove(out_path)
-            except OSError:
-                pass
-            atomic_write_bytes(inp_path, next_text.encode("utf-8"))
-            original_text = next_text
-            continue
-        break
+        # session handover -- but only if the continuation is not the identical
+        # scientific state that was just run.
+        next_text, carried, notes, refusal = build_continuation(
+            original_text, out_text, job_kind, outcome)
+        if refusal:
+            emit("continuation_refused", refusal, pass_number=passes)
+            break
+        next_fp = scientific_fingerprint(job_kind, next_text,
+                                         cumulative=cumulative, outcome=outcome)
+        if not fingerprint_progressed(ran_fp, next_fp):
+            emit("no_scientific_progress",
+                 "the continuation is the identical scientific state that was just "
+                 "run; another pass would repeat the same calculation",
+                 pass_number=passes,
+                 previous_fingerprint=ran_fp, next_fingerprint=next_fp)
+            break
+        emit("in_session_continue",
+             "continuing in this same session instead of spending a restart",
+             pass_number=passes, reason=outcome.kind,
+             time_remaining=round(time_remaining()), notes=notes)
+        try:
+            shutil.copyfile(out_path, wp("%s.pass%d.out" % (BASENAME, passes)))
+            os.remove(out_path)
+        except OSError:
+            pass
+        atomic_write_bytes(inp_path, next_text.encode("utf-8"))
+        original_text = next_text
+        text = next_text
+        continue
 
     # ------------------------------------------------------------------
     # Window wrap-up
@@ -1705,10 +1952,61 @@ def main():
         package_results(note=note)
         return 1
 
-    next_text, carried, notes = build_continuation(original_text, out_text, job_kind, outcome)
+    try:
+        next_text, carried, notes, refusal = build_continuation(
+            original_text, out_text, job_kind, outcome)
+    except Exception as exc:  # noqa: BLE001
+        next_text, carried, notes, refusal = None, [], [], str(exc)
+
+    if refusal:
+        # The continuation could not repoint the input at the new state, so
+        # the only thing a successor could run is the ORIGINAL geometry -- a
+        # silent repeat. Stop with an explanation instead of pushing one.
+        note = ("This window cannot build a faithful continuation: %s The files "
+                "here are the partial progress from this window; the chain stops "
+                "instead of re-running the identical calculation." % refusal)
+        write_state("FAILED", note=note, job_kind=job_kind,
+                    error={"code": "continuation_refused", "reason": refusal},
+                    cumulative_cycles=cumulative, disk_epochs=disk_epochs, outcome=outcome)
+        purge_scratch()
+        package_results(note=note)
+        emit("window_end", "continuation refused; window stopped with its partial progress",
+             wall_seconds=round(time.time() - START_TIME), passes=passes)
+        return 1
+
+    next_fp = scientific_fingerprint(job_kind, next_text, cumulative=cumulative,
+                                     outcome=outcome)
+    if not fingerprint_progressed(ran_fp, next_fp):
+        # The window wrap-up mirror of the in-session rule: when the pass that
+        # just ended (killed by time, disk, or an outcome-level stop) added NO
+        # geometry, cycle, scan point, Hessian column or path image, the only
+        # thing a successor could inherit is the state that was already run.
+        # Pushing it would restart the same calculation and burn a whole
+        # session window; the honest terminal state is no_scientific_progress.
+        # Unfinished work is NOT labelled FINISHED, and the partial results
+        # stay right here for the user.
+        note = ("The only continuation this window could offer is the identical "
+                "scientific state it just ran (same geometry, %d cumulative "
+                "optimisation cycles, no new scan point, Hessian column or path "
+                "image), so pushing a successor would repeat the same calculation "
+                "without progress. The window stopped with state "
+                "no_scientific_progress; the files in this archive are the latest "
+                "partial results." % cumulative)
+        write_state("FAILED", note=note, job_kind=job_kind,
+                    error={"code": "no_scientific_progress",
+                           "fingerprint": next_fp, "previous_fingerprint": ran_fp},
+                    cumulative_cycles=cumulative, disk_epochs=disk_epochs, outcome=outcome)
+        purge_scratch()
+        package_results(note=note)
+        emit("window_end", "no scientific progress; stopped instead of repeating "
+                           "the calculation",
+             wall_seconds=round(time.time() - START_TIME), passes=passes)
+        return 1
+
     write_state("CHECKPOINTING", job_kind=job_kind, cumulative_cycles=cumulative,
                 disk_epochs=disk_epochs, note="staging a checkpoint",
-                extra={"continuation_notes": notes}, outcome=outcome)
+                extra={"continuation_notes": notes,
+                       "progress_fingerprint": next_fp}, outcome=outcome)
 
     manifest, verified = stage_and_verify_checkpoint(
         next_text, carried, job_kind, outcome, cumulative)

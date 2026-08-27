@@ -221,6 +221,19 @@ def decide(job: JobManifest, obs: Observation, *, config=CONFIG) -> Decision:
             return Decision(Trigger.ORCA_COMPLETE,
                             "the window reported a verified completion",
                             {"note": ledger_job.last_note[:400]}, action="adopt_ledger")
+        if (ledger_job.state is JobState.FAILED and job.state is JobState.RESTARTING):
+            # An operator explicitly resumed this job after the failure. The
+            # failed window's ledger is still fresh (same epoch is never
+            # stale), and re-adopting it here would flip the resumed job
+            # straight back to FAILED -- the resume would silently do nothing.
+            # The failed window stays failed; the next window is pushed from
+            # the last verified checkpoint, the same crash-during-commit
+            # completion path already proven safe.
+            return Decision(Trigger.SUCCESSOR_RETRY,
+                            "an operator resumed this job; pushing the next window from "
+                            "the last verified checkpoint instead of re-adopting the "
+                            "failed window's outcome",
+                            {"ledger_state": "FAILED"}, action="push_successor")
         if ledger_job.state is JobState.FAILED and job.state is not JobState.FAILED:
             return Decision(Trigger.ORCA_FATAL,
                             "the window reported an unrecoverable failure",
@@ -541,6 +554,7 @@ class Reconciler:
             if obs.record is not None:
                 job = self._adopt(job, obs.record, decision, correlation_id, actor)
             else:
+                previous_state = job.state
                 if decision.detail.get("next_slug"):
                     next_slug = decision.detail["next_slug"]
                     if next_slug not in job.chain_slugs:
@@ -559,6 +573,19 @@ class Reconciler:
                     if decision.detail.get("note"):
                         job.last_note = str(decision.detail["note"])[:2000]
                 job.touch()
+                # Every externally induced state change must remain traceable:
+                # this fallback has no window ledger to adopt, so the decision
+                # itself is recorded as the audit event.
+                if job.state is not previous_state:
+                    event = Event.create(
+                        job_id=job.job_id, epoch=job.epoch,
+                        trigger="ADOPT_REMOTE_STATUS",
+                        from_state=previous_state, to_state=job.state, actor=actor,
+                        correlation_id=correlation_id, reason=decision.reason,
+                        **decision.detail,
+                    )
+                    job.record_event(event)
+                    self.store.append_event(event)
             return self._save(job, version, fence)
 
         # ---- roll back --------------------------------------------------
@@ -663,15 +690,35 @@ class Reconciler:
             job.current_slug = record.legacy_next_slug
             job.epoch = max(job.epoch + 1, job.epoch)
         if decision.trigger == Trigger.ORCA_COMPLETE and (ledger_job is None or job.state is not JobState.FINISHED):
+            previous_state = job.state
             job.state = JobState.FINISHED
             if decision.detail.get("note"):
                 job.last_note = str(decision.detail["note"])[:2000]
+            if ledger_job is None:
+                event = Event.create(
+                    job_id=job.job_id, epoch=job.epoch,
+                    trigger="ADOPT_REMOTE_STATUS", from_state=previous_state,
+                    to_state=job.state, actor=actor, correlation_id=correlation_id,
+                    reason=decision.reason,
+                )
+                job.record_event(event)
+                self.store.append_event(event)
         elif decision.trigger == Trigger.ORCA_FATAL and (ledger_job is None or job.state is not JobState.FAILED):
+            previous_state = job.state
             job.state = JobState.FAILED
             if decision.detail.get("error"):
                 job.last_error = {"message": str(decision.detail["error"])}
             if decision.detail.get("note"):
                 job.last_note = str(decision.detail["note"])[:2000]
+            if ledger_job is None:
+                event = Event.create(
+                    job_id=job.job_id, epoch=job.epoch,
+                    trigger="ADOPT_REMOTE_STATUS", from_state=previous_state,
+                    to_state=job.state, actor=actor, correlation_id=correlation_id,
+                    reason=decision.reason,
+                )
+                job.record_event(event)
+                self.store.append_event(event)
 
         if record.note:
             job.last_note = record.note[:2000]

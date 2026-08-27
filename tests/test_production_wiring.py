@@ -309,7 +309,7 @@ def test_sweep_endpoint_auth_enforcement(test_client):
     assert resp_missing_key.status_code in (400, 401)
     assert resp_missing_key.json["ok"] is False
 
-    resp_missing_user = test_client.post("/api/orca/sweep", json={"kaggle_key": "a1b2c3d4e5f60718293a4b5c6d7e8f90"})
+    resp_missing_user = test_client.post("/api/orca/sweep", json={"kaggle_key": "synthetic-kaggle-key-for-wiring-test"})
     assert resp_missing_user.status_code in (400, 401)
     assert resp_missing_user.json["ok"] is False
 

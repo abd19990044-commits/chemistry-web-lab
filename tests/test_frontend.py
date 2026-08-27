@@ -318,7 +318,8 @@ console.log('EVALUATED-OK');
             results = {}
             for label, seed in states.items():
                 proc = subprocess.run(
-                    [node, runner, json.dumps(sorted(html_ids)), APP_JS,
+                    [node, runner,
+                     json.dumps(sorted(html_ids | dynamic_ids)), APP_JS,
                      json.dumps(inline), json.dumps(seed)],
                     capture_output=True, text=True, timeout=60)
                 results[label] = proc
