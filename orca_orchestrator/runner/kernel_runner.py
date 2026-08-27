@@ -141,6 +141,11 @@ MAX_TOTAL_OPT_CYCLES = int(B.get("max_total_opt_cycles", 1500))
 # anything legitimate; the budget exists so a pathological fast-failing ORCA
 # cannot spin a pass per second until the session clock runs out.
 MAX_IN_SESSION_PASSES = int(B.get("max_in_session_passes", 48))
+# MaxDisk budget (MB) forced for EVERY calculation the runners execute: the
+# Kaggle scratch quota is shared by all job kinds, and an input that lets ORCA
+# guess its scratch needs can die mid-run on ENOSPC. Normalized, never
+# duplicated (see art.set_maxdisk).
+MAXDISK_MB = int(B.get("maxdisk_mb", 20000))
 PER_WINDOW_MAXITER = int(B.get("per_window_opt_maxiter", 200))
 HEARTBEAT_SECONDS = int(B.get("heartbeat_seconds", 45))
 WATCHDOG_POLL = int(B.get("watchdog_poll_seconds", 10))
@@ -1564,10 +1569,13 @@ def generate_molden_artifact(started=None):
     except OSError as exc:
         return {"status": "MOLDEN_FAILED", "detail": "could not launch orca_2mkl: %s" % exc}
 
-    outputs = sorted(glob.glob(wp(BASENAME + ".molden.input"))
-                     + glob.glob(wp(BASENAME + ".molden")))
+    outputs = sorted(glob.glob(wp(BASENAME + ".molden.input"))) + \
+        sorted(glob.glob(wp(BASENAME + ".molden")))
     fresh = [p for p in outputs
              if os.path.getsize(p) > 0 and os.path.getmtime(p) >= started - 1]
+    # <base>.molden.input is THE orca_2mkl artifact; a bare .molden is only a
+    # fallback, so prefer the primary name when both exist.
+    fresh.sort(key=lambda p: (0 if p.lower().endswith(".molden.input") else 1, p))
     if proc.returncode != 0:
         for p in fresh:                      # a failed run's partial output
             try:
@@ -1608,6 +1616,14 @@ def package_results(note=""):
             if name not in seen and os.path.isfile(path):
                 seen.add(name)
                 ordered.append(path)
+    # A molden file is only archived when THIS run generated and verified it.
+    # On failure the status is reported in JOB_NOTE and any stale/unverified
+    # *.molden* is excluded, so it can never be downloaded as this run's
+    # orbital artifact.
+    if molden["status"] != "MOLDEN_GENERATED":
+        _molden_re = re.compile(r"\.molden(\.input)?$", re.IGNORECASE)
+        ordered = [p for p in ordered
+                   if not _molden_re.search(os.path.basename(p))]
 
     manifest, included, skipped, total = [], 0, [], 0
     zip_path = os.path.join(OUTPUT_DIR, "results.zip")
@@ -1810,6 +1826,11 @@ def main():
              **clamp)
     if job_kind in ("opt", "opt_freq", "scan", "irc"):
         text = art.set_geom_maxiter(text, PER_WINDOW_MAXITER)
+    _pre_maxdisk = text
+    text = art.set_maxdisk(text, MAXDISK_MB)
+    if text != _pre_maxdisk:
+        emit("maxdisk_set",
+             "MaxDisk budget set to %d MB for this window" % MAXDISK_MB)
     atomic_write_bytes(inp_path, text.encode("utf-8"))
 
     cumulative_header = int(H.get("cumulative_opt_cycles") or 0)

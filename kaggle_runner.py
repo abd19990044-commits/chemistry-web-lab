@@ -866,6 +866,10 @@ DEFAULT_SCAN_MAXITER = 120          # per scan POINT, so it must stay modest
 MAX_GEOM_MAXITER = 4000
 DEFAULT_SCF_MAXITER = 500
 MAX_SCF_MAXITER = 2000
+# MaxDisk budget (MB) forced for EVERY window: the scratch quota is shared by
+# all job kinds, and letting ORCA guess its scratch needs can kill a run on
+# ENOSPC mid-calculation. Normalized, never duplicated.
+MAXDISK_MB = 20000
 
 PREP_NOTES = []                     # every rewrite applied to the user's input
 REFUSE_CONTINUATION = ""            # non-empty -> this job must never be continued
@@ -1155,6 +1159,11 @@ def _prepare_input(text, first_window):
             "failure. SlowConv changes the convergence PATH, so for a system with "
             "more than one SCF solution this window may land on a different one "
             "than the previous window did" % int(SCF_MAXITER))
+
+    _maxdisk_before = _block_value(text, "maxdisk", "MaxDisk")
+    text = _force_block_value(text, "maxdisk", "MaxDisk", MAXDISK_MB)
+    if _block_value(text, "maxdisk", "MaxDisk") != _maxdisk_before:
+        PREP_NOTES.append("MaxDisk normalized to %d MB for this window" % MAXDISK_MB)
 
     if is_tddft_opt and int(RESTART_COUNT) > 0:
         PREP_NOTES.append(

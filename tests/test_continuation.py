@@ -301,7 +301,12 @@ def run_all_checks():
     check("MaxIter lands inside %geom even when it holds a nested Constraints...end",
           re.search(r"(?is)%geom\s+MaxIter\s+500", out) is not None)
     check("...without disturbing the constraints themselves",
-          "{ B 0 1 C }" in out and out.count("end") == nested.count("end"))
+          "{ B 0 1 C }" in out
+          # Structural check inside the %geom block itself: the Constraints
+          # sub-block, maxstep and the block's own end must survive intact.
+          # (A whole-output "end" count would now also see the legitimate
+          # %maxdisk block the MaxDisk budget adds.)
+          and re.search(r"(?is)%geom[^%]*?\{ B 0 1 C \}[^%]*?maxstep 0\.1\s*end", out) is not None)
 
     one_line = "! B3LYP Opt\n%geom Scan B 0 1 = 1.0, 2.0, 10 end end\n"
     out = prepare_with(one_line)

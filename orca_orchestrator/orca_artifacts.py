@@ -894,6 +894,31 @@ def set_geom_maxiter(text: str, maxiter: int) -> str:
     return text[:body_start] + body + text[body_end:]
 
 
+def set_maxdisk(text: str, maxdisk_mb: int) -> str:
+    """Guarantees the %maxdisk MaxDisk budget (in MB) for a calculation.
+
+    An existing directive is NORMALIZED to the requested value (never
+    duplicated - ORCA aborts on duplicated keywords), and a missing one is
+    inserted into the %maxdisk block; without any block a minimal one is
+    appended. The value applies to every job kind: scratch-heavy Opt/NEB/MD
+    runs and single points share the same disk quota.
+    """
+    text = text or ""
+    span = find_block_span(text, "maxdisk")
+    if not span:
+        return text.rstrip() + "\n%%maxdisk\n  MaxDisk %d\nend\n" % int(maxdisk_mb)
+    start, body_start, body_end = span
+    body = text[body_start:body_end]
+    own_depth = _mask_nested_blocks(body)
+    km = re.search(r"(?i)\bmaxdisk\s+\d+", own_depth)
+    if km:
+        s, e = km.span()
+        body = body[:s] + "MaxDisk %d" % int(maxdisk_mb) + body[e:]
+    else:
+        body = "\n  MaxDisk %d\n" % int(maxdisk_mb) + body.lstrip("\n")
+    return text[:body_start] + body + text[body_end:]
+
+
 def requested_nprocs(text: str) -> int:
     m = re.search(r"%\s*pal\b(?:(?!\bend\b).)*?nprocs\s+(\d+)", text or "",
                   re.IGNORECASE | re.DOTALL)
