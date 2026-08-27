@@ -8,6 +8,8 @@
   },
   "description": "Chemistry Lab is a web-based computational chemistry platform for molecular structure exploration, ORCA quantum-chemistry workflows, scientific result analysis, spectroscopy visualization, thermochemistry, and fault-tolerant execution of long-running computational jobs.",
   "version": "1.0.3",
+  "doi": "10.5281/zenodo.22119038",
+  "doi_url": "https://doi.org/10.5281/zenodo.22119038",
   "license": {
     "name": "ORCA Web Lab Academic and Non-Commercial License v1.1",
     "type": "custom"

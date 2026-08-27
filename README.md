@@ -15,6 +15,7 @@ pinned: false
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![ORCA 6.x Compatible](https://img.shields.io/badge/ORCA-6.0%20%7C%206.1-orange.svg)](https://www.faccts.de/orca/)
 [![License: Academic & Non-Commercial v1.1](https://img.shields.io/badge/License-Academic%20%26%20Non--Commercial%20v1.1-blue.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22119038.svg)](https://doi.org/10.5281/zenodo.22119038)
 [![RDKit Chemistry](https://img.shields.io/badge/RDKit-2025.03-teal.svg)](https://www.rdkit.org/)
 [![CI Build Status](https://github.com/abd19990044-commits/chemistry-web-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/abd19990044-commits/chemistry-web-lab/actions/workflows/ci.yml)
 
@@ -171,9 +172,7 @@ Open your browser and navigate to: **`http://127.0.0.1:7860`**
 | `/api/orca/coords` | `POST` | Resolves compound names and SMILES to 3D Cartesian coordinates via PubChem. |
 | `/api/orca/generate` | `POST` | Generates validated ORCA 6 calculation input blocks. |
 | `/api/reaction` | `POST` | Processes and renders 2D reaction diagrams with stoichiometry and MDL RXN file. |
-| `/api/orca/upload-archive` | `POST` | Uploads and validates a Linux ORCA `.tar.xz` distribution archive with tar-slip protection. |
-| `/api/orca/archive/<id>` | `GET` / `DELETE` | Serves or deletes a stored ORCA `.tar.xz` archive package. |
-| `/api/kaggle/submit` | `POST` | Submits a long-running ORCA calculation to Kaggle supporting Dataset, Link, or Uploaded Archive. |
+| `/api/kaggle/submit` | `POST` | Submits a long-running ORCA calculation to Kaggle supporting Dataset or Direct Link. |
 | `/api/kaggle/sync` | `POST` | Synchronizes active and completed calculations for the signed-in user. |
 | `/api/kaggle/download` | `GET` | Downloads the complete verified scientific result bundle (`.zip`) containing Molden, `.out`, `.xyz`, and scratch files. |
 | `/api/kaggle/credentials` | `GET` / `POST` / `DELETE` | Retrieves metadata, securely stores AES-256-GCM ciphertext, or purges user credentials. |
@@ -182,10 +181,9 @@ Open your browser and navigate to: **`http://127.0.0.1:7860`**
 ---
 
 ### 5. ORCA Source Provisioning & Result Downloads
-- **Three Supported ORCA Sources**:
+- **Two Supported ORCA Sources**:
   1. **Kaggle Dataset**: Supply a private dataset identifier (e.g. `username/dataset` or dummy example `jon534/orca6`) or full URL.
   2. **Google Drive / Direct Link**: Provide a direct HTTP/Drive download link to your licensed Linux ORCA archive.
-  3. **Direct Upload (.tar.xz)**: Upload your Linux ORCA `.tar.xz` package directly. Validated with tar-slip / path-traversal protection and stored locally on the device for fast reuse across calculation jobs.
 - **Canonical Full ZIP Result Download**:
   - Single, canonical download button: `📦 Full ZIP`.
   - Automatically generates **Molden format** orbital representations (`orca_2mkl <basename> -molden`) when `.gbw` wavefunctions exist.
@@ -300,7 +298,8 @@ If you use Chemistry Lab in your academic research, teaching, or computational m
   title   = {{Chemistry Lab: A Web-Based Computational Chemistry Platform}},
   year    = {2026},
   version = {1.0.3},
-  url     = {https://github.com/abd19990044-commits/chemistry-web-lab},
+  doi     = {10.5281/zenodo.22119038},
+  url     = {https://doi.org/10.5281/zenodo.22119038},
   note    = {Academic and Non-Commercial Research Platform}
 }
 ```

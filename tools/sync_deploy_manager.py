@@ -376,12 +376,11 @@ def upload_to_github() -> tuple[bool, str]:
         print("[INFO] GitHub/ working tree is clean. No new commit needed.")
     else:
         commit_msg = (
-            "release: consolidate orca_engine license and ML dataset pipeline\n\n"
-            "- Consolidated orca_engine under ORCA Web Lab Academic and Non-Commercial License v1.1\n"
-            "- Added ML-ready canonical JSON and JSONL export with fail-closed target leakage protection\n"
-            "- Added deterministic calculation_id and multi-tier duplicate detection\n"
-            "- Restored Copy for Word clipboard integration for 2D structures and reaction equations\n"
-            "- Preserved all third-party license obligations (RDKit, Flask, Cryptography, 3Dmol.js)\n"
+            "docs: synchronize Chemistry Lab v1.0.3 DOI and documentation\n\n"
+            "- Synchronized official Zenodo DOI (10.5281/zenodo.22119038) across repository metadata\n"
+            "- Updated README.md, CITATION.cff, Academic Manual, and Citation Guides\n"
+            "- Unified product identity under Chemistry Lab v1.0.3\n"
+            "- Preserved Academic and Non-Commercial License v1.1\n"
             "- Zero em-dashes and en-dashes invariant maintained across all modules\n"
         )
         subprocess.check_call(["git", "commit", "-m", commit_msg], cwd=GH_DIR)

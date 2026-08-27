@@ -500,20 +500,21 @@ def create_manual(output_path: str):
         "  title        = {{Chemistry Lab: A Web-Based Computational Chemistry Platform}},\n"
         "  year         = {2026},\n"
         "  version      = {1.0.3},\n"
-        "  url          = {https://github.com/abd19990044-commits/chemistry-web-lab},\n"
-        "  note         = {Compatible with ORCA 6.1 program system}\n"
+        "  doi          = {10.5281/zenodo.22119038},\n"
+        "  url          = {https://doi.org/10.5281/zenodo.22119038},\n"
+        "  note         = {Academic and Non-Commercial Research Platform}\n"
         "}"
     )
 
     add_body("ACS / Vancouver Chemistry Format:", bold_prefix="2. ")
     add_body(
-        "Hasan, A. S. Chemistry Lab, version 1.0.3; Advanced Computational Chemistry & Spectroscopic Analysis Platform, 2026. https://github.com/abd19990044-commits/chemistry-web-lab",
+        "Hasan, A. S. Chemistry Lab, version 1.0.3; Advanced Computational Chemistry & Spectroscopic Analysis Platform, 2026. https://doi.org/10.5281/zenodo.22119038",
         space_after=8
     )
 
     add_body("APA 7th Edition Format:", bold_prefix="3. ")
     add_body(
-        "Hasan, A. S. (2026). Chemistry Lab: A Web-Based Computational Chemistry Platform (Version 1.0.3) [Computer software]. Retrieved from https://github.com/abd19990044-commits/chemistry-web-lab",
+        "Hasan, A. S. (2026). Chemistry Lab: A Web-Based Computational Chemistry Platform (Version 1.0.3) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.22119038",
         space_after=8
     )
 
