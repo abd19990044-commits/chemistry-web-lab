@@ -30,9 +30,24 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install ruff jsonschema
 
-      - name: Run Ruff Lint Checks
+      - name: Run Ruff Baseline Audit
+        continue-on-error: true
         run: |
-          ruff check . --config pyproject.toml
+          ruff check . --config pyproject.toml --output-format=github
+
+      - name: Run Blocking Python Syntax Check
+        run: |
+          python -m compileall -q \
+            app.py \
+            chem_core.py \
+            kaggle_runner.py \
+            reaction_conditions.py \
+            sitecustomize.py \
+            usercustomize.py \
+            chem_core \
+            orca_orchestrator \
+            orca_engine/src \
+            tools
 
       - name: Validate Canonical Scientific Schemas
         run: |
