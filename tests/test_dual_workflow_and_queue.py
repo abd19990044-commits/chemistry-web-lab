@@ -51,7 +51,8 @@ def test_extract_opt_coords_endpoint(client, monkeypatch):
         tmp_dir = tempfile.mkdtemp()
         zip_path = os.path.join(tmp_dir, "results.zip")
         with zipfile.ZipFile(zip_path, "w") as zf:
-            zf.writestr("job.out", SAMPLE_ORCA_OUTPUT)
+            zf.writestr("job.out", SAMPLE_ORCA_OUTPUT + "\nORCA TERMINATED NORMALLY\n")
+            zf.writestr("h2o_opt.inp", "! B3LYP def2-SVP Opt\n* xyz 0 1\nO 0 0 0\nH 0 0 0.96\nH 0 0 -0.96\n*\n")
             zf.writestr("JOB_NOTE.txt", "Job finished successfully.")
         return zip_path, tmp_dir
 

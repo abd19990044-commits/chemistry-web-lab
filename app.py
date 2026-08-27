@@ -1343,8 +1343,6 @@ def api_kaggle_extract_opt_coords():
 
         out_content = None
         out_name = None
-        out_content = None
-        out_name = None
         xyz_content = None
         inp_content = None
         with zipfile.ZipFile(zip_path, "r") as zf:
@@ -1364,6 +1362,40 @@ def api_kaggle_extract_opt_coords():
         clean_xyz = ""
         total_energy = None
         formula = ""
+
+        # ── Scientific eligibility gate ────────────────────────────────────
+        # A coordinate import must come from a genuinely completed geometry
+        # optimization. Classification reads the input the way ORCA does
+        # (comment text can never change the kind - "# opt test" stays an SP),
+        # and completion uses the same convergence markers the orchestrator
+        # enforces: "ORCA TERMINATED NORMALLY" alone is NOT convergence, and
+        # a run killed by time/disk/watchdog or aborted is not importable.
+        try:
+            from orca_orchestrator import orca_artifacts as _art
+        except ImportError:
+            _art = None
+        if _art is None:
+            return error_response("Coordinate extraction requires the orchestration module.", 503)
+        job_kind = _art.detect_job_kind(inp_content or "")
+        if job_kind not in ("opt", "opt_ts"):
+            return jsonify({
+                "ok": False,
+                "error": "This calculation is a %s, not a geometry optimization - "
+                         "coordinates can only be imported from completed Opt/OptTS runs." % (job_kind or "unknown"),
+                "code": "not_optimization",
+                "job_kind": job_kind,
+            }), 422
+        outcome = _art.classify_outcome(out_content or "", job_kind=job_kind)
+        if not outcome.is_complete:
+            return jsonify({
+                "ok": False,
+                "error": "This optimization did not converge (%s), so it has no final optimized "
+                         "geometry to import." % outcome.kind,
+                "code": "optimization_not_complete",
+                "job_kind": job_kind,
+                "outcome": outcome.kind,
+            }), 422
+
 
         # 1. Primary path: Extract from output .xyz file (Full 14-16 decimal precision verbatim from ORCA geometry engine)
         if xyz_content:
@@ -1404,21 +1436,11 @@ def api_kaggle_extract_opt_coords():
                 if extracted_lines:
                     clean_xyz = "\n".join(extracted_lines)
 
-        # 3. Tertiary fallback: Extract from input .inp file or echo in .out if no opt output was generated
-        if not clean_xyz and inp_content:
-            match = re.search(r"\*\s*xyz\s+[-+]?\d+\s+[-+]?\d+\s*\n(.*?)\n\s*\*", inp_content, re.DOTALL | re.IGNORECASE)
-            if match:
-                extracted_lines = []
-                for line in match.group(1).strip().splitlines():
-                    parts = line.strip().split()
-                    if len(parts) >= 4 and re.match(r"^[A-Za-z]{1,2}:?$", parts[0]):
-                        try:
-                            float(parts[1]), float(parts[2]), float(parts[3])
-                            extracted_lines.append(f"{parts[0]:<3} {parts[1]} {parts[2]} {parts[3]}")
-                        except ValueError:
-                            pass
-                if extracted_lines:
-                    clean_xyz = "\n".join(extracted_lines)
+        # NOTE: there is deliberately NO fallback to the INPUT geometry here.
+        # A coordinate import must be the FINAL optimized geometry of a
+        # completed optimization; silently substituting the initial input
+        # geometry would hand stage 2 a structure the optimization never
+        # produced (the exact failure the scientific review forbids).
 
         # 4. Quaternary fallback: Parse with OrcaParser for metadata and fallback geometry
         if out_content and OrcaParser:
@@ -1426,8 +1448,22 @@ def api_kaggle_extract_opt_coords():
                 parsed_jobs = OrcaParser(io.StringIO(out_content), source_name=out_name or job_id).parse()
                 if parsed_jobs:
                     last_job = parsed_jobs[-1]
-                    total_energy = getattr(last_job, "e_elec_eh", None) or getattr(last_job, "electronic_zpe_eh", None) or getattr(last_job, "gibbs_free_energy_eh", None)
-                    formula = getattr(last_job, "chemical_formula", "")
+
+                    def _plain(v):
+                        # Parser revisions differ: metadata may be attributes
+                        # OR methods. Normalize callables to their values.
+                        if callable(v):
+                            try:
+                                v = v()
+                            except Exception:  # noqa: BLE001
+                                return None
+                        return v
+
+                    total_energy = (_plain(getattr(last_job, "e_elec_eh", None))
+                                    or _plain(getattr(last_job, "electronic_zpe_eh", None))
+                                    or _plain(getattr(last_job, "gibbs_free_energy_eh", None)))
+                    _formula = _plain(getattr(last_job, "chemical_formula", "")) or ""
+                    formula = str(_formula)
                     if not clean_xyz and last_job.elements and last_job.coords:
                         lines = []
                         for el, (x, y, z) in zip(last_job.elements, last_job.coords, strict=False):
@@ -1439,10 +1475,28 @@ def api_kaggle_extract_opt_coords():
         if not clean_xyz:
             return error_response("No 3D coordinates found in calculation results or input file.", 404)
 
+        _geo_lines = [ln for ln in clean_xyz.splitlines() if ln.strip()]
+        if not _geo_lines or any(
+                not re.match(r"^[A-Za-z]{1,2}:?\s+[-+0-9.eE]+\s+[-+0-9.eE]+\s+[-+0-9.eE]+$", ln.strip())
+                for ln in _geo_lines):
+            return error_response(
+                "The extracted geometry failed validation (empty, malformed, or "
+                "non-numeric coordinates).", 422)
+        # A multi-atom structure with EVERY atom at the origin is degenerate,
+        # not optimized - refuse it rather than handing stage 2 a collapsed
+        # "molecule".
+        if len(_geo_lines) > 1 and all(
+                all(float(tok) == 0.0 for tok in ln.strip().split()[1:4])
+                for ln in _geo_lines):
+            return error_response(
+                "The extracted geometry is degenerate (every atom at the origin); "
+                "it cannot be an optimized structure.", 422)
         return jsonify({
             "ok": True,
             "job_id": job_id,
             "coords": clean_xyz,
+            "converged": True,
+            "job_kind": job_kind,
             "chemical_formula": formula or "",
             "total_energy_eh": total_energy,
             "e_elec_eh": total_energy,

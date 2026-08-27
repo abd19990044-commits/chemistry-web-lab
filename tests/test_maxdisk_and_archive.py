@@ -24,28 +24,55 @@ from orca_orchestrator import orca_artifacts as art  # noqa: E402
 # ---------------------------------------------------------------------------
 def test_maxdisk_inserted_when_absent():
     inp = "! B3LYP Opt\n* xyz 0 1\nO 0 0 0\n*"
-    out = art.set_maxdisk(inp, 20000)
+    out, effective, action = art.set_maxdisk(inp, 20000)
     assert out.count("MaxDisk 20000") == 1
     assert "%maxdisk" in out
+    assert (effective, action) == (20000, "inserted")
 
 
-def test_maxdisk_normalized_never_duplicated():
+def test_maxdisk_explicit_20000_is_preserved():
+    inp = "! B3LYP Opt\n%maxdisk\n  MaxDisk 20000\nend\n* xyz 0 1\nO 0 0 0\n"
+    out, effective, action = art.set_maxdisk(inp, 20000)
+    assert (effective, action) == (20000, "preserved")
+    assert out.count("MaxDisk") == 1
+
+
+def test_maxdisk_custom_valid_value_is_preserved():
+    """The generated runner must NOT silently replace a caller-supplied valid
+    MaxDisk with the 20000 default: a future cloud backend is allowed to raise
+    the budget."""
     inp = "! B3LYP Opt\n%maxdisk\n  MaxDisk 50000\nend\n* xyz 0 1\nO 0 0 0\n"
-    out = art.set_maxdisk(inp, 20000)
-    assert "MaxDisk 50000" not in out, "an existing MaxDisk must be normalized, not shadowed"
-    assert out.count("MaxDisk") == 1 and "MaxDisk 20000" in out
+    out, effective, action = art.set_maxdisk(inp, 20000)
+    assert (effective, action) == (50000, "preserved")
+    assert "MaxDisk 50000" in out and out.count("MaxDisk") == 1
+
+
+def test_maxdisk_invalid_value_is_rejected_to_the_default():
+    inp = "! B3LYP Opt\n%maxdisk\n  MaxDisk not-a-number\nend\n* xyz 0 1\nO 0 0 0\n"
+    out, effective, action = art.set_maxdisk(inp, 20000)
+    assert (effective, action) == (20000, "rejected-invalid")
+    assert "MaxDisk 20000" in out and "not-a-number" not in out
+
+
+def test_maxdisk_duplicates_collapse_to_one():
+    inp = "! B3LYP Opt\n%maxdisk\n  MaxDisk 50000\n  MaxDisk 30000\nend\n* xyz 0 1\nO 0 0 0\n"
+    out, effective, action = art.set_maxdisk(inp, 20000)
+    assert (effective, action) == (50000, "collapsed")
+    assert out.count("MaxDisk") == 1 and "MaxDisk 50000" in out
 
 
 def test_maxdisk_inserted_into_existing_block_without_duplicate():
     inp = "! B3LYP Opt\n%maxdisk\n  end\n* xyz 0 1\nO 0 0 0\n"
-    out = art.set_maxdisk(inp, 20000)
+    out, effective, action = art.set_maxdisk(inp, 20000)
     assert out.count("MaxDisk 20000") == 1
+    assert (effective, action) == (20000, "inserted")
 
 
 def test_maxdisk_does_not_touch_maxcore():
     inp = "! B3LYP Opt\n%maxcore\n  6000\nend\n* xyz 0 1\nO 0 0 0\n"
-    out = art.set_maxdisk(inp, 20000)
+    out, effective, action = art.set_maxdisk(inp, 20000)
     assert "6000" in out, "%maxcore must be untouched"
+    assert "MaxDisk 20000" in out
 
 
 def test_generated_kernel_script_enforces_maxdisk():

@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-08-27T22:25:46Z
+# Generated: 2026-08-27T23:52:54Z
 # Package Mode: RELEASE_FROM_COMMIT
 # Source State: clean_commit
-# Source Git SHA: 425867023b57556f72f5a75fef37b475767222d7
-# Package Tree Hash: e8c3abbb6dfb7b4e84cf730e562c360c20bf919f4952377dd356eeeb8cc8816d
-# Total Files: 307
-# Total Size: 30,621,919 bytes (29.20 MB)
+# Source Git SHA: 185d21e675f0283667bfb316f69a1228ab816fbd
+# Package Tree Hash: 5e0e6f3db57e178dce088c79deab3f4cc7d73e02bd1538383c701ae8041434bc
+# Total Files: 308
+# Total Size: 30,638,295 bytes (29.22 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -13,7 +13,7 @@
 .env.example                                       |        670 B | 83912c6ed8a1efd3cfdfa393f42ed6faa99616d54e274b6e7ec9e027c87ed934
 .github/workflows/ci.yml                           |      7,825 B | d241a57a6cd40f37f558a3b1c30cb39114eb20fb09b0261100bed582a38b3ba3
 .gitignore                                         |      1,007 B | 9c156f16da28dbfb0a69f340b7fd4dc7283b99fc46b6ce939877f8c64e47a185
-app.py                                             |    125,491 B | 32ee5b009ba88530b9e5b416bea6724313bf0f43c443989b14c8e8648065f662
+app.py                                             |    128,306 B | 1687120eb01c75ce76740b27d9fb37988f190703277737fd6b289dc098c298f8
 ARCHITECTURE.md                                    |     48,949 B | a50d3a2703d48a159a61037d46fea6a2279d0b3a6bf79bb9bc307675c6656f8b
 benchmarks/benzene_tddft.out                       |      1,551 B | 2510aaa519c6fe573da8436020801ca8bc2d9040b442f045f12802300a103e7c
 benchmarks/water_sp_freq.out                       |      3,095 B | a8c69da119edc8a2de9a4158a6cc7111ce015380a97e1810e9609ee0d1d9e63e
@@ -57,7 +57,7 @@ DEPLOY.md                                          |      9,495 B | d58aa1bed817
 Dockerfile                                         |      1,426 B | 9a5808b6a195f52988d4c2ac06b4b73761a032f124a58756a8cb088366cfa2e1
 docs/SCIENTIFIC_JSON_SCHEMA.md                     |     20,598 B | 3a5efcca4e91af8f364de87ac0ff635146d25f6715ad1b32c0d3a28bceaab2d6
 kaggle_runner/__init__.py                          |      1,347 B | 73d30fc6625d564f90a6698b681178df4c4f8a389e7ea1507994c8be03f0de3a
-kaggle_runner.py                                   |    182,440 B | 03868f130ee2cee7c67f869c6418282701006b463a4c4d275cce6ed7ea37a772
+kaggle_runner.py                                   |    183,856 B | 22fa7b8898e64cdcb0618d554cc49947fca50a86c9bfc5ca9ebbd7bbd9e4932d
 LICENSE                                            |     21,091 B | 5be6f2b9d34c8d3d2ca7d26e91013abe150c6070ed5ec976dd95745c444d268e
 LICENSE.txt                                        |     21,091 B | 5be6f2b9d34c8d3d2ca7d26e91013abe150c6070ed5ec976dd95745c444d268e
 orca_engine/.github/workflows/ci.yml               |      2,261 B | 95001c5859975b25297ba894df9ea49201aded1a0be4d5b0dbe898f4b98f052e
@@ -194,7 +194,7 @@ orca_orchestrator/cloudflare_controller/config.py  |        893 B | 573ad76cc4db
 orca_orchestrator/cloudflare_controller/controller.py |     13,651 B | db4deb2cc72121c828c1656413e5f8598ece8fe87e98972c9028954157f84e10
 orca_orchestrator/cloudflare_controller/models.py  |     16,260 B | f90341e7031b2d66cb884590a13f7aea16c6eca63815c539c8111babd1f40c4f
 orca_orchestrator/cloudflare_controller/reconciliation.py |     10,330 B | e342fb66d460414ba9edb735b14c987728c6a64aab31fd003c03b223e24c1da4
-orca_orchestrator/config.py                        |     12,970 B | 557e4bb6f1d8602c1d8b1c10cd4812437df8f09191d368a241b0734968627705
+orca_orchestrator/config.py                        |     13,321 B | cf2d6a3799bd7ee26786556290bc3bafa3db071453db27c4057de255696e4741
 orca_orchestrator/credential_vault.py              |     13,155 B | ac75217677cfe537e5ceacb6ddb8ea3048d25461a841a74eaea7a5dd924fb998
 orca_orchestrator/credentials.py                   |      8,516 B | 5a070fad7984a35bab311baa1d0ee7a8c0d7a5858f1e936371d9d383d3103b38
 orca_orchestrator/errors.py                        |      5,750 B | 6e96d66b34d3491dfd467800a73dd2da5195c452fcf6fa69eba6c6c22489b4c2
@@ -204,13 +204,13 @@ orca_orchestrator/ledger.py                        |     17,968 B | b12360b034d9
 orca_orchestrator/legacy_compat.py                 |     15,591 B | 8743602a130f273a16d1333cec29782b579956753b2bd77d46b55bdd7fbbe5a8
 orca_orchestrator/logging_ext.py                   |     10,243 B | 819fd23b15f13f4acf3dcc6624031076e481caf214b21f498ed20217f97e03db
 orca_orchestrator/models.py                        |     19,247 B | 56d8d3a1cc11ffc23de2081734f8c564e9fc50e496b53ef8f54e43ffa056c039
-orca_orchestrator/orca_artifacts.py                |     45,201 B | 2a82539a7bc0d3d4d454cc1cf947674fed3bb7678eba30e1e9d87dcc43ae4d69
+orca_orchestrator/orca_artifacts.py                |     46,912 B | 8a0495416547e5242b47a1b24691c8934e71b622b354091184521393f2b9b209
 orca_orchestrator/reconciler.py                    |     48,287 B | f3d1e8faaee651687a2d2f8d8e32fb7e0b7bb7a85a76caf0654913e7e3c72dbd
 orca_orchestrator/result_store.py                  |     14,393 B | b2352f873473cc0b663e3e24d6e2d68dbd3e2ee916e8d2e91a0a5cd3ba0e4e71
 orca_orchestrator/retry.py                         |      9,398 B | a3ab5fe3d6ec0288241d2236dc973182d6000060067b749c6b643a926b79e684
 orca_orchestrator/runner/__init__.py               |        238 B | e763d5e1898ef64f5ed165537a16d0d9fccbc7b406e4c6bb74a99e0771c05d00
-orca_orchestrator/runner/builder.py                |     11,195 B | 7094782ca5d8d52c01fc6cb31c58c44c21d95a84c2dcbe171e25601edb684f8c
-orca_orchestrator/runner/kernel_runner.py          |     99,389 B | 103b075bbf838b3a16253c80718f6ea0494c044edb865cf8d6eb2280f5e101ea
+orca_orchestrator/runner/builder.py                |     11,243 B | d7e810bfc289c9ce356e4d97dfa0ae316723cc2fafbe8da1bc5aa494cc8af595
+orca_orchestrator/runner/kernel_runner.py          |    100,321 B | 86da95772769c5aee3e36a3c104aea076560d6e722125ce6e68413ce61bf18c1
 orca_orchestrator/service.py                       |     40,468 B | 058da4e96a5fd9d8460eec849bf5696cddb960a3a6011ae655f43ae4d0f1ca68
 orca_orchestrator/states.py                        |     16,978 B | b417081bf71b16a4c58041ceba8cff51522329efb2f70e9ff1ebc657716ec528
 orca_orchestrator/store.py                         |     30,969 B | a45deacef9733bcdbd63467abb11d4cd3bed4e3112a55ff85dc9764dc78fc96d
@@ -248,7 +248,7 @@ static/css/style.css                               |     84,676 B | 3d5fe1508d42
 static/css/theme.css                               |      4,191 B | 0f46f52179f51f6f9e33d6afd4c1186a55cd4bff5de3e631055a9290c21cb0da
 static/docs/ChemistryLab_User_Manual.docx          |     46,938 B | 35f84c0a37efc80a0283904d56198d18cdba7a648f2492f4c6c76f331ce9b211
 static/job_runtime_fix.js                          |      1,641 B | 9133e459435dfad6a353c774a92c10cf37656eb529f114ca61dec2be5a63c697
-static/js/app.js                                   |    474,040 B | 645367fd04c1e04c9cd9bf0bfc4563b506e40cd230c8d6d9718381857bdad20a
+static/js/app.js                                   |    474,749 B | 5e262019f17c010fa2a654a3320050beee2c8770fada89ed40104bd89ca04923
 static/js/kaggle_credentials.js                    |     13,632 B | afa45631bbcb3f8e4dacc676adaf39c14e06c765750c3845c5dcc24a449f27b3
 static/js/reaction-editor.js                       |      4,508 B | 10f31d07d35ef8a7450b1dfefdb5c32ec44646a962a3b22154c8d9fd753d5be2
 static/js/workers/archive-worker.js                |     20,420 B | 29eff680289ace2a4ee5784419c0a189f5e962a054914a5e6d6f9e2ad66073f8
@@ -271,7 +271,7 @@ tests/test_cloudflare_worker_contract.py           |     41,225 B | ab6c7e3c1f57
 tests/test_continuation.py                         |     27,068 B | 544054c3e728d1d10498b46fdb238facf313b61d67835dbea395d4857747cdb2
 tests/test_deployment.py                           |      7,581 B | 44c14472f19e7d963a16ccc22410189560bccd0e9825b809ffe295e80b56b376
 tests/test_drawing.py                              |      1,611 B | c27c83c7e375f3a5fffdaba84a5a18c2b41c42585233250d5124c5a452cf66e6
-tests/test_dual_workflow_and_queue.py              |      3,832 B | e8f047734421d7aaf661764f830f83e4b842f6611f79540bc7fbbb3e5a306faa
+tests/test_dual_workflow_and_queue.py              |      3,978 B | 696a435622cef09495848fae421f8efc22dc8fc013564d9ae1c402e4dc95af6c
 tests/test_end_to_end_chain.py                     |     24,303 B | 5e36f66931cab71da4011d841d53107e64f1bde8811065f3c4b0b01f1ae0eeae
 tests/test_experimental_spectrum.py                |     11,017 B | 54f8d7def56f43af8e889631ff7d4063dec125b6d666865e32b4511e45c971a7
 tests/test_frontend.py                             |     17,638 B | 77e77192d81500a5ee54e4e66018b5526c30fdf2a2c7eecee42bbdcd6e566bdb
@@ -282,20 +282,21 @@ tests/test_kaggle_dataset_normalization.py         |      3,836 B | bd367eefd956
 tests/test_licensing.py                            |     13,999 B | 7388cd0d326289d85619757e234a4a016af1411b463dd59e179307711cbb0562
 tests/test_licensing_compliance.py                 |      7,884 B | 74698183b03a43a4ae37c6dfbe69ec1d2ccd12b04d959480d678601086d3cb73
 tests/test_lifecycle_simulation.py                 |     18,558 B | 7d77a9d7542f25bf1723db50e108f910183fe2b380c5f1c287150101ded88ea5
-tests/test_maxdisk_and_archive.py                  |      6,491 B | 682c4d945846db9980a9ea6012bfe02fb266726b7e28f3037907015a21d32655
+tests/test_maxdisk_and_archive.py                  |      7,778 B | e0be7a45d7a15026b091db2b3c9de96ff74713cca0f85d6c413ec309cae9d247
 tests/test_molden_artifact.py                      |      5,499 B | c389dc021761cbd5888aa243f0981460c93c287b57f7bfeb93cf994ae1984caa
 tests/test_navigation_routes.py                    |      2,936 B | 6b3ccfd45a8339f7bb7fbf0fd888d9789b3252d9f5e632ce30606a520bbc8641
 tests/test_nmr_api.py                              |      4,572 B | e6cb967937e04db1ff99e9d1979f89eb750365bc72a3bf962e5a504a1d2e31bf
 tests/test_nmr_golden.py                           |      6,758 B | f843c3186e8499b844dcdaad5cf001674b2c4f4f442bd9ff75f0c59b9482fa7f
 tests/test_nmr_parser.py                           |      4,749 B | c4a87a891bf68102fc9ba93702ee20342305531e5f9c53a0be95dbead7fec374
 tests/test_nmr_spectrum.py                         |      3,711 B | 26e73202deaaa4135def4a32812f90cc8524209c45a23401385570c43b1d923c
+tests/test_opt_coords_filter.py                    |      6,328 B | f109480e2fcfd4b9b37f8b3e72c725bb51db829fce69bcd09f0f629913f976c7
 tests/test_orca_builder.py                         |     19,467 B | 215dbae50a5f2582ef1645883e868f01be3da9c86e00e6f8b463e7851f514fdb
 tests/test_orca_engine_api.py                      |      9,412 B | 8932b63fbabf2be1a3f4ab41e5226037f49eba2f918e0a0e89fcb53a3364c962
 tests/test_orca_input_generator.py                 |      4,529 B | a62fa68e03828d35caae7d10b43539a51736df3f35219e1dfdf054ff1b51dfe2
 tests/test_orca_runtime_smoke.py                   |      5,911 B | 2f4efddf3a0c8bffff0540092405e9e2cd219f20b8a5291d4fcb0f2b48cb9d38
 tests/test_orca_source_and_results.py              |      5,669 B | 9054f52527021672925f49129a847b6cec2fd0b2c5fc86cc2bf1ad715c7ecbcf
 tests/test_orchestrator.py                         |     37,446 B | f63921ad4cc11b9287daa370bdfc362ab87f1c801bd537db6ec7032d89c74e3e
-tests/test_production_forensic_fixes.py            |     19,346 B | 20984e0fbf54f79dfad30f471cb070c3682ae84a5f4ffb24af83f4fc099b11f0
+tests/test_production_forensic_fixes.py            |     19,956 B | 5403d20ba39a9269dd01a9f47e260b360b673070c4010a4bfce2abf317215bdb
 tests/test_production_repairs.py                   |      7,963 B | 86e86a4fe8ad1f096b53945b42617bba4954231e6db899c574ed4cc7486a445e
 tests/test_production_wiring.py                    |     15,898 B | c41fe1e6c1b10d9a251e3aba00ea537b0833bb30d7248467717266f58c5821fd
 tests/test_pubchem_kaggle_thermo_fixes.py          |     14,462 B | 59d3af1294b8bd5969ada36566040c1abf7443fb0ee52bfaf2f350fa691499ca
@@ -307,7 +308,7 @@ tests/test_scientific_result_durability.py         |     22,226 B | 610e0869e640
 tests/test_security_hardening.py                   |     11,389 B | 366c0c0d911affebc457e80f4ee5abeb2cb1c0291119ce00423eadd8020346a6
 tests/test_spectra_enhancements.py                 |      5,796 B | b694e95b45d5dec6dd1e2d90ef43d43552e4d482acf18a820b2d7ffabe4844a1
 tests/test_thermochemistry_dual_slot.py            |      5,452 B | b9941981a46e1a96da437bb8feb28c9929b34cdfaa67e827c85d22b056a3a62b
-tests/test_web_routes.py                           |     26,329 B | 6bdddc484afbb859e26e167bc4df8b7cf90bd0790b0f7683fbe46ffa503ce1de
+tests/test_web_routes.py                           |     26,352 B | 98a7e7ccd6a63c2be9bdc72d89dae84495cbc57589f38e0e0c7579cd48f7d07f
 tests/test_word_copy_exports.py                    |      2,163 B | 2e02540b0b6cfc00355ae2bc7c070e042e94c93f3b80fb29e7773a9260d60967
 THIRD_PARTY_LICENSES.md                            |      9,328 B | ccde48b9db055d777b19ef6702983cc0ef17d72e775c45fc2e4321ae058836b8
 tools/build_deployment_packages.py                 |     22,310 B | f95c77b76d0b4096d74d2ecc38df2b19c4dda893829b02442837c9a86b76eadb

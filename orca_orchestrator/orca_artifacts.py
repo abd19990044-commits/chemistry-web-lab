@@ -894,29 +894,82 @@ def set_geom_maxiter(text: str, maxiter: int) -> str:
     return text[:body_start] + body + text[body_end:]
 
 
-def set_maxdisk(text: str, maxdisk_mb: int) -> str:
-    """Guarantees the %maxdisk MaxDisk budget (in MB) for a calculation.
+def set_maxdisk(text: str, default_mb: int = 20000):
+    """Ensures exactly one valid MaxDisk directive with the configured budget.
 
-    An existing directive is NORMALIZED to the requested value (never
-    duplicated - ORCA aborts on duplicated keywords), and a missing one is
-    inserted into the %maxdisk block; without any block a minimal one is
-    appended. The value applies to every job kind: scratch-heavy Opt/NEB/MD
-    runs and single points share the same disk quota.
+    Caller-configured values are PRESERVED: the configured/default budget is
+    applied only when no valid directive exists (or the existing one is
+    invalid). Duplicate directives collapse to the first valid one - ORCA
+    aborts on a duplicated keyword. ``%maxcore`` is never touched.
+
+    Returns ``(text, effective_mb, action)`` where action is one of
+    "preserved", "inserted", "collapsed", "rejected-invalid".
     """
     text = text or ""
-    span = find_block_span(text, "maxdisk")
-    if not span:
-        return text.rstrip() + "\n%%maxdisk\n  MaxDisk %d\nend\n" % int(maxdisk_mb)
-    start, body_start, body_end = span
-    body = text[body_start:body_end]
+    default_mb = max(1, int(default_mb))
+    masked = _mask_comments(text)
+
+    # Locate every %maxdisk block (start, end-of-key, start-of-end-token).
+    spans = []
+    for m in re.finditer(r"(?im)^[ \t]*%\s*maxdisk\b", masked):
+        depth, end = 1, None
+        for tm in _NEST_TOKEN_RE.finditer(masked, m.end()):
+            if tm.group(1).lower() == "end":
+                depth -= 1
+                if depth == 0:
+                    end = tm.start()
+                    break
+            else:
+                depth += 1
+        if end is not None:
+            spans.append((m.start(), m.end(), end))
+
+    if not spans:
+        return (text.rstrip() + "\n%%maxdisk\n  MaxDisk %d\nend\n" % default_mb,
+                default_mb, "inserted")
+
+    # Collapse extra %maxdisk blocks (a duplicated block means a duplicated
+    # budget); keep the first.
+    for (s, _ke, e) in reversed(spans[1:]):
+        line_end = text.find("\n", e)
+        line_end = len(text) if line_end == -1 else line_end + 1
+        text = text[:s] + text[line_end:]
+
+    start, key_end, end = spans[0]
+    body = text[key_end:end]
     own_depth = _mask_nested_blocks(body)
-    km = re.search(r"(?i)\bmaxdisk\s+\d+", own_depth)
-    if km:
-        s, e = km.span()
-        body = body[:s] + "MaxDisk %d" % int(maxdisk_mb) + body[e:]
+
+    directives = list(re.finditer(r"(?i)\bMaxDisk\s+(\S+)", own_depth))
+    if not directives:
+        body = "\n  MaxDisk %d\n" % default_mb + body.lstrip("\n")
+        return text[:key_end] + body + text[end:], default_mb, "inserted"
+
+    parsed = []
+    for d in directives:
+        try:
+            value = int(d.group(1))
+        except ValueError:
+            value = None
+        if value is not None and value <= 0:
+            value = None
+        parsed.append((d, value))
+
+    first_d, first_v = parsed[0]
+    if first_v is None:
+        effective, action = default_mb, "rejected-invalid"
     else:
-        body = "\n  MaxDisk %d\n" % int(maxdisk_mb) + body.lstrip("\n")
-    return text[:body_start] + body + text[body_end:]
+        effective = first_v
+        action = "collapsed" if len(parsed) > 1 else "preserved"
+
+    pieces, last = [], 0
+    for idx, (d, _v) in enumerate(parsed):
+        pieces.append(body[last:d.start()])
+        pieces.append(("MaxDisk %d" % effective) if idx == 0 else "")
+        last = d.end()
+    pieces.append(body[last:])
+    body = "".join(pieces)
+
+    return text[:key_end] + body + text[end:], effective, action
 
 
 def requested_nprocs(text: str) -> int:

@@ -192,6 +192,11 @@ class RunnerConfig:
     #: brake that stops a genuinely non-converging system from consuming
     #: max_epochs * 11 h of somebody's Kaggle quota for nothing.
     max_total_opt_cycles: int = _env_int("ORCA_MAX_TOTAL_OPT_CYCLES", 1500)
+    #: %maxdisk MaxDisk budget (MB) written into every window's input when the
+    #: caller did not configure one. A caller-supplied valid MaxDisk is always
+    #: preserved; this is only the fallback for future backends (e.g. a cloud
+    #: quota of 50000 MB) - never a Kaggle-only constant.
+    maxdisk_mb: int = _env_int("ORCA_MAXDISK_MB", 20000)
     #: %geom MaxIter written into each window's input. ORCA's own default is
     #: 200; a window that ends at MaxIter is continued from its last geometry
     #: with a fresh budget, which is the standard manual recovery.

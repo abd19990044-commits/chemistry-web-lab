@@ -400,14 +400,15 @@ def run_all_checks():
             r = client.post("/api/kaggle/login", json={"kaggle_username": "tester",
                                                        "kaggle_key": KEY})
             body = r.get_json()
+            err_text = str((body or {}).get("error", ""))
             check("REGRESSION: %s answers 503, not 401" % label,
                   r.status_code == 503, "got %s: %s" % (r.status_code, json.dumps(body)[:160]))
-            check("...and says it is the site's problem", marker in body["error"], body["error"][:160])
+            check("...and says it is the site's problem", marker in err_text, err_text[:160])
             check("...and warns against regenerating the token",
-                  "regenerate" in body["error"].lower(), body["error"][:200])
+                  "regenerate" in err_text.lower(), err_text[:200])
             check("...and does not put a Python traceback in front of the user",
-                  "Traceback" not in body["error"] and "ModuleNotFound" not in body["error"],
-                  body["error"][:200])
+                  "Traceback" not in err_text and "ModuleNotFound" not in err_text,
+                  err_text[:200])
 
         with_cli(FakeCli(list=(1, "", "401 - Unauthorized")))
         r = client.post("/api/kaggle/login", json={"kaggle_username": "tester", "kaggle_key": KEY})

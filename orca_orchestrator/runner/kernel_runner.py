@@ -145,7 +145,10 @@ MAX_IN_SESSION_PASSES = int(B.get("max_in_session_passes", 48))
 # Kaggle scratch quota is shared by all job kinds, and an input that lets ORCA
 # guess its scratch needs can die mid-run on ENOSPC. Normalized, never
 # duplicated (see art.set_maxdisk).
-MAXDISK_MB = int(B.get("maxdisk_mb", 20000))
+try:
+    MAXDISK_MB = max(1, int(B.get("maxdisk_mb", 20000)))
+except (TypeError, ValueError):
+    MAXDISK_MB = 20000  # a malformed budget must never abort a window
 PER_WINDOW_MAXITER = int(B.get("per_window_opt_maxiter", 200))
 HEARTBEAT_SECONDS = int(B.get("heartbeat_seconds", 45))
 WATCHDOG_POLL = int(B.get("watchdog_poll_seconds", 10))
@@ -1760,6 +1763,24 @@ def main():
 
     write_state("QUEUED", note="window booted")
 
+    # Stale-output quarantine: /kaggle/working and the session scratch
+    # survive a notebook re-run, so artifacts of a PREVIOUS job/window are
+    # removed at boot - the final zip must always be THIS run's output.
+    # Checkpoint and user-supplied restart artifacts are restored right
+    # afterwards by restore_checkpoint() and are never touched here.
+    for _stale_name in ("results.zip", "JOB_NOTE.txt"):
+        _stale_path = os.path.join(OUTPUT_DIR, _stale_name)
+        try:
+            if os.path.exists(_stale_path):
+                os.remove(_stale_path)
+        except OSError:
+            pass
+    for _stale_path in glob.glob(wp("*.molden")) + glob.glob(wp("*.molden.input")):
+        try:
+            os.remove(_stale_path)
+        except OSError:
+            pass
+
     deadline = START_TIME + TIME_LIMIT - HANDOFF_RESERVE
     ok, verification = restore_checkpoint(deadline)
     if not ok:
@@ -1826,11 +1847,10 @@ def main():
              **clamp)
     if job_kind in ("opt", "opt_freq", "scan", "irc"):
         text = art.set_geom_maxiter(text, PER_WINDOW_MAXITER)
-    _pre_maxdisk = text
-    text = art.set_maxdisk(text, MAXDISK_MB)
-    if text != _pre_maxdisk:
+    text, _maxdisk_mb, _maxdisk_action = art.set_maxdisk(text, MAXDISK_MB)
+    if _maxdisk_action != "preserved":
         emit("maxdisk_set",
-             "MaxDisk budget set to %d MB for this window" % MAXDISK_MB)
+             "MaxDisk %s: %d MB for this window" % (_maxdisk_action, _maxdisk_mb))
     atomic_write_bytes(inp_path, text.encode("utf-8"))
 
     cumulative_header = int(H.get("cumulative_opt_cycles") or 0)

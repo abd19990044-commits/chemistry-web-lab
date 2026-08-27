@@ -105,6 +105,7 @@ CARTESIAN COORDINATES (ANGSTROEM)
   H      0.000000   -0.757000   -0.468800
 ---------------------------------
 *** OPTIMIZATION RUN DONE ***
+THE OPTIMIZATION HAS CONVERGED
 VIBRATIONAL FREQUENCIES
 -----------------------
    1:      1595.00 cm**-1
@@ -116,6 +117,8 @@ VIBRATIONAL FREQUENCIES
     with zipfile.ZipFile(zip_path, "w") as zf:
         zf.writestr("molecule.out", out_text)
         zf.writestr("molecule.xyz", "3\n\nO 0.000000 0.000000 0.117200\nH 0.000000 0.757000 -0.468800\nH 0.000000 -0.757000 -0.468800\n")
+        zf.writestr("molecule.inp", "! B3LYP def2-SVP Opt\n* xyz 0 1\nO 0 0 0\nH 0 0 0.96\nH 0 0 -0.96\n*\n")
+
     
     with open(os.path.join(mock_slug_dir, "_mock_meta.json"), "w") as fh:
         json.dump({"status": "complete", "pushed_at": time.time() - 10, "slug": job_id, "owner": "testuser"}, fh)
@@ -230,6 +233,7 @@ CARTESIAN COORDINATES (ANGSTROEM)
   H      0.000000   -0.757000   -0.468800
 ---------------------------------
 *** OPTIMIZATION RUN DONE ***
+THE OPTIMIZATION HAS CONVERGED
 ****ORCA TERMINATED NORMALLY****
 """
     # Create a zip containing a trajectory file that has 2 frames concatenated
@@ -248,6 +252,8 @@ H 0.000000 -0.757000 -0.468800
     with zipfile.ZipFile(zip_path, "w") as zf:
         zf.writestr("molecule.out", out_text)
         zf.writestr("molecule_trj.xyz", trajectory_xyz)
+        zf.writestr("molecule.inp", "! B3LYP def2-SVP Opt\n* xyz 0 1\nO 0 0 0\nH 0 0 0.96\nH 0 0 -0.96\n*\n")
+
         zf.writestr("ORIGINAL_input.xyz", "3\n\nO 0.0 0.0 0.5\nH 0.0 1.0 0.0\nH 0.0 -1.0 0.0\n")
 
     with open(os.path.join(mock_slug_dir, "_mock_meta.json"), "w") as fh:
@@ -444,6 +450,12 @@ H   0.000000000000  -0.757123456789  -0.468898765432
     zip_path = os.path.join(mock_slug_dir, "results.zip")
     with zipfile.ZipFile(zip_path, "w") as zf:
         zf.writestr("molecule.xyz", high_prec_xyz)
+        zf.writestr("molecule.out",
+                    "FINAL SINGLE POINT ENERGY      -76.450000\n"
+                    "THE OPTIMIZATION HAS CONVERGED\n"
+                    "****ORCA TERMINATED NORMALLY****\n")
+        zf.writestr("molecule.inp", "! B3LYP def2-SVP Opt\n* xyz 0 1\nO 0 0 0\nH 0 0 0.96\nH 0 0 -0.96\n*\n")
+
 
     with open(os.path.join(mock_slug_dir, "_mock_meta.json"), "w") as fh:
         json.dump({"status": "complete", "pushed_at": time.time() - 10, "slug": job_id, "owner": "testuser"}, fh)

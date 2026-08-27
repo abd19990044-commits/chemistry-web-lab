@@ -869,7 +869,10 @@ MAX_SCF_MAXITER = 2000
 # MaxDisk budget (MB) forced for EVERY window: the scratch quota is shared by
 # all job kinds, and letting ORCA guess its scratch needs can kill a run on
 # ENOSPC mid-calculation. Normalized, never duplicated.
-MAXDISK_MB = 20000
+try:
+    MAXDISK_MB = max(1, int(os.environ.get("ORCA_MAXDISK_MB", "20000")))
+except (TypeError, ValueError):
+    MAXDISK_MB = 20000
 
 PREP_NOTES = []                     # every rewrite applied to the user's input
 REFUSE_CONTINUATION = ""            # non-empty -> this job must never be continued
@@ -968,6 +971,34 @@ def _force_block_value(text, block, key, value):
             return text[:body_start] + body + text[body_end:]
     body = "\n  " + key + " " + str(value) + "\n" + body.lstrip("\n")
     return text[:body_start] + body + text[body_end:]
+
+
+def _normalize_maxdisk(text, default_mb):
+    """Ensures exactly one valid MaxDisk directive with the configured budget.
+
+    A caller-configured valid value is PRESERVED - any backend may raise the
+    budget, so a valid MaxDisk is never silently replaced with the default.
+    Missing or invalid directives fall back to the default, and duplicate
+    directives collapse to the first one (ORCA aborts on duplicates).
+    Returns (text, effective_mb, action)."""
+    before = _block_value(text, "maxdisk", "MaxDisk")
+    if before is not None and before > 0:
+        # Collapse duplicate directives beyond the first (same value kept).
+        span = _find_block(text, "maxdisk")
+        if span:
+            body = text[span[1]:span[2]]
+            if len(re.findall(r"(?i)\bMaxDisk\s+\d+", body)) > 1:
+                kept, seen = [], False
+                for ln in body.splitlines(keepends=True):
+                    if re.match(r"(?i)\s*MaxDisk\s+\d+", ln):
+                        if seen:
+                            continue
+                        seen = True
+                    kept.append(ln)
+                text = text[:span[1]] + "".join(kept) + text[span[3]:]
+        return text, before, "preserved"
+    return _force_block_value(text, "maxdisk", "MaxDisk", int(default_mb)), int(default_mb), (
+        "inserted" if before is None else "rejected-invalid")
 
 
 def _ensure_simple_keyword(text, keyword):
@@ -1160,10 +1191,9 @@ def _prepare_input(text, first_window):
             "more than one SCF solution this window may land on a different one "
             "than the previous window did" % int(SCF_MAXITER))
 
-    _maxdisk_before = _block_value(text, "maxdisk", "MaxDisk")
-    text = _force_block_value(text, "maxdisk", "MaxDisk", MAXDISK_MB)
-    if _block_value(text, "maxdisk", "MaxDisk") != _maxdisk_before:
-        PREP_NOTES.append("MaxDisk normalized to %d MB for this window" % MAXDISK_MB)
+    text, _maxdisk_mb, _maxdisk_action = _normalize_maxdisk(text, MAXDISK_MB)
+    if _maxdisk_action != "preserved":
+        PREP_NOTES.append("MaxDisk %s: %d MB for this window" % (_maxdisk_action, _maxdisk_mb))
 
     if is_tddft_opt and int(RESTART_COUNT) > 0:
         PREP_NOTES.append(

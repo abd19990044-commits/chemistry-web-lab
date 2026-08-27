@@ -25,16 +25,15 @@
       ""
     ).toLowerCase();
 
-    if (
-      type.includes("opt") ||
-      type.includes("relax") ||
-      type.includes("geom") ||
-      type.includes("ts") ||
-      type.includes("scan") ||
-      type.includes("neb")
-    ) {
-      return true;
-    }
+    // Coordinate sources are geometry optimizations ONLY (Opt / OptTS / the
+    // combined Opt+Freq forms), identified from structured calculation
+    // metadata - never from a job's name or comment text (an SP whose comment
+    // says "opt" is still an SP). Scan/NEB are reaction paths, not converged
+    // minima; SP/Freq/NumFreq/TD-DFT have no optimized geometry to import.
+    // Convergence itself is enforced server-side by /api/kaggle/
+    // extract-opt-coords via the ORCA classifier.
+    return /geometry optimization|\bopt\b|optts|opt_ts|opt\+freq/.test(type)
+      && !/scan|neb|relax/.test(type);
 
     const name = String(job.name || "").toLowerCase();
     if (
@@ -1034,7 +1033,12 @@
 
       try {
         const savedJobs = JSON.parse(localStorage.getItem(LS_KEYS.jobs) || "[]");
-        const optJobs = savedJobs.filter(isOptimizationJob);
+        // Only genuinely COMPLETED optimizations are offered as coordinate
+        // sources: failed, aborted, unconverged and still-running jobs are
+        // hidden (requirement: import shows only valid completed OPT results).
+        const optJobs = savedJobs.filter(
+          (sj) => isOptimizationJob(sj) && (sj.status === "complete" || sj.optimizedCoords)
+        );
         optJobs.forEach((sj, idx) => {
           let cCoords = "";
           if (sj.result && sj.result.xyz) {
