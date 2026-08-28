@@ -18,3 +18,9 @@ jsonschema>=4.20.0
 # Authenticated AEAD encryption for Kaggle credentials
 cryptography>=41.0.0
 
+
+# FastAPI migration (api/ layer; see FASTAPI_MIGRATION_ARCHITECTURE.md)
+fastapi>=0.141.1
+uvicorn>=0.52.4
+a2wsgi>=1.10.10
+httpx>=0.28.1

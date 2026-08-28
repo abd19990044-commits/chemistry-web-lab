@@ -30,6 +30,7 @@ from flask import (Flask, abort, after_this_request, jsonify, render_template, r
 import chem_core as core
 import reaction_conditions
 import kaggle_runner
+from services import kaggle_service, orca_service, health_service
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _ORCA_ENGINE_SRC = os.path.join(BASE_DIR, "orca_engine", "src")
@@ -400,51 +401,13 @@ def api_third_party_licenses():
 @app.route("/health")
 def health():
 
-    """Liveness plus a real readiness picture.
-
-    Hugging Face restarts a Space for reasons nobody is watching, so this
-    endpoint reports what the orchestrator recovered on boot and what the
-    watchdog last did -- enough to tell "up" from "up and actually driving
-    jobs" without opening a shell."""
-    # The `kaggle` CLI is what every /api/kaggle/* route shells out to, and it
-    # is the path the browser actually uses. Reporting only on the orchestrator
-    # meant /health could answer {"ok": true} while the CLI was missing from the
-    # image and every job submission was returning 502.
-    # The CLI is RUN, not merely located: a failed image build leaves the
-    # wrapper script on PATH with the package behind it missing, and a file
-    # test calls that healthy while every request raises.
-    cli = kaggle_runner.cli_health()
-    payload = {"ok": cli["ok"], "status": "running",
-               "runner": "kaggle_runner (legacy routes) - the path the UI submits through",
-               "kaggle_cli": cli.get("version") or cli.get("path") or "MISSING",
-               "kaggle_cli_ok": cli["ok"],
-               "orchestrator": ORCHESTRATOR_AVAILABLE,
-               "orca_engine": ORCA_ENGINE_AVAILABLE}
-    if not cli["ok"]:
-        payload["error"] = (
-            "the kaggle command-line tool is not usable (%s), so no job can be submitted, "
-            "polled or downloaded. Check that requirements.txt installed cleanly - a pin "
-            "that does not exist on PyPI fails the whole image build silently."
-            % cli.get("detail", "unknown"))
-    if ORCHESTRATOR_AVAILABLE:
-        try:
-            from orca_orchestrator import get_service
-
-            orch_health = get_service().health()
-            payload.update(orch_health)
-            payload["ok"] = bool(cli["ok"] and orch_health.get("ok", True))
-        except Exception as exc:  # noqa: BLE001
-            payload["orchestrator_error"] = str(exc)
-            payload["ok"] = False
-    else:
-        payload["ok"] = bool(cli["ok"])
+    """Liveness plus a real readiness picture (shared health_service)."""
+    payload = health_service.build_health(
+        orchestrator_available=ORCHESTRATOR_AVAILABLE,
+        orca_engine_available=ORCA_ENGINE_AVAILABLE)
     return jsonify(payload)
 
 
-
-# ─────────────────────────────────────────────────────────────
-# Google Sign-In (identity display only - no server-side user database)
-# ─────────────────────────────────────────────────────────────
 @app.route("/api/auth/google", methods=["POST"])
 def api_auth_google():
     if not GOOGLE_CLIENT_ID:
@@ -778,82 +741,8 @@ def api_orca_builder_clean():
 @app.route("/api/orca/generate", methods=["POST"])
 def api_orca_generate():
     data = request.get_json(force=True, silent=True) or {}
-    try:
-        cores = int(data.get("cores", 4))
-        ram = int(data.get("ram", 6000))
-        charge = int(data.get("charge", 0))
-        mult = int(data.get("mult", 1))
-    except (TypeError, ValueError):
-        return error_response("Non-numeric value in cores/RAM/charge/multiplicity.")
-
-    if not (1 <= cores <= 128):
-        return error_response("Cores must be between 1 and 128.")
-    if not (100 <= ram <= 64000):
-        return error_response("RAM per core must be between 100 and 64000 MB.")
-    if not (-10 <= charge <= 10):
-        return error_response("Charge must be between -10 and 10.")
-    if not (1 <= mult <= 20):
-        return error_response("Multiplicity must be between 1 and 20.")
-
-    coords = (data.get("coords") or "").strip()
-    if not coords:
-        return error_response("Please provide atomic coordinates (XYZ).")
-
-    payload = {
-        "custom_line": (data.get("custom_line") or "").strip() or None,
-        "calc_type": data.get("calc_type", "sp"),
-        "family": data.get("family"),
-        "theory": data.get("theory", ""),
-        "basis": data.get("basis", ""),
-        "disp": data.get("disp", "none"),
-        "ri_type": data.get("ri_type", "none"),
-        "scf_conv": data.get("scf_conv", "none"),
-        "solv_model": data.get("solv_model", "none"),
-        "solvent": data.get("solvent", "Water"),
-        "x2c": bool(data.get("x2c")),
-        "charge": charge,
-        "mult": mult,
-        "nroots": int(data.get("nroots", 10)) if data.get("calc_type") == "tddft" else None,
-        "cores": cores,
-        "ram": ram,
-        "maxdisk": int(data["maxdisk"]) if data.get("maxdisk") else None,
-        "largeprint": bool(data.get("largeprint")),
-        "temp": float(data.get("temp", 298.15)),
-        "pressure": float(data.get("pressure", 1.0)),
-        "coords": coords,
-    }
-    if payload["custom_line"] and not payload["custom_line"].startswith("!"):
-        return error_response("The custom command line must start with '!'.")
-
-
-    inp_text = core.generate_orca_6_input(payload)
-    filename = f"{core.safe_filename(data.get('name') or 'molecule')}_6.inp"
-    return jsonify({
-        "ok": True,
-        "input_text": inp_text,
-        "filename": filename,
-        "file_base64": b64(inp_text.encode("utf-8")),
-    })
-
-
-# ─────────────────────────────────────────────────────────────
-# Kaggle Launcher & Credential Vault
-# ─────────────────────────────────────────────────────────────
-def _resolve_kaggle_credentials(kaggle_username: str, kaggle_key: str) -> tuple[str, str]:
-    """Cleans credentials and transparently resolves missing keys from encrypted vault."""
-    kaggle_username = (kaggle_username or "").strip()
-    kaggle_key = (kaggle_key or "").strip()
-    kaggle_username, kaggle_key = kaggle_runner.clean_kaggle_credentials(kaggle_username, kaggle_key)
-    if not kaggle_key and kaggle_username and ORCHESTRATOR_AVAILABLE:
-        try:
-            from orca_orchestrator.credential_vault import get_vault_manager
-            loaded = get_vault_manager().load_credentials(kaggle_username)
-            if loaded:
-                kaggle_key = loaded.key or loaded.api_token or ""
-        except Exception:
-            pass
-    return kaggle_username, kaggle_key
-
+    result, status = orca_service.generate_inputs(data)
+    return jsonify(result), status
 
 @app.route("/api/kaggle/login", methods=["POST"])
 def api_kaggle_login():
@@ -1048,99 +937,30 @@ def api_kaggle_submit():
             continue
         files_payload[name] = base64.b64encode(f.read()).decode("utf-8")
 
-    # NOTE: intentionally no username segment here - see the long comment on
-    # kaggle_runner.list_jobs() for why embedding it used to silently break
-    # "sign in from a different browser" for any Kaggle username containing
-    # a character (most commonly a hyphen) that core.safe_filename() mangles.
-    # The slug doubles as the kernel's Kaggle title on purpose; see
-    # kaggle_runner.make_job_base_id().
-    title_source = job_name or os.path.splitext(os.path.basename(input_filename))[0]
-    job_base_id = kaggle_runner.make_job_base_id(title_source, input_filename)
-    # The job's display name, shown in "My Jobs" - the person's own wording,
-    # kept by the browser, so it survives even though Kaggle has to show the
-    # slug-safe title on its side.
-    job_title = kaggle_runner.kaggle_safe_title(title_source, fallback=job_base_id)
-    job_dir = None
-    try:
-        job_dir = kaggle_runner.build_job_dir(
-            kaggle_username=kaggle_username,
-            kaggle_key=kaggle_key,
-            job_base_id=job_base_id,
-            input_filename=input_filename,
-            files_payload=files_payload,
-            dataset_sources=dataset_sources,
-            orca_link=orca_link or None,
-            job_title=job_title,
-        )
-        pushed = kaggle_runner.push_job(job_dir, kaggle_username, kaggle_key)
-        # The live path emitted no success logging at all, so an operator could
-        # not answer "did this user's job get pushed, and when". The redacting
-        # formatter is already installed; it just had nothing to log.
-        log.info("kaggle job submitted", extra={"event": "job_submitted",
-                                                "job_id": pushed["job_id"],
-                                                "kaggle_owner": pushed["owner"],
-                                                "input_file": input_filename})
-        response_data = {
-            "ok": True,
-            # Both of these come from the URL Kaggle itself reported for the
-            # push, so the link the person clicks and the id the site polls
-            # always describe the notebook that actually exists.
-            "kaggle_url": pushed["url"],
-            "job_id": pushed["job_id"],
-            "kaggle_owner": pushed["owner"],
-            "job_title": job_title,
-            "message": "Job submitted to Kaggle successfully. Track progress and results below.",
-        }
-        _submit_dedup_store(idem_key, response_data)
-        if ORCHESTRATOR_AVAILABLE:
-            try:
-                from orca_orchestrator.credentials import parse as parse_credentials
-                from orca_orchestrator.credential_vault import get_vault_manager
-                creds = parse_credentials(kaggle_username, kaggle_key)
-                get_vault_manager().save_credentials(creds.username, creds)
-            except Exception:
-                pass
-        return jsonify(response_data)
-    except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
-        log.error("kaggle CLI unavailable:\n%s", traceback.format_exc())
-        return error_response(str(exc), 503)
-    except Exception as exc:  # noqa: BLE001
-        log.error("api_kaggle_submit failed:\n%s", traceback.format_exc())
-        return error_response(f"Failed to submit the job to Kaggle: {exc}", 502)
-    finally:
-        if job_dir:
-            shutil.rmtree(job_dir, ignore_errors=True)
-
+    payload, status = kaggle_service.submit_job(
+        kaggle_username=kaggle_username,
+        kaggle_key=kaggle_key,
+        dataset_sources_raw=dataset_sources,
+        orca_link=orca_link,
+        input_filename=input_filename,
+        input_content=input_content,
+        job_name=job_name,
+        idem_key=idem_key,
+        extra_files=files_payload,
+    )
+    if idem_key and payload.get("ok") and status == 200:
+        # Compatibility cache layer only: the authoritative replay store is
+        # the orchestrator store the service just persisted to.
+        kaggle_service.submit_dedup_store(idem_key, payload)
+    return jsonify(payload), status
 
 @app.route("/api/kaggle/status", methods=["POST"])
 def api_kaggle_status():
     data = request.get_json(force=True, silent=True) or {}
-    kaggle_username = (data.get("kaggle_username") or "").strip()
-    kaggle_key = (data.get("kaggle_key") or "").strip()
-    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key)
-    job_id = (data.get("job_id") or "").strip()
-
-    if not kaggle_username or not kaggle_key or not job_id:
-        return error_response("Missing username, API key, or job id.")
-    if not kaggle_runner.is_valid_job_id(job_id):
-        return error_response("That job id doesn't look like one of this site's jobs.")
-
-    try:
-        result = kaggle_runner.check_job_status(kaggle_username, kaggle_key, job_id)
-        if result.get("next_job_id"):
-            log.info("chain advanced", extra={"event": "chain_advanced", "job_id": job_id,
-                                              "next_job_id": result["next_job_id"]})
-        elif result.get("status") in ("error", "cancelled"):
-            log.info("job ended", extra={"event": "job_ended", "job_id": job_id,
-                                         "status": result["status"]})
-        return jsonify({"ok": True, **result})
-    except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
-        log.error("kaggle CLI unavailable:\n%s", traceback.format_exc())
-        return error_response(str(exc), 503)
-    except Exception as exc:  # noqa: BLE001
-        log.error("api_kaggle_status failed:\n%s", traceback.format_exc())
-        return error_response(f"Failed to check job status: {exc}", 502)
-
+    payload, status = kaggle_service.check_status(
+        data.get("kaggle_username") or "", data.get("kaggle_key") or "",
+        data.get("job_id") or "")
+    return jsonify(payload), status
 
 @app.route("/api/kaggle/download", methods=["GET", "POST"])
 def api_kaggle_download():
@@ -1312,207 +1132,14 @@ def api_kaggle_delete():
 
 @app.route("/api/kaggle/extract-opt-coords", methods=["POST"])
 def api_kaggle_extract_opt_coords():
-    """Extracts the final optimized Cartesian coordinates (.xyz format) from a
-    completed Kaggle calculation job for chaining into stage 2 calculations."""
+    """Delegates to the shared service (comment-safe Opt gate + convergence
+    evidence + final-geometry validation live in ONE implementation)."""
     data = request.get_json(force=True, silent=True) or {}
-    kaggle_username = (data.get("kaggle_username") or "").strip()
-    kaggle_key = (data.get("kaggle_key") or "").strip()
-    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key)
-    job_id = (data.get("job_id") or "").strip()
+    payload, status = kaggle_service.extract_opt_coords(
+        data.get("kaggle_username") or "", data.get("kaggle_key") or "",
+        data.get("job_id") or "")
+    return jsonify(payload), status
 
-    if not kaggle_username or not kaggle_key or not job_id:
-        return error_response("Missing username, API key, or job id.")
-    if not kaggle_runner.is_valid_job_id(job_id):
-        return error_response("That job id doesn't look like one of this site's jobs.")
-
-    cleanup_dir = None
-    try:
-        if ORCHESTRATOR_AVAILABLE:
-            try:
-                from orca_orchestrator.credentials import parse as parse_credentials
-                from orca_orchestrator.service import get_service
-                creds = parse_credentials(kaggle_username, kaggle_key)
-                zip_path, cleanup_dir = get_service().fetch_results(creds, job_id)
-            except Exception:
-                zip_path, cleanup_dir = kaggle_runner.fetch_job_results(kaggle_username, kaggle_key, job_id)
-        else:
-            zip_path, cleanup_dir = kaggle_runner.fetch_job_results(kaggle_username, kaggle_key, job_id)
-
-        if not zip_path or not os.path.exists(zip_path):
-            return error_response("Could not find output results archive on Kaggle.", 404)
-
-        out_content = None
-        out_name = None
-        xyz_content = None
-        inp_content = None
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            for item in zf.infolist():
-                fname_lower = item.filename.lower()
-                if not out_content and fname_lower.endswith((".out", ".log", ".property.txt")):
-                    out_name = item.filename
-                    out_content = zf.read(item).decode("utf-8", errors="replace")
-                elif fname_lower.endswith(".xyz") and not fname_lower.endswith(("_trj.xyz", "trajectory.xyz")):
-                    # Exclude unoptimized initial input geometries
-                    if not any(fname_lower.startswith(p) for p in ("original", "input", "initial", "start")) and not any(fname_lower.endswith(s) for s in ("_input.xyz", "_initial.xyz", "_start.xyz")):
-                        if not xyz_content or fname_lower.endswith((".opt.xyz", "opt.xyz", "final.xyz")):
-                            xyz_content = zf.read(item).decode("utf-8", errors="replace")
-                elif fname_lower.endswith(".inp") and not inp_content:
-                    inp_content = zf.read(item).decode("utf-8", errors="replace")
-
-        clean_xyz = ""
-        total_energy = None
-        formula = ""
-
-        # ── Scientific eligibility gate ────────────────────────────────────
-        # A coordinate import must come from a genuinely completed geometry
-        # optimization. Classification reads the input the way ORCA does
-        # (comment text can never change the kind - "# opt test" stays an SP),
-        # and completion uses the same convergence markers the orchestrator
-        # enforces: "ORCA TERMINATED NORMALLY" alone is NOT convergence, and
-        # a run killed by time/disk/watchdog or aborted is not importable.
-        try:
-            from orca_orchestrator import orca_artifacts as _art
-        except ImportError:
-            _art = None
-        if _art is None:
-            return error_response("Coordinate extraction requires the orchestration module.", 503)
-        job_kind = _art.detect_job_kind(inp_content or "")
-        if job_kind not in ("opt", "opt_ts"):
-            return jsonify({
-                "ok": False,
-                "error": "This calculation is a %s, not a geometry optimization - "
-                         "coordinates can only be imported from completed Opt/OptTS runs." % (job_kind or "unknown"),
-                "code": "not_optimization",
-                "job_kind": job_kind,
-            }), 422
-        outcome = _art.classify_outcome(out_content or "", job_kind=job_kind)
-        if not outcome.is_complete:
-            return jsonify({
-                "ok": False,
-                "error": "This optimization did not converge (%s), so it has no final optimized "
-                         "geometry to import." % outcome.kind,
-                "code": "optimization_not_complete",
-                "job_kind": job_kind,
-                "outcome": outcome.kind,
-            }), 422
-
-
-        # 1. Primary path: Extract from output .xyz file (Full 14-16 decimal precision verbatim from ORCA geometry engine)
-        if xyz_content:
-            raw_blocks = re.split(r"\n(?=\s*\d+\s*\n)", xyz_content.strip())
-            target_block = raw_blocks[-1].strip() if raw_blocks else xyz_content.strip()
-            raw_lines = target_block.splitlines()
-            if len(raw_lines) > 2 and raw_lines[0].strip().isdigit():
-                atom_lines = raw_lines[2:]
-            else:
-                atom_lines = raw_lines
-            extracted_lines = []
-            for line in atom_lines:
-                parts = line.strip().split()
-                if len(parts) >= 4 and re.match(r"^[A-Za-z]{1,2}:?$", parts[0]):
-                    try:
-                        float(parts[1]), float(parts[2]), float(parts[3])
-                        # Preserve 100% exact verbatim coordinate tokens without any rounding or zero padding
-                        extracted_lines.append(f"{parts[0]:<3} {parts[1]} {parts[2]} {parts[3]}")
-                    except ValueError:
-                        pass
-            if extracted_lines:
-                clean_xyz = "\n".join(extracted_lines)
-
-        # 2. Secondary path: Direct regex search on the last Cartesian block of .out log if .xyz was absent
-        if not clean_xyz and out_content:
-            blocks = re.findall(r"CARTESIAN COORDINATES \(ANGSTROEM\)\s*\n[-=\s]+\n(.*?)(?:\n\s*\n|\n-+\n|\n\*\*\*|\Z)", out_content, re.DOTALL | re.IGNORECASE)
-            if blocks:
-                last_block = blocks[-1].strip()
-                extracted_lines = []
-                for line in last_block.splitlines():
-                    parts = line.strip().split()
-                    if len(parts) >= 4 and re.match(r"^[A-Za-z]{1,2}:?$", parts[0]):
-                        try:
-                            float(parts[1]), float(parts[2]), float(parts[3])
-                            extracted_lines.append(f"{parts[0]:<3} {parts[1]} {parts[2]} {parts[3]}")
-                        except ValueError:
-                            pass
-                if extracted_lines:
-                    clean_xyz = "\n".join(extracted_lines)
-
-        # NOTE: there is deliberately NO fallback to the INPUT geometry here.
-        # A coordinate import must be the FINAL optimized geometry of a
-        # completed optimization; silently substituting the initial input
-        # geometry would hand stage 2 a structure the optimization never
-        # produced (the exact failure the scientific review forbids).
-
-        # 4. Quaternary fallback: Parse with OrcaParser for metadata and fallback geometry
-        if out_content and OrcaParser:
-            try:
-                parsed_jobs = OrcaParser(io.StringIO(out_content), source_name=out_name or job_id).parse()
-                if parsed_jobs:
-                    last_job = parsed_jobs[-1]
-
-                    def _plain(v):
-                        # Parser revisions differ: metadata may be attributes
-                        # OR methods. Normalize callables to their values.
-                        if callable(v):
-                            try:
-                                v = v()
-                            except Exception:  # noqa: BLE001
-                                return None
-                        return v
-
-                    total_energy = (_plain(getattr(last_job, "e_elec_eh", None))
-                                    or _plain(getattr(last_job, "electronic_zpe_eh", None))
-                                    or _plain(getattr(last_job, "gibbs_free_energy_eh", None)))
-                    _formula = _plain(getattr(last_job, "chemical_formula", "")) or ""
-                    formula = str(_formula)
-                    if not clean_xyz and last_job.elements and last_job.coords:
-                        lines = []
-                        for el, (x, y, z) in zip(last_job.elements, last_job.coords, strict=False):
-                            lines.append(f"{el:<3} {x:14.8f} {y:14.8f} {z:14.8f}".rstrip())
-                        clean_xyz = "\n".join(lines)
-            except Exception as exc:  # noqa: BLE001
-                log.warning("OrcaParser failed during metadata parse from %s: %s", out_name or job_id, exc)
-
-        if not clean_xyz:
-            return error_response("No 3D coordinates found in calculation results or input file.", 404)
-
-        _geo_lines = [ln for ln in clean_xyz.splitlines() if ln.strip()]
-        if not _geo_lines or any(
-                not re.match(r"^[A-Za-z]{1,2}:?\s+[-+0-9.eE]+\s+[-+0-9.eE]+\s+[-+0-9.eE]+$", ln.strip())
-                for ln in _geo_lines):
-            return error_response(
-                "The extracted geometry failed validation (empty, malformed, or "
-                "non-numeric coordinates).", 422)
-        # A multi-atom structure with EVERY atom at the origin is degenerate,
-        # not optimized - refuse it rather than handing stage 2 a collapsed
-        # "molecule".
-        if len(_geo_lines) > 1 and all(
-                all(float(tok) == 0.0 for tok in ln.strip().split()[1:4])
-                for ln in _geo_lines):
-            return error_response(
-                "The extracted geometry is degenerate (every atom at the origin); "
-                "it cannot be an optimized structure.", 422)
-        return jsonify({
-            "ok": True,
-            "job_id": job_id,
-            "coords": clean_xyz,
-            "converged": True,
-            "job_kind": job_kind,
-            "chemical_formula": formula or "",
-            "total_energy_eh": total_energy,
-            "e_elec_eh": total_energy,
-            "atom_count": len(clean_xyz.splitlines())
-        })
-    except Exception as exc:
-        log.error("api_kaggle_extract_opt_coords failed:\n%s", traceback.format_exc())
-        return error_response(f"Failed to extract coordinates from Kaggle job: {exc}", 502)
-    finally:
-        if cleanup_dir:
-            shutil.rmtree(cleanup_dir, ignore_errors=True)
-
-
-# ─────────────────────────────────────────────────────────────
-# Quantum Chemistry Engine & Analysis API
-# ─────────────────────────────────────────────────────────────
 @app.route("/api/orca/engine/status", methods=["GET"])
 def api_orca_engine_status():
     """Returns availability and version of the ORCA quantum chemistry engine."""

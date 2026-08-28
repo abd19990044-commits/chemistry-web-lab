@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-08-27T23:52:54Z
+# Generated: 2026-08-28T19:48:53Z
 # Package Mode: RELEASE_FROM_COMMIT
 # Source State: clean_commit
-# Source Git SHA: 185d21e675f0283667bfb316f69a1228ab816fbd
-# Package Tree Hash: 5e0e6f3db57e178dce088c79deab3f4cc7d73e02bd1538383c701ae8041434bc
-# Total Files: 308
-# Total Size: 30,638,295 bytes (29.22 MB)
+# Source Git SHA: b9175d99c1886ec063ebf421b4ead330b64295c7
+# Package Tree Hash: b9df35061e65bab7bbeb3e3fd302daec0475451ec26cc88720abd44ef59a6a6e
+# Total Files: 323
+# Total Size: 30,690,644 bytes (29.27 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -13,7 +13,15 @@
 .env.example                                       |        670 B | 83912c6ed8a1efd3cfdfa393f42ed6faa99616d54e274b6e7ec9e027c87ed934
 .github/workflows/ci.yml                           |      7,825 B | d241a57a6cd40f37f558a3b1c30cb39114eb20fb09b0261100bed582a38b3ba3
 .gitignore                                         |      1,007 B | 9c156f16da28dbfb0a69f340b7fd4dc7283b99fc46b6ce939877f8c64e47a185
-app.py                                             |    128,306 B | 1687120eb01c75ce76740b27d9fb37988f190703277737fd6b289dc098c298f8
+api/__init__.py                                    |        238 B | ea951dbebe30f73ec82a1c92bdc7f8c2b5c8b9788b7758dd9ea26811377767cc
+api/dependencies.py                                |        355 B | b9125004623c53196d20f98012d5a7a87aab81d2026b5adbe33a6304851d7717
+api/main.py                                        |      4,337 B | 88b7e68a47c7bd0de479ff6a1c578920c143958f58d04b8e38382227788425e2
+api/routes/__init__.py                             |         84 B | 78f74e6949770ed6015d90084546ff5a07267e0783623d8f1ecb4b73b9910c2a
+api/routes/health.py                               |        639 B | acb83867a18c3016a662cffd32ecbcad53adb22602cf170b155f24ab3430c6cc
+api/routes/kaggle.py                               |      6,252 B | 135fb0fc97bafb94dc03bd1d43619a1ca2935956ef45957da61a571e4127a571
+api/routes/orca.py                                 |        463 B | 1bb9ae8786393042e17a9af99119c581c5e9617adb7f43cfd2ecdee6d55c0581
+api/schemas/__init__.py                            |      2,389 B | 0aa04dcd1cd13d661c2ff03c176973f67a097587fba7bbbeb1e10a7aa652ead8
+app.py                                             |    108,031 B | 3c41629b7a2584f5c825ee298b62e8b09221e0ac8f5a08777c36bf8b3fd1ab28
 ARCHITECTURE.md                                    |     48,949 B | a50d3a2703d48a159a61037d46fea6a2279d0b3a6bf79bb9bc307675c6656f8b
 benchmarks/benzene_tddft.out                       |      1,551 B | 2510aaa519c6fe573da8436020801ca8bc2d9040b442f045f12802300a103e7c
 benchmarks/water_sp_freq.out                       |      3,095 B | a8c69da119edc8a2de9a4158a6cc7111ce015380a97e1810e9609ee0d1d9e63e
@@ -220,7 +228,7 @@ pytest.ini                                         |        234 B | b5969337b3cf
 reaction_conditions.py                             |      3,085 B | 6a2c5e254658c10f64b02bb7eb72724b5c711e22818ff0759890729d259913b7
 README.md                                          |     17,699 B | bf91be854db76ed2933b8ad20a9d740c266649a0394dc7936a8bc225fbe94547
 REPRODUCIBILITY.md                                 |      3,865 B | 891bf9662224ed0278904006d0af18724dcde6f0a604d4ed2142e5cbf3a81474
-requirements.txt                                   |        737 B | 2e6bde4d78b3cf1e60603b24eb714059cebcb94a75ceb92f289a0c36c50a0357
+requirements.txt                                   |        873 B | 0bf83f0b7bacbb72a8ae6bf0a28726b583c4515aa87652c54bff163e565aee62
 schema/canonical_scientific.schema.json            |     52,197 B | c80e3978f82296f0da4c8379ad2966dbccab18ad82092c698bd5d8eb2a446fcd
 scripts/analyze_manual_details.py                  |        974 B | 62d82edbb60326e21302589de4c55c51ea708f820f4a5fbdb424bc22c19da148
 scripts/detailed_manual_extractor.py               |        835 B | dc228cb8c2b37f592c5da319994c0aaada9f6ec94d068d8d7180b8c0ccad70f0
@@ -244,6 +252,10 @@ scripts/test_dual_workflow_and_queue.py            |     11,342 B | ce476c74c854
 scripts/test_opt_to_builder_flow.py                |      5,763 B | 221c86e6b1734c9fb71b1dd200480a6a6cf08eddb24d9149aeccb42fdb795165
 scripts/test_orbital_image_engine_version.py       |      5,235 B | cf9566a846c97a12ce3c640a70fee335ddbd3edca6e4fee3e2afad2318e7396f
 SECURITY.md                                        |      4,799 B | 453bcb2ee647e3c2fbe1da0ae61bb0adb692b2fe838f3cb00441e9aebb731322
+services/artifact_service.py                       |      2,239 B | 62781b95196e92aa019c059be00faba6f07d93584e3a08f82935cad873baf88a
+services/health_service.py                         |      3,145 B | 1760999e6310e1b56a496c394d7d032423c629a3144aab11168e9a6d3724e2df
+services/kaggle_service.py                         |     21,398 B | 33485c61ca6e3c58f57797efdaf37b3d0ba7e527078c9232c7b0660a0ea2906e
+services/orca_service.py                           |      3,151 B | cfc507f8ddde26a9f1e6ee6dd443339f47275823c0893904c6da7892971432d1
 static/css/style.css                               |     84,676 B | 3d5fe1508d4225e355302b1e98173219cd636b6ed4372a1b1ba9aefa15b2e619
 static/css/theme.css                               |      4,191 B | 0f46f52179f51f6f9e33d6afd4c1186a55cd4bff5de3e631055a9290c21cb0da
 static/docs/ChemistryLab_User_Manual.docx          |     46,938 B | 35f84c0a37efc80a0283904d56198d18cdba7a648f2492f4c6c76f331ce9b211
@@ -261,6 +273,7 @@ tests/fixtures/orca_parsed_data_3_2.json           |    882,023 B | bcabb84f7510
 tests/fixtures/orca_parsed_data_small.json         |      7,977 B | e2fbe3194fe463392c1939a74a1c1269a2a19a6127b6fed9a04d696c070f6469
 tests/test_account_control.py                      |        921 B | 85e5ce35d00aa3f12a9da1b8c2aef5e3e595160da4c7b89fd9e58be0ce899a8a
 tests/test_archive_security.py                     |      5,236 B | c47b2cd22eceb0b787f5a3ba9cf14968cf252ac3df4daf4fd8dd2bf097cff674
+tests/test_asgi_live.py                            |      2,765 B | 3b8010dff6574af36a8c484bed0f4a9753c683ff983dff6599f5626093457de3
 tests/test_canonical_analyzer_refinement.py        |     18,359 B | 00cbaee6b1b60d69a6799f3bd3a76e784803f866e2cd863374959d92f5f7511d
 tests/test_canonical_scientific_schema.py          |     28,439 B | 1028571f88562460d5f9901259b0e3e330ca3b8c8beb4c14427def64451c9f98
 tests/test_clean_ir_visualization.py               |      2,279 B | 1d7f7fc2e2231d32eec4decc47cd195a42265ea913707822103f0fe5ff456789
@@ -274,6 +287,7 @@ tests/test_drawing.py                              |      1,611 B | c27c83c7e375
 tests/test_dual_workflow_and_queue.py              |      3,978 B | 696a435622cef09495848fae421f8efc22dc8fc013564d9ae1c402e4dc95af6c
 tests/test_end_to_end_chain.py                     |     24,303 B | 5e36f66931cab71da4011d841d53107e64f1bde8811065f3c4b0b01f1ae0eeae
 tests/test_experimental_spectrum.py                |     11,017 B | 54f8d7def56f43af8e889631ff7d4063dec125b6d666865e32b4511e45c971a7
+tests/test_fastapi_contract.py                     |     19,777 B | 63ca8bf5589ac07cda408e1d3e3765b3baeb4f3497b96d42cecdd8970172271e
 tests/test_frontend.py                             |     17,638 B | 77e77192d81500a5ee54e4e66018b5526c30fdf2a2c7eecee42bbdcd6e566bdb
 tests/test_full_system_audit.py                    |      8,490 B | 91b3fded7e14f46e433c3c746d8178f70e4001cabb84e5e4ed30e05f3006c7ac
 tests/test_ir_spectrum.py                          |      3,553 B | db23839e67e9393b7cc3adef1877e3fd67d20b0091e5f52f50e23b5581c2752e
@@ -296,6 +310,7 @@ tests/test_orca_input_generator.py                 |      4,529 B | a62fa68e0382
 tests/test_orca_runtime_smoke.py                   |      5,911 B | 2f4efddf3a0c8bffff0540092405e9e2cd219f20b8a5291d4fcb0f2b48cb9d38
 tests/test_orca_source_and_results.py              |      5,669 B | 9054f52527021672925f49129a847b6cec2fd0b2c5fc86cc2bf1ad715c7ecbcf
 tests/test_orchestrator.py                         |     37,446 B | f63921ad4cc11b9287daa370bdfc362ab87f1c801bd537db6ec7032d89c74e3e
+tests/test_owner_isolation.py                      |      4,996 B | 4c4b5c3a8d596f692285ae44fdc32890ed4537fe064c8e54de6ca0aa8131b179
 tests/test_production_forensic_fixes.py            |     19,956 B | 5403d20ba39a9269dd01a9f47e260b360b673070c4010a4bfce2abf317215bdb
 tests/test_production_repairs.py                   |      7,963 B | 86e86a4fe8ad1f096b53945b42617bba4954231e6db899c574ed4cc7486a445e
 tests/test_production_wiring.py                    |     15,898 B | c41fe1e6c1b10d9a251e3aba00ea537b0833bb30d7248467717266f58c5821fd
@@ -311,7 +326,7 @@ tests/test_thermochemistry_dual_slot.py            |      5,452 B | b9941981a46e
 tests/test_web_routes.py                           |     26,352 B | 98a7e7ccd6a63c2be9bdc72d89dae84495cbc57589f38e0e0c7579cd48f7d07f
 tests/test_word_copy_exports.py                    |      2,163 B | 2e02540b0b6cfc00355ae2bc7c070e042e94c93f3b80fb29e7773a9260d60967
 THIRD_PARTY_LICENSES.md                            |      9,328 B | ccde48b9db055d777b19ef6702983cc0ef17d72e775c45fc2e4321ae058836b8
-tools/build_deployment_packages.py                 |     22,310 B | f95c77b76d0b4096d74d2ecc38df2b19c4dda893829b02442837c9a86b76eadb
+tools/build_deployment_packages.py                 |     22,570 B | f214a7940ffb5d75ec8f570ea605bb0e2ec7c3a704c128180a2a79685d75b245
 tools/export_thermochemistry_json.py               |      5,393 B | 67935274038fdd98ed60863fae016ab6d5be68d0dccc5fb8c7ebf39ef417ae54
 tools/export_training_jsonl.py                     |     15,911 B | 8574db2c2739a0c971bec008573aa4be00fb72c20f106bdabef2e1e62d3cff8e
 tools/normalize_scientific_json.py                 |     96,326 B | 21d2ccb10727c5a14b42d0c34514cca89c1ded8f8331e2becb1448f2a35b27f4
