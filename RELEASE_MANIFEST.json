@@ -6,12 +6,12 @@
   "package_mode": "SNAPSHOT_FROM_WORKTREE",
   "source_type": "dirty_worktree_snapshot",
   "source_git_state": "dirty_snapshot",
-  "source_git_sha": "14152ad122f5183f74d7d26c8618bc0f7e6c0787-dirty",
+  "source_git_sha": "2c815ebd49a56cb5317ec56de0324c21f238c5bd-dirty",
   "source_git_dirty": true,
-  "package_tree_hash": "66a4c281ebb0111e75892a462b18f2ec1b5d19e9d72d868009efed8b4c6a8422",
-  "generated_at": "2026-08-29T22:35:10Z",
+  "package_tree_hash": "3c01cfc3610f87e3b3ba18acc10037eb883d28cc5ffd77795f2ab501ffd5b8bc",
+  "generated_at": "2026-08-29T23:33:06Z",
   "file_count": 329,
-  "total_size_bytes": 30831419,
+  "total_size_bytes": 30840597,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -1269,8 +1269,8 @@
       "source_origin": "repo_source"
     },
     "static/js/app.js": {
-      "sha256": "57af2e97236f9179c92fb18f26e5512f7bc227890f7745d22e35848998985b7c",
-      "size_bytes": 502526,
+      "sha256": "f2f50b4574bf709c47b576ed06e42fe46b72424dabd181ecce5b2e5baadae87a",
+      "size_bytes": 503000,
       "source_origin": "repo_source"
     },
     "static/js/kaggle_credentials.js": {
@@ -1424,8 +1424,8 @@
       "source_origin": "repo_source"
     },
     "tests/test_ir_spectrum_orientation.py": {
-      "sha256": "acd7c6237b512fb75a5c7c6508896c29fab01e7bfd124f5eb428557f2f11c0f7",
-      "size_bytes": 14353,
+      "sha256": "b598a325886a62a395950da7ff26c7aa2f91f76c99894639dea12183bf6a6b0b",
+      "size_bytes": 14336,
       "source_origin": "repo_source"
     },
     "tests/test_kaggle_credential_vault.py": {
@@ -1599,8 +1599,8 @@
       "source_origin": "repo_source"
     },
     "tests/test_spectra_xy_export.py": {
-      "sha256": "d7c7c5b055a19fdb30dea8548130ca6e842a3f39cec8c1123bc63542d85b5eba",
-      "size_bytes": 11068,
+      "sha256": "eeacec1bbdab0a8a3a7b7f25f7ecf4e8203b9a826a2534f9a20d5b3288e35938",
+      "size_bytes": 19789,
       "source_origin": "repo_source"
     },
     "tests/test_thermochemistry_dual_slot.py": {
@@ -1654,7 +1654,7 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "2bd11421a312fb27ab4db2a079815a8c6c265df290c22b4a887298f3c1c50e2f",
+      "sha256": "15e4bcd830b1281f04f85efa95e86a73a1373efabab77034968144fcaa43a43e",
       "size_bytes": 44305,
       "source_origin": "generated_manifest"
     }

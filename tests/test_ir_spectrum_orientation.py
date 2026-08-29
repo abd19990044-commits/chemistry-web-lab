@@ -188,8 +188,8 @@ def test_ir_spectrum_orientation():
            and re.search(r"const yPos = mapY\(yVal\);\s*ctx\.fillText\(label", body) is not None)
     _check("tick loop covers the full scale from the bottom (yStep starts at 0 -> the 0% label exists at the bottom)",
            re.search(r"for \(let yStep = 0; yStep <= 4; yStep\+\+\) \{\s*const yVal = minY \+ \(\(maxY - minY\) / 4\) \* yStep;", body) is not None)
-    _check("shared-normalization select is wired into the IR renderer",
-           'document.getElementById("ir-normalization-mode")' in body
+    _check("shared-normalization basis (getIRSharedNormMax) drives the IR renderer",
+           'getIRSharedNormMax' in body
            and 'ir-normalization-mode' in open(os.path.join(ROOT, "templates", "index.html"), encoding="utf-8").read())
 
     # ---- numeric production-JS verification (real app.js via Node) ----

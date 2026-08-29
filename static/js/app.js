@@ -7428,18 +7428,11 @@
       if (minWn >= maxWn) maxWn = minWn + 100;
     }
 
-    const irNormMode = (document.getElementById("ir-normalization-mode")?.value || "per_spectrum");
-    let theoCurves = activeTheos.map(theo => {
-      const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2);
-      return { theo, curve };
-    });
-    if (irNormMode === "shared" && theoCurves.length) {
-      const globalMaxAbs = Math.max(...theoCurves.flatMap(tc => tc.curve.map(p => p.absorbance)), 0.1);
-      theoCurves = theoCurves.map(tc => ({
-        theo: tc.theo,
-        curve: computeIRConvolution(tc.theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2, globalMaxAbs),
-      }));
-    }
+    const sharedNormMax = getIRSharedNormMax(scaleFactor, fwhm, shift, minWn, maxWn);
+    const theoCurves = activeTheos.map(theo => ({
+      theo,
+      curve: computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2, sharedNormMax),
+    }));
 
     const isIntensity = (irYAxisMode === "theory_intensity");
     const isTrans = (irYAxisMode === "transmittance");
@@ -9031,6 +9024,15 @@
       });
     }
 
+    function getIRSharedNormMax(scaleFactor, fwhm, shift, minWn, maxWn) {
+      if ((document.getElementById("ir-normalization-mode")?.value || "per_spectrum") !== "shared") return null;
+      let globalMaxAbs = 0;
+      loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo")).forEach(theo => {
+        const c = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2);
+        c.forEach(p2 => { if (p2.absorbance > globalMaxAbs) globalMaxAbs = p2.absorbance; });
+      });
+      return globalMaxAbs > 0 ? globalMaxAbs : null;
+    }
     function irDisplayedHeaders() {
       if (irYAxisMode === "theory_intensity") {
         return { yHeader: "Relative_Intensity", yUnit: "km/mol" };
@@ -9048,7 +9050,8 @@
       if (kind === "theo") {
         const theo = loadedTheoreticalIRSpectra[idx];
         if (!theo) return;
-        const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, 400, 4000, 2);
+        const sharedNormMax = getIRSharedNormMax(scaleFactor, fwhm, shift, 400, 4000);
+        const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, 400, 4000, 2, sharedNormMax);
         // canonical FTIR presentation order: 4000 -> 400 (same coordinate pairs,
         // ordered to match the plotted X axis; the renderer's mapX already draws
         // 4000 on the left). No recalculation.
@@ -9085,11 +9088,13 @@
       const fwhm = parseFloat(irFwhmSlider?.value || "15.0");
       const shift = parseFloat(irShiftSlider?.value || "0");
       const headers = irDisplayedHeaders();
+      const sharedNormMax = getIRSharedNormMax(scaleFactor, fwhm, shift, 400, 4000);
       const columns = [];
       const meta = ["Chemistry Lab", "View: " + irViewMode, "X: Wavenumber (cm^-1)",
-        "Y: " + headers.yHeader + " (" + headers.yUnit + ")", "FWHM: " + fwhm + " cm^-1"];
+        "Y: " + headers.yHeader + " (" + headers.yUnit + ")", "FWHM: " + fwhm + " cm^-1",
+        "Normalization: " + (sharedNormMax ? "Shared" : "Per Spectrum")];
       loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo")).forEach(theo => {
-        const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, 400, 4000, 2);
+        const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, 400, 4000, 2, sharedNormMax);
         const ordered = curve.slice().reverse();
         let ys;
         if (irYAxisMode === "absorbance") ys = ordered.map(p => p.absorbance);

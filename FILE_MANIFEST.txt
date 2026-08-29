@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-08-29T22:35:10Z
+# Generated: 2026-08-29T23:33:06Z
 # Package Mode: SNAPSHOT_FROM_WORKTREE
 # Source State: dirty_snapshot
-# Source Git SHA: 14152ad122f5183f74d7d26c8618bc0f7e6c0787-dirty
-# Package Tree Hash: 66a4c281ebb0111e75892a462b18f2ec1b5d19e9d72d868009efed8b4c6a8422
+# Source Git SHA: 2c815ebd49a56cb5317ec56de0324c21f238c5bd-dirty
+# Package Tree Hash: 3c01cfc3610f87e3b3ba18acc10037eb883d28cc5ffd77795f2ab501ffd5b8bc
 # Total Files: 328
-# Total Size: 30,787,114 bytes (29.36 MB)
+# Total Size: 30,796,292 bytes (29.37 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -260,7 +260,7 @@ static/css/style.css                               |     84,676 B | 3d5fe1508d42
 static/css/theme.css                               |      4,191 B | 0f46f52179f51f6f9e33d6afd4c1186a55cd4bff5de3e631055a9290c21cb0da
 static/docs/ChemistryLab_User_Manual.docx          |     46,938 B | 35f84c0a37efc80a0283904d56198d18cdba7a648f2492f4c6c76f331ce9b211
 static/job_runtime_fix.js                          |      1,641 B | 9133e459435dfad6a353c774a92c10cf37656eb529f114ca61dec2be5a63c697
-static/js/app.js                                   |    502,526 B | 57af2e97236f9179c92fb18f26e5512f7bc227890f7745d22e35848998985b7c
+static/js/app.js                                   |    503,000 B | f2f50b4574bf709c47b576ed06e42fe46b72424dabd181ecce5b2e5baadae87a
 static/js/kaggle_credentials.js                    |     13,632 B | afa45631bbcb3f8e4dacc676adaf39c14e06c765750c3845c5dcc24a449f27b3
 static/js/reaction-editor.js                       |      4,508 B | 10f31d07d35ef8a7450b1dfefdb5c32ec44646a962a3b22154c8d9fd753d5be2
 static/js/workers/archive-worker.js                |     20,420 B | 29eff680289ace2a4ee5784419c0a189f5e962a054914a5e6d6f9e2ad66073f8
@@ -291,7 +291,7 @@ tests/test_fastapi_contract.py                     |     19,777 B | 63ca8bf5589a
 tests/test_frontend.py                             |     17,638 B | 77e77192d81500a5ee54e4e66018b5526c30fdf2a2c7eecee42bbdcd6e566bdb
 tests/test_full_system_audit.py                    |      8,490 B | 91b3fded7e14f46e433c3c746d8178f70e4001cabb84e5e4ed30e05f3006c7ac
 tests/test_ir_spectrum.py                          |      3,553 B | db23839e67e9393b7cc3adef1877e3fd67d20b0091e5f52f50e23b5581c2752e
-tests/test_ir_spectrum_orientation.py              |     14,353 B | acd7c6237b512fb75a5c7c6508896c29fab01e7bfd124f5eb428557f2f11c0f7
+tests/test_ir_spectrum_orientation.py              |     14,336 B | b598a325886a62a395950da7ff26c7aa2f91f76c99894639dea12183bf6a6b0b
 tests/test_kaggle_credential_vault.py              |     19,055 B | a0e83eb39b208cf36cef5528917212949a01d99d6ef249009e13ac0890fef9d4
 tests/test_kaggle_dataset_normalization.py         |      3,836 B | bd367eefd9566e1a649d0f1f7fedc33120726b5034a4a55d80b72ebb54de2b70
 tests/test_licensing.py                            |     13,999 B | 7388cd0d326289d85619757e234a4a016af1411b463dd59e179307711cbb0562
@@ -326,7 +326,7 @@ tests/test_scientific_json_audit_and_ml.py         |     12,053 B | 8915dd617a0c
 tests/test_scientific_result_durability.py         |     22,226 B | 610e0869e6403535e545c93bd990ddbd4fefb9b5d4abb13cd58a3a11ac3f04b0
 tests/test_security_hardening.py                   |     11,389 B | 366c0c0d911affebc457e80f4ee5abeb2cb1c0291119ce00423eadd8020346a6
 tests/test_spectra_enhancements.py                 |      5,796 B | b694e95b45d5dec6dd1e2d90ef43d43552e4d482acf18a820b2d7ffabe4844a1
-tests/test_spectra_xy_export.py                    |     11,068 B | d7c7c5b055a19fdb30dea8548130ca6e842a3f39cec8c1123bc63542d85b5eba
+tests/test_spectra_xy_export.py                    |     19,789 B | eeacec1bbdab0a8a3a7b7f25f7ecf4e8203b9a826a2534f9a20d5b3288e35938
 tests/test_thermochemistry_dual_slot.py            |      5,452 B | b9941981a46e1a96da437bb8feb28c9929b34cdfaa67e827c85d22b056a3a62b
 tests/test_web_routes.py                           |     26,352 B | 98a7e7ccd6a63c2be9bdc72d89dae84495cbc57589f38e0e0c7579cd48f7d07f
 tests/test_word_copy_exports.py                    |      2,163 B | 2e02540b0b6cfc00355ae2bc7c070e042e94c93f3b80fb29e7773a9260d60967
