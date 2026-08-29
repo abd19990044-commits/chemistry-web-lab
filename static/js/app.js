@@ -6143,7 +6143,7 @@
     }
   }
 
-  function addTheoreticalCalculationToStudio(name, transitions, method = "ORCA TD-DFT", basis = "") {
+  function addTheoreticalCalculationToStudio(name, transitions, method = "ORCA TD-DFT", basis = "", extra = {}) {
     if (!transitions || !transitions.length) return;
     const id = `theo_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const color = THEO_PALETTE[loadedTheoreticalSpectra.length % THEO_PALETTE.length];
@@ -6158,6 +6158,8 @@
       transitions,
       color,
       visible: true,
+      imported: false,
+      ...extra,
     };
     if (existingIdx >= 0) {
       loadedTheoreticalSpectra[existingIdx] = item;
@@ -6895,7 +6897,7 @@
     }
   }
 
-  function addTheoreticalIRCalculationToStudio(name, irModes, method = "ORCA DFT", basis = "") {
+  function addTheoreticalIRCalculationToStudio(name, irModes, method = "ORCA DFT", basis = "", extra = {}) {
     if (!irModes || !irModes.length) return;
     const id = `theo_ir_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const color = THEO_IR_PALETTE[loadedTheoreticalIRSpectra.length % THEO_IR_PALETTE.length];
@@ -6922,6 +6924,9 @@
       modes: normalizedModes,
       color,
       visible: true,
+      imported: false,
+      imaginary_count: 0,
+      ...extra,
     };
     if (existingIdx >= 0) {
       loadedTheoreticalIRSpectra[existingIdx] = item;
@@ -7027,18 +7032,30 @@
     loadedTheoreticalIRSpectra.forEach((theo, idx) => {
       const card = document.createElement("div");
       card.className = `spectrum-layer-card theo-layer ${theo.visible ? 'active' : 'disabled'}`;
+      const badge = theo.imported
+        ? '<span class="layer-type-tag tag-imported" title="Imported ORCA FREQ output">Imported</span>'
+        : '<span class="layer-type-tag">Current</span>';
+      const actions = theo.imported ? `
+            <button type="button" class="btn-layer-del" data-rename-ir-theo="${idx}" title="Rename spectrum">&#9998;</button>
+            <button type="button" class="btn-layer-del" data-del-ir-theo="${idx}" title="Remove imported spectrum">&#10005;</button>` : "";
+      const imagNote = (theo.imaginary_count > 0)
+        ? `<span style="color:var(--accent-danger);">&#9888; ${theo.imaginary_count} imaginary</span>` : "";
       card.innerHTML = `
         <div class="layer-header-row">
           <label class="layer-title-label">
             <input type="checkbox" class="layer-toggle-cb" data-ir-type="theo" data-ir-index="${idx}" ${theo.visible ? 'checked' : ''}>
             <input type="color" class="layer-color-picker" data-ir-type="theo" data-ir-index="${idx}" value="${theo.color}" title="Change IR curve color">
-            <strong>${theo.name}</strong>
+            <strong>${escapeHtml(theo.name)}</strong>
           </label>
-          <span class="layer-type-tag">ORCA Vibrations</span>
+          <div class="layer-actions">
+            ${badge}
+            ${actions}
+          </div>
         </div>
         <div class="layer-meta-row">
-          <span>${theo.method}</span>
+          <span>${escapeHtml(theo.method || "ORCA DFT")}</span>
           <span>${theo.modes.length} Modes</span>
+          ${imagNote}
         </div>
       `;
       listEl.appendChild(card);
@@ -7116,6 +7133,32 @@
         }
       });
     });
+
+    listEl.querySelectorAll("[data-del-ir-theo]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.delIrTheo, 10);
+        if (loadedTheoreticalIRSpectra[idx] && loadedTheoreticalIRSpectra[idx].imported) {
+          loadedTheoreticalIRSpectra.splice(idx, 1);
+          updateIRSpectrumLayersTray();
+          drawIRMultiSpectrum();
+        }
+      });
+    });
+
+    listEl.querySelectorAll("[data-rename-ir-theo]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.renameIrTheo, 10);
+        const entry = loadedTheoreticalIRSpectra[idx];
+        if (entry && entry.imported) {
+          const next = (window.prompt("Rename spectrum:", entry.name) || "").trim();
+          if (next) {
+            entry.name = next;
+            updateIRSpectrumLayersTray();
+            drawIRMultiSpectrum();
+          }
+        }
+      });
+    });
   }
 
   function populateExperimentalIRPointsTable(exp) {
@@ -7144,7 +7187,7 @@
     }
   }
 
-  function computeIRConvolution(modes, scalingFactor = 1.0, fwhmCm = 15.0, shiftCm = 0.0, startCm = 400, endCm = 4000, stepCm = 2) {
+  function computeIRConvolution(modes, scalingFactor = 1.0, fwhmCm = 15.0, shiftCm = 0.0, startCm = 400, endCm = 4000, stepCm = 2, normMax = null) {
     if (!modes || !modes.length || fwhmCm <= 0) return [];
     const valid = [];
     modes.forEach(m => {
@@ -7174,7 +7217,8 @@
     }
 
     return points.map(pt => {
-      const aNorm = maxA > 0 ? (pt.abs / maxA) : 0;
+      const denom = (normMax != null && normMax > 0) ? normMax : maxA;
+      const aNorm = denom > 0 ? (pt.abs / denom) : 0;
       const tPct = 100.0 * Math.pow(10, -aNorm);
       return {
         wavenumber_cm: Math.round(pt.wn * 10) / 10,
@@ -7243,10 +7287,18 @@
       if (minWn >= maxWn) maxWn = minWn + 100;
     }
 
-    const theoCurves = activeTheos.map(theo => {
+    const irNormMode = (document.getElementById("ir-normalization-mode")?.value || "per_spectrum");
+    let theoCurves = activeTheos.map(theo => {
       const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2);
       return { theo, curve };
     });
+    if (irNormMode === "shared" && theoCurves.length) {
+      const globalMaxAbs = Math.max(...theoCurves.flatMap(tc => tc.curve.map(p => p.absorbance)), 0.1);
+      theoCurves = theoCurves.map(tc => ({
+        theo: tc.theo,
+        curve: computeIRConvolution(tc.theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2, globalMaxAbs),
+      }));
+    }
 
     const isIntensity = (irYAxisMode === "theory_intensity");
     const isTrans = (irYAxisMode === "transmittance");
@@ -7270,7 +7322,7 @@
     const maxTheoModeInt = allTheoModes.length > 0 ? Math.max(...allTheoModes.map(m => m.intensity_km_mol || 0), 10.0) : 100.0;
     maxIntensity = Math.ceil((maxTheoModeInt * 1.15) / 10) * 10 || 100.0;
 
-    let maxY = isIntensity ? maxIntensity : (isTrans ? 105.0 : maxAbs);
+    let maxY = isIntensity ? maxIntensity : (isTrans ? 100.0 : maxAbs);
 
     if (irManualRangeEnabled) {
       if (irManualMinY !== null && !isNaN(irManualMinY)) {
@@ -8442,7 +8494,7 @@
           const nearest = curve.find(p => Math.abs(p.wavelength_nm - wlHover) <= 1.0);
           if (nearest) {
             hasReadings = true;
-            tooltipHtml += `<span style="color:${theo.color};">● ${theo.name}:</span> ε = ${nearest.intensity.toFixed(2)}<br>`;
+            tooltipHtml += `<span style="color:${theo.color};">● ${escapeHtml(theo.name)}:</span> ε = ${nearest.intensity.toFixed(2)}<br>`;
           }
         });
 
@@ -8825,6 +8877,152 @@
       });
     }
 
+    const irRemoveImportedBtn = document.getElementById("ir-remove-imported");
+    if (irRemoveImportedBtn) {
+      irRemoveImportedBtn.addEventListener("click", () => {
+        for (let i = loadedTheoreticalIRSpectra.length - 1; i >= 0; i--) {
+          if (loadedTheoreticalIRSpectra[i].imported) loadedTheoreticalIRSpectra.splice(i, 1);
+        }
+        updateIRSpectrumLayersTray();
+        drawIRMultiSpectrum();
+      });
+    }
+
+    const irImportBtn = document.getElementById("engine-ir-import-freq-btn");
+    const irImportInput = document.getElementById("engine-ir-import-freq-input");
+    if (irImportBtn && irImportInput) {
+      irImportBtn.addEventListener("click", () => irImportInput.click());
+      irImportInput.addEventListener("change", async () => {
+        const files = Array.from(irImportInput.files || []);
+        irImportInput.value = "";
+        if (!files.length) return;
+        const statusEl = document.getElementById("engine-ir-import-status");
+        const renderStatus = (rows) => {
+          if (!statusEl) return;
+          statusEl.classList.remove("hidden");
+          statusEl.innerHTML = rows.map(r =>
+            `<div style="font-size:0.78rem; padding:0.15rem 0;">${escapeHtml(r.label)}: ${escapeHtml(r.text)}</div>`
+          ).join("");
+        };
+        const rows = [];
+        irImportBtn.disabled = true;
+        try {
+          const fd = new FormData();
+          files.slice(0, 20).forEach(f => fd.append("files", f));
+          const resp = await fetch("/api/orca/engine/import-orca-output", { method: "POST", body: fd });
+          const data = await resp.json();
+          if (!resp.ok || !data.ok) {
+            renderStatus([{ label: "Import failed", text: (data && data.error) || ("HTTP " + resp.status) }]);
+            return;
+          }
+          data.results.forEach(r => {
+            if (r.status === "loaded" && r.capabilities && r.capabilities.ir && r.ir && r.ir.modes.length) {
+              const exists = loadedTheoreticalIRSpectra.some(t => t.raw_hash === r.raw_hash);
+              if (exists) {
+                rows.push({ label: r.file_name, text: "already loaded (duplicate skipped)" });
+                return;
+              }
+              addTheoreticalIRCalculationToStudio(
+                r.display_name || r.file_name, r.ir.modes,
+                r.ir.method || "ORCA DFT", r.ir.basis_set || "",
+                { imported: true, raw_hash: r.raw_hash, file_name: r.file_name,
+                  imaginary_count: r.ir.imaginary_frequency_count || 0 });
+              rows.push({ label: r.file_name, text: "loaded - " + r.ir.modes.length + " modes"
+                + (r.ir.imaginary_frequency_count > 0
+                    ? " - " + r.ir.imaginary_frequency_count + " imaginary frequency(ies) detected and excluded from the displayed curve"
+                    : "")
+                + (r.capabilities.uv ? " - TD-DFT/UV data also available in the UV-Vis studio" : "") });
+            } else if (r.status === "loaded") {
+              rows.push({ label: r.file_name, text: "no IR/FREQ data in this output"
+                + (r.capabilities && r.capabilities.uv ? " (TD-DFT/UV data available - import it from the UV-Vis studio)" : "") });
+            } else if (r.status === "duplicate") {
+              rows.push({ label: r.file_name, text: "already loaded (duplicate of " + (r.duplicate_of || "an imported file") + ")" });
+            } else {
+              rows.push({ label: r.file_name, text: "rejected - " + (r.reason || "unknown reason") });
+            }
+          });
+          renderStatus(rows);
+          updateIRSpectrumLayersTray();
+          drawIRMultiSpectrum();
+        } catch (err) {
+          renderStatus([{ label: "Import failed", text: String((err && err.message) || err) }]);
+        } finally {
+          irImportBtn.disabled = false;
+        }
+      });
+    }
+
+    const uvRemoveImportedBtn = document.getElementById("uv-remove-imported");
+    if (uvRemoveImportedBtn) {
+      uvRemoveImportedBtn.addEventListener("click", () => {
+        for (let i = loadedTheoreticalSpectra.length - 1; i >= 0; i--) {
+          if (loadedTheoreticalSpectra[i].imported) loadedTheoreticalSpectra.splice(i, 1);
+        }
+        updateSpectrumLayersTray();
+        drawUVVisMultiSpectrum();
+      });
+    }
+
+    const uvImportBtn = document.getElementById("engine-uvvis-import-btn");
+    const uvImportInput = document.getElementById("engine-uvvis-import-input");
+    if (uvImportBtn && uvImportInput) {
+      uvImportBtn.addEventListener("click", () => uvImportInput.click());
+      uvImportInput.addEventListener("change", async () => {
+        const files = Array.from(uvImportInput.files || []);
+        uvImportInput.value = "";
+        if (!files.length) return;
+        const statusEl = document.getElementById("engine-uvvis-import-status");
+        const renderStatus = (rows) => {
+          if (!statusEl) return;
+          statusEl.classList.remove("hidden");
+          statusEl.innerHTML = rows.map(r =>
+            `<div style="font-size:0.78rem; padding:0.15rem 0;">${escapeHtml(r.label)}: ${escapeHtml(r.text)}</div>`
+          ).join("");
+        };
+        const rows = [];
+        uvImportBtn.disabled = true;
+        try {
+          const fd = new FormData();
+          files.slice(0, 20).forEach(f => fd.append("files", f));
+          const resp = await fetch("/api/orca/engine/import-orca-output", { method: "POST", body: fd });
+          const data = await resp.json();
+          if (!resp.ok || !data.ok) {
+            renderStatus([{ label: "Import failed", text: (data && data.error) || ("HTTP " + resp.status) }]);
+            return;
+          }
+          data.results.forEach(r => {
+            if (r.status === "loaded" && r.capabilities && r.capabilities.uv && r.uv && r.uv.transitions.length) {
+              const exists = loadedTheoreticalSpectra.some(t => t.raw_hash === r.raw_hash);
+              if (exists) {
+                rows.push({ label: r.file_name, text: "already loaded (duplicate skipped)" });
+                return;
+              }
+              addTheoreticalCalculationToStudio(
+                r.display_name || r.file_name, r.uv.transitions,
+                r.uv.method || "TD-DFT", r.uv.basis_set || "",
+                { imported: true, raw_hash: r.raw_hash, file_name: r.file_name });
+              rows.push({ label: r.file_name, text: "loaded - " + r.uv.transitions.length + " transitions"
+                + (r.capabilities.ir ? " - FREQ/IR data also available in the IR studio" : "") });
+            } else if (r.status === "loaded") {
+              rows.push({ label: r.file_name, text: "no TD-DFT/UV data in this output"
+                + (r.capabilities && r.capabilities.ir ? " (FREQ/IR data available - import it from the IR studio)" : "") });
+            } else if (r.status === "duplicate") {
+              rows.push({ label: r.file_name, text: "already loaded (duplicate of " + (r.duplicate_of || "an imported file") + ")" });
+            } else {
+              rows.push({ label: r.file_name, text: "rejected - " + (r.reason || "unknown reason") });
+            }
+          });
+          renderStatus(rows);
+          updateSpectrumLayersTray();
+          drawUVVisMultiSpectrum();
+        } catch (err) {
+          renderStatus([{ label: "Import failed", text: String((err && err.message) || err) }]);
+        } finally {
+          uvImportBtn.disabled = false;
+        }
+      });
+    }
+
     if (irViewportSelect) {
       irViewportSelect.addEventListener("change", (e) => {
         irViewportMode = e.target.value;
@@ -8978,7 +9176,7 @@
             } else {
               valStr = `Abs = ${nearest.absorbance.toFixed(3)} AU`;
             }
-            tooltipHtml += `<span style="color:${theo.color};">● ${theo.name}:</span> ${valStr}<br>`;
+            tooltipHtml += `<span style="color:${theo.color};">● ${escapeHtml(theo.name)}:</span> ${valStr}<br>`;
           }
         });
 

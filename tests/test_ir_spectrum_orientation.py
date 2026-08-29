@@ -8,14 +8,16 @@ Locks the scientifically verified behavior of the authoritative IR pipeline
 - ORCA modes are IR INTENSITIES (km/mol); the %T view is a NORMALIZED RELATIVE
   transmittance built as tPct = 100 * 10**(-aNorm), aNorm in [0, 1] - never the
   invalid `100 - raw_km_mol` conversion.
+- Practical-FTIR Y scale is EXACTLY 0..100: 100% maps to the plot top, 0% to
+  the plot bottom; tick labels are exactly 0/25/50/75/100 (no 105% headroom).
 - baseline far from bands sits at ~100 %T (top of canvas);
 - the strongest ORCA intensity produces the DEEPEST downward %T band;
-- the Y axis uses the normal numeric orientation: 0 at bottom, 100 near the top
-  (both in the mapY arithmetic AND in the drawn tick labels - no reversal, no
-  double inversion);
 - wavenumber axis is conventional descending IR (4000 left -> 400 right),
   independent of the Y quantity;
 - intensity mode plots stronger modes higher (upward);
+- multi-spectrum overlay: deterministic spectra A and B are generated on ONE
+  shared wavenumber grid, each with per-spectrum normalization (own max ->
+  10% floor); shared normalization (one global max) is verified separately;
 - switching display modes never mutates the raw parsed modes;
 - the derived curve is a presentation array that never overwrites the raw
   km/mol data;
@@ -53,6 +55,10 @@ def _check(label, condition, detail=""):
         pytest.fail("%s%s" % (label, (" | " + detail) if detail else ""))
 
 
+def _node_available():
+    return shutil.which("node") is not None
+
+
 NODE_HARNESS = r"""
 const fs = require("fs");
 const src = fs.readFileSync(process.argv[2], "utf8");
@@ -62,20 +68,27 @@ if (fnStart < 0) { console.log(JSON.stringify({ error: "computeIRConvolution not
 const fnSrc = src.slice(fnStart, src.indexOf("\n  }", fnStart) + 4);
 eval(fnSrc.replace("function computeIRConvolution", "globalThis.computeIRConvolution = function computeIRConvolution"));
 
-const modes = [
+// Deterministic spectra (audit fixtures): A strongest at 3000, B strongest at 1050
+const modesA = [
   { frequency_cm: 1000, intensity_km_mol: 10 },
   { frequency_cm: 1500, intensity_km_mol: 50 },
   { frequency_cm: 3000, intensity_km_mol: 100 },
 ];
-const modesSnapshot = JSON.stringify(modes);
-const curve = computeIRConvolution(modes, 1.0, 15.0, 0.0, 400, 4000, 2);
+const modesB = [
+  { frequency_cm: 1050, intensity_km_mol: 80 },
+  { frequency_cm: 1600, intensity_km_mol: 20 },
+  { frequency_cm: 2950, intensity_km_mol: 60 },
+];
+const modesSnapshot = JSON.stringify([modesA, modesB]);
 
-const at = (wn) => curve.reduce((a, p) => (Math.abs(p.wavenumber_cm - wn) < Math.abs(a.wavenumber_cm - wn) ? p : a));
-const c1000 = at(1000), c1500 = at(1500), c3000 = at(3000), baseline = at(3900);
-const tVals = curve.map(p => p.transmittance_pct);
+const curveA = computeIRConvolution(modesA, 1.0, 15.0, 0.0, 400, 4000, 2);
+const curveB = computeIRConvolution(modesB, 1.0, 15.0, 0.0, 400, 4000, 2);
+const at = (curve, wn) => curve.reduce((a, p) => (Math.abs(p.wavenumber_cm - wn) < Math.abs(a.wavenumber_cm - wn) ? p : a));
+const c1000 = at(curveA, 1000), c1500 = at(curveA, 1500), c3000 = at(curveA, 3000), baseline = at(curveA, 3900);
+const tVals = curveA.concat(curveB).map(p => p.transmittance_pct);
 
-// EXACT canvas mapper formulas from renderIRSpectrumToCanvas (transmittance mode)
-const minWn = 400, maxWn = 4000, minY = 0.0, maxY = 105.0;
+// EXACT canvas mapper formulas from renderIRSpectrumToCanvas (transmittance mode, scale 0..100)
+const minWn = 400, maxWn = 4000, minY = 0.0, maxY = 100.0;
 const padding = { top: 35, right: 65, bottom: 48, left: 65 };
 const width = 1400, height = 800;
 const plotW = width - padding.left - padding.right;
@@ -84,8 +97,16 @@ const mapX = (wn) => padding.left + ((maxWn - wn) / (maxWn - minWn)) * plotW;
 const mapY = (val) => padding.top + plotH - ((val - minY) / (maxY - minY)) * plotH;
 
 // intensity mode: plotted value = absorbance_norm * maxTheoModeInt, maxY = 100
-const maxTheoModeInt = Math.max(...modes.map(m => m.intensity_km_mol || 0), 10.0);
+const maxTheoModeInt = Math.max(...modesA.map(m => m.intensity_km_mol || 0), 10.0);
 const plottedIntensity = (pt) => pt.absorbance_norm * maxTheoModeInt;
+
+// shared normalization: one global maximum across BOTH spectra
+const maxAbsA = Math.max(...curveA.map(p => p.absorbance));
+const maxAbsB = Math.max(...curveB.map(p => p.absorbance));
+const globalMax = Math.max(maxAbsA, maxAbsB);
+const curveAShared = computeIRConvolution(modesA, 1.0, 15.0, 0.0, 400, 4000, 2, globalMax);
+const curveBShared = computeIRConvolution(modesB, 1.0, 15.0, 0.0, 400, 4000, 2, globalMax);
+const sharedFloorB = 100.0 * Math.pow(10, -(maxAbsB / globalMax));
 
 const out = {
   t1000: c1000.transmittance_pct,
@@ -94,23 +115,33 @@ const out = {
   baseline_t: baseline.transmittance_pct,
   strongest_is_lowest_t: c3000.transmittance_pct < c1500.transmittance_pct && c1500.transmittance_pct < c1000.transmittance_pct,
   bounds_ok: tVals.every(t => t >= 0 && t <= 100 && isFinite(t)),
-  pairing_ok: [1000, 1500, 3000].every(wn => Math.abs(at(wn).wavenumber_cm - wn) <= 2),
+  pairing_ok: [1000, 1500, 3000].every(wn => Math.abs(at(curveA, wn).wavenumber_cm - wn) <= 2)
+    && [1050, 1600, 2950].every(wn => Math.abs(at(curveB, wn).wavenumber_cm - wn) <= 2),
   band_points_downward: mapY(c3000.transmittance_pct) > mapY(100),
-  y100_above_y0: mapY(100) < mapY(0),
+  y100_top: Math.abs(mapY(100) - padding.top) < 1e-9,
+  y0_bottom: Math.abs(mapY(0) - (padding.top + plotH)) < 1e-9,
+  tick_labels: [0, 1, 2, 3, 4].map(s => Math.round(minY + ((maxY - minY) / 4) * s)),
   descending_x: mapX(4000) < mapX(400),
   x_independent_of_y: !/mapY/.test(mapX.toString()),
   strongest_abs_largest: c3000.absorbance > c1500.absorbance && c1500.absorbance > c1000.absorbance,
   intensity_mode_upward: plottedIntensity(c3000) > plottedIntensity(c1500) && plottedIntensity(c1500) > plottedIntensity(c1000)
     && mapY(plottedIntensity(c3000)) < mapY(plottedIntensity(c1000)),
-  modes_unmutated: JSON.stringify(modes) === modesSnapshot,
-  returns_new_array: curve !== modes && curve.every(p => !("intensity_km_mol" in p)),
+  modes_unmutated: JSON.stringify([modesA, modesB]) === modesSnapshot,
+  returns_new_array: curveA !== modesA && curveA.every(p => !("intensity_km_mol" in p)),
+  overlay_same_grid: curveA.length === curveB.length
+    && curveA.every((p, i) => p.wavenumber_cm === curveB[i].wavenumber_cm),
+  overlay_a_deepest_at_3000: Math.abs(at(curveA, 3000).transmittance_pct - Math.min(...curveA.map(p => p.transmittance_pct))) < 0.01,
+  overlay_b_deepest_near_1050: Math.abs(at(curveB, 1050).transmittance_pct - Math.min(...curveB.map(p => p.transmittance_pct))) < 0.5,
+  overlay_both_in_bounds: true,
+  per_spectrum_floors_10: Math.abs(Math.min(...curveA.map(p => p.transmittance_pct)) - 10) < 0.5
+    && Math.abs(Math.min(...curveB.map(p => p.transmittance_pct)) - 10) < 0.5,
+  shared_floorA_is_10: Math.abs(Math.min(...curveAShared.map(p => p.transmittance_pct)) - 10) < 0.5,
+  shared_floorB: sharedFloorB,
+  shared_floorB_valid: sharedFloorB > 10.0 && sharedFloorB < 100.0 && isFinite(sharedFloorB)
+    && Math.abs(Math.min(...curveBShared.map(p => p.transmittance_pct)) - sharedFloorB) < 0.01,
 };
 console.log(JSON.stringify(out));
 """
-
-
-def _node_available():
-    return shutil.which("node") is not None
 
 
 def _renderer_body(src):
@@ -149,14 +180,17 @@ def test_ir_spectrum_orientation():
            re.search(r"mapY\s*=\s*\(val\)\s*=>\s*\{\s*return padding\.top \+ plotH - \(\(val - minY\) / \(maxY - minY\)\) \* plotH;", body) is not None)
     _check("no reversed/inverted Y-axis construct inside the IR renderer",
            not re.search(r"reversed|inverted|\binverse\b", body, re.IGNORECASE))
-    _check("transmittance mode scale constants: minY=0, maxY=105 (headroom above 100)",
-           "let minY = 0.0;" in body and "isTrans ? 105.0" in body)
+    _check("transmittance mode scale constants: minY=0, maxY=100 (strict 0-100, no headroom)",
+           "let minY = 0.0;" in body and "isTrans ? 100.0" in body and "isTrans ? 105.0" not in body)
     _check("tick labels are generated from the same mapped values "
            "(label text `${Math.round(yVal)}%` drawn at mapY(yVal) - labels cannot be swapped relative to position)",
            re.search(r"label = `\$\{Math\.round\(yVal\)\}%`", body) is not None
            and re.search(r"const yPos = mapY\(yVal\);\s*ctx\.fillText\(label", body) is not None)
-    _check("tick loop covers the full scale from the bottom (yStep starts at 0 -> the 0%% label exists at the bottom)",
+    _check("tick loop covers the full scale from the bottom (yStep starts at 0 -> the 0% label exists at the bottom)",
            re.search(r"for \(let yStep = 0; yStep <= 4; yStep\+\+\) \{\s*const yVal = minY \+ \(\(maxY - minY\) / 4\) \* yStep;", body) is not None)
+    _check("shared-normalization select is wired into the IR renderer",
+           'document.getElementById("ir-normalization-mode")' in body
+           and 'ir-normalization-mode' in open(os.path.join(ROOT, "templates", "index.html"), encoding="utf-8").read())
 
     # ---- numeric production-JS verification (real app.js via Node) ----
     if not _node_available():
@@ -182,18 +216,32 @@ def test_ir_spectrum_orientation():
     _check("deepest band reaches the normalized floor (10 %%T for aNorm=1)",
            abs(res["t3000"] - 10.0) < 0.5)
     _check("bounds 0 <= relative %%T <= 100 and finite everywhere", res["bounds_ok"])
-    _check("frequency/intensity pairing preserved (centers within 2 cm-1)", res["pairing_ok"])
+    _check("frequency/intensity pairing preserved for both spectra (centers within 2 cm-1)", res["pairing_ok"])
     _check("strong absorption band points DOWNWARD in pixel space (mapY(T_min) > mapY(100))",
            res["band_points_downward"])
-    _check("Y-axis numeric orientation: 100%% maps ABOVE 0%% (mapY(100) < mapY(0))", res["y100_above_y0"])
+    _check("Y-axis numeric orientation: mapY(100) == padding.top (100% at the very top)", res["y100_top"])
+    _check("Y-axis numeric orientation: mapY(0) == padding.top + plotH (0% at the very bottom)", res["y0_bottom"])
+    _check("tick labels are exactly 0/25/50/75/100 (no 105%% top tick): %s" % res["tick_labels"],
+           res["tick_labels"] == [0, 25, 50, 75, 100])
     _check("wavenumber axis conventional descending (4000 left -> 400 right)", res["descending_x"])
     _check("X-axis reversal is independent of the Y quantity", res["x_independent_of_y"])
     _check("absorbance mode: stronger mode -> larger absorbance", res["strongest_abs_largest"])
     _check("intensity mode: stronger mode -> higher plotted peak (upward)", res["intensity_mode_upward"])
     _check("display-mode switching never mutates the raw parsed modes", res["modes_unmutated"])
     _check("convolution returns a derived presentation array (no km/mol fields leaked)", res["returns_new_array"])
-    print("   measured: T(1000)=%.2f%%  T(1500)=%.2f%%  T(3000)=%.2f%%  baseline=%.2f%%"
-          % (res["t1000"], res["t1500"], res["t3000"], res["baseline_t"]))
+
+    # ---- multi-spectrum overlay invariants (fixtures A and B) ----
+    _check("overlay: spectra A and B generated on ONE identical wavenumber grid", res["overlay_same_grid"])
+    _check("overlay: spectrum A deepest band at 3000 cm-1", res["overlay_a_deepest_at_3000"])
+    _check("overlay: spectrum B deepest band near 1050 cm-1", res["overlay_b_deepest_near_1050"])
+    _check("overlay: per-spectrum normalization floors both deepest bands at 10 %%T",
+           res["per_spectrum_floors_10"])
+    _check("shared normalization: strongest spectrum keeps the 10 %%T floor", res["shared_floorA_is_10"])
+    _check("shared normalization: weaker spectrum floor rises above 10 %%T "
+           "(cross-spectrum intensity ratios preserved; got %.2f %%T)" % res["shared_floorB"],
+           res["shared_floorB_valid"])
+    print("   measured: T(1000)=%.2f%%  T(1500)=%.2f%%  T(3000)=%.2f%%  baseline=%.2f%%  sharedFloorB=%.2f%%"
+          % (res["t1000"], res["t1500"], res["t3000"], res["baseline_t"], res["shared_floorB"]))
 
 
 if __name__ == "__main__":

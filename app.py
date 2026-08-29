@@ -1740,6 +1740,136 @@ def api_orca_engine_experimental_parse():
         return error_response(f"Experimental spectrum parsing failed: {exc}", 500)
 
 
+# ---------------------------------------------------------------------------
+# Unified ORCA output import (multi-file) for the IR / UV-Vis overlay studios.
+# Reuses the SAME authoritative OrcaParser as the current-calculation path -
+# there is no second scientific parser. Uploaded content is treated strictly
+# as text/data: it is never executed. Per-file status keeps one invalid file
+# from rejecting the whole batch.
+ORCA_IMPORT_MAX_FILES = 20
+ORCA_IMPORT_MAX_FILE_BYTES = 25 * 1024 * 1024
+
+
+@app.route("/api/orca/engine/import-orca-output", methods=["POST"])
+def api_orca_engine_import_orca_output():
+    """Imports one or more ORCA outputs and reports per-file FREQ/IR and
+    TD-DFT/UV capabilities with the raw scientific data needed for overlay."""
+    if not ORCA_ENGINE_AVAILABLE:
+        return error_response("ORCA Quantum Chemistry Engine is not available.", 503)
+
+    uploads = [f for f in request.files.getlist("files") if f and f.filename]
+    if not uploads:
+        return error_response("No ORCA output files provided.", 400)
+    if len(uploads) > ORCA_IMPORT_MAX_FILES:
+        return error_response(
+            "Too many files in one import (maximum %d)." % ORCA_IMPORT_MAX_FILES, 413)
+
+    import hashlib
+
+    results = []
+    seen_hashes = {}
+    for storage in uploads:
+        raw_name = os.path.basename((storage.filename or "orca_output.txt").strip()) or "orca_output.txt"
+        entry = {"file_name": raw_name}
+        content = storage.read(ORCA_IMPORT_MAX_FILE_BYTES + 1)
+        if len(content) > ORCA_IMPORT_MAX_FILE_BYTES:
+            entry.update({"status": "rejected",
+                          "reason": "file exceeds the %d MB per-file import limit"
+                                    % (ORCA_IMPORT_MAX_FILE_BYTES // (1024 * 1024))})
+            results.append(entry)
+            continue
+        if not content.strip():
+            entry.update({"status": "rejected", "reason": "file is empty"})
+            results.append(entry)
+            continue
+        sha = hashlib.sha256(content).hexdigest()
+        entry["raw_hash"] = sha
+        entry["size"] = len(content)
+        if sha in seen_hashes:
+            entry.update({"status": "duplicate",
+                          "reason": "content identical to an already-imported file",
+                          "duplicate_of": seen_hashes[sha]})
+            results.append(entry)
+            continue
+        seen_hashes[sha] = raw_name
+
+        display_name = os.path.splitext(core.safe_filename(os.path.splitext(raw_name)[0]))[0] or "orca_output"
+        entry["display_name"] = display_name
+        text = content.decode("utf-8", errors="replace")
+        try:
+            parsed_jobs = OrcaParser(io.StringIO(text), source_name=display_name).parse() or []
+        except Exception as exc:  # noqa: BLE001 - malformed input must not 500
+            entry.update({"status": "rejected",
+                          "reason": "malformed ORCA output (parser: %s)" % str(exc)[:120]})
+            results.append(entry)
+            continue
+
+        ir_job = next((j for j in parsed_jobs
+                       if getattr(j, "ir_frequencies_cm", None)
+                       and getattr(j, "ir_intensities_km_mol", None)), None)
+        uv_job = next((j for j in parsed_jobs
+                       if getattr(j, "tddft_cm", None) and getattr(j, "tddft_fosc", None)), None)
+        capabilities = {"ir": ir_job is not None, "uv": uv_job is not None}
+        entry["capabilities"] = capabilities
+        if not any(capabilities.values()):
+            entry.update({"status": "rejected",
+                          "reason": "no usable FREQ/IR or TD-DFT/UV results found "
+                                    "(SP-only, Opt-only, or unsupported output)"})
+            results.append(entry)
+            continue
+
+        entry["status"] = "loaded"
+        if ir_job:
+            modes = []
+            for i, (fc, t2) in enumerate(zip(ir_job.ir_frequencies_cm,
+                                             ir_job.ir_intensities_km_mol)):
+                try:
+                    modes.append({"mode": i + 1, "frequency_cm": float(fc),
+                                  "intensity_km_mol": float(t2)})
+                except (TypeError, ValueError):
+                    continue
+            imaginary = sum(1 for m in modes if m["frequency_cm"] < 0)
+            entry["ir"] = {
+                "modes": modes,
+                "imaginary_frequency_count": imaginary or int(getattr(ir_job, "imaginary_frequencies_count", 0) or 0),
+                "method": getattr(ir_job, "method", None) or "ORCA DFT",
+                "basis_set": getattr(ir_job, "basis_set", None) or "",
+                "charge": getattr(ir_job, "charge", None),
+                "multiplicity": getattr(ir_job, "multiplicity", None),
+                "mode_count": len(modes),
+            }
+        if uv_job:
+            transitions = []
+            for i, (cm, fosc) in enumerate(zip(uv_job.tddft_cm, uv_job.tddft_fosc)):
+                try:
+                    cm_v, fosc_v = float(cm), float(fosc)
+                except (TypeError, ValueError):
+                    continue
+                if cm_v <= 0 or fosc_v < 0:
+                    continue
+                transitions.append({
+                    "state_index": i + 1,
+                    "energy_cm": cm_v,
+                    "excitation_energy_ev": cm_v * 1.2398419843320026e-4,
+                    "wavelength_nm": (1.0e7 / cm_v) if cm_v > 0 else None,
+                    "oscillator_strength": fosc_v,
+                })
+            entry["uv"] = {
+                "transitions": transitions,
+                "method": getattr(uv_job, "method", None) or "TD-DFT",
+                "basis_set": getattr(uv_job, "basis_set", None) or "",
+                "charge": getattr(uv_job, "charge", None),
+                "multiplicity": getattr(uv_job, "multiplicity", None),
+                "transition_count": len(transitions),
+            }
+        results.append(entry)
+
+    loaded = sum(1 for r in results if r.get("status") == "loaded")
+    return jsonify({"ok": True, "results": results, "loaded": loaded,
+                    "rejected": sum(1 for r in results if r.get("status") == "rejected"),
+                    "duplicates": sum(1 for r in results if r.get("status") == "duplicate")})
+
+
 @app.route("/api/orca/engine/multi-spectrum/overlay", methods=["POST"])
 def api_orca_engine_multi_spectrum_overlay():
     """Generate multi-spectrum overlay comparing immutable experimental references with theoretical models."""
