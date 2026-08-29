@@ -6251,6 +6251,10 @@
             <span class="layer-meta-sub">${theo.transitions.length} transitions • ${theo.method || 'TD-DFT'}</span>
           </div>
         </div>
+        <div class="layer-info-actions">
+          <button type="button" class="btn-layer-del" data-xy-uv-theo="${idx}" title="Export XY (Origin-friendly text)">&#8681;</button>
+          <button type="button" class="btn-layer-del" data-rename-uv-theo="${idx}" title="Rename spectrum (display name only)">&#9998;</button>
+        </div>
         <span class="layer-badge badge-theo">THEORY</span>
       `;
       listEl.appendChild(card);
@@ -6270,6 +6274,10 @@
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 0.4rem;">
+          <div class="layer-info-actions">
+            <button type="button" class="layer-del-btn" data-xy-uv-exp="${idx}" title="Export XY (Origin-friendly text)">&#8681;</button>
+            <button type="button" class="layer-del-btn" data-rename-uv-exp="${idx}" title="Rename spectrum (display name only)">&#9998;</button>
+          </div>
           <span class="layer-badge badge-exp">EXP</span>
           <button type="button" class="layer-del-btn" data-del-exp="${idx}" title="Remove experimental dataset">✕</button>
         </div>
@@ -6321,6 +6329,41 @@
         }
       });
     });
+    listEl.querySelectorAll("[data-xy-uv-theo]").forEach(btn => {
+      btn.addEventListener("click", () => exportUVXYSingle("theo", parseInt(btn.dataset.xyUvTheo, 10)));
+    });
+    listEl.querySelectorAll("[data-xy-uv-exp]").forEach(btn => {
+      btn.addEventListener("click", () => exportUVXYSingle("exp", parseInt(btn.dataset.xyUvExp, 10)));
+    });
+    listEl.querySelectorAll("[data-rename-uv-theo]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.renameUvTheo, 10);
+        const entry = loadedTheoreticalSpectra[idx];
+        if (entry) {
+          const next = (window.prompt("Rename spectrum (display name only - source file and data are untouched):", entry.name) || "").trim();
+          if (next) {
+            entry.name = next;
+            updateSpectrumLayersTray();
+            drawUVVisMultiSpectrum();
+          }
+        }
+      });
+    });
+    listEl.querySelectorAll("[data-rename-uv-exp]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.renameUvExp, 10);
+        const entry = loadedExperimentalSpectra[idx];
+        if (entry) {
+          const next = (window.prompt("Rename spectrum (display name only - source file is untouched):", entry.label || entry.file_name) || "").trim();
+          if (next) {
+            entry.label = next;
+            updateSpectrumLayersTray();
+            drawUVVisMultiSpectrum();
+          }
+        }
+      });
+    });
+
   }
 
   function populateExperimentalPointsTable(exp) {
@@ -6404,8 +6447,8 @@
     const shift = parseFloat(document.getElementById("engine-shift-slider")?.value || "0");
 
     // Gather active theoretical and experimental series
-    const activeTheos = loadedTheoreticalSpectra.filter(t => t.visible);
-    const activeExps = loadedExperimentalSpectra.filter(e => e.visible);
+    const activeTheos = loadedTheoreticalSpectra.filter(t => t.visible && uvViewAllows("theo"));
+    const activeExps = loadedExperimentalSpectra.filter(e => e.visible && uvViewAllows("exp"));
 
     if (activeTheos.length === 0 && activeExps.length === 0) {
       ctx.fillStyle = isLight ? "#475569" : "#91A5BE";
@@ -6603,12 +6646,19 @@
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = "center";
     ctx.fillStyle = isLight ? "#4338ca" : "#818cf8";
-    ctx.fillText(spectrumNormalizeMode in { "all": 1, "theoretical_only": 1 } ? "Theoretical Intensity (Norm)" : "Molar Extinction ε (L·mol⁻¹·cm⁻¹)", -(padding.top + plotH / 2), 16);
+    ctx.fillText(uvCustomTitles.y || (spectrumNormalizeMode in { "all": 1, "theoretical_only": 1 } ? "Theoretical Intensity (Norm)" : "Molar Extinction ε (L·mol⁻¹·cm⁻¹)"), -(padding.top + plotH / 2), 16);
     if (activeExps.length > 0) {
       ctx.fillStyle = isLight ? "#059669" : "#2BD9A8";
       ctx.fillText(spectrumNormalizeMode in { "all": 1, "experimental_only": 1 } ? "Exp Absorbance (Norm)" : "Experimental Absorbance (AU)", -(padding.top + plotH / 2), width - 12);
     }
     ctx.restore();
+    ctx.font = "bold 11px Inter, sans-serif";
+    ctx.fillStyle = isLight ? "#0f172a" : "#CBD5E1";
+    ctx.textAlign = "center";
+    ctx.fillText(uvCustomTitles.x || "Wavelength (nm)", padding.left + plotW / 2, padding.top + plotH + 18);
+    ctx.font = "bold 13px Inter, sans-serif";
+    ctx.fillStyle = isLight ? "#0f172a" : "#e2e8f0";
+    ctx.fillText(uvCustomTitles.title || "UV-Vis Spectrum", width / 2, 14);
 
     // =========================================================================
     // STRICT VIEWPORT CLIPPING: Ensure all data curves remain inside the plot box
@@ -6851,6 +6901,72 @@
   let loadedExperimentalIRFiles = [];
   let loadedExperimentalIRSpectra = [];
   let loadedTheoreticalIRSpectra = [];
+  let irViewMode = "all";
+  let uvViewMode = "all";
+  let irCustomTitles = { title: "", x: "", y: "" };
+  let uvCustomTitles = { title: "", x: "", y: "" };
+  function irViewAllows(kind) {
+    if (irViewMode === "theoretical_only") return kind === "theo";
+    if (irViewMode === "experimental_only") return kind === "exp";
+    return true;
+  }
+  function uvViewAllows(kind) {
+    if (uvViewMode === "theoretical_only") return kind === "theo";
+    if (uvViewMode === "experimental_only") return kind === "exp";
+    return true;
+  }
+  function sanitizeFileStem(name) {
+    return (String(name || "spectrum").split(/[\\/]/).pop() || "spectrum")
+      .replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, "_")
+      .replace(/^\.+/, "").slice(0, 80) || "spectrum";
+  }
+  function downloadTextFile(filename, text) {
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function buildXYText(columns, metaLines) {
+    const parts = [];
+    (metaLines || []).forEach(m => parts.push("# " + m));
+    const fmt = (v) => Number(v).toFixed(6);
+    if (columns.length === 1) {
+      const c = columns[0];
+      parts.push(c.xHeader + "\t" + c.yHeader);
+      const n = Math.min(c.xs.length, c.ys.length);
+      for (let i = 0; i < n; i++) parts.push(fmt(c.xs[i]) + "\t" + fmt(c.ys[i]));
+      return parts.join("\n") + "\n";
+    }
+    const x0 = columns[0];
+    const sameGrid = columns.every(c => c.xs.length === x0.xs.length
+      && c.xs.every((x, i) => Math.abs(Number(x) - Number(x0.xs[i])) < 1e-9));
+    if (sameGrid) {
+      parts.push([x0.xHeader].concat(columns.map(c => c.yHeader)).join("\t"));
+      const n = x0.xs.length;
+      for (let i = 0; i < n; i++) {
+        parts.push([fmt(x0.xs[i])].concat(columns.map(c => fmt(c.ys[i]))).join("\t"));
+      }
+      return parts.join("\n") + "\n";
+    }
+    const headers = [];
+    columns.forEach(c => { headers.push(c.xHeader, c.yHeader); });
+    parts.push(headers.join("\t"));
+    const n = Math.max(...columns.map(c => Math.min(c.xs.length, c.ys.length)));
+    for (let i = 0; i < n; i++) {
+      const row = [];
+      columns.forEach(c => {
+        row.push(i < c.xs.length ? fmt(c.xs[i]) : "");
+        row.push(i < c.ys.length ? fmt(c.ys[i]) : "");
+      });
+      parts.push(row.join("\t"));
+    }
+    return parts.join("\n") + "\n";
+  }
   let showTheoreticalIRSticks = true;
   let showIRLegend = true;
   let currentIRTheme = "dark";
@@ -6866,7 +6982,7 @@
   let cachedExcelIRSheets = [];
 
   function checkIRYQuantityCompatibility() {
-    const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible);
+    const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp"));
     const quantities = new Set(activeExps.map(e => e.y_quantity || "transmittance"));
     const mismatchBanner = document.getElementById("ir-unit-mismatch-banner");
     if (quantities.size > 1 && mismatchBanner) {
@@ -7035,9 +7151,11 @@
       const badge = theo.imported
         ? '<span class="layer-type-tag tag-imported" title="Imported ORCA FREQ output">Imported</span>'
         : '<span class="layer-type-tag">Current</span>';
-      const actions = theo.imported ? `
-            <button type="button" class="btn-layer-del" data-rename-ir-theo="${idx}" title="Rename spectrum">&#9998;</button>
-            <button type="button" class="btn-layer-del" data-del-ir-theo="${idx}" title="Remove imported spectrum">&#10005;</button>` : "";
+      const actions = `
+            <button type="button" class="btn-layer-del" data-xy-ir-theo="${idx}" title="Export XY (Origin-friendly text)">&#8681;</button>` +
+        (theo.imported ? `
+            <button type="button" class="btn-layer-del" data-rename-ir-theo="${idx}" title="Rename spectrum (display name only)">&#9998;</button>
+            <button type="button" class="btn-layer-del" data-del-ir-theo="${idx}" title="Remove imported spectrum">&#10005;</button>` : "");
       const imagNote = (theo.imaginary_count > 0)
         ? `<span style="color:var(--accent-danger);">&#9888; ${theo.imaginary_count} imaginary</span>` : "";
       card.innerHTML = `
@@ -7073,6 +7191,8 @@
           </label>
           <div class="layer-actions">
             <span class="layer-type-tag tag-exp">FTIR Ref</span>
+            <button type="button" class="btn-layer-del" data-xy-ir-exp="${idx}" title="Export XY (Origin-friendly text)">&#8681;</button>
+            <button type="button" class="btn-layer-del" data-rename-ir-exp="${idx}" title="Rename spectrum (display name only)">&#9998;</button>
             <button type="button" class="btn-layer-del" data-del-ir-exp="${idx}" title="Remove dataset">✕</button>
           </div>
         </div>
@@ -7134,6 +7254,27 @@
       });
     });
 
+    listEl.querySelectorAll("[data-xy-ir-theo]").forEach(btn => {
+      btn.addEventListener("click", () => exportIRXYSingle("theo", parseInt(btn.dataset.xyIrTheo, 10)));
+    });
+    listEl.querySelectorAll("[data-xy-ir-exp]").forEach(btn => {
+      btn.addEventListener("click", () => exportIRXYSingle("exp", parseInt(btn.dataset.xyIrExp, 10)));
+    });
+    listEl.querySelectorAll("[data-rename-ir-exp]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.renameIrExp, 10);
+        const entry = loadedExperimentalIRSpectra[idx];
+        if (entry) {
+          const next = (window.prompt("Rename spectrum (display name only - source file is untouched):", entry.label || entry.file_name) || "").trim();
+          if (next) {
+            entry.label = next;
+            updateIRSpectrumLayersTray();
+            drawIRMultiSpectrum();
+          }
+        }
+      });
+    });
+
     listEl.querySelectorAll("[data-del-ir-theo]").forEach(btn => {
       btn.addEventListener("click", () => {
         const idx = parseInt(btn.dataset.delIrTheo, 10);
@@ -7149,8 +7290,8 @@
       btn.addEventListener("click", () => {
         const idx = parseInt(btn.dataset.renameIrTheo, 10);
         const entry = loadedTheoreticalIRSpectra[idx];
-        if (entry && entry.imported) {
-          const next = (window.prompt("Rename spectrum:", entry.name) || "").trim();
+        if (entry) {
+          const next = (window.prompt("Rename spectrum (display name only - source file and data are untouched):", entry.name) || "").trim();
           if (next) {
             entry.name = next;
             updateIRSpectrumLayersTray();
@@ -7249,8 +7390,8 @@
     const fwhm = parseFloat(document.getElementById("engine-ir-fwhm-slider")?.value || "15.0");
     const shift = parseFloat(document.getElementById("engine-ir-shift-slider")?.value || "0");
 
-    const activeTheos = loadedTheoreticalIRSpectra.filter(t => t.visible);
-    const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible);
+    const activeTheos = loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo"));
+    const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp"));
 
     if (activeTheos.length === 0 && activeExps.length === 0) {
       ctx.fillStyle = isLight ? "#475569" : "#91A5BE";
@@ -7304,6 +7445,12 @@
     const isTrans = (irYAxisMode === "transmittance");
     const isAbs = (irYAxisMode === "absorbance");
     const isTheoOnly = (activeTheos.length > 0 && activeExps.length === 0);
+    if (irViewMode === "experimental_only" && activeExps.length === 0) {
+      ctx.font = "bold 13px Inter, sans-serif";
+      ctx.fillStyle = axisColor;
+      ctx.textAlign = "center";
+      ctx.fillText("No experimental spectrum loaded. Import one to compare.", width / 2, height / 2);
+    }
 
     const padding = { top: showIRLegend ? 58 : 35, right: 65, bottom: 48, left: 65 };
     const plotW = width - padding.left - padding.right;
@@ -7402,7 +7549,11 @@
     }
 
     ctx.font = "bold 12px Inter, sans-serif";
-    ctx.fillText("Wavenumber (cm⁻¹)", padding.left + plotW / 2, padding.top + plotH + 36);
+    ctx.fillText(irCustomTitles.x || "Wavenumber (cm⁻¹)", padding.left + plotW / 2, padding.top + plotH + 36);
+    ctx.font = "bold 13px Inter, sans-serif";
+    ctx.fillStyle = axisColor;
+    ctx.textAlign = "center";
+    ctx.fillText(irGraphTitle, padding.left + plotW / 2, 16);
 
     ctx.font = "10px Inter, sans-serif";
     ctx.textAlign = "right";
@@ -7428,6 +7579,9 @@
     } else if (isAbs) {
       yAxisTitle = isTheoOnly ? "Theoretical IR Absorbance (AU)" : "Absorbance (AU)";
     }
+    if (irCustomTitles.y) yAxisTitle = irCustomTitles.y;
+    const irXTitle = irCustomTitles.x || "Wavenumber (cm^-1)";
+    const irGraphTitle = irCustomTitles.title || "Simulated IR Spectrum";
 
     ctx.save();
     ctx.translate(16, padding.top + plotH / 2);
@@ -8489,7 +8643,7 @@
         // Find nearest theoretical values
         const sigma = parseFloat(document.getElementById("engine-sigma-slider")?.value || "20");
         const shift = parseFloat(document.getElementById("engine-shift-slider")?.value || "0");
-        loadedTheoreticalSpectra.filter(t => t.visible).forEach(theo => {
+        loadedTheoreticalSpectra.filter(t => t.visible && uvViewAllows("theo")).forEach(theo => {
           const curve = computeUvvisConvolution(theo.transitions, sigma, shift, minX, maxX, 1);
           const nearest = curve.find(p => Math.abs(p.wavelength_nm - wlHover) <= 1.0);
           if (nearest) {
@@ -8503,7 +8657,7 @@
           const nearest = exp.raw_data.find(p => Math.abs(p.wavelength_nm - wlHover) <= 1.5);
           if (nearest) {
             hasReadings = true;
-            tooltipHtml += `<span style="color:${exp.color};">■ ${exp.file_name}:</span> Abs = ${nearest.absorbance.toFixed(4)} AU<br>`;
+            tooltipHtml += `<span style="color:${exp.color};">■ ${escapeHtml(exp.label || exp.file_name)}:</span> Abs = ${nearest.absorbance.toFixed(4)} AU<br>`;
           }
         });
 
@@ -8532,8 +8686,8 @@
     const exportCsvBtn = document.getElementById("engine-uvvis-export-csv");
     if (exportCsvBtn) {
       exportCsvBtn.addEventListener("click", () => {
-        const activeTheos = loadedTheoreticalSpectra.filter(t => t.visible);
-        const activeExps = loadedExperimentalSpectra.filter(e => e.visible);
+        const activeTheos = loadedTheoreticalSpectra.filter(t => t.visible && uvViewAllows("theo"));
+        const activeExps = loadedExperimentalSpectra.filter(e => e.visible && uvViewAllows("exp"));
 
         if (!activeTheos.length && !activeExps.length) {
           showToast("No active spectrum layers to export.");
@@ -8584,8 +8738,8 @@
     const dlUvvisPngBtn = document.getElementById("engine-uvvis-download-png");
     if (dlUvvisPngBtn) {
       dlUvvisPngBtn.addEventListener("click", () => {
-        const activeTheos = loadedTheoreticalSpectra.filter(t => t.visible);
-        const activeExps = loadedExperimentalSpectra.filter(e => e.visible);
+        const activeTheos = loadedTheoreticalSpectra.filter(t => t.visible && uvViewAllows("theo"));
+        const activeExps = loadedExperimentalSpectra.filter(e => e.visible && uvViewAllows("exp"));
 
         if (!activeTheos.length && !activeExps.length) {
           showToast("No spectrum data available to export.");
@@ -8877,6 +9031,111 @@
       });
     }
 
+    function irDisplayedHeaders() {
+      if (irYAxisMode === "theory_intensity") {
+        return { yHeader: "Relative_Intensity", yUnit: "km/mol" };
+      }
+      if (irYAxisMode === "absorbance") {
+        return { yHeader: "Absorbance", yUnit: "AU" };
+      }
+      return { yHeader: "Relative_Transmittance_pct", yUnit: "%" };
+    }
+    function exportIRXYSingle(kind, idx) {
+      const scaleFactor = parseFloat(irScaleSlider?.value || "1.0");
+      const fwhm = parseFloat(irFwhmSlider?.value || "15.0");
+      const shift = parseFloat(irShiftSlider?.value || "0");
+      const headers = irDisplayedHeaders();
+      if (kind === "theo") {
+        const theo = loadedTheoreticalIRSpectra[idx];
+        if (!theo) return;
+        const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, 400, 4000, 2);
+        // canonical FTIR presentation order: 4000 -> 400 (same coordinate pairs,
+        // ordered to match the plotted X axis; the renderer's mapX already draws
+        // 4000 on the left). No recalculation.
+        const ordered = curve.slice().reverse();
+        const xs = ordered.map(p => p.wavenumber_cm);
+        let ys;
+        if (irYAxisMode === "absorbance") ys = ordered.map(p => p.absorbance);
+        else if (irYAxisMode === "theory_intensity") {
+          const maxModeInt = theo.modes.length ? Math.max(...theo.modes.map(m => m.intensity_km_mol || 0), 10) : 100;
+          ys = ordered.map(p => p.absorbance_norm * maxModeInt);
+        } else ys = ordered.map(p => p.transmittance_pct);
+        const stem = sanitizeFileStem(theo.name);
+        const meta = ["Chemistry Lab", "Spectrum: " + theo.name, "Type: Simulated IR",
+          "X: Wavenumber (cm^-1)", "Y: " + headers.yHeader + " (" + headers.yUnit + ")",
+          "FWHM: " + fwhm + " cm^-1", "Scaling: " + scaleFactor, "Normalization: Per Spectrum"];
+        downloadTextFile(stem + "_XY.txt", buildXYText(
+          [{ xHeader: "Wavenumber_cm-1", yHeader: headers.yHeader, xs, ys }], meta));
+        return;
+      }
+      const exp = loadedExperimentalIRSpectra[idx];
+      if (!exp) return;
+      const xs = exp.raw_data.map(p => p.wavenumber_cm);
+      const ys = exp.raw_data.map(p => (irYAxisMode === "absorbance" ? p.absorbance : p.transmittance_pct));
+      const yHeader = irYAxisMode === "absorbance" ? "Absorbance" : "Transmittance_pct";
+      const stem = sanitizeFileStem(exp.label || exp.file_name);
+      const meta = ["Chemistry Lab", "Spectrum: " + (exp.label || exp.file_name),
+        "Type: Experimental FTIR", "Source file: " + exp.file_name,
+        "X: Wavenumber (cm^-1)", "Y: " + yHeader];
+      downloadTextFile(stem + "_XY.txt", buildXYText(
+        [{ xHeader: "Wavenumber_cm-1", yHeader, xs, ys }], meta));
+    }
+    function exportIRXYVisible() {
+      const scaleFactor = parseFloat(irScaleSlider?.value || "1.0");
+      const fwhm = parseFloat(irFwhmSlider?.value || "15.0");
+      const shift = parseFloat(irShiftSlider?.value || "0");
+      const headers = irDisplayedHeaders();
+      const columns = [];
+      const meta = ["Chemistry Lab", "View: " + irViewMode, "X: Wavenumber (cm^-1)",
+        "Y: " + headers.yHeader + " (" + headers.yUnit + ")", "FWHM: " + fwhm + " cm^-1"];
+      loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo")).forEach(theo => {
+        const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, 400, 4000, 2);
+        const ordered = curve.slice().reverse();
+        let ys;
+        if (irYAxisMode === "absorbance") ys = ordered.map(p => p.absorbance);
+        else if (irYAxisMode === "theory_intensity") {
+          const maxModeInt = theo.modes.length ? Math.max(...theo.modes.map(m => m.intensity_km_mol || 0), 10) : 100;
+          ys = ordered.map(p => p.absorbance_norm * maxModeInt);
+        } else ys = ordered.map(p => p.transmittance_pct);
+        columns.push({ xHeader: "Wavenumber_cm-1", yHeader: theo.name,
+          xs: ordered.map(p => p.wavenumber_cm), ys });
+      });
+      loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp")).forEach(exp => {
+        columns.push({ xHeader: "Wavenumber_cm-1_" + sanitizeFileStem(exp.label || exp.file_name),
+          yHeader: (exp.label || exp.file_name) + "_" + (irYAxisMode === "absorbance" ? "Absorbance" : "Transmittance_pct"),
+          xs: exp.raw_data.map(p => p.wavenumber_cm),
+          ys: exp.raw_data.map(p => (irYAxisMode === "absorbance" ? p.absorbance : p.transmittance_pct)) });
+      });
+      if (!columns.length) return;
+      downloadTextFile("IR_visible_curves_XY.txt", buildXYText(columns, meta));
+    }
+    const irExportXYVisibleBtn = document.getElementById("ir-export-xy-visible");
+    if (irExportXYVisibleBtn) {
+      irExportXYVisibleBtn.addEventListener("click", exportIRXYVisible);
+    }
+    const irViewModeSel = document.getElementById("ir-view-mode");
+    if (irViewModeSel) {
+      irViewModeSel.addEventListener("change", (e) => {
+        irViewMode = e.target.value;
+        updateIRSpectrumLayersTray();
+        drawIRMultiSpectrum();
+      });
+    }
+    [["ir-graph-title", "title"], ["ir-x-title", "x"], ["ir-y-title", "y"]].forEach(([id, key]) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("input", (e) => { irCustomTitles[key] = e.target.value; drawIRMultiSpectrum(); });
+    });
+    const irTitlesReset = document.getElementById("ir-titles-reset");
+    if (irTitlesReset) {
+      irTitlesReset.addEventListener("click", () => {
+        irCustomTitles = { title: "", x: "", y: "" };
+        ["ir-graph-title", "ir-x-title", "ir-y-title"].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.value = "";
+        });
+        drawIRMultiSpectrum();
+      });
+    }
     const irRemoveImportedBtn = document.getElementById("ir-remove-imported");
     if (irRemoveImportedBtn) {
       irRemoveImportedBtn.addEventListener("click", () => {
@@ -8952,6 +9211,92 @@
       });
     }
 
+    function uvDisplayedColumn(curve) {
+      const normalized = spectrumNormalizeMode in { "all": 1, "theoretical_only": 1 };
+      const normDiv = normalized ? Math.max(...curve.map(p => p.intensity), 0.001) : 1.0;
+      return {
+        ys: curve.map(p => p.intensity / normDiv),
+        yHeader: normalized ? "Theoretical_Intensity_Norm" : "Theoretical_Intensity",
+      };
+    }
+    function exportUVXYSingle(kind, idx) {
+      const sigma = parseFloat(document.getElementById("engine-sigma-slider")?.value || "20");
+      const shift = parseFloat(document.getElementById("engine-shift-slider")?.value || "0");
+      if (kind === "theo") {
+        const theo = loadedTheoreticalSpectra[idx];
+        if (!theo) return;
+        const curve = computeUvvisConvolution(theo.transitions, sigma, shift, 180, 800, 1);
+        if (!curve.length) return;
+        const col = uvDisplayedColumn(curve);
+        const stem = sanitizeFileStem(theo.name);
+        const meta = ["Chemistry Lab", "Spectrum: " + theo.name, "Type: Simulated UV-Vis (TD-DFT)",
+          "X: Wavelength (nm)", "Y: " + col.yHeader, "Gaussian sigma: " + sigma + " nm",
+          "Normalization: " + spectrumNormalizeMode];
+        downloadTextFile(stem + "_XY.txt", buildXYText(
+          [{ xHeader: "Wavelength_nm", yHeader: col.yHeader, xs: curve.map(p => p.wavelength_nm), ys: col.ys }], meta));
+        return;
+      }
+      const exp = loadedExperimentalSpectra[idx];
+      if (!exp) return;
+      const xs = exp.raw_data.map(p => p.wavelength_nm);
+      const ys = exp.raw_data.map(p => p.absorbance);
+      const stem = sanitizeFileStem(exp.label || exp.file_name);
+      const meta = ["Chemistry Lab", "Spectrum: " + (exp.label || exp.file_name),
+        "Type: Experimental UV-Vis", "Source file: " + exp.file_name,
+        "X: Wavelength (nm)", "Y: Absorbance"];
+      downloadTextFile(stem + "_XY.txt", buildXYText(
+        [{ xHeader: "Wavelength_nm", yHeader: "Absorbance", xs, ys }], meta));
+    }
+    function exportUVXYVisible() {
+      const sigma = parseFloat(document.getElementById("engine-sigma-slider")?.value || "20");
+      const shift = parseFloat(document.getElementById("engine-shift-slider")?.value || "0");
+      const columns = [];
+      const meta = ["Chemistry Lab", "View: " + uvViewMode, "X: Wavelength (nm)",
+        "Y: follows the active normalization mode (" + spectrumNormalizeMode + ")",
+        "Gaussian sigma: " + sigma + " nm"];
+      loadedTheoreticalSpectra.filter(t => t.visible && uvViewAllows("theo")).forEach(theo => {
+        const curve = computeUvvisConvolution(theo.transitions, sigma, shift, 180, 800, 1);
+        if (!curve.length) return;
+        const col = uvDisplayedColumn(curve);
+        columns.push({ xHeader: "Wavelength_nm", yHeader: theo.name,
+          xs: curve.map(p => p.wavelength_nm), ys: col.ys });
+      });
+      loadedExperimentalSpectra.filter(e => e.visible && uvViewAllows("exp")).forEach(exp => {
+        columns.push({ xHeader: "Wavelength_nm_" + sanitizeFileStem(exp.label || exp.file_name),
+          yHeader: (exp.label || exp.file_name) + "_Absorbance",
+          xs: exp.raw_data.map(p => p.wavelength_nm),
+          ys: exp.raw_data.map(p => p.absorbance) });
+      });
+      if (!columns.length) return;
+      downloadTextFile("UV_visible_curves_XY.txt", buildXYText(columns, meta));
+    }
+    const uvExportXYVisibleBtn = document.getElementById("uv-export-xy-visible");
+    if (uvExportXYVisibleBtn) {
+      uvExportXYVisibleBtn.addEventListener("click", exportUVXYVisible);
+    }
+    const uvViewModeSel = document.getElementById("uv-view-mode");
+    if (uvViewModeSel) {
+      uvViewModeSel.addEventListener("change", (e) => {
+        uvViewMode = e.target.value;
+        updateSpectrumLayersTray();
+        drawUVVisMultiSpectrum();
+      });
+    }
+    [["uv-graph-title", "title"], ["uv-x-title", "x"], ["uv-y-title", "y"]].forEach(([id, key]) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("input", (e) => { uvCustomTitles[key] = e.target.value; drawUVVisMultiSpectrum(); });
+    });
+    const uvTitlesReset = document.getElementById("uv-titles-reset");
+    if (uvTitlesReset) {
+      uvTitlesReset.addEventListener("click", () => {
+        uvCustomTitles = { title: "", x: "", y: "" };
+        ["uv-graph-title", "uv-x-title", "uv-y-title"].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.value = "";
+        });
+        drawUVVisMultiSpectrum();
+      });
+    }
     const uvRemoveImportedBtn = document.getElementById("uv-remove-imported");
     if (uvRemoveImportedBtn) {
       uvRemoveImportedBtn.addEventListener("click", () => {
@@ -9162,7 +9507,7 @@
         const fwhm = parseFloat(irFwhmSlider?.value || "15.0");
         const shift = parseFloat(irShiftSlider?.value || "0");
 
-        loadedTheoreticalIRSpectra.filter(t => t.visible).forEach(theo => {
+        loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo")).forEach(theo => {
           const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2);
           const nearest = curve.find(p => Math.abs(p.wavenumber_cm - wnHover) <= 3.0);
           if (nearest) {
@@ -9192,7 +9537,7 @@
             } else {
               valStr = `Abs = ${nearest.absorbance.toFixed(3)} AU`;
             }
-            tooltipHtml += `<span style="color:${exp.color};">■ ${exp.file_name}:</span> ${valStr}<br>`;
+            tooltipHtml += `<span style="color:${exp.color};">■ ${escapeHtml(exp.label || exp.file_name)}:</span> ${valStr}<br>`;
           }
         });
 
@@ -9214,8 +9559,8 @@
     // High-Res IR PNG Download
     if (irDownloadPngBtn) {
       irDownloadPngBtn.addEventListener("click", () => {
-        const activeTheos = loadedTheoreticalIRSpectra.filter(t => t.visible);
-        const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible);
+        const activeTheos = loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo"));
+        const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp"));
         if (!activeTheos.length && !activeExps.length) {
           showToast("No IR spectrum data available to export.");
           return;
@@ -9247,8 +9592,8 @@
     // IR CSV Export
     if (irExportCsvBtn) {
       irExportCsvBtn.addEventListener("click", () => {
-        const activeTheos = loadedTheoreticalIRSpectra.filter(t => t.visible);
-        const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible);
+        const activeTheos = loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo"));
+        const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp"));
 
         if (!activeTheos.length && !activeExps.length) {
           showToast("No active IR spectrum layers to export.");

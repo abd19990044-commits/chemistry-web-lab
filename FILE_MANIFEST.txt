@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-08-29T21:00:06Z
+# Generated: 2026-08-29T22:35:10Z
 # Package Mode: SNAPSHOT_FROM_WORKTREE
 # Source State: dirty_snapshot
-# Source Git SHA: ab7978493229cacece48c67c91fcbceaf99771e0-dirty
-# Package Tree Hash: fa16e45aef7738b962ca6a79e2adffb1a9a6d5c469cf3b77942fbbc43048e872
-# Total Files: 327
-# Total Size: 30,755,459 bytes (29.33 MB)
+# Source Git SHA: 14152ad122f5183f74d7d26c8618bc0f7e6c0787-dirty
+# Package Tree Hash: 66a4c281ebb0111e75892a462b18f2ec1b5d19e9d72d868009efed8b4c6a8422
+# Total Files: 328
+# Total Size: 30,787,114 bytes (29.36 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -260,11 +260,11 @@ static/css/style.css                               |     84,676 B | 3d5fe1508d42
 static/css/theme.css                               |      4,191 B | 0f46f52179f51f6f9e33d6afd4c1186a55cd4bff5de3e631055a9290c21cb0da
 static/docs/ChemistryLab_User_Manual.docx          |     46,938 B | 35f84c0a37efc80a0283904d56198d18cdba7a648f2492f4c6c76f331ce9b211
 static/job_runtime_fix.js                          |      1,641 B | 9133e459435dfad6a353c774a92c10cf37656eb529f114ca61dec2be5a63c697
-static/js/app.js                                   |    484,582 B | aeb76441e3265624efd107f8ad2f678b361831d6ba40babf835854f6f632882c
+static/js/app.js                                   |    502,526 B | 57af2e97236f9179c92fb18f26e5512f7bc227890f7745d22e35848998985b7c
 static/js/kaggle_credentials.js                    |     13,632 B | afa45631bbcb3f8e4dacc676adaf39c14e06c765750c3845c5dcc24a449f27b3
 static/js/reaction-editor.js                       |      4,508 B | 10f31d07d35ef8a7450b1dfefdb5c32ec44646a962a3b22154c8d9fd753d5be2
 static/js/workers/archive-worker.js                |     20,420 B | 29eff680289ace2a4ee5784419c0a189f5e962a054914a5e6d6f9e2ad66073f8
-templates/index.html                               |    135,372 B | a5dfd2c53d593b133a72960be2dff6a497f7f83c9665b0a6ee0eced75e2fe0ab
+templates/index.html                               |    138,015 B | 308292412a1081e56c972ab5e19a63ccce8e9957a2779e6d15efcc95c53afefd
 tests/conftest.py                                  |      4,165 B | 74102746a82b23c22cf5290651a59446d86f2475e6c35efa50932cb00f38a5c4
 tests/fake_orca.py                                 |     14,271 B | 61a158fae896194453358856f312794d099fce006443ddffa13e6ca4d112103c
 tests/fixtures/ORCA_Calculation_quantum_analysis_3.json |    882,023 B | bcabb84f75101646810b16e3990c0a8d202e284221036aeab29b6315fa3ecc2b
@@ -326,6 +326,7 @@ tests/test_scientific_json_audit_and_ml.py         |     12,053 B | 8915dd617a0c
 tests/test_scientific_result_durability.py         |     22,226 B | 610e0869e6403535e545c93bd990ddbd4fefb9b5d4abb13cd58a3a11ac3f04b0
 tests/test_security_hardening.py                   |     11,389 B | 366c0c0d911affebc457e80f4ee5abeb2cb1c0291119ce00423eadd8020346a6
 tests/test_spectra_enhancements.py                 |      5,796 B | b694e95b45d5dec6dd1e2d90ef43d43552e4d482acf18a820b2d7ffabe4844a1
+tests/test_spectra_xy_export.py                    |     11,068 B | d7c7c5b055a19fdb30dea8548130ca6e842a3f39cec8c1123bc63542d85b5eba
 tests/test_thermochemistry_dual_slot.py            |      5,452 B | b9941981a46e1a96da437bb8feb28c9929b34cdfaa67e827c85d22b056a3a62b
 tests/test_web_routes.py                           |     26,352 B | 98a7e7ccd6a63c2be9bdc72d89dae84495cbc57589f38e0e0c7579cd48f7d07f
 tests/test_word_copy_exports.py                    |      2,163 B | 2e02540b0b6cfc00355ae2bc7c070e042e94c93f3b80fb29e7773a9260d60967

@@ -973,6 +973,17 @@ Products:   12 CO2 + 6 H2O</pre>
               <button type="button" id="engine-uvvis-theme-toggle" class="btn btn-ghost btn-small">☀️ White Theme</button>
               <button type="button" id="engine-uvvis-download-png" class="btn btn-ghost btn-small" title="Export high-resolution publication spectrum PNG">📸 High-Res PNG</button>
               <button type="button" id="engine-uvvis-export-csv" class="btn btn-ghost btn-small" title="Export all active spectra to CSV">⬇ Export CSV</button>
+              <select id="uv-view-mode" class="form-select" style="max-width:220px;" title="Choose which spectral categories are displayed">
+                <option value="all" selected>View: All spectra</option>
+                <option value="theoretical_only">View: Theoretical Only</option>
+                <option value="experimental_only">View: Experimental Only</option>
+              </select>
+              <input type="text" id="uv-graph-title" class="form-input" style="max-width:200px;" placeholder="Graph title (auto)">
+              <input type="text" id="uv-x-title" class="form-input" style="max-width:170px;" placeholder="X title (auto)">
+              <input type="text" id="uv-y-title" class="form-input" style="max-width:170px;" placeholder="Y title (auto)">
+              <button type="button" id="uv-titles-reset" class="btn btn-ghost btn-small" title="Restore default titles">Reset Titles</button>
+              <button type="button" id="uv-export-xy-visible" class="btn btn-secondary btn-small" title="Export all visible curves as Origin-friendly tab-delimited XY text">Export Visible XY</button>
+              <button type="button" id="uv-remove-imported" class="btn btn-ghost btn-small" title="Remove all imported ORCA spectra (keeps the current calculation)">Remove Imported</button>
               <span class="field-hint" id="engine-uvvis-import-status" style="flex-basis:100%;"></span>
             </div>
           </div>
@@ -1173,6 +1184,17 @@ Products:   12 CO2 + 6 H2O</pre>
             </div>
             <div class="uvvis-top-actions">
               <input type="file" id="engine-ir-exp-file-input" accept=".txt,.csv,.tsv,.xlsx,.xls,.dat,.dpt" class="hidden" multiple>
+              <select id="ir-view-mode" class="form-select" style="max-width:220px;" title="Choose which spectral categories are displayed">
+                <option value="all" selected>View: All spectra</option>
+                <option value="theoretical_only">View: Theoretical Only</option>
+                <option value="experimental_only">View: Experimental Only</option>
+              </select>
+              <input type="text" id="ir-graph-title" class="form-input" style="max-width:200px;" placeholder="Graph title (auto)">
+              <input type="text" id="ir-x-title" class="form-input" style="max-width:170px;" placeholder="X title (auto)">
+              <input type="text" id="ir-y-title" class="form-input" style="max-width:170px;" placeholder="Y title (auto)">
+              <button type="button" id="ir-titles-reset" class="btn btn-ghost btn-small" title="Restore scientifically correct default titles">Reset Titles</button>
+              <button type="button" id="ir-export-xy-visible" class="btn btn-secondary btn-small" title="Export all visible curves as Origin-friendly tab-delimited XY text">Export Visible XY</button>
+              <button type="button" id="ir-remove-imported" class="btn btn-ghost btn-small" title="Remove all imported ORCA spectra (keeps the current calculation)">Remove Imported</button>
               <button type="button" id="engine-ir-import-freq-btn" class="btn btn-secondary btn-small" title="Import one or more ORCA output files (.out/.log/.txt) containing FREQ/IR results for multi-spectrum overlay">
                 &#8986; Import ORCA FREQ Output
               </button>

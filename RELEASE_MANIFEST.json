@@ -6,12 +6,12 @@
   "package_mode": "SNAPSHOT_FROM_WORKTREE",
   "source_type": "dirty_worktree_snapshot",
   "source_git_state": "dirty_snapshot",
-  "source_git_sha": "ab7978493229cacece48c67c91fcbceaf99771e0-dirty",
+  "source_git_sha": "14152ad122f5183f74d7d26c8618bc0f7e6c0787-dirty",
   "source_git_dirty": true,
-  "package_tree_hash": "fa16e45aef7738b962ca6a79e2adffb1a9a6d5c469cf3b77942fbbc43048e872",
-  "generated_at": "2026-08-29T21:00:06Z",
-  "file_count": 328,
-  "total_size_bytes": 30799631,
+  "package_tree_hash": "66a4c281ebb0111e75892a462b18f2ec1b5d19e9d72d868009efed8b4c6a8422",
+  "generated_at": "2026-08-29T22:35:10Z",
+  "file_count": 329,
+  "total_size_bytes": 30831419,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -1269,8 +1269,8 @@
       "source_origin": "repo_source"
     },
     "static/js/app.js": {
-      "sha256": "aeb76441e3265624efd107f8ad2f678b361831d6ba40babf835854f6f632882c",
-      "size_bytes": 484582,
+      "sha256": "57af2e97236f9179c92fb18f26e5512f7bc227890f7745d22e35848998985b7c",
+      "size_bytes": 502526,
       "source_origin": "repo_source"
     },
     "static/js/kaggle_credentials.js": {
@@ -1289,8 +1289,8 @@
       "source_origin": "repo_source"
     },
     "templates/index.html": {
-      "sha256": "a5dfd2c53d593b133a72960be2dff6a497f7f83c9665b0a6ee0eced75e2fe0ab",
-      "size_bytes": 135372,
+      "sha256": "308292412a1081e56c972ab5e19a63ccce8e9957a2779e6d15efcc95c53afefd",
+      "size_bytes": 138015,
       "source_origin": "repo_source"
     },
     "tests/conftest.py": {
@@ -1598,6 +1598,11 @@
       "size_bytes": 5796,
       "source_origin": "repo_source"
     },
+    "tests/test_spectra_xy_export.py": {
+      "sha256": "d7c7c5b055a19fdb30dea8548130ca6e842a3f39cec8c1123bc63542d85b5eba",
+      "size_bytes": 11068,
+      "source_origin": "repo_source"
+    },
     "tests/test_thermochemistry_dual_slot.py": {
       "sha256": "b9941981a46e1a96da437bb8feb28c9929b34cdfaa67e827c85d22b056a3a62b",
       "size_bytes": 5452,
@@ -1649,8 +1654,8 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "91b96be98a4abb79615bdb7f62639a8f8f66d0302988621bc4a917597af34e68",
-      "size_bytes": 44172,
+      "sha256": "2bd11421a312fb27ab4db2a079815a8c6c265df290c22b4a887298f3c1c50e2f",
+      "size_bytes": 44305,
       "source_origin": "generated_manifest"
     }
   }
