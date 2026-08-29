@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-08-29T13:59:58Z
+# Generated: 2026-08-29T19:15:43Z
 # Package Mode: SNAPSHOT_FROM_WORKTREE
 # Source State: dirty_snapshot
-# Source Git SHA: 6b09fb153093b290f4024276c7573b8c4fc2d9d1-dirty
-# Package Tree Hash: 6b147544e02863a1ac57830eeb1c415f27b7bcd569848f0905fb5e17ecd552da
-# Total Files: 325
-# Total Size: 30,713,281 bytes (29.29 MB)
+# Source Git SHA: 86cc6b723afe0bfe124940595b03bc6483557bf5-dirty
+# Package Tree Hash: d77e19108f7583eacffe92851ede522eaa7b3d9fc0e4c0daf0e83939b0fa8ce7
+# Total Files: 326
+# Total Size: 30,723,895 bytes (29.30 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -291,6 +291,7 @@ tests/test_fastapi_contract.py                     |     19,777 B | 63ca8bf5589a
 tests/test_frontend.py                             |     17,638 B | 77e77192d81500a5ee54e4e66018b5526c30fdf2a2c7eecee42bbdcd6e566bdb
 tests/test_full_system_audit.py                    |      8,490 B | 91b3fded7e14f46e433c3c746d8178f70e4001cabb84e5e4ed30e05f3006c7ac
 tests/test_ir_spectrum.py                          |      3,553 B | db23839e67e9393b7cc3adef1877e3fd67d20b0091e5f52f50e23b5581c2752e
+tests/test_ir_spectrum_orientation.py              |     10,614 B | d05ff222451d7262f4aebdf2bda52fd770557e63556f69d49fab0a00c8fd7752
 tests/test_kaggle_credential_vault.py              |     19,055 B | a0e83eb39b208cf36cef5528917212949a01d99d6ef249009e13ac0890fef9d4
 tests/test_kaggle_dataset_normalization.py         |      3,836 B | bd367eefd9566e1a649d0f1f7fedc33120726b5034a4a55d80b72ebb54de2b70
 tests/test_licensing.py                            |     13,999 B | 7388cd0d326289d85619757e234a4a016af1411b463dd59e179307711cbb0562
