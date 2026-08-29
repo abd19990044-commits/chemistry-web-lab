@@ -71,6 +71,17 @@ def generate_inputs(data: dict):
         return error("The custom command line must start with '!'."), 400
 
     inp_text = core.generate_orca_6_input(payload)
+
+    # Honor the caller's explicit MaxDisk budget in the generated input (the
+    # documented contract of this field). Omitted -> the input stays
+    # backend-neutral and the execution runner applies its configured default
+    # (20000 MB). force=True: an explicit API value overrides anything a
+    # pre-existing directive may say; %maxcore is never touched.
+    if payload["maxdisk"] is not None:
+        from orca_orchestrator import orca_artifacts as _art
+        inp_text, _effective_maxdisk, _maxdisk_action = _art.set_maxdisk(
+            inp_text, int(payload["maxdisk"]), force=True)
+
     filename = f"{core.safe_filename(data.get('name') or 'molecule')}_6.inp"
     result = {
         "ok": True,

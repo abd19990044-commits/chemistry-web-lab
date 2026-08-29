@@ -46,6 +46,7 @@ def submit_job(req: JobSubmitRequest,
         input_filename=req.input_filename,
         input_content=req.input_content,
         job_name=req.job_name,
+        maxdisk_mb=req.maxdisk_mb,
         idem_key=idempotency_key,
     )
     return _payload_or_http(payload, status)

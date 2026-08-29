@@ -116,7 +116,7 @@ def check_status(kaggle_username, kaggle_key, job_id):
 # ---------------------------------------------------------------------------
 def submit_job(*, kaggle_username, kaggle_key, dataset_sources_raw, orca_link,
                input_filename, input_content, job_name, idem_key=None, store=None,
-               extra_files=None):
+               extra_files=None, maxdisk_mb=None):
     """Authoritative submission used by BOTH Flask and FastAPI.
 
     Idempotency is enforced by the ORCHESTRATOR STORE (SQLite, shared across
@@ -144,8 +144,39 @@ def submit_job(*, kaggle_username, kaggle_key, dataset_sources_raw, orca_link,
 
     import chem_core as core
 
+    # Defensive service-level guard (P2-2): non-Pydantic callers (the legacy
+    # Flask route omits the field; future internal callers) must never turn an
+    # invalid explicit budget into an invalid ORCA directive. Omitted stays
+    # untouched; the FastAPI boundary additionally rejects with 422.
+    if maxdisk_mb is not None:
+        if isinstance(maxdisk_mb, bool):
+            return {"ok": False,
+                    "error": "maxdisk_mb must be a positive integer (MB)."}, 400
+        try:
+            value = float(maxdisk_mb)
+            non_integral = value != int(value)
+        except (TypeError, ValueError, OverflowError):
+            return {"ok": False,
+                    "error": "maxdisk_mb must be a positive integer (MB)."}, 400
+        if non_integral or int(value) < 1:
+            return {"ok": False,
+                    "error": "maxdisk_mb must be a positive integer (MB)."}, 400
+        maxdisk_mb = int(value)
+
     dataset_sources = kaggle_runner.clean_dataset_sources(dataset_sources_raw)
     input_filename = core.safe_filename(os.path.splitext(input_filename)[0]) + ".inp"
+
+    # Explicit per-job MaxDisk override (P2-2): force the caller's budget into
+    # the canonical input text BEFORE the idempotency identity is computed, so
+    # content_sha covers it too. Both execution runners PRESERVE a valid
+    # directive, so the value survives every window, successor and checkpoint
+    # without coupling MaxDisk to one backend. Omitted -> runners keep their
+    # configured default (20000 MB).
+    if maxdisk_mb is not None:
+        from orca_orchestrator import orca_artifacts as _art
+        input_content, _forced_maxdisk_mb, _maxdisk_action = _art.set_maxdisk(
+            input_content, int(maxdisk_mb), force=True)
+
     files_payload = {input_filename: base64.b64encode(input_content.encode("utf-8")).decode("utf-8")}
     for _aux_name, _aux_b64 in (extra_files or {}).items():
         files_payload[_aux_name] = _aux_b64
@@ -163,6 +194,7 @@ def submit_job(*, kaggle_username, kaggle_key, dataset_sources_raw, orca_link,
         "content_sha": hashlib.sha256(input_content.encode("utf-8")).hexdigest(),
         "aux": [], "datasets": sorted(dataset_sources or []),
         "name": job_name, "orca_link": orca_link or "",
+        "maxdisk_mb": int(maxdisk_mb) if maxdisk_mb is not None else None,
     }
     payload_hash = hashlib.sha256(
         _json.dumps(request_payload, sort_keys=True).encode("utf-8")).hexdigest()

@@ -894,7 +894,7 @@ def set_geom_maxiter(text: str, maxiter: int) -> str:
     return text[:body_start] + body + text[body_end:]
 
 
-def set_maxdisk(text: str, default_mb: int = 20000):
+def set_maxdisk(text: str, default_mb: int = 20000, force: bool = False):
     """Ensures exactly one valid MaxDisk directive with the configured budget.
 
     Caller-configured values are PRESERVED: the configured/default budget is
@@ -902,8 +902,13 @@ def set_maxdisk(text: str, default_mb: int = 20000):
     invalid). Duplicate directives collapse to the first valid one - ORCA
     aborts on a duplicated keyword. ``%maxcore`` is never touched.
 
+    With ``force=True`` the caller's budget OVERRIDES even a valid existing
+    directive (action "updated"). That is the explicit per-job override path
+    used by the API submission layer; the default keeps the historical
+    preserve-first contract for runner-side normalization.
+
     Returns ``(text, effective_mb, action)`` where action is one of
-    "preserved", "inserted", "collapsed", "rejected-invalid".
+    "preserved", "inserted", "collapsed", "updated", "rejected-invalid".
     """
     text = text or ""
     default_mb = max(1, int(default_mb))
@@ -956,7 +961,9 @@ def set_maxdisk(text: str, default_mb: int = 20000):
 
     first_d, first_v = parsed[0]
     if first_v is None:
-        effective, action = default_mb, "rejected-invalid"
+        effective, action = default_mb, ("updated" if force else "rejected-invalid")
+    elif force:
+        effective, action = default_mb, "updated"
     else:
         effective = first_v
         action = "collapsed" if len(parsed) > 1 else "preserved"

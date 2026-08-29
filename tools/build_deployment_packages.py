@@ -122,6 +122,30 @@ def safe_rmtree(target: Path):
     shutil.rmtree(target, onerror=_onerror)
 
 
+def clear_package_contents(target: Path):
+    """Removes every entry of a package directory EXCEPT the exact `.git` entry.
+
+    GitHub/ is an INDEPENDENT nested Git repository: its history, refs, index,
+    objects, config and HEAD must survive a package rebuild byte-for-byte.
+    Enforcement is structural - the `.git` entry is never even passed to the
+    remover, so no caller mistake can delete it. Package MANIFEST generation
+    also skips `.git` (see generate_and_verify_manifest) so repository
+    metadata never becomes package content.
+    """
+    if not target.exists():
+        return
+    for entry in target.iterdir():
+        if entry.name == '.git':
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            safe_rmtree(entry)
+        else:
+            try:
+                entry.unlink()
+            except OSError:
+                safe_rmtree(entry)
+
+
 def is_text_file(p: Path) -> bool:
     if p.suffix.lower() in TEXT_EXTS:
         return True
@@ -330,7 +354,11 @@ Commercial use (including internal corporate R&D, sponsored commercial research,
 
 
 def build_github_package(dest_dir: Path, provenance: dict) -> dict:
-    safe_rmtree(dest_dir)
+    # INVARIANT: GitHub/ is an independent nested Git repository. A rebuild
+    # refreshes package CONTENT only and must NEVER delete, overwrite, move,
+    # recreate or replace GitHub/.git. clear_package_contents() removes stale
+    # package entries while structurally preserving the exact .git tree.
+    clear_package_contents(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Root files
@@ -417,6 +445,8 @@ def generate_and_verify_manifest(target_dir: Path, release_type: str, provenance
     raw_files = []
     file_hashes_for_tree = []
     for p in sorted(target_dir.rglob('*')):
+        if '.git' in p.parts:
+            continue  # nested repository metadata is never package content
         if p.is_file() and p.name not in ('FILE_MANIFEST.txt', 'RELEASE_MANIFEST.json'):
             rel = str(p.relative_to(target_dir)).replace('\\', '/')
             digest = sha256_file(p)
@@ -498,7 +528,9 @@ def generate_and_verify_manifest(target_dir: Path, release_type: str, provenance
     # Step 5: MANDATORY POST-BUILD SELF-VERIFICATION
     # Re-verify every single file on disk against the manifest
     print(f"Verifying generated manifest for {target_dir.name}...")
-    disk_files = [p for p in target_dir.rglob('*') if p.is_file() and p.name != 'RELEASE_MANIFEST.json']
+    disk_files = [p for p in target_dir.rglob('*')
+                  if '.git' not in p.parts and p.is_file()
+                  and p.name != 'RELEASE_MANIFEST.json']
     assert len(disk_files) == len(runtime_critical_files), (
         f"File count mismatch in {target_dir.name}: disk has {len(disk_files)}, manifest has {len(runtime_critical_files)}"
     )
