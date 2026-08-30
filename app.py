@@ -1750,6 +1750,152 @@ ORCA_IMPORT_MAX_FILES = 20
 ORCA_IMPORT_MAX_FILE_BYTES = 25 * 1024 * 1024
 
 
+# ---------------------------------------------------------------------------
+# Reaction Workflow + Thermochemistry API (services-backed; no duplicated
+# scientific logic between surfaces). Reports follow the 48-hour retention
+# contract with owner isolation and UTC-expiry persisted to disk.
+from services.reaction_workflow_service import (  # noqa: E402
+    ReactionStore, ReactionValidationError, add_stage, assemble_species_result,
+    complete_stage_with_output, compute_and_store_thermodynamics, create_reaction,
+    set_stage_input,
+)
+import services.thermo_report_service as _thermo_report_service  # noqa: E402
+
+try:
+    from orca_orchestrator.config import CONFIG as _RXN_ORCH_CONFIG
+    _RXN_STATE_DIR = _RXN_ORCH_CONFIG.store.state_dir
+except Exception:  # noqa: BLE001 - store must work even without the orchestrator config
+    import tempfile as _tmpmod
+    _RXN_STATE_DIR = os.path.join(_tmpmod.gettempdir(), "chemistry_lab_reaction_state")
+_reaction_store = ReactionStore(_RXN_STATE_DIR)
+
+
+def _reaction_error(message, code=400):
+    return jsonify({"ok": False, "error": {"code": "REACTION_ERROR", "message": message}}), code
+
+
+def _reaction_owner():
+    try:
+        return _extract_request_identity() or "anonymous"
+    except Exception:
+        return "anonymous"
+
+
+@app.route("/api/v1/reactions", methods=["POST", "GET"])
+def api_v1_reactions():
+    _reaction_store.cleanup_if_due()
+    if request.method == "GET":
+        return jsonify({"ok": True, "reactions": _reaction_store.list_reactions(_reaction_owner())})
+    payload = request.get_json(silent=True) or {}
+    try:
+        reaction = create_reaction(_reaction_owner(), payload.get("equation") or "", _reaction_store,
+                                   payload.get("display_name") or "")
+    except ReactionValidationError as exc:
+        return _reaction_error(str(exc))
+    return jsonify({"ok": True, "reaction": reaction})
+
+
+@app.route("/api/v1/reactions/<reaction_id>", methods=["GET"])
+def api_v1_reaction_detail(reaction_id):
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    return jsonify({"ok": True, "reaction": reaction})
+
+
+@app.route("/api/v1/reactions/<reaction_id>/stages", methods=["POST"])
+def api_v1_reaction_add_stage(reaction_id):
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    payload = request.get_json(silent=True) or {}
+    try:
+        stage = add_stage(reaction, payload.get("species_id"), payload.get("kind") or "",
+                          payload.get("label") or "")
+        if payload.get("input_text"):
+            set_stage_input(reaction, stage["stage_id"], payload["input_text"])
+        _reaction_store.save_reaction(reaction)
+    except ReactionValidationError as exc:
+        return _reaction_error(str(exc))
+    return jsonify({"ok": True, "stage": stage})
+
+
+@app.route("/api/v1/reactions/<reaction_id>/stages/<stage_id>/complete", methods=["POST"])
+def api_v1_reaction_stage_complete(reaction_id, stage_id):
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    payload = request.get_json(silent=True) or {}
+    species_id = payload.get("species_id") or ""
+    try:
+        stage = complete_stage_with_output(reaction, species_id, stage_id,
+                                           payload.get("output_text") or "", _reaction_store)
+    except ReactionValidationError as exc:
+        return _reaction_error(str(exc))
+    return jsonify({"ok": True,
+                    "stage": {"stage_id": stage["stage_id"], "state": stage["state"],
+                              "error": stage.get("error"),
+                              "geometry_hash": stage.get("geometry_hash")}})
+
+
+@app.route("/api/v1/reactions/<reaction_id>/species/<species_id>/assemble", methods=["POST"])
+def api_v1_reaction_species_assemble(reaction_id, species_id):
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    try:
+        result = assemble_species_result(reaction, species_id, _reaction_store)
+    except ReactionValidationError as exc:
+        return _reaction_error(str(exc), 409)
+    return jsonify({"ok": True, "final_result": result})
+
+
+@app.route("/api/v1/reactions/<reaction_id>/thermodynamics", methods=["POST", "GET"])
+def api_v1_reaction_thermodynamics(reaction_id):
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    if request.method == "GET":
+        return jsonify({"ok": True, "state": reaction["state"],
+                        "thermodynamics": reaction.get("thermodynamics")})
+    try:
+        thermo = compute_and_store_thermodynamics(reaction, _reaction_store)
+    except ReactionValidationError as exc:
+        return _reaction_error(str(exc), 409)
+    return jsonify({"ok": True, "thermodynamics": thermo})
+
+
+@app.route("/api/v1/reactions/<reaction_id>/thermodynamics/report", methods=["POST"])
+def api_v1_reaction_report(reaction_id):
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    thermo = reaction.get("thermodynamics")
+    if not thermo:
+        return _reaction_error("thermodynamics not computed yet - compute it before generating a report.", 409)
+    try:
+        meta = _thermo_report_service.create_report(_reaction_store, _reaction_owner(), reaction, thermo)
+    except Exception as exc:  # noqa: BLE001 - PDF failure must not invalidate the thermo result
+        return _reaction_error("PDF generation failed: %s" % str(exc)[:150], 500)
+    return jsonify({"ok": True, "report": meta})
+
+
+@app.route("/api/v1/thermo-reports/<report_id>", methods=["GET"])
+def api_v1_thermo_report_download(report_id):
+    try:
+        meta, data = _thermo_report_service.get_downloadable_report(
+            _reaction_store, _reaction_owner(), report_id)
+    except _thermo_report_service.ReportExpired:
+        return _reaction_error("REPORT_EXPIRED", 404)
+    except _thermo_report_service.ReportNotFound:
+        return _reaction_error("report not found", 404)
+    except _thermo_report_service.ReportForbidden:
+        return _reaction_error("report not found", 404)
+    response = Response(data, mimetype="application/pdf")
+    response.headers["Content-Disposition"] = 'attachment; filename="thermodynamics_report.pdf"'
+    return response
+
+
 @app.route("/api/orca/engine/import-orca-output", methods=["POST"])
 def api_orca_engine_import_orca_output():
     """Imports one or more ORCA outputs and reports per-file FREQ/IR and

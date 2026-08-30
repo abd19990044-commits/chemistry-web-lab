@@ -6,12 +6,12 @@
   "package_mode": "SNAPSHOT_FROM_WORKTREE",
   "source_type": "dirty_worktree_snapshot",
   "source_git_state": "dirty_snapshot",
-  "source_git_sha": "2c815ebd49a56cb5317ec56de0324c21f238c5bd-dirty",
+  "source_git_sha": "a92ad1a3ad4875fbe587d12028d7eb618e49e8d6-dirty",
   "source_git_dirty": true,
-  "package_tree_hash": "3c01cfc3610f87e3b3ba18acc10037eb883d28cc5ffd77795f2ab501ffd5b8bc",
-  "generated_at": "2026-08-29T23:33:06Z",
-  "file_count": 329,
-  "total_size_bytes": 30840597,
+  "package_tree_hash": "27bc9dbcfacd097fe233c2da70ddff513940c1c9dc731c9e080e48077e08ffbc",
+  "generated_at": "2026-08-30T01:01:32Z",
+  "file_count": 332,
+  "total_size_bytes": 30916704,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -74,8 +74,8 @@
       "source_origin": "repo_source"
     },
     "app.py": {
-      "sha256": "538d66b9d01ab4ceb824e4e2e897f029b4f386c4571c767d118e1d3dac150976",
-      "size_bytes": 114338,
+      "sha256": "8ecb206dfde76fb76464f34283cfdaf2867e3a235e50895b0aaf9c93dabcfb83",
+      "size_bytes": 121073,
       "source_origin": "repo_source"
     },
     "ARCHITECTURE.md": {
@@ -1109,8 +1109,8 @@
       "source_origin": "repo_source"
     },
     "requirements.txt": {
-      "sha256": "0bf83f0b7bacbb72a8ae6bf0a28726b583c4515aa87652c54bff163e565aee62",
-      "size_bytes": 873,
+      "sha256": "a1b0574fb6e5f9fe82bb6af9ac6618c6317cedc8aa07dc4459d3ba2f5bd087b9",
+      "size_bytes": 884,
       "source_origin": "repo_source"
     },
     "schema/canonical_scientific.schema.json": {
@@ -1246,6 +1246,16 @@
     "services/orca_service.py": {
       "sha256": "60680256ad793abc97716295021577164033f2c58073b5e9f1958e14b8bb1553",
       "size_bytes": 3748,
+      "source_origin": "repo_source"
+    },
+    "services/reaction_workflow_service.py": {
+      "sha256": "8c7cd1ebdbd90ec993221088e0de775f52b5a30a972a69abbbe512633e91f504",
+      "size_bytes": 34761,
+      "source_origin": "repo_source"
+    },
+    "services/thermo_report_service.py": {
+      "sha256": "ceaa7f76df296e443636f5b0b6e800205fda002ad43a0153af97ed7ed0948d9e",
+      "size_bytes": 10147,
       "source_origin": "repo_source"
     },
     "static/css/style.css": {
@@ -1568,6 +1578,11 @@
       "size_bytes": 21892,
       "source_origin": "repo_source"
     },
+    "tests/test_reaction_workflow_thermo.py": {
+      "sha256": "d3965b8566a18f435ed0a43a4f03f2ef10ff5a73622f645180723baec5fe4cc3",
+      "size_bytes": 24054,
+      "source_origin": "repo_source"
+    },
     "tests/test_repeated_execution_regression.py": {
       "sha256": "07d0cb7ecba84fe0815bc279ed2b1da616662c66ca83a11ec2420751e81d59db",
       "size_bytes": 22608,
@@ -1654,8 +1669,8 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "15e4bcd830b1281f04f85efa95e86a73a1373efabab77034968144fcaa43a43e",
-      "size_bytes": 44305,
+      "sha256": "059420869c5723a893964c9bd32348deb4755f05c794fb7d10d0fa47a97cc96f",
+      "size_bytes": 44704,
       "source_origin": "generated_manifest"
     }
   }
