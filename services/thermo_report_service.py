@@ -237,10 +237,6 @@ def get_downloadable_report(store, owner: str, report_id: str, now_provider=None
     meta = store.get_report(report_id)
     if meta is None or (owner is not None and meta.get("owner") != owner):
         raise ReportNotFound("report not found")
-    if meta.get("result_id"):
-        current = [m for m in [store.get_report(m2["report_id"]) for m2 in
-                               store._read(store.reports_path, [])]
-                   if m2 and m2.get("result_id") == meta.get("result_id")]
     expires = datetime.fromisoformat(meta["expires_at"])
     if now >= expires:
         raise ReportExpired("REPORT_EXPIRED")

@@ -105,20 +105,85 @@ def parse_reaction_equation(equation: str):
         raise ReactionValidationError("Reaction equation must contain exactly one arrow (->, =>, \u2192, \u21cc or =).")
     species = []
     for role, side in (("reactant", parts[0]), ("product", parts[1])):
-        for raw in side.split("+"):
-            raw = raw.strip()
-            if not raw:
-                raise ReactionValidationError("Empty term in reaction equation side.")
-            m = _TERM_RE.match(raw)
+        # Full-consumption tokenizer: every non-whitespace character must be
+        # consumed. Distinguishes coefficient / formula digits / ionic charge:
+        #   "2 Fe3+"  -> coeff 2, Fe, charge +3   (single element + digits + sign)
+        #   "SO4^2-"  -> SO4, charge -2           (explicit ^ notation)
+        #   "NH4+"    -> NH4, charge +1           (multi-element, sign only)
+        #   "e-"      -> electron: charge -1, excluded from the atom count,
+        #                included in the charge balance.
+        term_re = re.compile(
+            r"(\d*\.?\d*)\s*"
+            r"(e-|[A-Za-z][A-Za-z0-9]*(?:\([A-Za-z0-9]+\))?(?:\^[+-]?\d+[+-]?|[+-]\d+|[+-])?)")
+        pos = 0
+        parsed_terms = 0
+        while pos < len(side):
+            if side[pos].isspace():
+                pos += 1
+                continue
+            if side[pos] == "+":
+                nxt = pos + 1
+                while nxt < len(side) and side[nxt].isspace():
+                    nxt += 1
+                if nxt >= len(side):
+                    raise ReactionValidationError(
+                        "Invalid equation: trailing '+' separator with no species.")
+                if side[nxt] == "+":
+                    raise ReactionValidationError(
+                        "Invalid equation: consecutive '+' separators at %r." % side[pos:pos + 12])
+                pos = nxt
+                continue
+            m = term_re.match(side, pos)
             if not m or not m.group(2):
-                raise ReactionValidationError("Cannot parse species term: %r" % raw)
+                raise ReactionValidationError(
+                    "Cannot parse species term at: %r (unconsumed input is not allowed)"
+                    % side[pos:pos + 24])
             coeff = float(m.group(1)) if m.group(1) else 1.0
             if coeff <= 0:
-                raise ReactionValidationError("Stoichiometric coefficients must be positive: %r" % raw)
-            species.append({"raw_term": raw, "name": m.group(2),
-                            "charge_hint": int(m.group(3)) if m.group(3) else 0,
+                raise ReactionValidationError(
+                    "Stoichiometric coefficients must be positive: %r" % m.group(2))
+            raw = m.group(2)
+            if raw == "e-":
+                species.append({"raw_term": raw, "name": "e-", "charge_hint": -1,
+                                "coefficient": coeff, "role": role, "nu": -coeff, "electron": True})
+                parsed_terms += 1
+                pos = m.end()
+                continue
+            charge_hint = 0
+            cm = re.search(r"\^([+-]?)?(\d+)([+-]?)$", raw)
+            if cm:
+                sign = -1 if (cm.group(1) == "-" or cm.group(3) == "-") else 1
+                charge_hint = sign * int(cm.group(2))
+                core = raw[:cm.start()]
+            else:
+                tm = re.search(r"([+-])(\d*)$", raw)
+                if tm:
+                    sign = 1 if tm.group(1) == "+" else -1
+                    head = raw[:tm.start()]
+                    am = re.fullmatch(r"([A-Z][a-z]?)(\d+)", head)
+                    if am:
+                        # Fe3+/Fe2+ -> trailing digits on a bare element are the
+                        # ionic charge; the formula keeps the element only.
+                        charge_hint = sign * int(am.group(2))
+                        core = am.group(1)
+                    else:
+                        # NH4+ style: digits belong to the formula; charge = sign
+                        charge_hint = sign
+                        core = head
+                else:
+                    charge_hint = 0
+                    core = raw
+            if not re.search(r"[A-Z]", core) and core != "e-":
+                raise ReactionValidationError(
+                    "Invalid species term: %r contains no chemical element." % raw)
+            species.append({"raw_term": raw, "name": core,
+                            "charge_hint": charge_hint,
                             "coefficient": coeff, "role": role,
                             "nu": coeff if role == "product" else -coeff})
+            parsed_terms += 1
+            pos = m.end()
+        if parsed_terms == 0:
+            raise ReactionValidationError("Empty term in reaction equation side.")
     if not species:
         raise ReactionValidationError("Reaction has no species.")
     return species
@@ -146,9 +211,14 @@ def validate_reaction_balance(species):
     warnings, atoms, charge = [], {}, 0.0
     for sp in species:
         nu = sp.get("nu", 0.0)
+        # e- (electron): charge -1, excluded from the atom count (no element),
+        # included in the charge balance.
+        if str(sp.get("name") or "") == "e-":
+            charge += nu * (-1.0)
+            continue
         for el, c in parse_formula_counts(sp.get("formula") or sp.get("name") or "").items():
             atoms[el] = atoms.get(el, 0.0) + nu * c
-        charge += nu * float(sp.get("charge") or 0)
+        charge += nu * float(sp.get("charge") or sp.get("charge_hint") or 0)
     for el, net in sorted(atoms.items()):
         if abs(net) > 1e-8:
             warnings.append("WARNING - NOT ATOM BALANCED: %s (net %.4f)" % (el, net))
@@ -664,6 +734,7 @@ def complete_stage_with_output(reaction: dict, species_id: str, stage_id: str, o
         species["state"] = "COMPLETE" if all(s.get("state") == "COMPLETE" for s in species["stages"]) else "RUNNING"
         reaction["state"] = "WAITING"
     if store is not None:
+        validate_workflow_stages(species["stages"])
         store.save_reaction(reaction)
     return stage
 

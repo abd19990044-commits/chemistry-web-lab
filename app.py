@@ -1846,6 +1846,8 @@ def api_v1_reaction_species_assemble(reaction_id, species_id):
     try:
         result = assemble_species_result(reaction, species_id, _reaction_store)
     except ReactionValidationError as exc:
+        # persist validation state (stale flags) before reporting the 409
+        _reaction_store.save_reaction(reaction)
         return _reaction_error(str(exc), 409)
     return jsonify({"ok": True, "final_result": result})
 

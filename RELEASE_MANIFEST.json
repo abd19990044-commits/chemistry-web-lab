@@ -6,12 +6,12 @@
   "package_mode": "SNAPSHOT_FROM_WORKTREE",
   "source_type": "dirty_worktree_snapshot",
   "source_git_state": "dirty_snapshot",
-  "source_git_sha": "a92ad1a3ad4875fbe587d12028d7eb618e49e8d6-dirty",
+  "source_git_sha": "bfcbbe648f3caad08aad752b22966361c7dda8f8-dirty",
   "source_git_dirty": true,
-  "package_tree_hash": "27bc9dbcfacd097fe233c2da70ddff513940c1c9dc731c9e080e48077e08ffbc",
-  "generated_at": "2026-08-30T01:01:32Z",
+  "package_tree_hash": "bbfb4c1139e0a78ce5e3d7577135a5859d673388545655d97554bbf03d58f534",
+  "generated_at": "2026-08-30T17:33:18Z",
   "file_count": 332,
-  "total_size_bytes": 30916704,
+  "total_size_bytes": 30922037,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -74,8 +74,8 @@
       "source_origin": "repo_source"
     },
     "app.py": {
-      "sha256": "8ecb206dfde76fb76464f34283cfdaf2867e3a235e50895b0aaf9c93dabcfb83",
-      "size_bytes": 121073,
+      "sha256": "1507bb227ce9c3d8e3e1e5137c8aae915ee92669c51956ab4aca0fbd589a39c8",
+      "size_bytes": 121195,
       "source_origin": "repo_source"
     },
     "ARCHITECTURE.md": {
@@ -1249,13 +1249,13 @@
       "source_origin": "repo_source"
     },
     "services/reaction_workflow_service.py": {
-      "sha256": "8c7cd1ebdbd90ec993221088e0de775f52b5a30a972a69abbbe512633e91f504",
-      "size_bytes": 34761,
+      "sha256": "b28d3e571f8789b2545042e15f240c40136f9c097298af8ace4c0c225e8b75bd",
+      "size_bytes": 38181,
       "source_origin": "repo_source"
     },
     "services/thermo_report_service.py": {
-      "sha256": "ceaa7f76df296e443636f5b0b6e800205fda002ad43a0153af97ed7ed0948d9e",
-      "size_bytes": 10147,
+      "sha256": "aca18edc71f5fa558f3a0c4c7af49dc428f1498f712579553ef403193ffa5d4b",
+      "size_bytes": 9899,
       "source_origin": "repo_source"
     },
     "static/css/style.css": {
@@ -1579,8 +1579,8 @@
       "source_origin": "repo_source"
     },
     "tests/test_reaction_workflow_thermo.py": {
-      "sha256": "d3965b8566a18f435ed0a43a4f03f2ef10ff5a73622f645180723baec5fe4cc3",
-      "size_bytes": 24054,
+      "sha256": "4dc820bda563646b4046040c36879ea4de2e00d24d2708e688bfb081d8c621d0",
+      "size_bytes": 26093,
       "source_origin": "repo_source"
     },
     "tests/test_repeated_execution_regression.py": {
@@ -1669,7 +1669,7 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "059420869c5723a893964c9bd32348deb4755f05c794fb7d10d0fa47a97cc96f",
+      "sha256": "25f4ce58d9ffbd8a6d5075c26123aec4c4829d284e598e8d89792d12ca05a77b",
       "size_bytes": 44704,
       "source_origin": "generated_manifest"
     }
