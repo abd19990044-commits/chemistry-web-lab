@@ -103,6 +103,78 @@ _TERM_RE = re.compile(r"(\d*\.?\d*)\s*([A-Za-z][A-Za-z0-9()]*)\s*(?:\^\{?([+-]?\
 _ELEMENT_RE = re.compile(r"([A-Z][a-z]?)(\d*\.?\d*)")
 _PAREN_RE = re.compile(r"\(([A-Za-z0-9]*)\)\s*(\d*\.?\d*)")
 
+_PERIODIC_TABLE_SYMBOLS = [
+    "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
+    "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca",
+    "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn",
+    "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr", "Y", "Zr",
+    "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn",
+    "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", "Nd",
+    "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb",
+    "Lu", "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg",
+    "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th",
+    "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm",
+    "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh", "Hs", "Mt", "Ds",
+    "Rg", "Cn", "Nh", "Fl", "Mc", "Lv", "Ts", "Og"
+]
+_ELEMENT_LOWER_MAP = {e.lower(): e for e in _PERIODIC_TABLE_SYMBOLS}
+_COMMON_FORMULA_CANONICAL = {
+    "h2": "H2", "o2": "O2", "n2": "N2", "f2": "F2", "cl2": "Cl2", "br2": "Br2", "i2": "I2",
+    "h2o": "H2O", "co2": "CO2", "ch4": "CH4", "nh3": "NH3", "co": "CO", "hcl": "HCl",
+    "hbr": "HBr", "hi": "HI", "hf": "HF", "so2": "SO2", "so3": "SO3", "h2s": "H2S",
+    "no": "NO", "no2": "NO2", "n2o": "N2O", "hcn": "HCN", "naoh": "NaOH", "koh": "KOH",
+    "nacl": "NaCl", "caco3": "CaCO3", "c2h6": "C2H6", "c2h4": "C2H4", "c2h2": "C2H2",
+    "c6h6": "C6H6", "c2h5oh": "C2H5OH", "ch3oh": "CH3OH", "ch3cooh": "CH3COOH",
+    "h2so4": "H2SO4", "hno3": "HNO3", "h3po4": "H3PO4"
+}
+
+
+def canonicalize_chemical_core(core_str: str) -> str:
+    raw = (core_str or "").strip()
+    if not raw or raw == "e-":
+        return raw
+    low = raw.lower()
+    if low in _COMMON_FORMULA_CANONICAL:
+        return _COMMON_FORMULA_CANONICAL[low]
+    if re.search(r"[A-Z]", raw):
+        return raw
+    try:
+        import chem_core as _core
+        smiles, _ = _core.resolve_species(raw)
+        if smiles:
+            from rdkit import Chem
+            from rdkit.Chem import rdMolDescriptors
+            mol = Chem.MolFromSmiles(smiles)
+            if mol is not None:
+                calc_f = rdMolDescriptors.CalcMolFormula(mol)
+                if calc_f:
+                    return calc_f
+    except Exception:
+        pass
+    tokens = re.findall(r"[a-z]+|\d+|\(|\)|\+|\-|\^", raw)
+    res = []
+    for tok in tokens:
+        if tok.isalpha():
+            i, n, seg = 0, len(tok), []
+            while i < n:
+                two = tok[i:i+2]
+                one = tok[i:i+1]
+                if len(two) == 2 and two in _ELEMENT_LOWER_MAP and two not in ("no", "co"):
+                    seg.append(_ELEMENT_LOWER_MAP[two])
+                    i += 2
+                elif one in _ELEMENT_LOWER_MAP:
+                    seg.append(_ELEMENT_LOWER_MAP[one])
+                    i += 1
+                elif len(two) == 2 and two in _ELEMENT_LOWER_MAP:
+                    seg.append(_ELEMENT_LOWER_MAP[two])
+                    i += 2
+                else:
+                    return None
+            res.append("".join(seg))
+        else:
+            res.append(tok)
+    return "".join(res)
+
 
 def parse_reaction_equation(equation: str):
     if not equation or not equation.strip():
@@ -181,8 +253,12 @@ def parse_reaction_equation(equation: str):
                     charge_hint = 0
                     core = raw
             if not re.search(r"[A-Z]", core) and core != "e-":
-                raise ReactionValidationError(
-                    "Invalid species term: %r contains no chemical element." % raw)
+                canon = canonicalize_chemical_core(core)
+                if canon and re.search(r"[A-Z]", canon):
+                    core = canon
+                else:
+                    raise ReactionValidationError(
+                        "Invalid species term: %r contains no chemical element." % raw)
             species.append({"raw_term": raw, "name": core,
                             "charge": charge_hint,
                             "charge_hint": charge_hint,
@@ -1195,6 +1271,15 @@ def resolve_species_3d_geometry(name_or_formula: str, smiles: str = None) -> tup
         mol = Chem.MolFromSmiles(candidate_smiles)
         if mol is not None:
             xyz = core.xyz_from_smiles(candidate_smiles)
+            if xyz:
+                return xyz, None
+    except Exception:
+        pass
+
+    try:
+        res_smiles, _ = core.resolve_species(name_or_formula)
+        if res_smiles:
+            xyz = core.xyz_from_smiles(res_smiles)
             if xyz:
                 return xyz, None
     except Exception:

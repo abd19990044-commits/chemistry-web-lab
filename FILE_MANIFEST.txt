@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-09-04T21:08:20Z
+# Generated: 2026-09-04T22:27:45Z
 # Package Mode: RELEASE_FROM_COMMIT
 # Source State: clean_commit
-# Source Git SHA: 2389107631f877ee80ceb3fb3fbd976eb277ed7d
-# Package Tree Hash: 82e42e596e31c36ebe39213f9a4bd14fea5410d063d251c05693472221192abc
+# Source Git SHA: 35f23a4f16e7a91a884ff797b1be4fca24377753
+# Package Tree Hash: 494a9225b7361f8710141436397ba6cd61d41c750dab20cb5caf7d9a12cf9e65
 # Total Files: 378
-# Total Size: 31,561,748 bytes (30.10 MB)
+# Total Size: 31,572,279 bytes (30.11 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -27,7 +27,7 @@ api/schemas/__init__.py                            |      2,389 B | 0aa04dcd1cd1
 api/schemas/analysis.py                            |      1,070 B | b080fd9ff8ab060b3097e6804748f39c8d1095267e095f52a3ad86f71085f9b0
 api/schemas/compound.py                            |        571 B | ff722ad94af53bdb95bf595c6a2e952ae4ffac7435b4c9d82ffcc28011db75ca
 api/schemas/local_agent.py                         |      3,820 B | d7f85d6e2cd232bf68cfcbd644a34dd24143d40a47676ca135b1e9638a9712aa
-app.py                                             |    166,713 B | d317789aa6d6f583bdcf8b128b4ee2a3fdbead76b8cc3bd98ce7ae9d8fd16607
+app.py                                             |    168,185 B | ab09b9be354e2364d563c999bc21f8d2a1d0e89eb8fdfc341863c4c75758900e
 ARCHITECTURE.md                                    |     48,949 B | a50d3a2703d48a159a61037d46fea6a2279d0b3a6bf79bb9bc307675c6656f8b
 benchmarks/benzene_tddft.out                       |      1,551 B | 2510aaa519c6fe573da8436020801ca8bc2d9040b442f045f12802300a103e7c
 benchmarks/water_sp_freq.out                       |      3,095 B | a8c69da119edc8a2de9a4158a6cc7111ce015380a97e1810e9609ee0d1d9e63e
@@ -69,7 +69,7 @@ data/examples/canonical_thermochemistry.json       |      6,032 B | 2b5289e0d1f5
 data/examples/canonical_workflow.json              |      8,050 B | f925f0a3f356ab4f765786a2899782953b48257b32cf11ecd6042824d159b30a
 data/examples/training_dataset_h2o.jsonl           |        919 B | a702f4c373aef0a15a3a7025b6438f44d088c7ffa5a2bd3737dec5f3f391f2fc
 data/examples/training_manifest_h2o.json           |        565 B | a0f20d3db8376be41b6e6a7e129aca337f050243f56ac922bc673a952bf70a42
-data/local_agent_registry.db                       |    126,976 B | e99139d5886b4d9dc28a8a3299bd40d91e7b512fa89acd6168e0299da55f7856
+data/local_agent_registry.db                       |    126,976 B | f9b5ea74c9e9598bdaae01e2790196f67b9f8cc38b59e91e4410d180e00104cd
 data/local_orca_settings.json                      |        374 B | 8ebd2cddf18393c2afc3ad32e3bfc128b4d723326f6d3b80b42e22f550f1ac17
 DEPLOY.md                                          |      9,495 B | d58aa1bed81791210dea98b9fa799159ec708a13b1a9ed67c1a2268742336112
 Dockerfile                                         |      1,183 B | b421984ab252be2b779320050f415b49a1778469fc6499db3cd2c455acc83557
@@ -276,17 +276,17 @@ services/local_agent_service.py                    |     37,897 B | 70be745886b3
 services/local_orca_service.py                     |     39,138 B | 5c3a6075ab10f38134d4d6b08d37f4e8f5c19181d4908704ae88f53b2833697d
 services/orca_service.py                           |      3,748 B | 60680256ad793abc97716295021577164033f2c58073b5e9f1958e14b8bb1553
 services/reaction_diagram_service.py               |      9,333 B | f86d6ce030aa63f58b6d6705811fb327f70198eab6b95a706f662fafd83530e4
-services/reaction_workflow_service.py              |     64,319 B | 464a7db514d9525f10e278e34e40b3c49d5df6d294c3559fde26e8f6db09a5b1
+services/reaction_workflow_service.py              |     67,771 B | 78999ab65f52f78a98ed4cce1a274e0ba52523e70cb5867a69f10db575244b0a
 services/thermo_report_service.py                  |     10,334 B | c5fee3601c8888bbc09bbcbea65adf4ddad535a04589d20cdf995cfc893b29b7
 static/css/style.css                               |     84,676 B | 3d5fe1508d4225e355302b1e98173219cd636b6ed4372a1b1ba9aefa15b2e619
 static/css/theme.css                               |      4,191 B | 0f46f52179f51f6f9e33d6afd4c1186a55cd4bff5de3e631055a9290c21cb0da
 static/docs/ChemistryLab_User_Manual.docx          |     46,938 B | 35f84c0a37efc80a0283904d56198d18cdba7a648f2492f4c6c76f331ce9b211
 static/job_runtime_fix.js                          |      1,641 B | 9133e459435dfad6a353c774a92c10cf37656eb529f114ca61dec2be5a63c697
-static/js/app.js                                   |    527,411 B | 9748c5fff9133a5cc29cfcc643b87ef04e47a725bc5a334d4c664493eab68342
+static/js/app.js                                   |    530,505 B | 7a157ae86b443f289b039b4c49ed6870d1774248be14ef69b93ec1850ef86ec5
 static/js/kaggle_credentials.js                    |     14,638 B | 8f02d94905076f26369786bb530876752dd891e3cd8e19ac576af2fd22819fdf
 static/js/local-agent.js                           |     27,014 B | 9e33f1acb0781ded8451d22a1288ead0c0227562ab3b2810208eab4b666465a2
 static/js/reaction-editor.js                       |      8,373 B | a11362d1a686ac234f10a365525cba3ea50ec937e14ece09f84557b889b3f4a7
-static/js/reaction-unified.js                      |     16,754 B | 4b552ee210f36515a725ed05400dd7856a7f75922541e2b5598821e73d4c37db
+static/js/reaction-unified.js                      |     18,040 B | 9ad8499161fef08a979ae0c750c512fcc16cc0f06ebf22bfc631006b878dbc4a
 static/js/workers/archive-worker.js                |     20,420 B | 29eff680289ace2a4ee5784419c0a189f5e962a054914a5e6d6f9e2ad66073f8
 templates/index.html                               |    186,320 B | 94d013449fa8020adc7dbefaf559d34fc46b9464ed86cfdba0bc2a75fdc7bb67
 tests/conftest.py                                  |      5,258 B | c826b8de0be2b711dc88c81f84ce2f9f1e37bba241c65268351677ed12cc540a
@@ -360,10 +360,10 @@ tests/test_production_repairs.py                   |      7,963 B | 86e86a4fe8ad
 tests/test_production_security_audit.py            |     13,024 B | 258cbbcc626fe93b67a77905cd1dd21b9a6661132c6ef53c832253ae6d9a1213
 tests/test_production_wiring.py                    |     15,898 B | c41fe1e6c1b10d9a251e3aba00ea537b0833bb30d7248467717266f58c5821fd
 tests/test_pubchem_kaggle_thermo_fixes.py          |     14,462 B | 59d3af1294b8bd5969ada36566040c1abf7443fb0ee52bfaf2f350fa691499ca
-tests/test_reaction.py                             |     21,892 B | e45833dfd88aabd042f6cf2307a1170072332c5efe49157d50d51a279b28e702
+tests/test_reaction.py                             |     21,928 B | fefb748d85d8c82863d91201624d19d4979debc449a8613af2fde990239aede8
 tests/test_reaction_tenant_isolation_and_spoofing.py |      6,718 B | 3bf4a60de3fa31d00616a3a1c85105efff53cfea8794fc46fd1a686cb42017a1
 tests/test_reaction_thermochemistry_audit.py       |     11,611 B | 38dde8813c68af5dc3b94fb354fbbe0671cb1ef5e726f6c59b8056290a638561
-tests/test_reaction_unified_3d_and_downloads.py    |      7,566 B | 834dbd60fce29d4d5a4b25c0b7980142432516713b3cb52451265b4d2c6bb25d
+tests/test_reaction_unified_3d_and_downloads.py    |      8,757 B | e25770316e34d746a84ab73055b03028b54af52ea5d69a8bd00fa89e47a4b553
 tests/test_reaction_workflow_thermo.py             |     27,196 B | fcf6c0fa53ca90301bb43a3ef7c5cc97db3eb17ddc5d92e4bb0625851b8cc596
 tests/test_repeated_execution_regression.py        |     22,608 B | 07d0cb7ecba84fe0815bc279ed2b1da616662c66ca83a11ec2420751e81d59db
 tests/test_scientific_benchmarks.py                |      3,692 B | e3726ac450f8c3c5d3b3c46b421aa2f7541fbf27a71671c8200d80eb77316dd9

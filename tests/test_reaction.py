@@ -46,6 +46,7 @@ except ImportError as exc:                                      # pragma: no cov
     print("SKIP: %s (install flask and rdkit to run this suite)" % exc)
     sys.exit(0)
 
+webapp.app.config["TESTING"] = True
 client = webapp.app.test_client()
 
 # A tiny offline PubChem, so the suite never touches the network and the

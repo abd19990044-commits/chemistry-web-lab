@@ -2326,6 +2326,26 @@ def api_v1_reaction_unified_setup():
         if not workflow_config:
             solv_val = payload.get("solvation") or payload.get("solvent") or "none"
             solv_model = "cpcm" if (solv_val and solv_val.lower() not in ("none", "gas phase", "gas_phase", "gas")) else "none"
+            stages_cfg = payload.get("stages")
+            if not stages_cfg:
+                preset = (payload.get("stages_preset") or "").lower()
+                if preset == "opt":
+                    stages_cfg = [{"kind": "OPT", "label": "Geometry Optimization", "order": 0}]
+                elif preset == "freq":
+                    stages_cfg = [{"kind": "FREQ", "label": "Frequency & Thermochemistry", "order": 0}]
+                elif preset == "sp":
+                    stages_cfg = [{"kind": "SP", "label": "Single Point Energy", "order": 0}]
+                elif preset == "opt_freq":
+                    stages_cfg = [
+                        {"kind": "OPT", "label": "Geometry Optimization", "order": 0},
+                        {"kind": "FREQ", "label": "Frequency & Thermochemistry", "order": 1}
+                    ]
+                elif preset == "opt_freq_sp":
+                    stages_cfg = [
+                        {"kind": "OPT", "label": "Geometry Optimization", "order": 0},
+                        {"kind": "FREQ", "label": "Frequency & Thermochemistry", "order": 1},
+                        {"kind": "SP", "label": "High-Level Single Point", "order": 2}
+                    ]
             workflow_config = {
                 "method": payload.get("method") or payload.get("theory") or "B3LYP",
                 "basis": payload.get("basis_set") or payload.get("basis") or "def2-SVP",
@@ -2334,19 +2354,26 @@ def api_v1_reaction_unified_setup():
                 "solvent": solv_val if solv_model != "none" else "Water",
                 "cores": payload.get("nprocs") or payload.get("cores") or 4,
                 "ram": payload.get("maxcore") or payload.get("ram") or 2000,
-                "backend": payload.get("backend") or "local",
+                "backend": payload.get("backend") or payload.get("target_host") or "local",
                 "target_device": payload.get("target_device"),
-                "stages": payload.get("stages"),
+                "stages": stages_cfg,
             }
         reaction = generate_unified_reaction_inputs(reaction=reaction, workflow_config=workflow_config, store=_reaction_store)
-        return jsonify({"ok": True, "reaction": reaction, "species": reaction.get("species", [])})
+        stages_count = sum(len(sp.get("stages", [])) for sp in reaction.get("species", []))
+        return jsonify({
+            "ok": True,
+            "reaction": reaction,
+            "reaction_id": reaction.get("reaction_id"),
+            "stages_count": stages_count,
+            "species": reaction.get("species", [])
+        })
     except Exception as exc:
         log.error("api_v1_reaction_unified_setup failed: %s", traceback.format_exc())
         return _reaction_error(str(exc), 500)
 
 
 @app.route("/api/v1/reactions/<reaction_id>/start-execution", methods=["POST"])
-def api_v1_reaction_start_execution():
+def api_v1_reaction_start_execution(reaction_id):
     """Starts/enqueues all ready stages for the reaction across target backend/workers."""
     reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
     if reaction is None:

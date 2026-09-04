@@ -199,3 +199,36 @@ def test_companion_agent_output_upload_and_download(client, tmp_path):
     assert f"water_opt.xyz" in zf.namelist()
     assert zf.read("water_opt.out").decode("utf-8") == fake_out
     assert zf.read("water_opt.xyz").decode("utf-8") == fake_xyz
+
+
+def test_lowercase_equation_unified_setup_and_start_execution(client):
+    """Verify lowercase reaction equations (e.g. 2 h2 + o2 -> 2 h2o) and start execution."""
+    payload = {
+        "equation": "2 h2 + o2 -> 2 h2o",
+        "stages_preset": "opt_freq",
+        "method": "B3LYP",
+        "basis_set": "def2-SVP",
+        "dispersion": "D3BJ",
+        "solv_model": "none",
+        "target_host": "server_local",
+        "max_concurrency": 1
+    }
+    res = client.post("/api/v1/reactions/unified-setup", json=payload)
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["ok"] is True
+    assert data["reaction_id"] is not None
+    assert data["stages_count"] == 6
+
+    rxn = data["reaction"]
+    species_names = [s["formula"] for s in rxn["species"]]
+    assert species_names == ["H2", "O2", "H2O"]
+
+    # Start execution via start-execution endpoint
+    rxn_id = data["reaction_id"]
+    start_res = client.post(f"/api/v1/reactions/{rxn_id}/start-execution", json={"max_concurrency": 1})
+    assert start_res.status_code == 200
+    start_data = start_res.get_json()
+    assert start_data["ok"] is True
+    assert start_data["reaction"]["state"] == "RUNNING"
+

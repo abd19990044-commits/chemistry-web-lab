@@ -399,6 +399,36 @@
     }
   }
 
+  // Expose global client for wizard and UI integration
+  window.ReactionUnifiedClient = {
+    startExecution: async function(reactionId, options = {}) {
+      if (!reactionId) return;
+      activeReactionId = reactionId;
+      try {
+        const concurrencyLimit = options.max_concurrency || 1;
+        const startRes = await fetch(`/api/v1/reactions/${encodeURIComponent(reactionId)}/start-execution`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ max_concurrency: concurrencyLimit })
+        });
+        const startData = await startRes.json();
+        if (startData && startData.reaction) activeReactionData = startData.reaction;
+
+        renderReactionExecutionWorkspace(activeReactionData || { reaction_id: reactionId, state: 'RUNNING' });
+        startExecutionPolling(reactionId);
+
+        const wfPanel = document.getElementById('reaction-workflow') || document.getElementById('rxn-wf-active-workspace');
+        if (wfPanel) {
+          wfPanel.scrollIntoView({ behavior: 'smooth' });
+        }
+      } catch (err) {
+        console.error('Failed to start reaction execution:', err);
+      }
+    },
+    renderWorkspace: renderReactionExecutionWorkspace,
+    pollExecution: startExecutionPolling
+  };
+
   document.addEventListener('DOMContentLoaded', () => {
     initUnifiedReactionController();
   });

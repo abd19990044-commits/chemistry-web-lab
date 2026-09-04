@@ -6,12 +6,12 @@
   "package_mode": "RELEASE_FROM_COMMIT",
   "source_type": "commit",
   "source_git_state": "clean_commit",
-  "source_git_sha": "2389107631f877ee80ceb3fb3fbd976eb277ed7d",
+  "source_git_sha": "35f23a4f16e7a91a884ff797b1be4fca24377753",
   "source_git_dirty": false,
-  "package_tree_hash": "82e42e596e31c36ebe39213f9a4bd14fea5410d063d251c05693472221192abc",
-  "generated_at": "2026-09-04T21:08:20Z",
+  "package_tree_hash": "494a9225b7361f8710141436397ba6cd61d41c750dab20cb5caf7d9a12cf9e65",
+  "generated_at": "2026-09-04T22:27:45Z",
   "file_count": 379,
-  "total_size_bytes": 31612696,
+  "total_size_bytes": 31623227,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -104,8 +104,8 @@
       "source_origin": "repo_source"
     },
     "app.py": {
-      "sha256": "d317789aa6d6f583bdcf8b128b4ee2a3fdbead76b8cc3bd98ce7ae9d8fd16607",
-      "size_bytes": 166713,
+      "sha256": "ab09b9be354e2364d563c999bc21f8d2a1d0e89eb8fdfc341863c4c75758900e",
+      "size_bytes": 168185,
       "source_origin": "repo_source"
     },
     "ARCHITECTURE.md": {
@@ -314,7 +314,7 @@
       "source_origin": "repo_source"
     },
     "data/local_agent_registry.db": {
-      "sha256": "e99139d5886b4d9dc28a8a3299bd40d91e7b512fa89acd6168e0299da55f7856",
+      "sha256": "f9b5ea74c9e9598bdaae01e2790196f67b9f8cc38b59e91e4410d180e00104cd",
       "size_bytes": 126976,
       "source_origin": "repo_source"
     },
@@ -1349,8 +1349,8 @@
       "source_origin": "repo_source"
     },
     "services/reaction_workflow_service.py": {
-      "sha256": "464a7db514d9525f10e278e34e40b3c49d5df6d294c3559fde26e8f6db09a5b1",
-      "size_bytes": 64319,
+      "sha256": "78999ab65f52f78a98ed4cce1a274e0ba52523e70cb5867a69f10db575244b0a",
+      "size_bytes": 67771,
       "source_origin": "repo_source"
     },
     "services/thermo_report_service.py": {
@@ -1379,8 +1379,8 @@
       "source_origin": "repo_source"
     },
     "static/js/app.js": {
-      "sha256": "9748c5fff9133a5cc29cfcc643b87ef04e47a725bc5a334d4c664493eab68342",
-      "size_bytes": 527411,
+      "sha256": "7a157ae86b443f289b039b4c49ed6870d1774248be14ef69b93ec1850ef86ec5",
+      "size_bytes": 530505,
       "source_origin": "repo_source"
     },
     "static/js/kaggle_credentials.js": {
@@ -1399,8 +1399,8 @@
       "source_origin": "repo_source"
     },
     "static/js/reaction-unified.js": {
-      "sha256": "4b552ee210f36515a725ed05400dd7856a7f75922541e2b5598821e73d4c37db",
-      "size_bytes": 16754,
+      "sha256": "9ad8499161fef08a979ae0c750c512fcc16cc0f06ebf22bfc631006b878dbc4a",
+      "size_bytes": 18040,
       "source_origin": "repo_source"
     },
     "static/js/workers/archive-worker.js": {
@@ -1769,8 +1769,8 @@
       "source_origin": "repo_source"
     },
     "tests/test_reaction.py": {
-      "sha256": "e45833dfd88aabd042f6cf2307a1170072332c5efe49157d50d51a279b28e702",
-      "size_bytes": 21892,
+      "sha256": "fefb748d85d8c82863d91201624d19d4979debc449a8613af2fde990239aede8",
+      "size_bytes": 21928,
       "source_origin": "repo_source"
     },
     "tests/test_reaction_tenant_isolation_and_spoofing.py": {
@@ -1784,8 +1784,8 @@
       "source_origin": "repo_source"
     },
     "tests/test_reaction_unified_3d_and_downloads.py": {
-      "sha256": "834dbd60fce29d4d5a4b25c0b7980142432516713b3cb52451265b4d2c6bb25d",
-      "size_bytes": 7566,
+      "sha256": "e25770316e34d746a84ab73055b03028b54af52ea5d69a8bd00fa89e47a4b553",
+      "size_bytes": 8757,
       "source_origin": "repo_source"
     },
     "tests/test_reaction_workflow_thermo.py": {
@@ -1904,7 +1904,7 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "c905ced17f7a98d562bd25461a9fea8dc56d6f1a7e8e73bfb2993bda9d91447e",
+      "sha256": "b47d8e91224e105f1f7bff85d0d9c7355ba68a85f12da58f04e2960942b3806f",
       "size_bytes": 50948,
       "source_origin": "generated_manifest"
     }

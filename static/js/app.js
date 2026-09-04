@@ -351,10 +351,24 @@
     if (contentType.includes("application/json")) data = await resp.json().catch(() => null);
     else { const text = await resp.text().catch(() => ""); const detail = text.replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim().slice(0,240); throw new Error(`Server returned HTTP ${resp.status}${detail ? `: ${detail}` : "."}`); }
     if (!data) throw new Error(`Server returned HTTP ${resp.status} with an invalid JSON response.`);
-    if (!resp.ok || !data.ok) throw new Error(data.error || `Request failed (HTTP ${resp.status}).`);
+    if (!resp.ok || !data.ok) {
+      let errMsg = "";
+      if (data.error) {
+        if (typeof data.error === "string") errMsg = data.error;
+        else if (typeof data.error === "object") errMsg = data.error.message || data.error.detail || data.error.code || JSON.stringify(data.error);
+      } else if (data.detail) {
+        if (typeof data.detail === "string") errMsg = data.detail;
+        else if (typeof data.detail === "object") errMsg = data.detail.message || JSON.stringify(data.detail);
+      }
+      if (!errMsg) errMsg = `Request failed (HTTP ${resp.status}).`;
+      throw new Error(errMsg);
+    }
     return data;
   }
-  function showError(el, message) { el.textContent = message; el.classList.remove("hidden"); }
+  function showError(el, message) {
+    el.textContent = typeof message === "object" && message ? (message.message || JSON.stringify(message)) : String(message);
+    el.classList.remove("hidden");
+  }
   function hide(el) { el.classList.add("hidden"); }
   function show(el) { el.classList.remove("hidden"); }
 
@@ -3763,6 +3777,52 @@
         return;
       }
 
+      if (wizard && wizard.isReactionWorkflow) {
+        genBtn.disabled = true;
+        err.textContent = "Setting up unified 3D reaction inputs for all species...";
+        try {
+          const method = wizard.theory || wizard.method || "B3LYP";
+          const basis = wizard.basis || "def2-SVP";
+          const dispersion = wizard.disp || wizard.dispersion || "D3BJ";
+          let solventModel = "none";
+          let solvent = "Water";
+          if (wizard.solv_model && wizard.solv_model !== "none") {
+            solventModel = wizard.solv_model;
+            solvent = wizard.solvent || "Water";
+          }
+          const calcType = wizard.calc_type || "opt";
+          const stagesPreset = calcType === "opt_freq" ? "opt_freq" : (calcType === "freq" ? "freq" : (calcType === "sp" ? "sp" : "opt"));
+
+          const res = await postJSON("/api/v1/reactions/unified-setup", {
+            equation: wizard.reactionEquation,
+            stages_preset: stagesPreset,
+            method: method,
+            basis_set: basis,
+            dispersion: dispersion,
+            solv_model: solventModel,
+            solvent: solvent,
+            target_host: "server_local",
+            max_concurrency: 1
+          });
+
+          const rxn = res.reaction || {};
+          const rxnId = rxn.reaction_id || res.reaction_id;
+          const totalStagesCount = res.stages_count || (rxn.species || []).reduce((acc, s) => acc + (s.stages || []).length, 0) || 1;
+
+          closeWizard();
+          showToast(`⚡ Unified reaction workflow initialized with ${totalStagesCount} stages across all species!`);
+
+          if (window.ReactionUnifiedClient && typeof window.ReactionUnifiedClient.startExecution === "function") {
+            window.ReactionUnifiedClient.startExecution(rxnId);
+          }
+        } catch (e) {
+          err.textContent = typeof e === "object" && e.message ? e.message : String(e);
+        } finally {
+          genBtn.disabled = false;
+        }
+        return;
+      }
+
       genBtn.disabled = true;
       err.textContent = "Generating…";
       try {
@@ -4040,15 +4100,20 @@
 
       if (wizard && wizard.isReactionWorkflow) {
         genBtn.disabled = true;
-        err.textContent = "Setting up unified 3D reaction inputs for all species…";
+        err.textContent = "Setting up unified 3D reaction inputs for all species...";
         try {
           const stageCfg = wizard.stages[0] || {};
-          const method = stageCfg.method || wizard.method || "B3LYP";
+          const method = stageCfg.theory || stageCfg.method || wizard.theory || wizard.method || "B3LYP";
           const basis = stageCfg.basis || wizard.basis || "def2-SVP";
-          const dispersion = stageCfg.dispersion || wizard.dispersion || "D3BJ";
-          let solventModel = "gas";
+          const dispersion = stageCfg.disp || stageCfg.dispersion || wizard.disp || wizard.dispersion || "D3BJ";
+          let solventModel = "none";
+          let solvent = "Water";
           if (stageCfg.solv_model && stageCfg.solv_model !== "none") {
-            solventModel = stageCfg.solvent ? `${stageCfg.solv_model}(${stageCfg.solvent})` : stageCfg.solv_model;
+            solventModel = stageCfg.solv_model;
+            solvent = stageCfg.solvent || "Water";
+          } else if (wizard.solv_model && wizard.solv_model !== "none") {
+            solventModel = wizard.solv_model;
+            solvent = wizard.solvent || "Water";
           }
           const stagesPreset = wizard.stages.length > 1 ? "opt_freq" : (stageCfg.calc_type || "opt_freq");
 
@@ -4058,20 +4123,24 @@
             method: method,
             basis_set: basis,
             dispersion: dispersion,
-            solvent_model: solventModel,
-            target_host: "server_host",
+            solv_model: solventModel,
+            solvent: solvent,
+            target_host: "server_local",
             max_concurrency: 1
           });
 
-          if (!res.ok) throw new Error(res.error || "Failed to setup reaction workflow");
+          const rxn = res.reaction || {};
+          const rxnId = rxn.reaction_id || res.reaction_id;
+          const totalStagesCount = res.stages_count || (rxn.species || []).reduce((acc, s) => acc + (s.stages || []).length, 0) || totalStages;
+
           closeWizard();
-          showToast(`⚡ Unified reaction workflow initialized with ${res.stages_count} stages across all species!`);
+          showToast(`⚡ Unified reaction workflow initialized with ${totalStagesCount} stages across all species!`);
 
           if (window.ReactionUnifiedClient && typeof window.ReactionUnifiedClient.startExecution === "function") {
-            window.ReactionUnifiedClient.startExecution(res.reaction_id);
+            window.ReactionUnifiedClient.startExecution(rxnId);
           }
         } catch (e) {
-          err.textContent = e.message;
+          err.textContent = typeof e === "object" && e.message ? e.message : String(e);
         } finally {
           genBtn.disabled = false;
         }
