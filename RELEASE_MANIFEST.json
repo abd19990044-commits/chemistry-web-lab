@@ -6,10 +6,10 @@
   "package_mode": "RELEASE_FROM_COMMIT",
   "source_type": "commit",
   "source_git_state": "clean_commit",
-  "source_git_sha": "5257cf2cca1fb34420a3f90374771e882283dc2d",
+  "source_git_sha": "2389107631f877ee80ceb3fb3fbd976eb277ed7d",
   "source_git_dirty": false,
   "package_tree_hash": "82e42e596e31c36ebe39213f9a4bd14fea5410d063d251c05693472221192abc",
-  "generated_at": "2026-09-04T21:02:37Z",
+  "generated_at": "2026-09-04T21:08:20Z",
   "file_count": 379,
   "total_size_bytes": 31612696,
   "runtime_critical_files": {
@@ -1904,7 +1904,7 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "57aaa50c79ab5b00e1dc00a45bebb66d2fde5cc3a92cd5d40db4b13469e2de7e",
+      "sha256": "c905ced17f7a98d562bd25461a9fea8dc56d6f1a7e8e73bfb2993bda9d91447e",
       "size_bytes": 50948,
       "source_origin": "generated_manifest"
     }
