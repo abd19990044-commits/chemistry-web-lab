@@ -74,7 +74,10 @@ Thumbs.db
 
 # App Data & Local Cache
 .data/
+data/
 data_cache/
+pytest_tmp/
+*.xyz
 kaggle.json
 *.log
 scratch/

@@ -1,6 +1,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from services.auth_service import (
+    get_authenticated_owner,
+    require_authenticated_owner,
+    is_admin_user,
+    AuthenticationError,
+    AuthorizationError,
+)
+from services.execution_backend import (
+    ExecutionBackendType,
+    ExecutionError,
+    resolve_execution_target,
+)
+
 import concurrent.futures
 
 import base64
@@ -24,13 +37,14 @@ try:
 except ImportError:
     RAR_AVAILABLE = False
 
-from flask import (Flask, abort, after_this_request, jsonify, render_template, request,
+from flask import (Flask, abort, after_this_request, jsonify, render_template, request, Response,
                    send_file, send_from_directory, session)
 
 import chem_core as core
 import reaction_conditions
 import kaggle_runner
-from services import kaggle_service, orca_service, health_service
+from services import kaggle_service, orca_service, health_service, local_agent_service as _local_agent_service, local_orca_service as _local_orca_service
+_resolve_kaggle_credentials = kaggle_service.resolve_credentials
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _ORCA_ENGINE_SRC = os.path.join(BASE_DIR, "orca_engine", "src")
@@ -159,9 +173,21 @@ def _resolve_secret_key() -> str:
          lost on a Space rebuild, which only means users sign in again.
       3. A process-local random key, with a loud warning.
     """
-    from_env = os.environ.get("SECRET_KEY")
-    if from_env:
-        return from_env
+    from_env = os.environ.get("SECRET_KEY") or os.environ.get("FLASK_SECRET_KEY")
+    if from_env and from_env.strip():
+        return from_env.strip()
+
+    is_production = (
+        os.environ.get("CHEMISTRY_LAB_ENV") == "production"
+        or os.environ.get("ENVIRONMENT") == "production"
+        or os.environ.get("FLASK_ENV") == "production"
+        or bool(os.environ.get("SPACE_ID"))
+        or bool(os.environ.get("HF_SPACE_ID"))
+    )
+
+    if is_production and os.environ.get("CHEMISTRY_LAB_TEST_MODE") != "1":
+        log.error("Fatal startup error: SECRET_KEY is not configured in production environment.")
+        raise RuntimeError("Production deployment requires a configured SECRET_KEY environment variable.")
 
     try:
         from orca_orchestrator.config import CONFIG
@@ -193,6 +219,17 @@ def _resolve_secret_key() -> str:
 
 
 app.secret_key = _resolve_secret_key()
+
+_IS_PRODUCTION = (
+    os.environ.get("CHEMISTRY_LAB_ENV") == "production"
+    or os.environ.get("ENVIRONMENT") == "production"
+    or os.environ.get("FLASK_ENV") == "production"
+    or bool(os.environ.get("SPACE_ID"))
+    or bool(os.environ.get("HF_SPACE_ID"))
+)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = bool(_IS_PRODUCTION)
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 
@@ -242,6 +279,115 @@ def error_response(message: str, status: int = 400):
     return jsonify({"ok": False, "error": message}), status
 
 
+def _generate_csrf_token() -> str:
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_hex(32)
+        session["csrf_token"] = token
+    return str(token)
+
+
+@app.before_request
+def _csrf_protection():
+    # Always ensure session has a CSRF token for future requests
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+
+    # Safe HTTP methods are exempt from CSRF validation
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return None
+
+    # Testing mode exemption:
+    # When app.config["TESTING"] is True, CSRF is disabled UNLESS explicitly enabled with app.config["CSRF_ENABLED"] = True
+    if app.config.get("TESTING") and not app.config.get("CSRF_ENABLED", False):
+        return None
+
+    # Exempt machine-to-machine agent daemon endpoints (only genuinely headless machine daemon endpoints)
+    path = request.path
+    machine_daemon_endpoints = (
+        "/api/v1/local-agent/runtime/init",
+        "/api/v1/local-agent/runtime/finalize",
+        "/api/v1/local-agent/devices/register",
+        "/api/v1/local-agent/heartbeat",
+        "/api/v1/local-agent/jobs/poll",
+        "/api/v1/local-agent/runtime/end",
+    )
+    if (
+        path in machine_daemon_endpoints
+        or path.startswith("/api/v1/local-agent/ws")
+        or bool(re.match(r"^/api/v1/local-agent/jobs/[^/]+/(progress|complete|upload|status)$", path))
+    ):
+        return None
+
+    # Check for valid Bearer token for pure non-browser API callers
+    auth_header = request.headers.get("Authorization", "").strip()
+    if auth_header.startswith("Bearer "):
+        bearer_token = auth_header[7:].strip()
+        from services.auth_service import is_valid_bearer_token
+        if is_valid_bearer_token(bearer_token):
+            # Only genuine validated Bearer tokens exempt non-browser requests
+            # If there is no authenticated browser user session in the cookie, exempt it
+            if not session.get("user"):
+                return None
+
+    # Extract client token from headers, form, or JSON body
+    token = (
+        request.headers.get("X-CSRF-Token")
+        or request.headers.get("X-CSRFToken")
+        or (request.form.get("csrf_token") if request.form else None)
+    )
+    if not token and request.is_json:
+        body = request.get_json(silent=True)
+        if isinstance(body, dict):
+            token = body.get("csrf_token")
+
+    expected = session.get("csrf_token")
+    if not expected or not token or not secrets.compare_digest(str(expected), str(token)):
+        log.warning("CSRF validation rejected %s request to %s from %s", request.method, request.path, request.remote_addr)
+        return jsonify({
+            "ok": False,
+            "error": "CSRF validation failed: missing or invalid CSRF token.",
+            "code": "CSRF_FORBIDDEN"
+        }), 403
+
+    return None
+
+
+@app.after_request
+def _apply_security_headers_and_csrf(response):
+    # Set double-submit CSRF cookie & header for frontend clients
+    if "csrf_token" in session:
+        response.set_cookie(
+            "csrf_token",
+            session["csrf_token"],
+            samesite="Lax",
+            secure=bool(app.config.get("SESSION_COOKIE_SECURE", False)),
+            httponly=False,
+            path="/"
+        )
+        response.headers["X-CSRF-Token"] = session["csrf_token"]
+
+    # Strict Security Headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://accounts.google.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "img-src 'self' data: blob: https:; "
+        "connect-src 'self' https://pubchem.ncbi.nlm.nih.gov https://en.wikipedia.org https://accounts.google.com ws: wss:; "
+        "worker-src 'self' blob:; "
+        "child-src 'self' blob:; "
+        "frame-src 'self' https://accounts.google.com; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self';"
+    )
+    return response
+
+
 # ─────────────────────────────────────────────────────────────
 # Pages
 # ─────────────────────────────────────────────────────────────
@@ -249,6 +395,12 @@ def error_response(message: str, status: int = 400):
 def index():
     return _render_lab_index("home")
 
+
+
+@app.route("/reactions")
+def reactions_view():
+    """Primary section - Unified reaction drawing, workflow, execution & thermodynamics."""
+    return _render_lab_index("reactions")
 
 @app.route("/lab")
 def lab_view():
@@ -275,9 +427,12 @@ def _render_lab_index(initial_view: str):
     route, so deep links, refreshes and back/forward navigation all work
     without a client-side router; the template activates the requested view
     through the existing showView() switcher."""
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
     return render_template(
         "index.html",
         initial_view=initial_view,
+        csrf_token=session["csrf_token"],
         calc_types=core.CALC_TYPES,
         composite_methods=core.COMPOSITE_METHODS,
         dft_functionals=core.DFT_FUNCTIONALS,
@@ -304,6 +459,19 @@ def _too_large(_exc):
                   "your archive or calculation output file is under 500 MB."
                   % (app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024))),
     }), 413
+
+
+@app.errorhandler(AuthenticationError)
+def _handle_auth_error(exc):
+    """Translates AuthenticationError into structured 401 JSON response."""
+    return jsonify({
+        "ok": False,
+        "error": {
+            "code": "UNAUTHORIZED",
+            "message": str(exc),
+        }
+    }), getattr(exc, "status_code", 401)
+
 
 
 @app.route("/download/manual")
@@ -432,6 +600,7 @@ def api_auth_google():
             "picture": info.get("picture"),
         }
         session["user"] = user
+        session["csrf_token"] = secrets.token_hex(32)
         return jsonify({"ok": True, "user": user})
     except Exception as exc:  # noqa: BLE001
         log.warning("Google token verification failed: %s", exc)
@@ -446,6 +615,7 @@ def api_auth_me():
 @app.route("/api/auth/logout", methods=["POST"])
 def api_auth_logout():
     session.pop("user", None)
+    session["csrf_token"] = secrets.token_hex(32)
     return jsonify({"ok": True})
 
 
@@ -744,13 +914,24 @@ def api_orca_generate():
     result, status = orca_service.generate_inputs(data)
     return jsonify(result), status
 
+def _extract_request_identity() -> str | None:
+    """Extracts authoritative user identity exclusively from verified session or auth context.
+
+    CRITICAL SECURITY CONTRACT (SEC-02):
+    - Derives identity exclusively from verified session or trusted proxy context via get_authenticated_owner.
+    - NEVER trusts client-supplied X-Owner-Id, X-User-Id, query parameters, or form fields.
+    """
+    return get_authenticated_owner(session=session, request=request)
+
+
 @app.route("/api/kaggle/login", methods=["POST"])
 def api_kaggle_login():
     """Credential verification and job listing with optional encrypted persistence."""
+    owner = _extract_request_identity()
     data = request.get_json(force=True, silent=True) or {}
-    kaggle_username = (data.get("kaggle_username") or "").strip()
-    kaggle_key = (data.get("kaggle_key") or "").strip()
-    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key)
+    kaggle_username = (data.get("kaggle_username") or data.get("username") or request.form.get("kaggle_username") or request.form.get("username") or "").strip()
+    kaggle_key = (data.get("kaggle_key") or data.get("key") or request.form.get("kaggle_key") or request.form.get("key") or "").strip()
+    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key, owner=owner)
     if not kaggle_username or not kaggle_key:
         return error_response("Please enter your Kaggle username and API key/token.")
     try:
@@ -762,28 +943,32 @@ def api_kaggle_login():
             creds = parse_credentials(kaggle_username, kaggle_key)
             service = get_service()
             service.authenticate(creds.username, creds.key or creds.api_token)
-            # Persist encrypted credential if master key configured
+            # Persist encrypted credential bound to authoritative owner if configured
+            target_owner = owner or creds.username
             try:
-                get_vault_manager().save_credentials(creds.username, creds)
+                get_vault_manager().save_credentials(target_owner, creds)
             except Exception as save_err:
                 log.debug("Auto-save to vault skipped: %s", save_err)
-            return jsonify({"ok": True, "username": creds.username, "jobs": [_legacy_job(j) for j in service.list_jobs(creds)], "owner": creds.username})
+            return jsonify({"ok": True, "username": creds.username, "jobs": [_legacy_job(j) for j in service.list_jobs(creds)], "owner": target_owner})
         auth = kaggle_runner.verify_kaggle_credentials(kaggle_username, kaggle_key)
         jobs = kaggle_runner.list_jobs(kaggle_username, kaggle_key)
-        return jsonify({"ok": True, "username": auth["username"], "jobs": jobs})
+        return jsonify({"ok": True, "username": auth["username"], "jobs": jobs, "owner": owner or auth["username"]})
     except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
         return error_response(str(exc), 503)
     except Exception as exc:
-        return error_response(f"Could not sign in to Kaggle: {str(exc).strip() or 'credential verification failed.'}", 401)
+        from orca_orchestrator.logging_ext import redact
+        safe_msg = redact(str(exc).strip() or "credential verification failed.")
+        return error_response(f"Could not sign in to Kaggle: {safe_msg}", 401)
 
 
 @app.route("/api/kaggle/sync", methods=["POST"])
 def api_kaggle_sync():
     """Synchronize jobs independently from authentication."""
+    owner = _extract_request_identity()
     data = request.get_json(force=True, silent=True) or {}
-    kaggle_username = (data.get("kaggle_username") or "").strip()
-    kaggle_key = (data.get("kaggle_key") or "").strip()
-    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key)
+    kaggle_username = (data.get("kaggle_username") or data.get("username") or request.form.get("kaggle_username") or request.form.get("username") or "").strip()
+    kaggle_key = (data.get("kaggle_key") or data.get("key") or request.form.get("kaggle_key") or request.form.get("key") or "").strip()
+    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key, owner=owner)
     if not kaggle_username or not kaggle_key:
         return error_response("Missing Kaggle username or API key/token.")
     try:
@@ -794,11 +979,12 @@ def api_kaggle_sync():
             from orca_orchestrator.credential_vault import get_vault_manager
             creds = parse_credentials(kaggle_username, kaggle_key)
             service = get_service()
+            target_owner = owner or creds.username
             try:
-                get_vault_manager().save_credentials(creds.username, creds)
+                get_vault_manager().save_credentials(target_owner, creds)
             except Exception:
                 pass
-            return jsonify({"ok": True, "jobs": [_legacy_job(j) for j in service.list_jobs(creds)], "owner": creds.username, "username": creds.username})
+            return jsonify({"ok": True, "jobs": [_legacy_job(j) for j in service.list_jobs(creds)], "owner": target_owner, "username": creds.username})
         return jsonify({"ok": True, "jobs": kaggle_runner.list_jobs(kaggle_username, kaggle_key)})
     except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
         return error_response(str(exc), 503)
@@ -815,6 +1001,7 @@ def api_kaggle_credentials():
     from orca_orchestrator.credential_vault import (
         CredentialVerificationError,
         get_vault_manager,
+        mask_token,
     )
     from orca_orchestrator.credentials import parse as parse_credentials
 
@@ -825,30 +1012,74 @@ def api_kaggle_credentials():
         if not owner:
             return error_response("Authentication required to view credential status.", 401)
         meta = vault_mgr.get_metadata(owner)
-        return jsonify({"ok": True, "credential": meta.to_dict()})
+        creds = vault_mgr.load_credentials(owner)
+        if creds and creds.is_valid:
+            token_masked = mask_token(creds.key or creds.api_token)
+            return jsonify({
+                "ok": True,
+                "configured": True,
+                "username": creds.username,
+                "token_masked": token_masked,
+                "status": meta.status if (meta and meta.exists) else "ACTIVE",
+                "last_verified_at": meta.last_verified_at if (meta and meta.exists) else None,
+                "credential": meta.to_dict() if meta else {},
+            })
+        elif meta and meta.exists:
+            return jsonify({
+                "ok": True,
+                "configured": True,
+                "username": meta.kaggle_username,
+                "token_masked": "********",
+                "status": meta.status,
+                "last_verified_at": meta.last_verified_at,
+                "credential": meta.to_dict(),
+            })
+        else:
+            return jsonify({
+                "ok": True,
+                "configured": False,
+                "username": "",
+                "token_masked": "",
+                "status": "NOT_CONFIGURED",
+                "last_verified_at": None,
+                "credential": {"exists": False, "owner": owner},
+            })
 
     if request.method == "POST":
+        if not owner:
+            return error_response("Authentication required to save credentials.", 401)
+
+        test_mode = os.environ.get("CHEMISTRY_LAB_TEST_MODE") == "1" or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+        if not vault_mgr.is_configured and not test_mode:
+            return error_response("Master encryption key is not configured on this server.", 503)
+
         data = request.get_json(force=True, silent=True) or {}
-        username = (data.get("kaggle_username") or request.form.get("kaggle_username") or "").strip()
-        key = (data.get("kaggle_key") or request.form.get("kaggle_key") or "").strip()
+        username = (data.get("kaggle_username") or data.get("username") or request.form.get("kaggle_username") or request.form.get("username") or "").strip()
+        key = (data.get("kaggle_key") or data.get("key") or request.form.get("kaggle_key") or request.form.get("key") or "").strip()
         if not username or not key:
             return error_response("Both kaggle_username and API key/token are required.")
 
-        target_owner = owner or username.lower()
+        # Strict tenant isolation: target_owner is authoritative owner
+        target_owner = owner
         try:
             creds = parse_credentials(username, key)
             saved = vault_mgr.save_credentials(target_owner, creds, verify_with_kaggle=True)
+            token_masked = mask_token(creds.key or creds.api_token)
             return jsonify({
                 "ok": True,
                 "saved_to_vault": saved,
+                "configured": True,
                 "owner": target_owner,
+                "username": creds.username,
+                "token_masked": token_masked,
                 "message": "Credentials verified and saved securely in encrypted vault.",
             })
         except CredentialVerificationError as exc:
             return error_response(str(exc), 401)
         except Exception as exc:
             log.error("Failed to save credentials to vault: %s", exc)
-            return error_response(f"Failed to persist credentials: {exc}", 500)
+            from orca_orchestrator.logging_ext import redact
+            return error_response(f"Failed to persist credentials: {redact(str(exc))}", 500)
 
     if request.method == "DELETE":
         if not owner:
@@ -859,24 +1090,45 @@ def api_kaggle_credentials():
     return error_response("Method not allowed", 405)
 
 
-def _extract_request_identity() -> str | None:
-    """Extracts authenticated user identity from session, headers, or parameters."""
-    user = session.get("user")
-    if user and isinstance(user, dict):
-        identity = user.get("sub") or user.get("email") or user.get("name")
-        if identity:
-            return str(identity).strip()
+@app.route("/api/kaggle/test", methods=["POST"])
+def api_kaggle_test():
+    """Validates Kaggle credentials connectivity using vault credentials or ephemeral token."""
+    data = request.get_json(force=True, silent=True) or {}
+    owner = _extract_request_identity()
+    username = (data.get("kaggle_username") or data.get("username") or request.form.get("kaggle_username") or request.form.get("username") or "").strip()
+    key = (data.get("kaggle_key") or data.get("key") or request.form.get("kaggle_key") or request.form.get("key") or "").strip()
 
-    for h in ("X-Kaggle-Username", "X-Owner-Id", "X-User-Id"):
-        val = request.headers.get(h)
-        if val and val.strip():
-            return val.strip()
+    # If key is omitted, load from encrypted vault under authoritative owner
+    if not key and owner and ORCHESTRATOR_AVAILABLE:
+        from orca_orchestrator.credential_vault import get_vault_manager
+        stored = get_vault_manager().load_credentials(owner)
+        if stored and stored.is_valid:
+            username = username or stored.username
+            key = stored.key or stored.api_token or ""
 
-    form_val = request.form.get("kaggle_username") or request.form.get("owner_id") or request.args.get("owner_id")
-    if form_val and form_val.strip():
-        return form_val.strip()
+    if not username or not key:
+        return error_response("Missing Kaggle username or API key/token.", 400)
 
-    return None
+    username, key = kaggle_runner.clean_kaggle_credentials(username, key)
+    try:
+        auth = kaggle_runner.verify_kaggle_credentials(username, key)
+        return jsonify({
+            "ok": True,
+            "validated": True,
+            "username": auth.get("username", username),
+            "message": "Kaggle credentials verified successfully.",
+        })
+    except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
+        return error_response(str(exc), 503)
+    except Exception as exc:
+        from orca_orchestrator.logging_ext import redact
+        err_msg = redact(str(exc).strip() or "Credential verification failed.")
+        return jsonify({
+            "ok": False,
+            "error": "INVALID_KAGGLE_CREDENTIALS",
+            "message": f"Kaggle connection test failed: {err_msg}",
+        }), 401
+
 
 
 @app.route("/api/kaggle/submit", methods=["POST"])
@@ -887,9 +1139,10 @@ def api_kaggle_submit():
         log.info("Duplicate submit blocked by Idempotency-Key: %s", idem_key)
         return jsonify(cached)
 
+    owner = _extract_request_identity()
     kaggle_username = (request.form.get("kaggle_username") or "").strip()
     kaggle_key = (request.form.get("kaggle_key") or "").strip()
-    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key)
+    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key, owner=owner)
     dataset_sources_raw = (request.form.get("dataset_sources") or "").strip()
     orca_link = (request.form.get("orca_link") or "").strip()
     input_filename = (request.form.get("input_filename") or "molecule.inp").strip()
@@ -947,6 +1200,7 @@ def api_kaggle_submit():
         job_name=job_name,
         idem_key=idem_key,
         extra_files=files_payload,
+        owner=owner,
     )
     if idem_key and payload.get("ok") and status == 200:
         # Compatibility cache layer only: the authoritative replay store is
@@ -956,10 +1210,11 @@ def api_kaggle_submit():
 
 @app.route("/api/kaggle/status", methods=["POST"])
 def api_kaggle_status():
+    owner = _extract_request_identity()
     data = request.get_json(force=True, silent=True) or {}
     payload, status = kaggle_service.check_status(
         data.get("kaggle_username") or "", data.get("kaggle_key") or "",
-        data.get("job_id") or "")
+        data.get("job_id") or "", owner=owner)
     return jsonify(payload), status
 
 @app.route("/api/kaggle/download", methods=["GET", "POST"])
@@ -967,13 +1222,14 @@ def api_kaggle_download():
     """Fetches a completed job's output directly from Kaggle's own kernel
     storage and streams it to the browser. Supports both essential (fast lightweight)
     and full archive modes, with automatic repair of incomplete archives."""
+    owner = _extract_request_identity()
     if request.method == "GET":
         data = request.args.to_dict()
     else:
         data = request.get_json(force=True, silent=True) or {}
     kaggle_username = (data.get("kaggle_username") or "").strip()
     kaggle_key = (data.get("kaggle_key") or "").strip()
-    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key)
+    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key, owner=owner)
     job_id = (data.get("job_id") or "").strip()
     mode = (data.get("mode") or "essential").strip().lower()
 
@@ -1108,10 +1364,11 @@ def api_kaggle_delete():
     account. This is what makes deleting a job in "My Jobs" stick - without
     an actual delete on Kaggle's side, list_jobs() would simply find the
     same kernel again and re-add it the next time this account signs in."""
+    owner = _extract_request_identity()
     data = request.get_json(force=True, silent=True) or {}
     kaggle_username = (data.get("kaggle_username") or "").strip()
     kaggle_key = (data.get("kaggle_key") or "").strip()
-    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key)
+    kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key, owner=owner)
     job_id = (data.get("job_id") or "").strip()
 
     if not kaggle_username or not kaggle_key or not job_id:
@@ -1134,10 +1391,11 @@ def api_kaggle_delete():
 def api_kaggle_extract_opt_coords():
     """Delegates to the shared service (comment-safe Opt gate + convergence
     evidence + final-geometry validation live in ONE implementation)."""
+    owner = _extract_request_identity()
     data = request.get_json(force=True, silent=True) or {}
     payload, status = kaggle_service.extract_opt_coords(
         data.get("kaggle_username") or "", data.get("kaggle_key") or "",
-        data.get("job_id") or "")
+        data.get("job_id") or "", owner=owner)
     return jsonify(payload), status
 
 @app.route("/api/orca/engine/status", methods=["GET"])
@@ -1260,6 +1518,39 @@ _janitor_thread = threading.Thread(target=_janitor_sweep_expired_sessions, daemo
 _janitor_thread.start()
 
 
+def decode_text_bytes(raw_bytes: bytes) -> str:
+    """Safely decode text bytes into string supporting UTF-8, UTF-8-BOM, UTF-16-LE (PowerShell output), UTF-16-BE, CP1252, and Latin-1."""
+    if not raw_bytes:
+        return ""
+    if raw_bytes.startswith(b"\xef\xbb\xbf"):
+        return raw_bytes[3:].decode("utf-8", errors="replace")
+    if raw_bytes.startswith((b"\xff\xfe", b"\xfe\xff")):
+        try:
+            return raw_bytes.decode("utf-16", errors="replace")
+        except Exception:
+            pass
+    # Detect UTF-16 without BOM (common in Windows PowerShell redirect: `orca input.inp > output.out`)
+    if len(raw_bytes) >= 4 and (raw_bytes[1] == 0 or raw_bytes[0] == 0):
+        try:
+            decoded = raw_bytes.decode("utf-16", errors="replace")
+            if any(k in decoded.lower() for k in ("orca", "program", "version", "basis", "energy", "input")):
+                return decoded
+        except Exception:
+            pass
+    # Try UTF-8
+    try:
+        return raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    # Fallback to Western/Windows encodings
+    for enc in ("cp1252", "latin1", "iso-8859-1"):
+        try:
+            return raw_bytes.decode(enc)
+        except UnicodeDecodeError:
+            pass
+    return raw_bytes.decode("utf-8", errors="replace")
+
+
 def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, target_dir: str) -> list[dict]:
     """Extract ORCA output files (.out, .log, .property.txt, .xyz, .molden) from ZIP, RAR, or TAR archives.
     
@@ -1321,7 +1612,7 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
                             dest_path = _safe_write_member(item.filename, content_bytes)
                             if not dest_path:
                                 continue
-                            text = content_bytes.decode("utf-8", errors="replace")
+                            text = decode_text_bytes(content_bytes)
                             extracted_files.append({
                                 "filename": item.filename,
                                 "basename": os.path.basename(item.filename),
@@ -1356,7 +1647,7 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
                                 dest_path = _safe_write_member(member.name, content_bytes)
                                 if not dest_path:
                                     continue
-                                text = content_bytes.decode("utf-8", errors="replace")
+                                text = decode_text_bytes(content_bytes)
                                 extracted_files.append({
                                     "filename": member.name,
                                     "basename": os.path.basename(member.name),
@@ -1387,7 +1678,7 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
                                 dest_path = _safe_write_member(item.filename, content_bytes)
                                 if not dest_path:
                                     continue
-                                text = content_bytes.decode("utf-8", errors="replace")
+                                text = decode_text_bytes(content_bytes)
                                 extracted_files.append({
                                     "filename": item.filename,
                                     "basename": os.path.basename(item.filename),
@@ -1402,7 +1693,7 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
     # 4. Universal fallback: if single file was sent or raw text contains ORCA calculations
     if not extracted_files and raw_bytes and len(raw_bytes) <= MAX_ARCHIVE_TOTAL_SIZE:
         try:
-            text = raw_bytes.decode("utf-8", errors="replace")
+            text = decode_text_bytes(raw_bytes)
             if "ORCA" in text or "FINAL SINGLE POINT ENERGY" in text or "Program Version" in text:
                 extracted_files.append({
                     "filename": filename,
@@ -1501,7 +1792,15 @@ def api_orca_engine_parse():
                     "is_archive": True,
                     "archive_filename": f.filename,
                     "archive_entries": [
-                        {"filename": e["filename"], "basename": e["basename"], "molecule_name": e["molecule"]["name"], "jobs_count": e["jobs_count"]}
+                        {
+                            "filename": e["filename"],
+                            "basename": e["basename"],
+                            "molecule_name": e["molecule"]["name"],
+                            "jobs_count": e["jobs_count"],
+                            "raw_text": e["raw_text"],
+                            "molecule": e["molecule"],
+                            "latest_job": e["latest_job"],
+                        }
                         for e in archive_entries
                     ],
                     "selected_file": selected_entry["filename"],
@@ -1509,11 +1808,12 @@ def api_orca_engine_parse():
                     "name": selected_entry["molecule"]["name"],
                     "molecule": selected_entry["molecule"],
                     "jobs_count": selected_entry["jobs_count"],
+                    "jobs": selected_entry["molecule"].get("jobs", []),
                     "latest_job": selected_entry["latest_job"],
                     "cleanup_note": "Uploaded archive files will be automatically wiped from this server 30 minutes after your session ends.",
                 })
             else:
-                raw_text = raw_bytes.decode("utf-8", errors="replace")
+                raw_text = decode_text_bytes(raw_bytes)
     else:
         data = request.get_json(force=True, silent=True) or {}
         raw_text = (data.get("content") or "").strip()
@@ -1757,9 +2057,11 @@ ORCA_IMPORT_MAX_FILE_BYTES = 25 * 1024 * 1024
 from services.reaction_workflow_service import (  # noqa: E402
     ReactionStore, ReactionValidationError, add_stage, assemble_species_result,
     complete_stage_with_output, compute_and_store_thermodynamics, create_reaction,
-    set_stage_input,
+    set_stage_input, set_shared_workflow, apply_shared_workflow_to_species,
+    apply_shared_workflow_to_all, set_species_custom_workflow,
 )
 import services.thermo_report_service as _thermo_report_service  # noqa: E402
+import services.local_orca_service as _local_orca_service  # noqa: E402
 
 try:
     from orca_orchestrator.config import CONFIG as _RXN_ORCH_CONFIG
@@ -1774,11 +2076,27 @@ def _reaction_error(message, code=400):
     return jsonify({"ok": False, "error": {"code": "REACTION_ERROR", "message": message}}), code
 
 
-def _reaction_owner():
-    try:
-        return _extract_request_identity() or "anonymous"
-    except Exception:
-        return "anonymous"
+def _reaction_owner() -> str:
+    """Derives authoritative reaction tenant identity.
+
+    CRITICAL TENANT ISOLATION RULES (SEC-02):
+    1. Authenticated users: Identity derived strictly from verified session or context.
+    2. Client-supplied parameters (query, form, X-Owner-Id) are NEVER trusted for tenant identity.
+    3. Unauthenticated / Anonymous users: Assigned a cryptographically random, unique session identity
+       bound to their signed browser session (session['anon_id']). No shared global 'anonymous' tenant.
+    4. If CHEMISTRY_LAB_REQUIRE_AUTH == '1', unauthenticated requests are rejected with 401.
+    """
+    ident = _extract_request_identity()
+    if ident:
+        return ident
+
+    if os.environ.get("CHEMISTRY_LAB_REQUIRE_AUTH") == "1":
+        raise AuthenticationError("Authentication required for reaction operations.", status_code=401)
+
+    if "anon_id" not in session:
+        session["anon_id"] = f"anon_{secrets.token_urlsafe(16)}"
+    return session["anon_id"]
+
 
 
 @app.route("/api/v1/reactions", methods=["POST", "GET"])
@@ -1896,6 +2214,597 @@ def api_v1_thermo_report_download(report_id):
     response = Response(data, mimetype="application/pdf")
     response.headers["Content-Disposition"] = 'attachment; filename="thermodynamics_report.pdf"'
     return response
+
+
+# ------------------------- Shared Workflow Endpoints -------------------------
+@app.route("/api/v1/reactions/<reaction_id>/shared-workflow", methods=["GET", "POST"])
+def api_v1_reaction_shared_workflow(reaction_id):
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    if request.method == "GET":
+        return jsonify({"ok": True, "shared_workflow": reaction.get("shared_workflow")})
+    payload = request.get_json(silent=True) or {}
+    stages = payload.get("stages") or []
+    try:
+        shared_wf = set_shared_workflow(reaction, stages, _reaction_store)
+    except ReactionValidationError as exc:
+        return _reaction_error(str(exc))
+    return jsonify({"ok": True, "shared_workflow": shared_wf})
+
+
+@app.route("/api/v1/reactions/<reaction_id>/shared-workflow/apply", methods=["POST"])
+def api_v1_reaction_shared_workflow_apply(reaction_id):
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    payload = request.get_json(silent=True) or {}
+    species_id = payload.get("species_id")
+    overwrite_custom = bool(payload.get("overwrite_custom"))
+    try:
+        if species_id:
+            apply_shared_workflow_to_species(reaction, species_id, _reaction_store)
+        else:
+            apply_shared_workflow_to_all(reaction, _reaction_store, overwrite_custom=overwrite_custom)
+    except ReactionValidationError as exc:
+        return _reaction_error(str(exc))
+    return jsonify({"ok": True, "reaction": reaction})
+
+
+@app.route("/api/v1/reactions/<reaction_id>/species/<species_id>/custom-workflow", methods=["POST"])
+def api_v1_reaction_species_custom_workflow(reaction_id, species_id):
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    payload = request.get_json(silent=True) or {}
+    stages = payload.get("stages") or []
+    try:
+        species = set_species_custom_workflow(reaction, species_id, stages, _reaction_store)
+    except ReactionValidationError as exc:
+        return _reaction_error(str(exc))
+    return jsonify({"ok": True, "species": species})
+
+
+# ------------------------- Queue & Execution Control Endpoints -------------------------
+@app.route("/api/v1/reactions/queue", methods=["GET"])
+def api_v1_reactions_queue():
+    backend = request.args.get("backend")
+    summary = _reaction_store.get_queue_summary(backend=backend, owner=_reaction_owner())
+    kaggle_summary = _reaction_store.get_queue_summary(backend="kaggle", owner=_reaction_owner())
+    local_settings = _local_orca_service.get_local_orca_settings()
+    kaggle_enabled = bool(local_settings.get("kaggle_enabled", False))
+    return jsonify({
+        "ok": True,
+        "queue": summary,
+        "kaggle_enabled": kaggle_enabled,
+        "kaggle_active": kaggle_summary.get("active", 0),
+        "kaggle_queued": kaggle_summary.get("queued", 0),
+    })
+
+
+@app.route("/api/v1/reactions/<reaction_id>/pause", methods=["POST"])
+def api_v1_reaction_pause(reaction_id):
+    reaction = _reaction_store.pause_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    return jsonify({"ok": True, "reaction": reaction})
+
+
+@app.route("/api/v1/reactions/<reaction_id>/resume", methods=["POST"])
+def api_v1_reaction_resume(reaction_id):
+    reaction = _reaction_store.resume_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    return jsonify({"ok": True, "reaction": reaction})
+
+
+@app.route("/api/v1/reactions/<reaction_id>/cancel", methods=["POST"])
+def api_v1_reaction_cancel(reaction_id):
+    reaction = _reaction_store.cancel_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    return jsonify({"ok": True, "reaction": reaction})
+
+
+@app.route("/api/v1/reactions/unified-setup", methods=["POST"])
+def api_v1_reaction_unified_setup():
+    """Takes drawn/specified reaction equation + unified calculation settings,
+    resolves 3D coordinates for all species, constructs unified ORCA inputs,
+    and initializes the execution workflow."""
+    payload = request.get_json(silent=True) or {}
+    equation = (payload.get("equation") or "").strip()
+    if not equation:
+        return _reaction_error("Please provide a chemical reaction equation.")
+
+    owner = _reaction_owner()
+    try:
+        from services.reaction_workflow_service import create_reaction, generate_unified_reaction_inputs
+        reaction = create_reaction(owner=owner, equation=equation, store=_reaction_store, display_name=payload.get("display_name") or "")
+
+        # Apply unified configuration
+        workflow_config = payload.get("workflow_config") or {}
+        if not workflow_config:
+            solv_val = payload.get("solvation") or payload.get("solvent") or "none"
+            solv_model = "cpcm" if (solv_val and solv_val.lower() not in ("none", "gas phase", "gas_phase", "gas")) else "none"
+            workflow_config = {
+                "method": payload.get("method") or payload.get("theory") or "B3LYP",
+                "basis": payload.get("basis_set") or payload.get("basis") or "def2-SVP",
+                "disp": payload.get("dispersion") or payload.get("disp") or "D3BJ",
+                "solv_model": payload.get("solv_model") or solv_model,
+                "solvent": solv_val if solv_model != "none" else "Water",
+                "cores": payload.get("nprocs") or payload.get("cores") or 4,
+                "ram": payload.get("maxcore") or payload.get("ram") or 2000,
+                "backend": payload.get("backend") or "local",
+                "target_device": payload.get("target_device"),
+                "stages": payload.get("stages"),
+            }
+        reaction = generate_unified_reaction_inputs(reaction=reaction, workflow_config=workflow_config, store=_reaction_store)
+        return jsonify({"ok": True, "reaction": reaction, "species": reaction.get("species", [])})
+    except Exception as exc:
+        log.error("api_v1_reaction_unified_setup failed: %s", traceback.format_exc())
+        return _reaction_error(str(exc), 500)
+
+
+@app.route("/api/v1/reactions/<reaction_id>/start-execution", methods=["POST"])
+def api_v1_reaction_start_execution():
+    """Starts/enqueues all ready stages for the reaction across target backend/workers."""
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+
+    payload = request.get_json(silent=True) or {}
+    max_concurrency = int(payload.get("max_concurrency", 1))
+
+    reaction["state"] = "RUNNING"
+    dispatched_count = 0
+
+    for sp in reaction.get("species", []):
+        for st in sp.get("stages", []):
+            if st.get("state") in ("READY", "QUEUED"):
+                st_backend = st.get("backend") or "local"
+                target_agent = st.get("target_device")
+                if st_backend in ("local_agent", "hpc") and target_agent:
+                    try:
+                        j_name = f"{sp.get('display_name', 'sp')}_{st.get('kind', 'job')}"
+                        enq = _local_agent_service.enqueue_agent_job(
+                            agent_session_id=target_agent,
+                            owner_id=_reaction_owner(),
+                            input_text=st.get("input_text", ""),
+                            job_name=j_name,
+                        )
+                        st["agent_job_id"] = enq["job_id"]
+                        st["state"] = "RUNNING" if dispatched_count < max_concurrency else "QUEUED"
+                        if st["state"] == "RUNNING":
+                            dispatched_count += 1
+                    except Exception as e:
+                        log.warning("Could not enqueue stage for companion agent: %s", e)
+                elif st_backend == "server_local":
+                    st["state"] = "RUNNING" if dispatched_count < max_concurrency else "QUEUED"
+                    if st["state"] == "RUNNING":
+                        dispatched_count += 1
+                else:
+                    st["state"] = "QUEUED"
+
+    _reaction_store.save_reaction(reaction)
+    return jsonify({"ok": True, "reaction": reaction, "dispatched_count": dispatched_count})
+
+
+@app.route("/api/v1/reactions/<reaction_id>/thermodynamics/image", methods=["GET"])
+def api_v1_reaction_thermo_image(reaction_id):
+    """Generates and serves a publication-ready PNG diagram of reaction thermodynamics."""
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    thermo = reaction.get("thermodynamics")
+    if not thermo:
+        try:
+            thermo = compute_and_store_thermodynamics(reaction, _reaction_store)
+        except Exception:
+            return _reaction_error("Thermodynamics not computed yet.", 404)
+
+    try:
+        from services.reaction_diagram_service import generate_reaction_thermo_diagram
+        rxn_png = None
+        try:
+            equation = reaction.get("equation", "")
+            if "->" in equation:
+                r_part, p_part = equation.split("->", 1)
+                r_terms = core.split_compound_terms(r_part)
+                p_terms = core.split_compound_terms(p_part)
+                resolved = {}
+                for t in r_terms + p_terms:
+                    s, _ = core.resolve_species(t.name)
+                    if s:
+                        resolved[t.name] = s
+                as_pairs = lambda terms: [(t.coefficient, resolved[t.name]) for t in terms if t.name in resolved]
+                rxn_png = core.render_reaction_png(as_pairs(r_terms), as_pairs(p_terms))
+        except Exception:
+            rxn_png = None
+
+        method = reaction.get("species", [{}])[0].get("final_result", {}).get("method") or "DFT"
+        basis = reaction.get("species", [{}])[0].get("final_result", {}).get("basis_set") or ""
+        level_str = f"{method}/{basis}" if basis else method
+
+        img_bytes = generate_reaction_thermo_diagram(
+            reaction=reaction,
+            thermo=thermo,
+            rxn_image_bytes=rxn_png,
+            level_of_theory=level_str,
+        )
+        response = Response(img_bytes, mimetype="image/png")
+        safe_eq = re.sub(r'[^A-Za-z0-9_\-]', '_', reaction.get("display_name") or "reaction")
+        response.headers["Content-Disposition"] = f'inline; filename="thermodynamics_{safe_eq}.png"'
+        return response
+    except Exception as exc:
+        log.error("Failed to generate thermo diagram image: %s", traceback.format_exc())
+        return _reaction_error(f"Image generation failed: {exc}", 500)
+
+
+@app.route("/api/v1/reactions/<reaction_id>/download-all-outputs", methods=["GET"])
+def api_v1_reaction_download_all_outputs(reaction_id):
+    """Packages all species inputs, outputs, and geometries into a single downloadable ZIP archive."""
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+
+    try:
+        from services.reaction_workflow_service import build_reaction_outputs_zip
+        zip_bytes = build_reaction_outputs_zip(reaction, _reaction_store)
+        safe_eq = re.sub(r'[^A-Za-z0-9_\-]', '_', reaction.get("display_name") or "reaction")
+        filename = f"reaction_outputs_{safe_eq}_{reaction_id[:8]}.zip"
+        return send_file(
+            io.BytesIO(zip_bytes),
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=filename,
+        )
+    except Exception as exc:
+        log.error("Failed to package reaction outputs ZIP: %s", traceback.format_exc())
+        return _reaction_error(f"Failed to build archive: {exc}", 500)
+
+
+# ------------------------- Local ORCA Settings & Execution (Admin / Secured) -------------------------
+@app.route("/api/v1/local-orca/settings", methods=["GET", "POST"])
+def api_v1_local_orca_settings():
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required."}}), 401
+
+    if request.method == "GET":
+        settings = _local_orca_service.get_local_orca_settings()
+        validation = _local_orca_service.validate_local_orca_config(settings)
+        # Redact local paths for non-admin users
+        if not is_admin_user(owner):
+            settings = {k: ("***" if "directory" in k or "executable" in k else v) for k, v in settings.items()}
+        return jsonify({"ok": True, "settings": settings, "validation": validation})
+
+    if not is_admin_user(owner):
+        return jsonify({
+            "ok": False,
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "Modifying server-host ORCA configuration is restricted to administrators. Please configure your ORCA settings within your Local Companion Agent.",
+            }
+        }), 403
+
+    payload = request.get_json(silent=True) or {}
+    updated = _local_orca_service.save_local_orca_settings(payload)
+    validation = _local_orca_service.validate_local_orca_config(updated)
+    return jsonify({"ok": True, "settings": updated, "validation": validation})
+
+
+@app.route("/api/v1/local-orca/test-config", methods=["POST"])
+def api_v1_local_orca_test_config():
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required."}}), 401
+    if not is_admin_user(owner):
+        return jsonify({"ok": False, "error": {"code": "FORBIDDEN", "message": "Server-host configuration test is restricted to administrators."}}), 403
+
+    payload = request.get_json(silent=True) or {}
+    cfg = dict(_local_orca_service.get_local_orca_settings())
+    if payload:
+        cfg.update(payload)
+    validation = _local_orca_service.validate_local_orca_config(cfg)
+    return jsonify({"ok": True, "validation": validation})
+
+
+@app.route("/api/v1/local-orca/candidates", methods=["GET", "POST"])
+def api_v1_local_orca_candidates():
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required."}}), 401
+    if not is_admin_user(owner):
+        return jsonify({"ok": True, "candidates": []})
+    candidates = _local_orca_service.detect_orca_candidates()
+    return jsonify({"ok": True, "candidates": candidates})
+
+
+@app.route("/api/v1/local-orca/execute", methods=["POST"])
+def api_v1_local_orca_execute():
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required for ORCA execution."}}), 401
+    if not is_admin_user(owner):
+        return jsonify({
+            "ok": False,
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "Server-host ORCA execution is restricted to trusted administrators. Please execute using your connected Local Companion Agent.",
+            }
+        }), 403
+
+    payload = request.get_json(silent=True) or {}
+    job_id = payload.get("job_id") or uuid.uuid4().hex[:12]
+    input_text = payload.get("input_text") or ""
+    if not input_text.strip():
+        return _reaction_error("No input_text provided.", 400)
+    res = _local_orca_service.execute_local_orca_job(
+        job_id=job_id,
+        input_text=input_text,
+        attempt_id=payload.get("attempt_id"),
+        stage_kind=payload.get("stage_kind"),
+        settings=None,  # NEVER allow browser to supply executable settings to server
+        timeout_seconds=payload.get("timeout_seconds"),
+    )
+    return jsonify(res), (200 if res.get("ok") else 400)
+
+
+@app.route("/api/v1/local-orca/cancel", methods=["POST"])
+def api_v1_local_orca_cancel():
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required."}}), 401
+    payload = request.get_json(silent=True) or {}
+    job_id = payload.get("job_id") or ""
+    attempt_id = payload.get("attempt_id")
+    cancelled = _local_orca_service.cancel_local_orca_job(job_id, attempt_id)
+    return jsonify({"ok": True, "cancelled": cancelled})
+
+
+# ------------------------- Unified Calculation Submission & Queue (ExecutionBackend) -------------------------
+@app.route("/api/v1/jobs/submit", methods=["POST"])
+def api_v1_jobs_submit():
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required to submit calculations."}}), 401
+
+    payload = request.get_json(silent=True) or request.form.to_dict() or {}
+    backend_kind = payload.get("backend") or payload.get("execution_backend") or "local_agent"
+    agent_session_id = payload.get("agent_session_id") or payload.get("target_device")
+    resources = payload.get("resources") or {}
+    input_text = payload.get("input_content") or payload.get("input_text") or ""
+    job_name = payload.get("job_name") or "calculation"
+
+    if not input_text.strip():
+        return jsonify({"ok": False, "error": {"code": "EMPTY_INPUT", "message": "No calculation input provided."}}), 400
+
+    try:
+        target = resolve_execution_target(
+            backend_kind=backend_kind,
+            agent_session_id=agent_session_id,
+            owner_id=owner,
+            resources=resources,
+        )
+    except (ExecutionError, AuthorizationError) as exc:
+        return jsonify({"ok": False, "error": {"code": getattr(exc, "code", "EXECUTION_ERROR"), "message": exc.message}}), getattr(exc, "status_code", 400)
+
+    # Dispatch according to target backend
+    if target["backend"] in (ExecutionBackendType.LOCAL_AGENT.value, ExecutionBackendType.HPC.value):
+        injected_input = _local_agent_service.inject_orca_resources(input_text, target["resources"])
+        enq = _local_agent_service.enqueue_agent_job(
+            agent_session_id=target["agent_session_id"],
+            owner_id=owner,
+            input_text=injected_input,
+            job_name=job_name,
+        )
+        return jsonify({
+            "ok": True,
+            "job_id": enq["job_id"],
+            "status": "QUEUED",
+            "backend": target["backend"],
+            "device_name": target["device_name"],
+            "agent_session_id": target["agent_session_id"],
+            "message": f"Calculation enqueued for {target['device_name']}.",
+        })
+
+    if target["backend"] == ExecutionBackendType.KAGGLE.value:
+        # Route to Kaggle submit logic
+        return api_kaggle_submit()
+
+    if target["backend"] == ExecutionBackendType.SERVER_LOCAL.value:
+        job_id = uuid.uuid4().hex[:12]
+        res = _local_orca_service.execute_local_orca_job(job_id=job_id, input_text=input_text)
+        return jsonify(res), (200 if res.get("ok") else 400)
+
+    return jsonify({"ok": False, "error": "Unknown execution backend."}), 400
+
+
+# ------------------------- Local Agent Package & Pairing Endpoints -------------------------
+@app.route("/api/v1/local-agent/packages", methods=["GET"])
+def api_v1_local_agent_packages():
+    try:
+        from tools.build_local_agent_packages import get_package_manifests
+        pkgs = get_package_manifests()
+        return jsonify({"ok": True, "packages": pkgs})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.route("/api/v1/local-agent/packages/<package_id>", methods=["GET"])
+def api_v1_local_agent_download_package(package_id):
+    from tools.build_local_agent_packages import get_package_file_path
+    from flask import send_file
+    p = get_package_file_path(package_id)
+    if not p or not os.path.isfile(p):
+        return jsonify({"ok": False, "error": f"Package {package_id} not found."}), 404
+    return send_file(p, mimetype="application/zip", as_attachment=True, download_name=os.path.basename(p))
+
+
+@app.route("/api/v1/local-agent/runtime/init", methods=["POST"])
+def api_v1_local_agent_runtime_init():
+    req = request.get_json(silent=True) or {}
+    res = _local_agent_service.init_runtime_session(
+        installation_id=req.get("installation_id"),
+        agent_session_id=req.get("agent_session_id"),
+        token_verifiers=req.get("token_verifiers") or [],
+        device_name=req.get("device_name"),
+        platform=req.get("platform"),
+        backend_kind=req.get("backend_kind"),
+        scheduler_type=req.get("scheduler_type"),
+        agent_version=req.get("agent_version"),
+        protocol_version=req.get("protocol_version"),
+        capabilities=req.get("capabilities"),
+    )
+    return jsonify(res), (200 if res.get("ok") else 400)
+
+
+@app.route("/api/v1/local-agent/runtime/claim", methods=["POST"])
+def api_v1_local_agent_runtime_claim():
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required to claim runtime device."}}), 401
+    req = request.get_json(silent=True) or {}
+    res = _local_agent_service.claim_runtime_token(
+        connection_api=req.get("connection_api"),
+        owner_id=owner,
+        custom_device_name=req.get("custom_device_name"),
+    )
+    return jsonify(res), (200 if res.get("ok") else 400)
+
+
+@app.route("/api/v1/local-agent/runtime/finalize", methods=["POST"])
+def api_v1_local_agent_runtime_finalize():
+    req = request.get_json(silent=True) or {}
+    res = _local_agent_service.finalize_agent_runtime(
+        agent_session_id=req.get("agent_session_id"),
+        connection_api=req.get("connection_api"),
+    )
+    return jsonify(res), (200 if res.get("ok") else 400)
+
+
+@app.route("/api/v1/local-agent/devices", methods=["GET"])
+@app.route("/api/v1/local-agent/agents", methods=["GET"])
+def api_v1_local_agent_devices():
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required to list runtime devices."}}), 401
+    devs = _local_agent_service.list_user_runtime_devices(owner_id=owner)
+    return jsonify({"ok": True, "devices": devs, "count": len(devs)})
+
+
+@app.route("/api/v1/local-agent/jobs/poll", methods=["GET"])
+def api_v1_local_agent_jobs_poll():
+    agent_session_id = request.headers.get("X-Agent-Session-Id") or request.args.get("agent_session_id") or ""
+    runtime_secret = request.headers.get("X-Runtime-Secret") or request.args.get("runtime_secret") or ""
+    res = _local_agent_service.poll_next_agent_job(
+        agent_session_id=agent_session_id,
+        runtime_session_secret=runtime_secret,
+    )
+    status_code = 200 if res.get("ok") else (401 if "UNAUTHORIZED" in str(res.get("error", "")) else 400)
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/local-agent/jobs/<job_id>/progress", methods=["POST"])
+def api_v1_local_agent_jobs_progress(job_id):
+    agent_session_id = request.headers.get("X-Agent-Session-Id") or request.args.get("agent_session_id") or ""
+    runtime_secret = request.headers.get("X-Runtime-Secret") or request.args.get("runtime_secret") or ""
+    req = request.get_json(silent=True) or {}
+    stdout_chunk = req.get("stdout_chunk") or ""
+    res = _local_agent_service.update_agent_job_progress(
+        job_id=job_id,
+        agent_session_id=agent_session_id,
+        runtime_session_secret=runtime_secret,
+        stdout_chunk=stdout_chunk,
+    )
+    status_code = 200 if res.get("ok") else (401 if "UNAUTHORIZED" in str(res.get("error", "")) else 400)
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/local-agent/jobs/<job_id>/complete", methods=["POST"])
+def api_v1_local_agent_jobs_complete(job_id):
+    agent_session_id = request.headers.get("X-Agent-Session-Id") or request.args.get("agent_session_id") or ""
+    runtime_secret = request.headers.get("X-Runtime-Secret") or request.args.get("runtime_secret") or ""
+    req = request.get_json(silent=True) or {}
+    res = _local_agent_service.complete_agent_job(
+        job_id=job_id,
+        agent_session_id=agent_session_id,
+        runtime_session_secret=runtime_secret,
+        exit_code=int(req.get("exit_code", 0)),
+        stdout_tail=req.get("stdout_tail", ""),
+        parsed_results=req.get("parsed_results"),
+        error_message=req.get("error_message"),
+        output_text=req.get("output_text"),
+        xyz_structure=req.get("xyz_structure"),
+    )
+    status_code = 200 if res.get("ok") else (401 if "UNAUTHORIZED" in str(res.get("error", "")) else 400)
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/local-agent/jobs/<job_id>", methods=["GET"])
+def api_v1_local_agent_job_status(job_id):
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required."}}), 401
+    res = _local_agent_service.get_agent_job_status(job_id=job_id, owner_id=owner)
+    return jsonify(res), (200 if res.get("ok") else 404)
+
+
+@app.route("/api/v1/local-agent/jobs/<job_id>/download", methods=["GET"])
+def api_v1_local_agent_job_download(job_id):
+    """Downloads a complete ZIP package of input, output, and geometry for an agent job."""
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required to download job artifacts."}}), 401
+    try:
+        zip_bytes, filename = _local_agent_service.build_job_artifacts_zip(job_id=job_id, owner_id=owner)
+        return send_file(
+            io.BytesIO(zip_bytes),
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=filename,
+        )
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+
+
+@app.route("/api/v1/local-agent/jobs/<job_id>/out", methods=["GET"])
+def api_v1_local_agent_job_out(job_id):
+    """Downloads or views the raw ORCA .out log from the agent execution."""
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required to view output log."}}), 401
+    art = _local_agent_service.get_job_artifacts(job_id=job_id, owner_id=owner)
+    if not art.get("ok"):
+        return jsonify(art), 404
+    out_text = art.get("output_text") or art.get("stdout_tail") or "No output logged."
+    j_name = art.get("job_name") or "calculation"
+    return Response(
+        out_text,
+        mimetype="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{j_name}_{job_id[:8]}.out"'}
+    )
+
+
+@app.route("/api/v1/local-agent/jobs/<job_id>/xyz", methods=["GET"])
+def api_v1_local_agent_job_xyz(job_id):
+    """Downloads or views the final 3D geometry .xyz file from the agent execution."""
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required to view 3D structure."}}), 401
+    art = _local_agent_service.get_job_artifacts(job_id=job_id, owner_id=owner)
+    if not art.get("ok"):
+        return jsonify(art), 404
+    xyz_text = art.get("xyz_structure") or ""
+    if not xyz_text:
+        return jsonify({"ok": False, "error": "No 3D geometry produced."}), 404
+    j_name = art.get("job_name") or "structure"
+    return Response(
+        xyz_text,
+        mimetype="chemical/x-xyz",
+        headers={"Content-Disposition": f'attachment; filename="{j_name}_{job_id[:8]}.xyz"'}
+    )
+
 
 
 @app.route("/api/orca/engine/import-orca-output", methods=["POST"])
@@ -2236,13 +3145,35 @@ def api_orca_engine_thermochemistry():
     if archive_file and archive_file.filename:
         raw_b = archive_file.read()
         extracted = extract_calculation_files_from_archive(raw_b, archive_file.filename, session_dir)
+        # Fallback if a single .out/.log file was uploaded to the archive parameter
+        if not extracted and raw_b:
+            try:
+                text = decode_text_bytes(raw_b)
+                single_jobs = OrcaParser(io.StringIO(text), source_name=archive_file.filename).parse()
+                if single_jobs:
+                    extracted = [{
+                        "filename": archive_file.filename,
+                        "basename": os.path.basename(archive_file.filename),
+                        "content": text
+                    }]
+            except Exception:
+                pass
+
         for item in extracted:
             clean_name = core.safe_filename(os.path.splitext(item["basename"])[0])
             try:
                 jobs = OrcaParser(io.StringIO(item["content"]), source_name=clean_name).parse()
                 if jobs:
-                    parsed_molecules[clean_name] = MoleculeData(name=clean_name, jobs=jobs, sources=[item["filename"]])
-                    parsed_molecules[item["basename"]] = parsed_molecules[clean_name]
+                    mol_obj = MoleculeData(name=clean_name, jobs=jobs, sources=[item["filename"]])
+                    parsed_molecules[clean_name] = mol_obj
+                    parsed_molecules[clean_name.lower()] = mol_obj
+                    parsed_molecules[item["basename"]] = mol_obj
+                    parsed_molecules[item["basename"].lower()] = mol_obj
+                    for j in jobs:
+                        form = getattr(j, "chemical_formula", None) or getattr(j, "formula", None)
+                        if form:
+                            parsed_molecules[form] = mol_obj
+                            parsed_molecules[form.lower()] = mol_obj
             except Exception:
                 pass
 
@@ -2276,6 +3207,12 @@ def api_orca_engine_thermochemistry():
                     parsed_molecules[sp_name] = mol_obj
                     parsed_molecules[clean_name] = mol_obj
                     parsed_molecules[sp_name.lower()] = mol_obj
+                    parsed_molecules[clean_name.lower()] = mol_obj
+                    for j in jobs:
+                        form = getattr(j, "chemical_formula", None) or getattr(j, "formula", None)
+                        if form:
+                            parsed_molecules[form] = mol_obj
+                            parsed_molecules[form.lower()] = mol_obj
             if sp_name:
                 r_terms.append(ReactionTerm(coefficient=coeff, molecule_name=sp_name, raw_text=f"{coeff} {sp_name}"))
 
@@ -2295,6 +3232,12 @@ def api_orca_engine_thermochemistry():
                     parsed_molecules[sp_name] = mol_obj
                     parsed_molecules[clean_name] = mol_obj
                     parsed_molecules[sp_name.lower()] = mol_obj
+                    parsed_molecules[clean_name.lower()] = mol_obj
+                    for j in jobs:
+                        form = getattr(j, "chemical_formula", None) or getattr(j, "formula", None)
+                        if form:
+                            parsed_molecules[form] = mol_obj
+                            parsed_molecules[form.lower()] = mol_obj
             if sp_name:
                 p_terms.append(ReactionTerm(coefficient=coeff, molecule_name=sp_name, raw_text=f"{coeff} {sp_name}"))
 
@@ -2302,7 +3245,8 @@ def api_orca_engine_thermochemistry():
     if not is_form and isinstance(data.get("molecules"), dict):
         for sp_name, content in data.get("molecules", {}).items():
             clean_name = core.safe_filename(sp_name)
-            if isinstance(content, str):
+            # Only parse if not already populated by structured reactants/products
+            if sp_name not in parsed_molecules and clean_name not in parsed_molecules and isinstance(content, str):
                 jobs = OrcaParser(io.StringIO(content), source_name=clean_name).parse()
                 if jobs:
                     mol_obj = MoleculeData(name=clean_name, jobs=jobs, sources=[sp_name])
@@ -2355,14 +3299,21 @@ def api_orca_engine_thermochemistry():
         # Build individual species energetics breakdown for the UI table
         species_breakdown = {}
         for sp_name, mol in list(parsed_molecules.items()):
-            best_e = engine._get_best_electronic(sp_name, mol.jobs)
+            latest_e_job = engine._get_best_electronic_job(sp_name, mol.jobs)
             freq_job = engine._get_best_freq_job(sp_name, mol.jobs) or next(
                 (j for j in reversed(mol.jobs) if j.gibbs_free_energy_eh is not None or j.total_enthalpy_eh is not None or j.zpe_eh is not None),
                 None
             )
+            best_e = engine._get_best_electronic(sp_name, mol.jobs)
             h_val = engine._get_best_energy(sp_name, EnergyKind.ENTHALPY)
             g_val = engine._get_best_energy(sp_name, EnergyKind.GIBBS)
             zpe_val = freq_job.zpe_eh if freq_job else None
+            e0_val = (best_e + zpe_val) if (best_e is not None and zpe_val is not None) else None
+
+            # Thermal corrections
+            h_thermal_corr = (freq_job.total_enthalpy_eh - freq_job.e_elec_eh) if (freq_job and freq_job.total_enthalpy_eh is not None and freq_job.e_elec_eh is not None) else (freq_job.enthalpy_correction_eh if freq_job else None)
+            g_thermal_corr = (freq_job.gibbs_free_energy_eh - freq_job.e_elec_eh) if (freq_job and freq_job.gibbs_free_energy_eh is not None and freq_job.e_elec_eh is not None) else (freq_job.gibbs_correction_eh if freq_job else None)
+
             entropy_val = None
             if freq_job and freq_job.entropy_term_eh is not None and freq_job.metadata.temperature_k and freq_job.metadata.temperature_k > 0:
                 entropy_val = (freq_job.entropy_term_eh * PhysConst.HARTREE_TO_KCAL * 1000.0) / freq_job.metadata.temperature_k
@@ -2379,12 +3330,20 @@ def api_orca_engine_thermochemistry():
                 )
 
             levels = mol.levels_of_theory()
-            is_composite = len(levels) > 1 or (freq_job and best_e is not None and freq_job.e_elec_eh is not None and abs(best_e - freq_job.e_elec_eh) > 1e-6)
+            is_composite = bool(latest_e_job and freq_job and latest_e_job is not freq_job and abs((latest_e_job.e_elec_eh or 0.0) - (freq_job.e_elec_eh or 0.0)) > 1e-6)
             is_electronic_only = bool(best_e is not None and h_val is None and g_val is None)
-            
+
+            e_low = freq_job.e_elec_eh if freq_job else None
+            e_high = latest_e_job.e_elec_eh if (is_composite and latest_e_job) else None
+
             entry = {
                 "e_elec_eh": best_e,
+                "e_low_eh": e_low,
+                "e_high_eh": e_high,
                 "zpe_eh": zpe_val,
+                "e0_eh": e0_val,
+                "h_thermal_corr_eh": h_thermal_corr,
+                "g_thermal_corr_eh": g_thermal_corr,
                 "enthalpy_eh": h_val,
                 "gibbs_eh": g_val,
                 "entropy_cal_mol_k": entropy_val,
@@ -2392,6 +3351,10 @@ def api_orca_engine_thermochemistry():
                 "levels_of_theory": levels,
                 "is_composite": is_composite,
                 "is_electronic_only": is_electronic_only,
+                "method_freq": freq_job.metadata.method if freq_job else None,
+                "basis_freq": freq_job.metadata.basis_set if freq_job else None,
+                "method_sp": latest_e_job.metadata.method if (is_composite and latest_e_job) else None,
+                "basis_sp": latest_e_job.metadata.basis_set if (is_composite and latest_e_job) else None,
                 "temperature_k": freq_job.metadata.temperature_k if freq_job else None,
                 "pressure_atm": freq_job.metadata.pressure_atm if freq_job else None,
             }

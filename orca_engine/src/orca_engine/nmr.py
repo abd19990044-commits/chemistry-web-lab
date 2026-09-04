@@ -251,13 +251,16 @@ class NMRAtomRecord:
     def from_dict(cls, data: dict[str, Any]) -> NMRAtomRecord:
         coord = data.get("coordinate")
         coord_tuple = tuple(coord) if coord and len(coord) == 3 else None
+        idx_val = data.get("atom_index") if data.get("atom_index") is not None else data.get("atom_idx", 0)
+        iso_val = data.get("isotropic_shielding") if data.get("isotropic_shielding") is not None else data.get("isotropic_ppm", 0.0)
+        cs_val = data.get("chemical_shift") if data.get("chemical_shift") is not None else data.get("chemical_shift_ppm")
         return cls(
-            atom_index=int(data["atom_index"]),
-            element=str(data["element"]),
+            atom_index=int(idx_val),
+            element=str(data.get("element", "H")),
             isotope=str(data.get("isotope", "1H")),
-            isotropic_shielding=float(data["isotropic_shielding"]),
+            isotropic_shielding=float(iso_val),
             anisotropy=float(data["anisotropy"]) if data.get("anisotropy") is not None else None,
-            chemical_shift=float(data["chemical_shift"]) if data.get("chemical_shift") is not None else None,
+            chemical_shift=float(cs_val) if cs_val is not None else None,
             assignment=str(data.get("assignment", "")),
             coordinate=coord_tuple,
             diamagnetic_iso=float(data["diamagnetic_iso"]) if data.get("diamagnetic_iso") is not None else None,

@@ -97,6 +97,7 @@ def _default_state_dir() -> str:
     dir silently disables cross-worker coordination.
     """
     candidates = [
+        ("CHEMISTRY_LAB_STATE_DIR", os.environ.get("CHEMISTRY_LAB_STATE_DIR")),
         ("ORCA_STATE_DIR", os.environ.get("ORCA_STATE_DIR")),
         ("persistent-volume", "/data"),
         ("working-directory", os.path.join(os.getcwd(), ".state")),
@@ -120,6 +121,16 @@ def _default_state_dir() -> str:
             "rejected": rejected,
         })
         return candidate
+
+    is_production = (
+        os.environ.get("CHEMISTRY_LAB_ENV") == "production"
+        or os.environ.get("ENVIRONMENT") == "production"
+        or os.environ.get("FLASK_ENV") == "production"
+        or bool(os.environ.get("SPACE_ID"))
+        or bool(os.environ.get("HF_SPACE_ID"))
+    )
+    if is_production and os.environ.get("CHEMISTRY_LAB_TEST_MODE") != "1":
+        raise RuntimeError("Production deployment requires a configured, writable state directory (set ORCA_STATE_DIR).")
 
     fallback = tempfile.mkdtemp(prefix="orca-state-")
     STATE_DIR_DIAGNOSTIC.update({

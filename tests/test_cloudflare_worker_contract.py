@@ -48,17 +48,44 @@ class D1SimulatedServer(BaseHTTPRequestHandler):
     expected_token: str | None = AUTH_TOKEN
     expected_project_id: str | None = PROJECT_ID
     expected_namespace: str | None = NAMESPACE
+    allowed_origins: list[str] | None = ["https://orcalab.example.com", "http://localhost:3000"]
 
     def log_message(self, format, *args):
         pass  # Suppress default server logs
+
+    def _get_cors_origin(self) -> str | None:
+        origin = self.headers.get("Origin")
+        if not origin:
+            return None
+        if self.allowed_origins is not None:
+            if origin in self.allowed_origins or "*" in self.allowed_origins:
+                return origin
+            return None
+        return origin
 
     def _send_json(self, data: dict, status: int = 200):
         body = json.dumps(data).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        cors_origin = self._get_cors_origin()
+        if cors_origin:
+            self.send_header("Access-Control-Allow-Origin", cors_origin)
+            self.send_header("Vary", "Origin")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Project-Id, X-Namespace")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        cors_origin = self._get_cors_origin()
+        if cors_origin:
+            self.send_header("Access-Control-Allow-Origin", cors_origin)
+            self.send_header("Vary", "Origin")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Project-Id, X-Namespace")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        self.end_headers()
 
     def _check_auth(self) -> bool:
         # CW-2: Fail closed if token unconfigured
@@ -991,3 +1018,51 @@ def test_cw_credential_vault_delete(cf_http_client):
     meta = cf_http_client.get_credential_metadata("bob_chemist")
     assert meta.exists is False
 
+
+def test_cw_cors_allowed_origin_and_preflight(d1_http_server):
+    """Verifies OPTIONS preflight and GET request echo allowed origin when allowlist matches."""
+    import urllib.request
+
+    # 1. OPTIONS Preflight with Allowed Origin
+    req = urllib.request.Request(
+        f"{d1_http_server}/health",
+        headers={"Origin": "https://orcalab.example.com"},
+        method="OPTIONS"
+    )
+    with urllib.request.urlopen(req) as resp:
+        assert resp.status == 204
+        assert resp.headers.get("Access-Control-Allow-Origin") == "https://orcalab.example.com"
+        assert resp.headers.get("Vary") == "Origin"
+
+    # 2. GET with Allowed Origin
+    req_get = urllib.request.Request(
+        f"{d1_http_server}/health",
+        headers={"Origin": "https://orcalab.example.com"}
+    )
+    with urllib.request.urlopen(req_get) as resp:
+        assert resp.status == 200
+        assert resp.headers.get("Access-Control-Allow-Origin") == "https://orcalab.example.com"
+
+
+def test_cw_cors_disallowed_origin_rejected(d1_http_server):
+    """Verifies unknown / disallowed origins do NOT receive Access-Control-Allow-Origin grant."""
+    import urllib.request
+
+    # OPTIONS Preflight with foreign origin
+    req = urllib.request.Request(
+        f"{d1_http_server}/health",
+        headers={"Origin": "https://malicious-site.attacker.com"},
+        method="OPTIONS"
+    )
+    with urllib.request.urlopen(req) as resp:
+        assert resp.status == 204
+        assert resp.headers.get("Access-Control-Allow-Origin") is None
+
+    # GET with foreign origin
+    req_get = urllib.request.Request(
+        f"{d1_http_server}/health",
+        headers={"Origin": "https://malicious-site.attacker.com"}
+    )
+    with urllib.request.urlopen(req_get) as resp:
+        assert resp.status == 200
+        assert resp.headers.get("Access-Control-Allow-Origin") is None

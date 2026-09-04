@@ -10,6 +10,9 @@ import pytest
 from orca_engine.models import JobData
 from orca_engine.parser import OrcaParser
 
+import os
+import tempfile
+
 DATA_DIR = Path(__file__).parent / "data"
 
 

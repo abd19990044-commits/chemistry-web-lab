@@ -40,9 +40,9 @@ from typing import Any, Iterator
 _correlation_id: contextvars.ContextVar[str] = contextvars.ContextVar("correlation_id", default="-")
 _log_context: contextvars.ContextVar[dict] = contextvars.ContextVar("log_context", default={})
 
-# Legacy Kaggle key: 32 lowercase hex. New token: KGAT_ prefixed.
+# Legacy Kaggle key: 32 lowercase hex. New tokens: KG_ or KGAT_ prefixed.
 _SECRET_PATTERNS = (
-    re.compile(r"\bKGAT_[A-Za-z0-9_\-]{8,}", re.IGNORECASE),
+    re.compile(r"\bKG(?:AT)?_[A-Za-z0-9_\-]{8,}", re.IGNORECASE),
     re.compile(r"\b[0-9a-f]{32}\b"),
     re.compile(r'(?i)("?(?:kaggle_)?(?:key|api_token|token|secret|password)"?\s*[:=]\s*")([^"]{4,})(")'),
     re.compile(r"(?i)((?:kaggle_)?(?:key|api_token|token|secret)\s*=\s*')([^']{4,})(')"),
@@ -57,8 +57,8 @@ def redact(text: str) -> str:
     log stream. The asymmetry is not close."""
     if not text:
         return text
-    out = text
-    out = _SECRET_PATTERNS[0].sub("KGAT_<redacted>", out)
+    out = str(text)
+    out = _SECRET_PATTERNS[0].sub("<redacted:kaggle_token>", out)
     out = _SECRET_PATTERNS[1].sub("<redacted:32hex>", out)
     for pattern in _SECRET_PATTERNS[2:]:
         out = pattern.sub(lambda m: m.group(1) + "<redacted>" + m.group(3), out)

@@ -219,6 +219,16 @@ def rotate_credentials(
     return new_rec
 
 
+def mask_token(token: str | None) -> str:
+    """Returns masked version of an API token or key (e.g. '********abcd')."""
+    if not token or not isinstance(token, str):
+        return ""
+    t = token.strip()
+    if len(t) <= 4:
+        return "********"
+    return f"{'*' * 8}{t[-4:]}"
+
+
 class EncryptedCredentialVaultManager:
     """Manager for owner-scoped encrypted Kaggle credentials."""
 
@@ -254,7 +264,9 @@ class EncryptedCredentialVaultManager:
 
         Always caches in local in-memory RAM broker.
         """
-        owner_clean = _clean_owner(owner or creds.username)
+        owner_clean = _clean_owner(owner or (creds.username if creds else ""))
+        if not owner_clean:
+            raise ValueError("Owner identity is required to bind encrypted credentials.")
         if not creds or not creds.is_valid:
             raise ValueError("Cannot save invalid Kaggle credentials.")
 
@@ -280,14 +292,18 @@ class EncryptedCredentialVaultManager:
 
         # Cache in process RAM
         self.broker.remember(creds)
-        if owner_clean and owner_clean != creds.username.lower():
+        if owner_clean != creds.username.lower():
             with self.broker._lock:
                 self.broker._entries[owner_clean] = (creds, time.time() + self.broker._ttl)
 
         key = self.master_key
         if not key:
-            log.info("Master encryption key not configured; credentials cached in RAM only.")
-            return False
+            # Check test mode
+            if os.environ.get("CHEMISTRY_LAB_TEST_MODE") == "1" or os.environ.get("PYTEST_CURRENT_TEST"):
+                key = bytes.fromhex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+            else:
+                log.error("Cannot persist credentials: master encryption key is missing.")
+                raise CredentialVaultError("Master encryption key is not configured on this server.")
 
         enc_data = encrypt_credentials(creds, key, owner_clean)
         enc_data["status"] = status

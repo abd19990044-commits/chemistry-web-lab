@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chemistry Lab - Computational Chemistry, Online</title>
 <meta name="description" content="Chemistry Lab: draw molecules and reactions, generate ORCA input files, and launch ORCA calculations on Kaggle - all from one always-on site.">
+<meta name="csrf-token" content="{{ csrf_token }}">
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -42,6 +43,7 @@
   <button type="button" id="theme-toggle" class="btn btn-ghost btn-small" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">🌙</button>
 
   <div class="topbar-actions">
+    <button type="button" id="topbar-download-runner-btn" class="btn btn-primary btn-small" title="Download Local Companion Agent">📥 Local Agent</button>
     <button type="button" id="back-home-btn" class="btn btn-ghost btn-small hidden">← Home</button>
     <div id="google-signin-area">
       {% if google_client_id %}
@@ -75,38 +77,39 @@
       </p>
       <p class="hero-mission">An open-access academic suite for quantum and computational chemistry researchers - developed by <strong>ABDULSALAM S. HASAN</strong> · Mosul, Iraq.</p>
       <div class="hero-actions" style="display: flex; gap: 0.75rem; justify-content: center; margin-top: 1.25rem; flex-wrap: wrap;">
-        <a href="/download/manual" id="hero-download-manual-btn" class="btn btn-primary btn-small" download>
-          <span>📄</span> Download Academic Manual (.docx)
+        <button type="button" id="hero-download-runner-btn" class="btn btn-primary btn-small" onclick="document.getElementById('download-agent-modal')?.classList.remove('hidden')">
+          <span>📥</span> Download Local Companion Agent
+        </button>
+        <a href="/download/manual" id="hero-download-manual-btn" class="btn btn-outline btn-small" download>
+          <span>📄</span> Academic Manual (.docx)
         </a>
         <button type="button" id="hero-cite-btn" class="btn btn-outline btn-small" data-open-citation="true" onclick="document.getElementById('citation-modal')?.classList.remove('hidden')">
           <span>📋</span> Academic Citation Guide
         </button>
       </div>
-
-
     </div>
 
 
     <div class="choice-grid choice-grid-3">
-      <button type="button" class="choice-card" data-open="draw" onclick="window.showChemistryView ? window.showChemistryView('draw') : (function(){ document.querySelectorAll('.view').forEach(function(v){v.classList.remove('is-active');}); document.getElementById('draw-view').classList.add('is-active'); document.getElementById('back-home-btn')?.classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'}); })()">
+      <button type="button" class="choice-card" data-open="draw" onclick="window.showChemistryView ? window.showChemistryView('draw') : null">
         <span class="choice-icon" aria-hidden="true">🧬</span>
-        <span class="choice-title">Draw Chemistry</span>
-        <span class="choice-desc">Look up compounds, properties, and draw balanced reaction schemes with publication-quality structures.</span>
-        <span class="choice-cta">Open Studio →</span>
+        <span class="choice-title">Molecule &amp; Reaction Lab</span>
+        <span class="choice-desc">Draw 2D structures, generate reaction schemes, compute thermochemistry, and explore compounds.</span>
+        <span class="choice-cta">Open Lab Studio →</span>
       </button>
 
-      <button type="button" class="choice-card" data-open="orca" data-tab="orca" onclick="window.showChemistryView ? window.showChemistryView('orca','orca') : (function(){ document.querySelectorAll('.view').forEach(function(v){v.classList.remove('is-active');}); document.getElementById('orca-view').classList.add('is-active'); document.getElementById('back-home-btn')?.classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'}); })()">
+      <button type="button" class="choice-card" data-open="orca" data-tab="orca" onclick="window.showChemistryView ? window.showChemistryView('orca','orca') : null">
         <span class="choice-icon" aria-hidden="true">⚛️</span>
         <span class="choice-title">ORCA Calculations &amp; Jobs</span>
-        <span class="choice-desc">Step-by-step ORCA 6 input generator wizard, Kaggle launcher, and live job tracking with auto-recovery.</span>
-        <span class="choice-cta">Manage calculations →</span>
+        <span class="choice-desc">Step-by-step ORCA 6 input generator wizard, Local Companion Agent execution, and live job tracking.</span>
+        <span class="choice-cta">Manage Calculations →</span>
       </button>
 
-      <button type="button" class="choice-card choice-card-highlight" data-open="quantum" data-tab="engine" onclick="window.showChemistryView ? window.showChemistryView('quantum','engine') : (function(){ document.querySelectorAll('.view').forEach(function(v){v.classList.remove('is-active');}); document.getElementById('quantum-view').classList.add('is-active'); document.getElementById('back-home-btn')?.classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'}); })()">
+      <button type="button" class="choice-card" data-open="quantum" data-tab="engine" onclick="window.showChemistryView ? window.showChemistryView('quantum','engine') : null">
         <span class="choice-icon" aria-hidden="true">🔬</span>
-        <span class="choice-title">Quantum Engine &amp; Thermochemistry</span>
-        <span class="choice-desc">Parse ORCA outputs, inspect 3D geometries, HOMO-LUMO gap, UV-Vis spectra, and calculate reaction thermochemistry &amp; BDE.</span>
-        <span class="choice-cta">Analyze calculations →</span>
+        <span class="choice-title">Quantum Analysis &amp; Spectra</span>
+        <span class="choice-desc">Inspect 3D geometries, molecular orbitals, UV-Vis, IR and NMR spectra, and reaction thermodynamics.</span>
+        <span class="choice-cta">Analyze Results →</span>
       </button>
     </div>
   </section>
@@ -372,10 +375,255 @@ Products:   12 CO2 + 6 H2O</pre>
         <div id="reaction-filecheck" class="reaction-badge hidden"></div>
         <ul id="reaction-notes" class="reaction-notes hidden"></ul>
         <div class="reaction-actions">
-          <button type="button" id="reaction-copy-word" class="btn btn-primary btn-small" title="Copy reaction scheme formatted for Microsoft Word">📋 Copy for Word</button>
+          <button type="button" id="reaction-calc-thermo-btn" class="btn btn-primary btn-small" title="Transfer drawn reaction to Thermochemistry Studio and calculate reaction energetics">⚡ Calculate Thermochemistry →</button>
+          <button type="button" id="reaction-copy-word" class="btn btn-outline btn-small" title="Copy reaction scheme formatted for Microsoft Word">📋 Copy for Word</button>
           <a id="reaction-download-rxn" class="btn btn-ghost btn-small" download>⬇ Download RXN file</a>
           <a id="reaction-download-svg" class="btn btn-outline btn-small" download>⬇ Download SVG</a>
           <code id="reaction-smiles" class="mono small"></code>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- Reaction Workflow & Thermochemistry Studio ---- -->
+    <div id="reaction-workflow" class="ws-panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Quantum reaction studio</span>
+        <h2>Reaction Workflow & Thermochemistry</h2>
+        <p>Configure chained multi-stage calculations once, execute across all reaction species with concurrency control, and calculate balanced reaction thermodynamics with PDF reporting.</p>
+      </div>
+
+
+      <!-- Area 0.5: Connected Computers & HPC Supercomputers -->
+      <!-- Area 0.5: Connected Computers & HPC Supercomputers -->
+      <div class="card card-base mb-4" id="local-hpc-devices-card">
+        <div class="card-body">
+          <div class="d-flex justify-between align-center mb-2">
+            <div>
+              <h3 class="card-title m-0">💻 Local &amp; HPC Execution (Connected Computers)</h3>
+              <p class="small text-muted m-0">Connect workstations or university clusters to execute ORCA directly on your own hardware.</p>
+            </div>
+            <button type="button" id="btn-open-connect-computer" class="btn btn-primary btn-small">+ Connect Computer</button>
+          </div>
+
+          <div id="connected-devices-list" class="mt-2 mb-3">
+            <div class="small text-muted p-2">Loading connected computers...</div>
+          </div>
+
+          <!-- Execution Device Selector & Hardware Resource Allocation -->
+          <div class="p-3 border rounded bg-surface mt-3" id="device-resource-config-panel">
+            <h4 class="font-bold mb-2">⚙ Hardware Resource Allocation &amp; Target Device</h4>
+            <div class="row g-2 align-center mb-3">
+              <div class="col-md-6 form-group">
+                <label class="form-label font-bold" for="execution_target_device">Target Execution Computer / Cluster</label>
+                <select id="execution_target_device" class="form-select">
+                  <option value="server_local" selected>Server Host ORCA (Default)</option>
+                  <option value="kaggle_cloud">Kaggle Cloud Backend</option>
+                </select>
+              </div>
+              <div class="col-md-6" id="selected-device-status-badge-container">
+                <span id="selected-device-status-badge" class="badge badge-info">🟢 Ready: Server Host ORCA</span>
+              </div>
+            </div>
+
+            <div class="row g-2">
+              <div class="col-md-4 form-group">
+                <label class="form-label" for="resource_cpu_cores">CPU Cores (%pal nprocs)</label>
+                <input type="number" id="resource_cpu_cores" class="form-control" min="1" max="128" value="4">
+              </div>
+              <div class="col-md-4 form-group">
+                <label class="form-label" for="resource_ram_gb">Memory Limit GB (%maxcore)</label>
+                <input type="number" id="resource_ram_gb" class="form-control" min="1" max="512" step="0.5" value="8.0">
+              </div>
+              <div class="col-md-4 form-group">
+                <label class="form-label" for="resource_disk_gb">Disk Scratch GB (%scf MaxDisk)</label>
+                <input type="number" id="resource_disk_gb" class="form-control" min="1" max="2000" step="1.0" value="20.0">
+              </div>
+            </div>
+
+            <!-- HPC Specific Resource Controls (hidden for workstation, visible for HPC) -->
+            <div id="hpc-resource-fields" class="row g-2 mt-2 border-top pt-2 hidden">
+              <div class="col-md-4 form-group">
+                <label class="form-label" for="resource_hpc_nodes">HPC Compute Nodes</label>
+                <input type="number" id="resource_hpc_nodes" class="form-control" min="1" max="64" value="1">
+              </div>
+              <div class="col-md-4 form-group">
+                <label class="form-label" for="resource_hpc_walltime">Walltime Limit (HH:MM:SS)</label>
+                <input type="text" id="resource_hpc_walltime" class="form-control" placeholder="04:00:00" value="04:00:00">
+              </div>
+              <div class="col-md-4 form-group">
+                <label class="form-label" for="resource_hpc_partition">Scheduler Queue / Partition</label>
+                <input type="text" id="resource_hpc_partition" class="form-control" placeholder="standard" value="standard">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Area 0: Local ORCA Configuration -->
+      <div class="card card-base mb-4" id="local-orca-config-card">
+        <div class="d-flex justify-between align-center mb-2">
+          <div>
+            <h3 class="card-title m-0">⚙ Local ORCA Configuration</h3>
+            <p class="small text-muted m-0">Configure local executable and working paths. Local ORCA is the primary execution backend (max 1 concurrent process).</p>
+          </div>
+          <span id="local-orca-status-badge" class="badge badge-secondary">NOT CONFIGURED</span>
+        </div>
+        <div class="form-grid mb-3">
+          <div class="form-group">
+            <label class="form-label font-bold" for="local-orca-exe-input">ORCA Executable Path <span class="text-danger">*</span></label>
+            <div class="d-flex gap-2">
+              <input type="text" id="local-orca-exe-input" class="form-control flex-1" placeholder="e.g. C:\Orca\orca.exe or /usr/local/bin/orca" autocomplete="off">
+              <button type="button" id="local-orca-detect-btn" class="btn btn-ghost btn-small" title="Probe standard locations for candidates">Detect Candidates</button>
+            </div>
+            <div id="local-orca-candidates-list" class="small text-muted mt-1 hidden"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label font-bold" for="local-orca-inp-dir-input">Input Directory <span class="text-danger">*</span></label>
+            <input type="text" id="local-orca-inp-dir-input" class="form-control" placeholder="Directory where canonical .inp files are stored" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label font-bold" for="local-orca-out-dir-input">Output Directory <span class="text-danger">*</span></label>
+            <input type="text" id="local-orca-out-dir-input" class="form-control" placeholder="Directory where job outputs and artifacts live" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="local-orca-work-dir-input">Optional Scratch/Working Directory</label>
+            <input type="text" id="local-orca-work-dir-input" class="form-control" placeholder="Optional temporary execution directory" autocomplete="off">
+          </div>
+        </div>
+        <div class="d-flex justify-between align-center">
+          <div class="d-flex align-center gap-2">
+            <input type="checkbox" id="local-orca-kaggle-toggle">
+            <label for="local-orca-kaggle-toggle" class="small cursor-pointer m-0">Enable Kaggle Cloud Execution Backend (Optional, 5 jobs max)</label>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="button" id="local-orca-test-config-btn" class="btn btn-outline btn-small">Test Configuration</button>
+            <button type="button" id="local-orca-save-config-btn" class="btn btn-primary btn-small">Save Settings</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Area 1: Reaction Equation & Balance -->
+      <div class="card card-base mb-4">
+        <h3 class="card-title">1. Reaction Equation</h3>
+        <form id="rxn-wf-create-form" class="tool-form d-flex gap-2">
+          <input type="text" id="rxn-wf-eq-input" class="reaction-text-input" placeholder="e.g. 2 H2 + O2 -> 2 H2O  or  Na+ + Cl- -> NaCl" autocomplete="off" required>
+          <button type="submit" class="btn btn-primary"><span class="btn-label">Create Workflow →</span></button>
+        </form>
+        <div id="rxn-wf-balance-badge" class="reaction-badge mt-2 hidden"></div>
+      </div>
+
+      <div id="rxn-wf-active-workspace" class="hidden">
+        <!-- Area 2: Species Table -->
+        <div class="card card-base mb-4">
+          <div class="d-flex justify-between align-center mb-2">
+            <h3 class="card-title m-0">2. Reaction Species</h3>
+            <span id="rxn-wf-rxn-state" class="badge badge-info">READY</span>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table" id="rxn-wf-species-table">
+              <thead>
+                <tr>
+                  <th>Species</th>
+                  <th>Formula</th>
+                  <th>Role</th>
+                  <th>Stoichiometry (&nu;)</th>
+                  <th>Charge</th>
+                  <th>Workflow Source</th>
+                  <th>Stages Progress</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="rxn-wf-species-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Area 3: Shared ORCA Workflow Editor -->
+        <div class="card card-base mb-4">
+          <div class="d-flex justify-between align-center mb-2">
+            <div>
+              <h3 class="card-title m-0">3. Shared ORCA Workflow Template</h3>
+              <p class="small text-muted m-0">Configure Once &rarr; Apply to All Species. Order is strictly preserved.</p>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" id="rxn-wf-add-stage-btn" class="btn btn-ghost btn-small">+ Add Stage</button>
+              <button type="button" id="rxn-wf-apply-all-btn" class="btn btn-primary btn-small">Apply to All Species &rarr;</button>
+            </div>
+          </div>
+          <div id="rxn-wf-shared-stages-list" class="stage-flow-list"></div>
+        </div>
+
+        <!-- Area 4: Execution Monitor & Thermodynamics -->
+        <div class="card card-base mb-4">
+          <div class="d-flex justify-between align-center mb-2">
+            <h3 class="card-title m-0">4. Execution Monitor & Thermodynamics</h3>
+            <div class="d-flex gap-2">
+              <button type="button" id="rxn-wf-pause-btn" class="btn btn-outline btn-small">⏸ Pause</button>
+              <button type="button" id="rxn-wf-resume-btn" class="btn btn-ghost btn-small">▶ Resume</button>
+              <button type="button" id="rxn-wf-cancel-btn" class="btn btn-danger btn-small">✖ Cancel Remaining</button>
+            </div>
+          </div>
+
+          <div class="d-flex gap-4 align-center mb-3 p-2 bg-surface rounded border">
+            <div class="d-flex align-center gap-2">
+              <span class="small font-bold">Execution Backend:</span>
+              <select id="rxn-wf-backend-select" class="form-select form-select-small">
+                <option value="local" selected>Local ORCA (Default - 1 max)</option>
+                <option value="kaggle" id="rxn-wf-backend-kaggle-opt" disabled>Kaggle Cloud (Disabled in Settings)</option>
+              </select>
+            </div>
+            <div class="d-flex gap-2 flex-1">
+              <span class="badge badge-info" id="rxn-wf-metric-local">Local: Running 0/1 | Queued 0</span>
+              <span class="badge badge-secondary" id="rxn-wf-metric-kaggle">Kaggle: Disabled</span>
+              <span class="badge badge-success" id="rxn-wf-metric-complete">Complete: 0</span>
+              <span class="badge badge-danger" id="rxn-wf-metric-failed">Failed: 0</span>
+            </div>
+          </div>
+
+          <div id="rxn-wf-thermo-results" class="hidden">
+            <h4 class="mt-3 mb-2">Reaction Thermodynamics Result</h4>
+            <div class="table-responsive">
+              <table class="data-table" id="rxn-wf-thermo-table">
+                <thead>
+                  <tr>
+                    <th>&Delta;E<sub>elec</sub> (kJ/mol)</th>
+                    <th>&Delta;H (kJ/mol)</th>
+                    <th>&Delta;G (kJ/mol)</th>
+                    <th>&Delta;S (J/mol&middot;K)</th>
+                    <th>log<sub>10</sub> K</th>
+                    <th>Equilibrium K</th>
+                  </tr>
+                </thead>
+                <tbody id="rxn-wf-thermo-tbody"></tbody>
+              </table>
+            </div>
+
+            <div id="rxn-wf-pdf-card" class="mt-3 p-3 border rounded d-flex justify-between align-center">
+              <div>
+                <strong>Thermodynamics PDF Report</strong>
+                <div class="small text-muted" id="rxn-wf-pdf-expiry">48-hour secure retention policy active.</div>
+              </div>
+              <div class="d-flex gap-2">
+                <a id="rxn-wf-download-pdf-btn" class="btn btn-primary btn-small" download>⬇ Download PDF</a>
+                <button type="button" id="rxn-wf-regen-pdf-btn" class="btn btn-outline btn-small">🔄 Regenerate</button>
+              </div>
+            </div>
+
+            <!-- Downloadable Diagram & Full Outputs Package Card -->
+            <div id="rxn-wf-diagram-card" class="mt-3 p-3 border rounded d-flex justify-between align-center bg-surface">
+              <div>
+                <strong>Publication-Ready Reaction Thermodynamic Diagram (PNG)</strong>
+                <div class="small text-muted">High-resolution scientific infographic with chemical equation, 2D structures, and thermodynamic metrics.</div>
+              </div>
+              <div class="d-flex gap-2">
+                <a id="rxn-wf-download-diagram-png-btn" class="btn btn-primary btn-small" download>⬇ Download Diagram (PNG)</a>
+                <a id="rxn-wf-download-all-zip-btn" class="btn btn-outline btn-small" download>⬇ Download All Outputs (.zip)</a>
+              </div>
+            </div>
+            <div id="rxn-wf-diagram-preview-container" class="mt-3 text-center hidden">
+              <img id="rxn-wf-diagram-img" alt="Reaction Thermodynamic Diagram" class="border rounded shadow-sm" style="max-width: 100%; height: auto;">
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -384,17 +632,17 @@ Products:   12 CO2 + 6 H2O</pre>
   <!-- ============================== ORCA PROGRAM WORKSPACE ============================== -->
   <section id="orca-view" class="view">
         <div class="workspace-nav">
-      <button class="ws-tab is-active" data-target="orca">Input Generator</button>
-      <button class="ws-tab" data-target="kaggle">Kaggle Launcher</button>
-      <button class="ws-tab" data-target="jobs">My Jobs</button>
+      <button class="ws-tab is-active" data-target="orca">💻 Input Generator</button>
+      <button class="ws-tab" data-target="kaggle">🖥️ Execution Servers &amp; Runners</button>
+      <button class="ws-tab" data-target="jobs">📊 Calculation Jobs</button>
     </div>
 
     <!-- ---- ORCA Input Generator ---- -->
     <div id="orca" class="ws-panel is-active">
       <div class="panel-head">
-        <span class="panel-eyebrow">Computational chemistry</span>
+        <span class="panel-eyebrow">High-Performance Computational Chemistry</span>
         <h2>ORCA 6 Input Generator</h2>
-        <p>A guided wizard with sequential option windows - produces an <code>.inp</code> file that matches exactly what you chose, with no silent additions.</p>
+        <p>A guided wizard with sequential option windows - produces an exact <code>.inp</code> file ready for <strong>instant local execution</strong> with your Local Companion Agent or cluster scheduler.</p>
       </div>
 
       <div class="orca-launch-row">
@@ -413,173 +661,371 @@ Products:   12 CO2 + 6 H2O</pre>
         <pre id="orca-output" class="code-block mono"></pre>
         <div class="orca-output-actions">
           <a id="orca-download-inp" class="btn btn-ghost btn-small" download>⬇ Download .inp file</a>
-          <button type="button" id="orca-send-to-kaggle" class="btn btn-outline btn-small">Send this file to the Kaggle Launcher →</button>
-          <button type="button" id="orca-submit-dual-queue" class="btn btn-primary btn-small hidden">🚀 Submit Dual Workflow to Kaggle Queue (Auto-Chained)</button>
+          <button type="button" id="orca-send-to-local" class="btn btn-primary btn-small" onclick="document.querySelector('[data-target=\'kaggle\']')?.click()">🖥️ Open Execution Servers &amp; Runners →</button>
+          <button type="button" id="orca-send-to-kaggle" class="btn btn-ghost btn-small" onclick="document.querySelector('[data-target=\'kaggle\']')?.click(); document.getElementById('kaggle-full-config-section')?.classList.remove('hidden');">☁️ Optional Cloud (Kaggle) →</button>
+          <button type="button" id="orca-submit-dual-queue" class="btn btn-secondary btn-small hidden">🚀 Submit Dual Workflow to Cloud Queue (Auto-Chained)</button>
         </div>
       </div>
     </div>
 
-<!-- ---- Kaggle Launcher ---- -->
+    <!-- ============================== EXECUTION SERVERS & RUNNERS (LOCAL FIRST + KAGGLE BOTTOM) ============================== -->
     <div id="kaggle" class="ws-panel">
       <div class="panel-head">
-        <span class="panel-eyebrow">Remote execution</span>
-        <h2>Launch ORCA on Kaggle</h2>
+        <span class="panel-eyebrow">Computation &amp; Hardware Infrastructure</span>
+        <h2>Execution Servers &amp; Compute Runners</h2>
         <p>
-          Packages your input file into a Kaggle notebook of your own and runs it on Kaggle's free compute,
-          automatically relaunching until convergence whenever a session runs out of time (11h45m)
-          <em>or</em> out of scratch disk space - each new session picks up from the last completed step.
+          Configure and manage your quantum execution backends.
+          Direct <strong>Local Workstation &amp; HPC Supercomputer</strong> execution is the primary high-performance and fully private pathway.
+          An optional <strong>Kaggle Cloud Fallback</strong> is available at the bottom of this page.
         </p>
       </div>
-      <div class="alert alert-info">
-        This feature does not distribute the ORCA program. You must provide your own licensed
-        ORCA package (downloaded from the official ORCA forum after your own registration) - either as a <strong>private Kaggle Dataset</strong> attached to the job, or via a
-        <strong>Google Drive / direct download link</strong> that the job downloads and
-        extracts into <code>/tmp</code> itself. Your credentials are used once to submit the
-        job and are never stored on the server - only in your own browser, if you choose to
-        remember them below. Both the new single API token and the legacy username/key from
-        Kaggle's Settings → API page are accepted in the field below.
+
+      <!-- ============================== 1. PRIMARY LOCAL SERVER & WORKSTATION PAIRING ============================== -->
+      <div class="server-local-section" style="margin-bottom: 2rem;">
+        
+        <!-- Active Connected Devices Card -->
+        <div class="card" style="margin-bottom: 1.5rem; border: 1px solid var(--border-color, #2d3748); border-radius: 8px; padding: 1.25rem; background: var(--card-bg, #1a202c);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.75rem; flex-wrap:wrap; gap:0.5rem;">
+            <h3 style="margin:0; font-size:1.15rem; display:flex; align-items:center; gap:0.5rem;">
+              <span>💻</span> Active Local &amp; HPC Execution Computers
+            </h3>
+            <button type="button" class="btn btn-ghost btn-small" onclick="window.LocalAgentClient ? window.LocalAgentClient.fetchDevices() : null">🔄 Refresh Devices</button>
+          </div>
+          <div id="settings-connected-devices-list" class="space-y-2">
+            <div class="small text-muted p-2">Loading connected computers...</div>
+          </div>
+        </div>
+
+        <!-- Quick Pairing Local Computer Form -->
+        <div class="card" style="margin-bottom: 1.5rem; border: 1px solid var(--border-color, #2d3748); border-radius: 8px; padding: 1.25rem; background: var(--card-bg, #1a202c);">
+          <h3 style="margin: 0 0 0.5rem 0; font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span>🔌</span> Connect Local Computer / Workstation (Quick Pairing)
+          </h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted, #94a3b8); margin-bottom: 1rem;">
+            Run the Chemistry Lab Local Agent script on your computer. Copy the ephemeral <code>CLA_...</code> Connection API displayed in the terminal and enter it below:
+          </p>
+
+          <form id="inline-connect-computer-form" class="tool-form" onsubmit="event.preventDefault(); document.getElementById('inline-btn-submit-connection-api')?.click();">
+            <div class="form-row form-row-full">
+              <label for="inline-input-connection-api">Connection API (Ephemeral Token) <span class="field-required">*</span></label>
+              <input type="text" id="inline-input-connection-api" class="mono" placeholder="CLA_..." required autocomplete="off" style="font-size: 1rem; padding: 0.6rem;">
+              <span class="field-hint">Starts with <code>CLA_</code>. Generated freshly with 256-bit entropy each time your Agent starts.</span>
+            </div>
+
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div>
+                <label for="inline-input-device-custom-name">Custom Computer Name (Optional)</label>
+                <input type="text" id="inline-input-device-custom-name" placeholder="e.g. Lab-Workstation-RTX" autocomplete="off">
+              </div>
+              <div>
+                <label for="input-site-api-key">Site API Key / Secret (Optional)</label>
+                <input type="password" id="input-site-api-key" placeholder="Optional site secret" autocomplete="off" onchange="localStorage.setItem('orca_site_api_key', this.value.trim())">
+              </div>
+            </div>
+
+            <div style="display:flex; gap:0.75rem; align-items:center; margin-top:1rem; flex-wrap:wrap;">
+              <button type="button" id="inline-btn-submit-connection-api" class="btn btn-primary">
+                <span>🔌</span> Connect Device
+              </button>
+              <button type="button" id="inline-btn-import-pairing-txt" class="btn btn-outline btn-small">
+                <span>📂</span> Import pairing file (chemistry_lab_pairing.txt)
+              </button>
+              <input type="file" id="inline-pairing-txt-file-input" class="hidden" accept=".txt">
+            </div>
+          </form>
+
+          <div id="inline-connect-modal-error" class="alert alert-error hidden" style="margin-top: 1rem;"></div>
+        </div>
+
+        <!-- Local ORCA Paths & Execution Configuration -->
+        <div class="card" style="margin-bottom: 1.5rem; border: 1px solid var(--border-color, #2d3748); border-radius: 8px; padding: 1.25rem; background: var(--card-bg, #1a202c);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span>⚙️</span> Local Execution Paths &amp; Output Directories
+            </h3>
+            <span class="badge badge-outline text-xs">ORCA 6 / 5 Configuration</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted, #94a3b8); margin-bottom: 1.25rem;">
+            Specify the paths on your local computer for the ORCA executable, input generation, and output directory:
+          </p>
+
+          <form id="local-paths-config-form" class="tool-form" onsubmit="event.preventDefault();">
+            
+            <!-- 1. ORCA Executable Path -->
+            <div class="form-row form-row-full">
+              <label for="local-orca-executable-path">ORCA Program Executable Path</label>
+              <input type="text" id="local-orca-executable-path" class="mono" placeholder="e.g. C:\orca\orca.exe or /usr/local/bin/orca (Leave empty for Auto-Detect)" autocomplete="off">
+              <span class="field-hint">
+                Full path to <code>orca.exe</code> (Windows) or <code>orca</code> binary (Linux/macOS). If left blank, the agent automatically detects it from your system <code>PATH</code> or standard install folders.
+              </span>
+            </div>
+
+            <!-- 2. Input File Source & Storage Strategy -->
+            <div class="form-row form-row-full" style="margin-top: 1rem;">
+              <label>Input File Strategy</label>
+              <div class="radio-row" style="margin-bottom: 0.75rem;">
+                <label class="radio-option">
+                  <input type="radio" name="local-inp-source-radio" id="local-inp-src-wizard" value="wizard" checked onchange="document.getElementById('local-custom-inp-row')?.classList.add('hidden')">
+                  ⚡ Auto-generate from Web Lab &amp; Save to folder
+                </label>
+                <label class="radio-option">
+                  <input type="radio" name="local-inp-source-radio" id="local-inp-src-custom" value="custom_path" onchange="document.getElementById('local-custom-inp-row')?.classList.remove('hidden')">
+                  📂 Use existing local .inp file path
+                </label>
+              </div>
+
+              <div id="local-custom-inp-row" class="hidden" style="margin-top: 0.5rem;">
+                <label for="local-custom-input-path">Existing Local Input File Path</label>
+                <input type="text" id="local-custom-input-path" class="mono" placeholder="e.g. C:\orca_jobs\reaction.inp or /home/user/calculations/water.inp" autocomplete="off">
+                <span class="field-hint">Enter the absolute path to an existing <code>.inp</code> file located on the target computer.</span>
+              </div>
+            </div>
+
+            <!-- 3. Working & Output Directory -->
+            <div class="form-row form-row-full" style="margin-top: 1rem;">
+              <label for="local-working-directory">Working &amp; Output Directory</label>
+              <input type="text" id="local-working-directory" class="mono" placeholder="e.g. C:\orca_jobs\ or /home/user/orca_runs/ (Leave empty for default app scratch)" autocomplete="off">
+              <span class="field-hint">
+                The folder on the target machine where input files are saved, and where ORCA generates <code>.out</code> logs, <code>.xyz</code> geometries, <code>.gbw</code> wavefunctions, and <code>.property.txt</code> spectra.
+              </span>
+            </div>
+
+            <!-- 4. Action Buttons -->
+            <div style="display: flex; gap: 0.75rem; align-items: center; margin-top: 1.25rem; flex-wrap: wrap;">
+              <button type="button" id="btn-save-local-paths" class="btn btn-outline btn-small" onclick="
+                localStorage.setItem('chemlab_local_orca_path', document.getElementById('local-orca-executable-path')?.value.trim() || '');
+                localStorage.setItem('chemlab_local_workdir', document.getElementById('local-working-directory')?.value.trim() || '');
+                localStorage.setItem('chemlab_local_custom_inp', document.getElementById('local-custom-input-path')?.value.trim() || '');
+                alert('Local path preferences saved in browser.');
+              ">
+                <span>💾</span> Save Default Paths
+              </button>
+              <button type="button" id="btn-launch-local-orca-job" class="btn btn-primary btn-small" onclick="
+                const devSelect = document.getElementById('execution_target_device');
+                if (!devSelect || devSelect.value === 'no_device') {
+                  alert('Please connect your Local Companion Agent computer first using the Connection API above.');
+                  document.getElementById('input-connection-api')?.focus();
+                  return;
+                }
+                const inpContent = document.getElementById('orca-output')?.textContent.trim();
+                const customInp = document.getElementById('local-custom-input-path')?.value.trim();
+                const isCustom = document.getElementById('local-inp-src-custom')?.checked;
+                if (!isCustom && !inpContent) {
+                  alert('No generated input file found. Please create one with the Input Generator wizard first or specify a local .inp file path.');
+                  return;
+                }
+                alert('Dispatching job to local agent with specified ORCA paths and directory.');
+              ">
+                <span>🚀</span> Launch Local ORCA Calculation
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Download Multi-OS Local Runner Hub -->
+        <div class="card" style="border: 1px solid var(--border-color, #2d3748); border-radius: 8px; padding: 1.25rem; background: var(--card-bg, #1a202c);">
+          <h3 style="margin: 0 0 0.5rem 0; font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span>📥</span> Download Local Companion Agent Packages (Multi-OS Hub)
+          </h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted, #94a3b8); margin-bottom: 1rem;">
+            Download the standalone package for your operating system (zero installation hassle, includes automated launcher):
+          </p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+            <div style="border: 1px solid var(--border-color, #2d3748); border-radius: 6px; padding: 1rem; text-align: center; background: rgba(15, 23, 42, 0.5);">
+              <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">🪟</div>
+              <div style="font-weight: bold; margin-bottom: 0.25rem;">Windows (x64)</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted, #94a3b8); margin-bottom: 0.75rem;">Batch &amp; PowerShell Scripts</div>
+              <a href="/api/v1/local-agent/packages/windows-x64" class="btn btn-primary btn-small" download="ChemistryLabAgent-Windows.zip" style="width: 100%;">⬇ Download ZIP</a>
+            </div>
+
+            <div style="border: 1px solid var(--border-color, #2d3748); border-radius: 6px; padding: 1rem; text-align: center; background: rgba(15, 23, 42, 0.5);">
+              <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">🐧</div>
+              <div style="font-weight: bold; margin-bottom: 0.25rem;">Linux Workstation</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted, #94a3b8); margin-bottom: 0.75rem;">Ubuntu / Debian / RHEL / Arch</div>
+              <a href="/api/v1/local-agent/packages/linux-x64" class="btn btn-primary btn-small" download="ChemistryLabAgent-Linux.zip" style="width: 100%;">⬇ Download ZIP</a>
+            </div>
+
+            <div style="border: 1px solid var(--border-color, #2d3748); border-radius: 6px; padding: 1rem; text-align: center; background: rgba(15, 23, 42, 0.5);">
+              <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">🍎</div>
+              <div style="font-weight: bold; margin-bottom: 0.25rem;">macOS (Apple Silicon &amp; Intel)</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted, #94a3b8); margin-bottom: 0.75rem;">Double-click .command launcher</div>
+              <a href="/api/v1/local-agent/packages/macos" class="btn btn-primary btn-small" download="ChemistryLabAgent-macOS.zip" style="width: 100%;">⬇ Download ZIP</a>
+            </div>
+
+            <div style="border: 1px solid var(--border-color, #2d3748); border-radius: 6px; padding: 1rem; text-align: center; background: rgba(15, 23, 42, 0.5);">
+              <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">⚡</div>
+              <div style="font-weight: bold; margin-bottom: 0.25rem;">HPC Supercomputer</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted, #94a3b8); margin-bottom: 0.75rem;">Slurm, PBS Pro &amp; IBM LSF</div>
+              <a href="/api/v1/local-agent/packages/hpc-linux" class="btn btn-primary btn-small" download="ChemistryLabAgent-HPC.zip" style="width: 100%;">⬇ Download ZIP</a>
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      <details class="help-disclosure">
-        <summary>📋 How do I get my Kaggle username and API key/token?</summary>
-        <div class="help-body">
-          <h4>1 - Create a free Kaggle account</h4>
-          <p>If you don't have one yet, go to <a href="https://www.kaggle.com" target="_blank" rel="noopener">kaggle.com</a> and sign up (email, Google, etc.), then verify your email address.</p>
-
-          <h4>2 - Open Settings → API</h4>
-          <p>Once signed in, click your profile picture in the top-right corner → <strong>Settings</strong>, then scroll down to the <strong>API</strong> section.</p>
-
-          <h4>3 - Create your key/token</h4>
-          <p>Click <strong>Create New Token</strong>. Kaggle issues a token that looks like <code>KGAT_…</code> - paste it into the "API key / token" field below, together with your Kaggle username in the field above it.</p>
-          <p>Prefer the older format? The same page also has a <strong>Legacy API Credentials</strong> section with a <strong>Create Legacy API Key</strong> button, which downloads a <code>kaggle.json</code> file holding your username and a 32-character key. Either format is accepted here - just always pair whichever one you use with the username shown on that same Settings page.</p>
-
-          <h4>4 - Verify your phone number</h4>
-          <p>Jobs submitted from here run with internet access turned on (needed to fetch/extract your ORCA package and install a couple of small Python packages). Kaggle only allows internet access on <strong>phone-verified</strong> accounts, under Settings → Phone Verification. Skipping this is the single most common reason a first submission fails with no obvious explanation.</p>
-
-          <div class="help-note">
-            Treat this key/token like a password: anyone who has it can act as you on Kaggle. It's sent only for the moment of a request and is never written to a database or kept long-term on this server; checking "remember me" saves it only in your own browser's local storage. Full details on <a href="#" data-view-link="legal">the Legal, Privacy &amp; Disclaimer page</a>.
-          </div>
-        </div>
-      </details>
-
-      <form id="kaggle-login-form" class="tool-form kaggle-form">
-        <div class="form-row">
-          <label for="kaggle-username">Kaggle username</label>
-          <input type="text" id="kaggle-username" required autocomplete="off">
-        </div>
-        <div class="form-row">
-          <label for="kaggle-key">Kaggle API key / token</label>
-          <input type="password" id="kaggle-key" placeholder="KGAT_… (new token) or the legacy 32-char key" required autocomplete="off">
-        </div>
-        <div class="form-row">
-          <label class="checkbox-row"><input type="checkbox" id="kaggle-remember" checked> Remember me on this browser</label>
-        </div>
-        <span class="field-hint">
-          Signing in also pulls back any jobs already submitted from this Kaggle account, so you can get
-          back to them even after clearing your browser data or switching devices.
+      <!-- ============================== 2. OPTIONAL SECONDARY CLOUD (KAGGLE FALLBACK AT BOTTOM) ============================== -->
+      <div class="server-section-divider" style="margin: 2.5rem 0 1.5rem 0; border-top: 1px solid var(--border-color, #2d3748); position: relative; text-align: center;">
+        <span style="position: relative; top: -0.75rem; background: var(--card-bg, #1a202c); padding: 0.25rem 1rem; border-radius: 999px; font-size: 0.8rem; color: var(--text-muted, #a0aec0); border: 1px solid var(--border-color, #2d3748);">
+          Secondary Cloud Fallback (Optional)
         </span>
-        <button type="submit" class="btn btn-primary"><span class="btn-label">Sign in with Kaggle</span></button>
-      </form>
+      </div>
 
-      <div id="kaggle-login-error" class="alert alert-error hidden"></div>
-      <div id="kaggle-login-loading" class="loading-row hidden"><span class="spinner"></span> Signing in and checking for existing jobs…</div>
-      <div id="kaggle-signed-in-as" class="alert alert-info hidden"></div>
-
-      <details class="help-disclosure">
-        <summary>⚛️ How do I get ORCA, and why does it have to be the Linux version?</summary>
-        <div class="help-body">
-          <h4>What ORCA is</h4>
-          <p>ORCA is a professional quantum-chemistry program developed by Prof. Frank Neese's group and distributed by FACCTs GmbH. It's free for academic and personal, non-commercial use - but it is closed-source and its license forbids redistribution, which is exactly why this site can't just hand you a copy and instead walks you through getting your own.</p>
-
-          <h4>1 - Register on the ORCA Forum</h4>
-          <p>Go to <a href="https://orcaforum.kofo.mpg.de/" target="_blank" rel="noopener">orcaforum.kofo.mpg.de</a> and create a free account, then confirm your email - registration only completes after that step.</p>
-
-          <h4>2 - Accept the license and open Downloads</h4>
-          <p>Once logged in, open the forum's <strong>Downloads</strong> section. You'll be asked to read and accept ORCA's End User License Agreement (EULA) before any file becomes available.</p>
-
-          <h4>3 - Pick the Linux build - this is the part that matters here</h4>
-          <p>ORCA ships builds for Windows, macOS, <em>and</em> Linux. This launcher runs your job inside a <strong>Kaggle Notebook</strong>, which is a cloud machine running Linux - not Windows, not macOS. A Windows <code>.exe</code> or a Mac binary is a different executable format that a Linux machine simply cannot run; only a Linux-compiled build will actually execute there. So from the list, pick the one described along the lines of:</p>
-          <ul>
-            <li><strong>Linux, x86-64, shared-version, .tar.xz Archive</strong> - the "dynamically linked" build, paired with an OpenMPI version shown right in its filename (e.g. <code>orca_6_..._linux_x86-64_shared_openmpi....tar.xz</code>).</li>
-          </ul>
-          <p>If a listing is marked as requiring AVX2 and you aren't sure that applies to you, the plain (non-AVX2) Linux shared build is the safer default.</p>
-
-          <h4>4 - Provide ORCA via your preferred source</h4>
-          <ul>
-            <li><strong>Option A - Kaggle Dataset:</strong> Upload the Linux <code>.tar.xz</code> to Kaggle as a private Dataset and supply its identifier (e.g. <code>username/dataset</code> or dummy example <code>jon534/orca6</code>) or full URL.</li>
-            <li><strong>Option B - Google Drive / direct link:</strong> Provide a direct download URL to your Linux ORCA archive.</li>
-          </ul>
-
-          <div class="help-warn">
-            You're responsible for using ORCA only under your own registration and in line with its EULA (academic/personal use, non-commercial, no redistribution). This site has no part in, and takes no responsibility for, how you obtained or use your copy - see <a href="#" data-view-link="legal">the Legal, Privacy &amp; Disclaimer page</a>.
+      <div class="card" style="border: 1px solid var(--border-color, #2d3748); border-radius: 8px; padding: 1.25rem; background: rgba(15, 23, 42, 0.4); margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h3 style="margin: 0 0 0.25rem 0; font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span>☁️</span> Kaggle Cloud Runner (Secondary Fallback)
+            </h3>
+            <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted, #94a3b8);">
+              Optional remote execution on Kaggle notebooks if you do not have a local ORCA installation on your machine.
+            </p>
           </div>
-        </div>
-      </details>
-
-      <form id="kaggle-form" class="tool-form kaggle-form hidden">
-        <div class="form-row form-row-full">
-          <label>ORCA source</label>
-          <div class="radio-row">
-            <label class="radio-option"><input type="radio" name="orca-source" id="orca-source-dataset" value="dataset" checked> Kaggle Dataset</label>
-            <label class="radio-option"><input type="radio" name="orca-source" id="orca-source-link" value="link"> Google Drive / direct link</label>
-          </div>
-        </div>
-        <div class="form-row" id="kaggle-dataset-row">
-          <label for="kaggle-dataset">Your ORCA Dataset id(s) (comma-separated for more than one)</label>
-          <input type="text" id="kaggle-dataset" placeholder="jon534/orca6" autocomplete="off">
-          <span class="field-hint">Accepts <code>username/dataset</code> (e.g. <code>jon534/orca6</code>) or a full Kaggle Dataset URL.</span>
-        </div>
-        <div class="form-row hidden" id="kaggle-orca-link-row">
-          <label for="kaggle-orca-link">ORCA archive link (Google Drive share link, or a direct .zip/.tar.xz URL)</label>
-          <input type="url" id="kaggle-orca-link" placeholder="https://drive.google.com/file/d/..." autocomplete="off">
-          <span class="field-hint">The Kaggle job downloads and extracts it into scratch storage at start-up. You can also open the link or start the browser download here.</span>
-        </div>
-        <div class="form-row form-row-full">
-          <span class="field-hint">
-            Whichever source you choose is remembered on this device, so you don't retype it
-            for every job.
-            <button type="button" id="kaggle-forget-source" class="link-button">Forget it</button>
-          </span>
+          <button type="button" id="btn-toggle-kaggle-section" class="btn btn-outline btn-small" onclick="const sec = document.getElementById('kaggle-full-config-section'); if (sec) { sec.classList.toggle('hidden'); if (!sec.classList.contains('hidden')) sec.scrollIntoView({behavior:'smooth'}); }">
+            ☁️ Connect Kaggle Account &amp; Settings →
+          </button>
         </div>
 
-        <div class="form-row form-row-full">
-          <label>Input file</label>
-          <div class="radio-row">
-            <label class="radio-option"><input type="radio" name="inp-source" id="inp-source-text" value="text" checked> Paste / generated content</label>
-            <label class="radio-option"><input type="radio" name="inp-source" id="inp-source-upload" value="upload"> Upload a ready .inp file</label>
+        <div id="kaggle-full-config-section" class="hidden" style="margin-top: 1.5rem; border-top: 1px dashed var(--border-color, #2d3748); padding-top: 1.25rem;">
+          <div class="alert alert-info" style="margin-bottom: 1.25rem;">
+            This feature does not distribute the ORCA program. You must provide your own licensed
+            ORCA package (downloaded from the official ORCA forum after your own registration) - either as a <strong>private Kaggle Dataset</strong> attached to the job, or via a
+            <strong>Google Drive / direct download link</strong> that the job downloads and
+            extracts into <code>/tmp</code> itself. Your credentials are used once to submit the
+            job and are never stored on the server - only in your own browser.
           </div>
-        </div>
-        <div id="kaggle-inp-text-row">
-          <div class="form-row">
-            <label for="kaggle-inp-name">Input file name</label>
-            <input type="text" id="kaggle-inp-name" placeholder="molecule.inp">
-            <span class="field-hint">Also used as the job's default name below if you leave that field blank.</span>
-          </div>
-          <div class="form-row form-row-full">
-            <label for="kaggle-inp-content">.inp file content</label>
-            <textarea id="kaggle-inp-content" rows="8" class="mono" placeholder="Build one with the Input Generator above, or paste it here directly"></textarea>
-          </div>
-        </div>
-        <div class="form-row form-row-full hidden" id="kaggle-inp-upload-row">
-          <label for="kaggle-inp-file">Upload .inp file</label>
-          <input type="file" id="kaggle-inp-file" accept=".inp">
-        </div>
 
-        <div class="form-row form-row-full">
-          <label for="kaggle-aux-files">Optional auxiliary files (.xyz / .allxyz / .hess / .mdrestart)</label>
-          <input type="file" id="kaggle-aux-files" multiple accept=".xyz,.allxyz,.hess,.mdrestart">
-        </div>
-        <div class="form-row form-row-full">
-          <label for="kaggle-job-name">Job name <span class="field-optional">(optional)</span></label>
-          <input type="text" id="kaggle-job-name" placeholder="Defaults to the input file's name" maxlength="50" autocomplete="off">
-          <span class="field-hint">Shown here in My Jobs, and used to build the notebook's address on Kaggle (lower-cased, spaces become dashes, plus a short unique suffix). Leave blank to use the input file's name instead.</span>
-        </div>
-        <button type="submit" class="btn btn-primary"><span class="btn-label">🚀 Submit job to Kaggle</span></button>
-      </form>
+          <details class="help-disclosure">
+            <summary>📋 How do I get my Kaggle username and API key/token?</summary>
+            <div class="help-body">
+              <h4>1 - Create a free Kaggle account</h4>
+              <p>If you don't have one yet, go to <a href="https://www.kaggle.com" target="_blank" rel="noopener">kaggle.com</a> and sign up, then verify your email address.</p>
 
-      <div id="kaggle-error" class="alert alert-error hidden"></div>
-      <div id="kaggle-loading" class="loading-row hidden"><span class="spinner"></span> Packaging and pushing the job to Kaggle…</div>
-      <div id="kaggle-result" class="alert alert-success hidden"></div>
+              <h4>2 - Open Settings → API</h4>
+              <p>Once signed in, click your profile picture in the top-right corner → <strong>Settings</strong>, then scroll down to the <strong>API</strong> section.</p>
+
+              <h4>3 - Create your key/token</h4>
+              <p>Click <strong>Create New Token</strong>. Kaggle issues a token that looks like <code>KGAT_…</code> - paste it into the "API key / token" field below, together with your Kaggle username in the field above it.</p>
+              
+              <h4>4 - Verify your phone number</h4>
+              <p>Jobs submitted from here run with internet access turned on (needed to fetch/extract your ORCA package). Kaggle only allows internet access on <strong>phone-verified</strong> accounts, under Settings → Phone Verification.</p>
+
+              <div class="help-note">
+                Treat this key/token like a password: anyone who has it can act as you on Kaggle. When saved, credentials are encrypted at rest via AES-256-GCM authenticated encryption bound to your account and never kept in browser local storage.
+              </div>
+            </div>
+          </details>
+
+          <form id="kaggle-login-form" class="tool-form kaggle-form">
+            <div class="form-row">
+              <label for="kaggle-username">Kaggle username</label>
+              <input type="text" id="kaggle-username" required autocomplete="off">
+            </div>
+            <div class="form-row">
+              <label for="kaggle-key">Kaggle API key / token</label>
+              <input type="password" id="kaggle-key" placeholder="KGAT_… (new token) or the legacy 32-char key" required autocomplete="off">
+            </div>
+            <div class="form-row">
+              <label class="checkbox-row"><input type="checkbox" id="kaggle-remember" checked> Remember credentials in secure account vault</label>
+            </div>
+            <span class="field-hint">
+              Signing in also pulls back any jobs already submitted from this Kaggle account.
+            </span>
+            <button type="submit" class="btn btn-primary"><span class="btn-label">Sign in with Kaggle</span></button>
+          </form>
+
+          <div id="kaggle-login-error" class="alert alert-error hidden"></div>
+          <div id="kaggle-login-loading" class="loading-row hidden"><span class="spinner"></span> Signing in and checking for existing jobs…</div>
+          <div id="kaggle-signed-in-as" class="alert alert-info hidden"></div>
+
+          <details class="help-disclosure" style="margin-top: 1rem;">
+            <summary>⚛️ How do I get ORCA, and why does it have to be the Linux version?</summary>
+            <div class="help-body">
+              <h4>What ORCA is</h4>
+              <p>ORCA is a professional quantum-chemistry program developed by Prof. Frank Neese's group and distributed by FACCTs GmbH. It's free for academic and personal, non-commercial use.</p>
+
+              <h4>1 - Register on the ORCA Forum</h4>
+              <p>Go to <a href="https://orcaforum.kofo.mpg.de/" target="_blank" rel="noopener">orcaforum.kofo.mpg.de</a> and create a free account, then confirm your email.</p>
+
+              <h4>2 - Accept the license and open Downloads</h4>
+              <p>Once logged in, open the forum's <strong>Downloads</strong> section.</p>
+
+              <h4>3 - Pick the Linux build</h4>
+              <p>This cloud launcher runs inside a <strong>Kaggle Linux Notebook</strong>. Only a Linux-compiled build (<code>.tar.xz</code>) will execute there.</p>
+
+              <h4>4 - Provide ORCA via your preferred source</h4>
+              <ul>
+                <li><strong>Option A - Kaggle Dataset:</strong> Upload the Linux <code>.tar.xz</code> to Kaggle as a private Dataset (e.g. <code>username/dataset</code>).</li>
+                <li><strong>Option B - Google Drive / direct link:</strong> Provide a direct download URL to your Linux ORCA archive.</li>
+              </ul>
+            </div>
+          </details>
+
+          <form id="kaggle-form" class="tool-form kaggle-form hidden" style="margin-top: 1rem;">
+            <div class="form-row form-row-full">
+              <label>ORCA source</label>
+              <div class="radio-row">
+                <label class="radio-option"><input type="radio" name="orca-source" id="orca-source-dataset" value="dataset" checked> Kaggle Dataset</label>
+                <label class="radio-option"><input type="radio" name="orca-source" id="orca-source-link" value="link"> Google Drive / direct link</label>
+              </div>
+            </div>
+            <div class="form-row" id="kaggle-dataset-row">
+              <label for="kaggle-dataset">Your ORCA Dataset id(s) (comma-separated for more than one)</label>
+              <input type="text" id="kaggle-dataset" placeholder="jon534/orca6" autocomplete="off">
+              <span class="field-hint">Accepts <code>username/dataset</code> (e.g. <code>jon534/orca6</code>) or a full Kaggle Dataset URL.</span>
+            </div>
+            <div class="form-row hidden" id="kaggle-orca-link-row">
+              <label for="kaggle-orca-link">ORCA archive link (Google Drive share link, or a direct .zip/.tar.xz URL)</label>
+              <input type="url" id="kaggle-orca-link" placeholder="https://drive.google.com/file/d/..." autocomplete="off">
+              <span class="field-hint">The Kaggle job downloads and extracts it into scratch storage at start-up.</span>
+            </div>
+            <div class="form-row form-row-full">
+              <span class="field-hint">
+                Whichever source you choose is remembered on this device.
+                <button type="button" id="kaggle-forget-source" class="link-button">Forget it</button>
+              </span>
+            </div>
+
+            <div class="form-row form-row-full">
+              <label>Input file</label>
+              <div class="radio-row">
+                <label class="radio-option"><input type="radio" name="inp-source" id="inp-source-text" value="text" checked> Paste / generated content</label>
+                <label class="radio-option"><input type="radio" name="inp-source" id="inp-source-upload" value="upload"> Upload a ready .inp file</label>
+              </div>
+            </div>
+            <div id="kaggle-inp-text-row">
+              <div class="form-row">
+                <label for="kaggle-inp-name">Input file name</label>
+                <input type="text" id="kaggle-inp-name" placeholder="molecule.inp">
+                <span class="field-hint">Also used as the job's default name below if you leave that field blank.</span>
+              </div>
+              <div class="form-row form-row-full">
+                <label for="kaggle-inp-content">.inp file content</label>
+                <textarea id="kaggle-inp-content" rows="8" class="mono" placeholder="Build one with the Input Generator above, or paste it here directly"></textarea>
+              </div>
+            </div>
+            <div class="form-row form-row-full hidden" id="kaggle-inp-upload-row">
+              <label for="kaggle-inp-file">Upload .inp file</label>
+              <input type="file" id="kaggle-inp-file" accept=".inp">
+            </div>
+
+            <div class="form-row form-row-full">
+              <label for="kaggle-aux-files">Optional auxiliary files (.xyz / .allxyz / .hess / .mdrestart)</label>
+              <input type="file" id="kaggle-aux-files" multiple accept=".xyz,.allxyz,.hess,.mdrestart">
+            </div>
+            <div class="form-row form-row-full">
+              <label for="kaggle-job-name">Job name <span class="field-optional">(optional)</span></label>
+              <input type="text" id="kaggle-job-name" placeholder="Defaults to the input file's name" maxlength="50" autocomplete="off">
+              <span class="field-hint">Shown in My Jobs, and used to build the notebook's address on Kaggle.</span>
+            </div>
+            <button type="submit" class="btn btn-primary"><span class="btn-label">🚀 Submit job to Kaggle</span></button>
+          </form>
+
+          <div id="kaggle-error" class="alert alert-error hidden"></div>
+          <div id="kaggle-loading" class="loading-row hidden"><span class="spinner"></span> Packaging and pushing the job to Kaggle…</div>
+          <div id="kaggle-result" class="alert alert-success hidden"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ---- My Jobs ---- -->
@@ -983,7 +1429,6 @@ Products:   12 CO2 + 6 H2O</pre>
               <input type="text" id="uv-y-title" class="form-input" style="max-width:170px;" placeholder="Y title (auto)">
               <button type="button" id="uv-titles-reset" class="btn btn-ghost btn-small" title="Restore default titles">Reset Titles</button>
               <button type="button" id="uv-export-xy-visible" class="btn btn-secondary btn-small" title="Export all visible curves as Origin-friendly tab-delimited XY text">Export Visible XY</button>
-              <button type="button" id="uv-remove-imported" class="btn btn-ghost btn-small" title="Remove all imported ORCA spectra (keeps the current calculation)">Remove Imported</button>
               <span class="field-hint" id="engine-uvvis-import-status" style="flex-basis:100%;"></span>
             </div>
           </div>
@@ -1199,15 +1644,14 @@ Products:   12 CO2 + 6 H2O</pre>
                 &#8986; Import ORCA FREQ Output
               </button>
               <input type="file" id="engine-ir-import-freq-input" accept=".out,.log,.txt" multiple class="hidden">
-              <button type="button" id="ir-remove-imported" class="btn btn-ghost btn-small" title="Remove all imported ORCA spectra (keeps the current calculation)">Remove Imported</button>
               <button type="button" id="engine-ir-add-exp-btn" class="btn btn-secondary btn-small" title="Upload experimental IR / FTIR spectrum file (.xlsx, .txt, .csv, .dpt)">
-              <span class="field-hint" id="engine-ir-import-status" style="flex-basis:100%;"></span>
                 🧪 + Upload Experimental IR (.xlsx, .txt, .csv)
               </button>
               <button type="button" id="engine-ir-legend-toggle" class="btn btn-ghost btn-small" title="Toggle Legend Labels in Top-Left Corner">🏷️ Hide Legend</button>
               <button type="button" id="engine-ir-theme-toggle" class="btn btn-ghost btn-small">☀️ White Theme</button>
               <button type="button" id="engine-ir-download-png" class="btn btn-ghost btn-small" title="Export high-resolution publication IR spectrum PNG">📸 High-Res PNG</button>
               <button type="button" id="engine-ir-export-csv" class="btn btn-ghost btn-small" title="Export all active IR spectra to CSV">⬇ Export CSV</button>
+              <span class="field-hint" id="engine-ir-import-status" style="flex-basis:100%;"></span>
             </div>
           </div>
 
@@ -1646,17 +2090,17 @@ Products:   12 CO2 + 6 H2O</pre>
 
         <div class="thermo-metrics-grid">
           <div class="thermo-tile highlight-tile">
-            <span class="thermo-label">Gibbs Free Energy (ΔG°)</span>
+            <span class="thermo-label">Reaction Gibbs Free Energy (ΔG°)</span>
             <span class="thermo-val" id="thermo-val-dg-kcal"> - kcal/mol</span>
             <span class="thermo-sub" id="thermo-val-dg-kj"> - kJ/mol</span>
           </div>
           <div class="thermo-tile">
-            <span class="thermo-label">Enthalpy Change / BDE (ΔH°)</span>
+            <span class="thermo-label">Reaction Enthalpy (ΔH°)</span>
             <span class="thermo-val" id="thermo-val-dh-kcal"> - kcal/mol</span>
             <span class="thermo-sub" id="thermo-val-dh-kj"> - kJ/mol</span>
           </div>
           <div class="thermo-tile">
-            <span class="thermo-label">Entropy Change (ΔS°)</span>
+            <span class="thermo-label">Reaction Entropy (ΔS°)</span>
             <span class="thermo-val" id="thermo-val-ds"> - cal/(mol·K)</span>
             <span class="thermo-sub" id="thermo-val-ds-si"> - J/(mol·K)</span>
           </div>
@@ -1666,14 +2110,14 @@ Products:   12 CO2 + 6 H2O</pre>
             <span class="thermo-sub">exp(-ΔG° / RT)</span>
           </div>
           <div class="thermo-tile">
-            <span class="thermo-label">Electronic + ZPE (ΔE<sub>0</sub> / BDE<sub>0K</sub>)</span>
+            <span class="thermo-label">Zero-Point Corrected Energy (ΔE<sub>0</sub>)</span>
             <span class="thermo-val mono" id="thermo-val-de0"> - kcal/mol</span>
-            <span class="thermo-sub">0 K Energy</span>
+            <span class="thermo-sub">0 K Energy (E<sub>el</sub> + ZPE)</span>
           </div>
           <div class="thermo-tile">
-            <span class="thermo-label">Pure Electronic Energy (ΔE<sub>el</sub>)</span>
+            <span class="thermo-label">Electronic Reaction Energy (ΔE<sub>el</sub>)</span>
             <span class="thermo-val mono" id="thermo-val-deel"> - kcal/mol</span>
-            <span class="thermo-sub">Bottom of well</span>
+            <span class="thermo-sub">Bottom of potential well</span>
           </div>
         </div>
 
@@ -1763,8 +2207,8 @@ Products:   12 CO2 + 6 H2O</pre>
         <p>The Kaggle Launcher submits and manages jobs using <strong>your own</strong> Kaggle account and its compute quota - never ours. Concretely:</p>
         <ul>
           <li>Your Kaggle username and API key/token are sent to our server only at the moment of a sign-in, submission, status-check, download, or delete request.</li>
-          <li>They're held only for the duration of that single request - so the official Kaggle command-line tool can act on your behalf - and are deleted immediately afterward. We do not keep a database of user credentials.</li>
-          <li>If you tick "remember me", your username and key/token are saved only inside your own browser's local storage, on your own device. We have no access to that copy; clearing it, or using "Sign out", removes it.</li>
+          <li>They are held in memory strictly while active. If you enable "remember credentials", your credentials are stored encrypted at rest using AES-256-GCM AEAD bound to your authenticated user account in the secure vault. Plaintext API secrets are never stored in browser local storage.</li>
+          <li>If you sign out or choose to forget credentials, they are permanently deleted from both browser memory and the secure server vault.</li>
           <li>Job results are streamed directly from Kaggle's own servers to your browser; we don't keep a copy of your input files, coordinates, or results once a request finishes.</li>
           <li>Any compute time, storage, or other usage on Kaggle is billed against, and governed by the terms of, your own Kaggle account - see Kaggle's own <a href="https://www.kaggle.com/terms" target="_blank" rel="noopener">Terms of Use</a>.</li>
         </ul>
@@ -1818,7 +2262,7 @@ Products:   12 CO2 + 6 H2O</pre>
         <p>This Site does not use advertising or analytics cookies. It uses only what's strictly needed to function:</p>
         <ul>
           <li>A <strong>session cookie</strong>, only if Google Sign-In is enabled and you use it, to keep you signed in during your visit.</li>
-          <li><strong>Browser local storage</strong> (not a cookie, but a similar on-device technology) to optionally remember your Kaggle username/key and your job list on this device, only if you tick "remember me" - see Section 4.</li>
+          <li><strong>Browser local storage</strong> (not a cookie, but a similar on-device technology) to optionally remember non-secret UI preferences, your Kaggle username, and your job list on this device. Raw API keys/tokens are never kept in browser local storage.</li>
         </ul>
         <p>You can clear either at any time through your browser settings, or with the "Sign out" buttons on the Site.</p>
       </div>
@@ -2054,6 +2498,194 @@ Products:   12 CO2 + 6 H2O</pre>
   </div>
 </div>
 
+<!-- ============================== DOWNLOAD LOCAL RUNNER MODAL ============================== -->
+<div id="download-agent-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="download-agent-modal-title">
+  <div class="modal-window" style="max-width: 780px;">
+    <div class="modal-header">
+      <span class="modal-step-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">Local Agent Package</span>
+      <h3 id="download-agent-modal-title">📥 Download Local Companion Agent</h3>
+      <button type="button" id="btn-close-download-modal" class="modal-close" aria-label="Close" onclick="document.getElementById('download-agent-modal')?.classList.add('hidden')">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <p style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 1.25rem;">
+        Execute ORCA quantum chemistry calculations directly on your local workstation, lab server, or university HPC cluster without uploading calculations to third parties.
+      </p>
+
+      <!-- OS Selector Tabs -->
+      <div class="workspace-nav" style="margin-bottom: 1.25rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+        <button type="button" class="ws-tab is-active" data-os-target="os-windows">🪟 Windows (x64)</button>
+        <button type="button" class="ws-tab" data-os-target="os-linux">🐧 Linux (x64 / Workstation)</button>
+        <button type="button" class="ws-tab" data-os-target="os-macos">🍎 macOS (Apple / Intel)</button>
+        <button type="button" class="ws-tab" data-os-target="os-hpc">🏛️ HPC Supercomputer (Slurm/PBS/LSF)</button>
+      </div>
+
+      <!-- Windows Tab -->
+      <div id="os-windows" class="os-panel is-active" style="background: var(--surface-sunken); padding: 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <h4 style="margin: 0 0 0.25rem 0;">Windows Agent Package (.zip)</h4>
+            <span class="mono small" style="color: var(--text-muted);">Includes install_and_run.bat &amp; PowerShell bootstrap</span>
+          </div>
+          <a href="/api/v1/local-agent/packages/windows-x64" class="btn btn-primary btn-small" download>⬇ Download Windows ZIP</a>
+        </div>
+        <div style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;">
+          <strong>Quick Launch Steps:</strong>
+          <ol style="margin: 0.35rem 0 0 0; padding-left: 1.2rem;">
+            <li>Extract <code>ChemistryLabAgent-Windows.zip</code> to your computer.</li>
+            <li>Double-click <code>install_and_run.bat</code> (or run <code>.\bootstrap_windows.ps1</code>).</li>
+            <li>Copy the <strong>CONNECTION API</strong> (<code>CLA_...</code>) displayed in the console.</li>
+            <li>Click <strong>Connect Computer</strong> in Chemistry Lab and paste the API key.</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- Linux Tab -->
+      <div id="os-linux" class="os-panel hidden" style="background: var(--surface-sunken); padding: 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <h4 style="margin: 0 0 0.25rem 0;">Linux Workstation Package (.zip)</h4>
+            <span class="mono small" style="color: var(--text-muted);">Ubuntu, Debian, Fedora, RHEL, Arch</span>
+          </div>
+          <a href="/api/v1/local-agent/packages/linux-x64" class="btn btn-primary btn-small" download>⬇ Download Linux ZIP</a>
+        </div>
+        <div style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;">
+          <strong>Quick Launch Steps:</strong>
+          <ol style="margin: 0.35rem 0 0 0; padding-left: 1.2rem;">
+            <li>Extract package: <code>unzip ChemistryLabAgent-Linux.zip &amp;&amp; cd ChemistryLabAgent-Linux</code></li>
+            <li>Run: <code>bash install_and_run.sh</code> (or <code>./start_agent.sh</code>)</li>
+            <li>Copy the <strong>CONNECTION API</strong> (<code>CLA_...</code>) and paste it into the Connect Computer modal.</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- macOS Tab -->
+      <div id="os-macos" class="os-panel hidden" style="background: var(--surface-sunken); padding: 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <h4 style="margin: 0 0 0.25rem 0;">macOS Package (.zip)</h4>
+            <span class="mono small" style="color: var(--text-muted);">Apple Silicon (M1/M2/M3/M4) &amp; Intel Mac</span>
+          </div>
+          <a href="/api/v1/local-agent/packages/macos" class="btn btn-primary btn-small" download>⬇ Download macOS ZIP</a>
+        </div>
+        <div style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;">
+          <strong>Quick Launch Steps:</strong>
+          <ol style="margin: 0.35rem 0 0 0; padding-left: 1.2rem;">
+            <li>Extract <code>ChemistryLabAgent-macOS.zip</code>.</li>
+            <li>Double-click <code>install_and_run.command</code> or run <code>bash install_and_run.sh</code> in Terminal.</li>
+            <li>Copy the <strong>CONNECTION API</strong> and paste into Chemistry Lab.</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- HPC Tab -->
+      <div id="os-hpc" class="os-panel hidden" style="background: var(--surface-sunken); padding: 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <h4 style="margin: 0 0 0.25rem 0;">HPC Supercomputer Agent (.zip)</h4>
+            <span class="mono small" style="color: var(--text-muted);">Slurm, PBS Pro, LSF integration</span>
+          </div>
+          <a href="/api/v1/local-agent/packages/hpc-linux" class="btn btn-primary btn-small" download>⬇ Download HPC Package</a>
+        </div>
+        <div style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;">
+          <strong>HPC Cluster Launch:</strong>
+          <ol style="margin: 0.35rem 0 0 0; padding-left: 1.2rem;">
+            <li>Extract on your HPC login node or scratch folder.</li>
+            <li>Run <code>bash install_hpc_agent.sh</code> (or submit via <code>sbatch</code>/<code>qsub</code>).</li>
+            <li>Copy the ephemeral Connection API and connect your web session to the cluster.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 1.5rem; justify-content: space-between;">
+        <button type="button" class="btn btn-outline btn-small" onclick="document.getElementById('download-agent-modal')?.classList.add('hidden'); document.getElementById('connect-computer-modal')?.classList.remove('hidden');">
+          🔗 Already Running? Connect Computer →
+        </button>
+        <button type="button" class="btn btn-ghost btn-small" onclick="document.getElementById('download-agent-modal')?.classList.add('hidden')">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== CONNECT COMPUTER MODAL ============================== -->
+<div id="connect-computer-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="connect-computer-modal-title">
+  <div class="modal-window" style="max-width: 600px;">
+    <div class="modal-header">
+      <span class="modal-step-badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Local &amp; HPC Agent</span>
+      <h3 id="connect-computer-modal-title">💻 Connect Local Computer / Cluster</h3>
+      <button type="button" id="btn-close-connect-modal" class="modal-close" aria-label="Close" onclick="document.getElementById('connect-computer-modal')?.classList.add('hidden')">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.25rem;">
+        When you run the Local Companion Agent script on your computer, it generates a unique, one-time <strong>Connection API</strong> (<code>CLA_...</code>). Enter or paste it below to link your browser session securely:
+      </p>
+
+      <div class="form-group mb-3">
+        <label for="input-connection-api" class="form-label font-bold">Ephemeral Connection API Key <span class="text-danger">*</span></label>
+        <div style="display: flex; gap: 0.5rem;">
+          <input type="text" id="input-connection-api" class="form-control mono flex-1" placeholder="e.g. CLA_a1b2c3d4e5f6g7h8..." autocomplete="off">
+          <input type="file" id="pairing-txt-file-input" accept=".txt" class="hidden">
+          <button type="button" id="btn-import-pairing-txt" class="btn btn-ghost btn-small" title="Import from chemistry_lab_pairing.txt">📁 Load File</button>
+        </div>
+        <span class="small text-muted mt-1" style="display: block;">Valid only while your agent process is running on your machine.</span>
+      </div>
+
+      <div class="form-group mb-3">
+        <label for="input-device-custom-name" class="form-label">Computer / Workstation Label <span class="small text-muted">(Optional)</span></label>
+        <input type="text" id="input-device-custom-name" class="form-control" placeholder="e.g. Lab Desktop RTX, MacBook Pro, HPC Cluster">
+      </div>
+
+      <div id="connect-modal-error" class="alert alert-error hidden mb-3"></div>
+
+      <div class="modal-actions" style="margin-top: 1.25rem; justify-content: space-between;">
+        <button type="button" class="btn btn-outline btn-small" onclick="document.getElementById('connect-computer-modal')?.classList.add('hidden'); document.getElementById('download-agent-modal')?.classList.remove('hidden');">
+          📥 Download Agent Package
+        </button>
+        <div style="display: flex; gap: 0.5rem;">
+          <button type="button" class="btn btn-ghost btn-small" onclick="document.getElementById('connect-computer-modal')?.classList.add('hidden')">Cancel</button>
+          <button type="button" id="btn-submit-connection-api" class="btn btn-primary btn-small">Connect Computer →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== KAGGLE CLOUD MODAL ============================== -->
+<div id="kaggle-cloud-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="kaggle-modal-title">
+  <div class="modal-window" style="max-width: 540px;">
+    <div class="modal-header">
+      <span class="modal-step-badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">Cloud Backend</span>
+      <h3 id="kaggle-modal-title">☁️ Connect Kaggle Account</h3>
+      <button type="button" id="btn-close-kaggle-modal" class="modal-close" aria-label="Close" onclick="document.getElementById('kaggle-cloud-modal')?.classList.add('hidden')">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.25rem;">
+        Use your Kaggle account to run calculations on cloud GPUs/CPUs. Your API key is encrypted and stored only in your browser session.
+      </p>
+
+      <div class="form-group mb-3">
+        <label for="modal-kaggle-username" class="form-label font-bold">Kaggle Username <span class="text-danger">*</span></label>
+        <input type="text" id="modal-kaggle-username" class="form-control" placeholder="e.g. janesmith" autocomplete="off">
+      </div>
+
+      <div class="form-group mb-3">
+        <label for="modal-kaggle-key" class="form-label font-bold">Kaggle API Key <span class="text-danger">*</span></label>
+        <input type="password" id="modal-kaggle-key" class="form-control mono" placeholder="From kaggle.json: 32-character key" autocomplete="off">
+        <span class="small text-muted mt-1" style="display: block;">Get this from Kaggle &rarr; Settings &rarr; API &rarr; Create New Token.</span>
+      </div>
+
+      <div id="kaggle-modal-error" class="alert alert-error hidden mb-3"></div>
+
+      <div class="modal-actions" style="margin-top: 1.25rem; justify-content: flex-end; gap: 0.5rem;">
+        <button type="button" class="btn btn-ghost btn-small" onclick="document.getElementById('kaggle-cloud-modal')?.classList.add('hidden')">Cancel</button>
+        <button type="button" id="btn-save-kaggle-creds" class="btn btn-primary btn-small">Save &amp; Enable Cloud Backend</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script id="orca-config" type="application/json">
 {
   "calc_types": {{ calc_types | tojson }},
@@ -2069,9 +2701,126 @@ Products:   12 CO2 + 6 H2O</pre>
   "scf_options": {{ scf_options | tojson }}
 }
 </script>
-<script src="{{ url_for('static', filename='js/app.js') }}?v=20260827a"></script>
-<script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
-<script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
-<script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>
+  <!-- Unified Reaction Calculation Setup Modal -->
+  <div id="unified-reaction-setup-modal" class="modal-backdrop hidden" style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div class="modal-dialog" style="background: #1a202c; color: #e2e8f0; border: 1px solid #2d3748; border-radius: 12px; width: 90%; max-width: 860px; max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6);">
+      <div class="d-flex justify-between align-center border-bottom pb-3 mb-3" style="border-color: #2d3748 !important;">
+        <div>
+          <h3 class="m-0 font-bold" style="font-size: 1.35rem; color: #f8fafc;">⚡ Unified Reaction Quantum Calculation Setup</h3>
+          <p class="small m-0" style="color: #94a3b8;">Generate 3D Cartesian coordinates and standardized ORCA inputs applied across all reactants &amp; products.</p>
+        </div>
+        <button type="button" id="btn-close-unified-setup" class="btn btn-ghost btn-small" style="font-size: 1.25rem; line-height: 1; color: #94a3b8;">&times;</button>
+      </div>
+
+      <!-- Reaction Preview Box -->
+      <div class="p-3 rounded mb-3" style="background: #0f172a; border: 1px solid #334155;">
+        <span class="small font-bold uppercase" style="color: #94a3b8;">Reaction Equation:</span>
+        <div id="unified-setup-equation" class="font-bold mt-1" style="font-size: 1.15rem; color: #38bdf8;">-</div>
+        <div id="unified-setup-species-tags" class="d-flex gap-2 flex-wrap mt-2"></div>
+      </div>
+
+      <!-- Prominent Notice Banner -->
+      <div class="alert alert-info mb-3" style="background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(14, 165, 233, 0.35); color: #bae6fd; padding: 0.75rem 1rem; border-radius: 8px;">
+        <strong style="color: #38bdf8;">📌 Note:</strong> The quantum chemical settings chosen below will be applied uniformly across <strong>all reactants and products</strong> in the equation.
+      </div>
+
+      <!-- Unified Calculation Form -->
+      <form id="unified-setup-form">
+        <div class="form-grid mb-3">
+          <!-- Stages / Workflow Preset -->
+          <div class="form-group" style="grid-column: span 2;">
+            <label class="form-label font-bold" style="color: #cbd5e1;">Calculation Stages (Workflow Steps):</label>
+            <select id="unified-setup-stages" class="form-select" style="background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 0.5rem; border-radius: 6px;">
+              <option value="opt_freq" selected>Opt + Freq (Geometry Optimization &amp; Thermochemistry) [Recommended]</option>
+              <option value="opt">Optimization Only (Opt)</option>
+              <option value="freq">Frequency Only (Freq - on initial coordinates)</option>
+              <option value="sp">Single Point Energy (SP)</option>
+              <option value="opt_freq_sp">Multi-Stage: Opt &rarr; Freq &rarr; High-Level SP</option>
+            </select>
+          </div>
+
+          <!-- Method / Functional -->
+          <div class="form-group">
+            <label class="form-label font-bold" style="color: #cbd5e1;">Method / Functional:</label>
+            <select id="unified-setup-method" class="form-select" style="background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 0.5rem; border-radius: 6px;">
+              <option value="B3LYP" selected>B3LYP (Hybrid GGA)</option>
+              <option value="r2SCAN-3c">r2SCAN-3c (Composite Meta-GGA - Fast &amp; Accurate)</option>
+              <option value="PBE0">PBE0 (Hybrid GGA)</option>
+              <option value="wB97X-D4">wB97X-D4 (Range-Separated)</option>
+              <option value="BP86">BP86 (Pure GGA)</option>
+              <option value="HF">Hartree-Fock (HF)</option>
+            </select>
+          </div>
+
+          <!-- Basis Set -->
+          <div class="form-group">
+            <label class="form-label font-bold" style="color: #cbd5e1;">Basis Set:</label>
+            <select id="unified-setup-basis" class="form-select" style="background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 0.5rem; border-radius: 6px;">
+              <option value="def2-SVP" selected>def2-SVP (Split-Valence Polarized)</option>
+              <option value="def2-TZVP">def2-TZVP (Triple-Zeta Polarized)</option>
+              <option value="def2-mSVP">def2-mSVP</option>
+              <option value="6-31G*">6-31G* (Pople)</option>
+              <option value="cc-pVDZ">cc-pVDZ (Dunning)</option>
+            </select>
+          </div>
+
+          <!-- Dispersion Correction -->
+          <div class="form-group">
+            <label class="form-label font-bold" style="color: #cbd5e1;">Dispersion Correction:</label>
+            <select id="unified-setup-dispersion" class="form-select" style="background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 0.5rem; border-radius: 6px;">
+              <option value="D3BJ" selected>D3BJ (Grimme with Becke-Johnson damping)</option>
+              <option value="D3ZERO">D3ZERO (Grimme zero-damping)</option>
+              <option value="D4">D4 (DFT-D4)</option>
+              <option value="none">None (No Dispersion)</option>
+            </select>
+          </div>
+
+          <!-- Solvation Model -->
+          <div class="form-group">
+            <label class="form-label font-bold" style="color: #cbd5e1;">Solvent Model:</label>
+            <select id="unified-setup-solvent" class="form-select" style="background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 0.5rem; border-radius: 6px;">
+              <option value="gas" selected>Gas Phase (No Solvation)</option>
+              <option value="CPCM(Water)">CPCM (Water)</option>
+              <option value="CPCM(Acetonitrile)">CPCM (Acetonitrile)</option>
+              <option value="CPCM(Ethanol)">CPCM (Ethanol)</option>
+              <option value="CPCM(DCM)">CPCM (Dichloromethane)</option>
+              <option value="SMD(Water)">SMD (Water)</option>
+              <option value="SMD(DMSO)">SMD (DMSO)</option>
+            </select>
+          </div>
+
+          <!-- Target Execution Host -->
+          <div class="form-group">
+            <label class="form-label font-bold" style="color: #cbd5e1;">Target Execution Host:</label>
+            <select id="unified-setup-target-host" class="form-select" style="background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 0.5rem; border-radius: 6px;">
+              <option value="server_host" selected>Server Host ORCA</option>
+              <option value="local_agent">Connected Local Agent / Workstation</option>
+            </select>
+          </div>
+
+          <!-- Max Concurrency -->
+          <div class="form-group">
+            <label class="form-label font-bold" style="color: #cbd5e1;">Max Concurrent Jobs (Queue Limit):</label>
+            <div class="d-flex align-center gap-2">
+              <input type="number" id="unified-setup-max-concurrency" class="form-control" value="1" min="1" max="8" style="width: 80px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 0.4rem; border-radius: 6px;">
+              <span class="small" style="color: #94a3b8;">Exceeding jobs enter queue and run sequentially.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-end gap-2 border-top pt-3" style="border-color: #2d3748 !important;">
+          <button type="button" id="btn-cancel-unified-setup" class="btn btn-ghost" style="color: #cbd5e1;">Cancel</button>
+          <button type="submit" id="btn-submit-unified-setup" class="btn btn-primary font-bold">⚡ Generate 3D Inputs &amp; Run Workflow &rarr;</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20260827a"></script>
+  <script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
+  <script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
+  <script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>
+  <script src="/static/js/local-agent.js"></script>
+  <script src="/static/js/reaction-unified.js"></script>
 </body>
 </html>

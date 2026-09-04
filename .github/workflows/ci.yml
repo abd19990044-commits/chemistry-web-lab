@@ -60,6 +60,9 @@ jobs:
             reaction_conditions.py \
             sitecustomize.py \
             usercustomize.py \
+            api \
+            services \
+            local_agent \
             chem_core \
             orca_orchestrator \
             orca_engine/src \
@@ -99,7 +102,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install pytest pytest-cov jsonschema numpy
-          python -m pip install -e ./orca_engine
+          python -m pip install ./orca_engine
 
       - name: Run Pytest Test Suite
         run: |
@@ -181,7 +184,7 @@ jobs:
           PY
 
   clean-install-verification:
-    name: Clean Clone & Package Install
+    name: Clean Wheel Distributable & Readiness Verification
     needs: [lint-and-static-check]
     runs-on: ubuntu-latest
     steps:
@@ -193,13 +196,44 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify Clean Package Build & Installation
+      - name: Build Distributable Wheel
         run: |
           python -m pip install --upgrade pip build
-          python -m pip install -r requirements.txt
-          python -m pip install pytest jsonschema numpy
-          python -m pip install -e ./orca_engine
-          pytest tests/test_canonical_scientific_schema.py tests/test_archive_security.py
+          python -m build --wheel
+
+      - name: Install Wheel in Isolated Environment & Verify Readiness
+        run: |
+          python -m venv /tmp/test_clean_venv
+          source /tmp/test_clean_venv/bin/activate
+          pip install --upgrade pip
+          pip install dist/*.whl
+          pip install pytest httpx
+          python -c "import api.main, orca_engine, services.reaction_diagram_service; print('Imported api.main, orca_engine, and services.reaction_diagram_service successfully from built wheel!')"
+          python -c "
+          from fastapi.testclient import TestClient
+          from api.main import app
+          client = TestClient(app)
+          resp = client.get('/api/v1/ready')
+          assert resp.status_code == 200, f'Expected 200, got {resp.status_code}: {resp.text}'
+          data = resp.json()
+          assert data.get('ready') is True, f'Expected ready True, got {data}'
+          print('FastAPI /api/v1/ready probe verified 200 OK with ready: true')
+
+          resp_ui = client.get('/')
+          assert resp_ui.status_code == 200, f'Expected 200, got {resp_ui.status_code}'
+          assert 'Chemistry Lab' in resp_ui.text, 'Expected Chemistry Lab in HTML'
+          print('Flask legacy UI mount verified 200 OK')
+
+          resp_js = client.get('/static/js/app.js')
+          assert resp_js.status_code == 200, f'Expected 200, got {resp_js.status_code}'
+          assert len(resp_js.text) > 100, 'Expected static JS content'
+          print('Static asset /static/js/app.js verified 200 OK')
+
+          resp_rxn_js = client.get('/static/js/reaction-unified.js')
+          assert resp_rxn_js.status_code == 200, f'Expected 200, got {resp_rxn_js.status_code}'
+          assert len(resp_rxn_js.text) > 100, 'Expected reaction-unified JS content'
+          print('Static asset /static/js/reaction-unified.js verified 200 OK')
+          "
 
   ci-gate:
     name: Release Gate

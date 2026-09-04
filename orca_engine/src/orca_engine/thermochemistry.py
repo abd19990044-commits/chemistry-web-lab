@@ -606,6 +606,11 @@ class ThermochemistryEngine:
             latest_e_job = self._get_best_electronic_job(name, molecule.jobs)
             freq_job = self._get_best_freq_job(name, molecule.jobs)
             if latest_e_job and freq_job and latest_e_job is not freq_job:
+                if latest_e_job.elements and freq_job.elements and latest_e_job.stoichiometry() != freq_job.stoichiometry():
+                    report.warnings.append(
+                        f"Incompatible Opt/Freq and SP compositions for '{name}': "
+                        f"The Opt/Freq and SP files do not describe the same molecular composition."
+                    )
                 if latest_e_job.geometry_hash and freq_job.geometry_hash and latest_e_job.geometry_hash != freq_job.geometry_hash:
                     report.geometry_mismatches.append(f"{name}: GEOMETRY_MISMATCH")
                     report.warnings.append(f"Composite calculation for {name} has mismatched geometries between frequency and electronic step.")
@@ -662,12 +667,27 @@ class ThermochemistryEngine:
             report.warnings.append(f"Gibbs energies were computed at different temperatures ({rendered_t}).")
 
 
+    def _stoichiometry_job(self, molecule_name: str) -> JobData | None:
+        """Return the authoritative job with molecular geometry/elements for a species."""
+        molecule = self._molecules.get(normalize_molecule_name(molecule_name))
+        if molecule is None or not molecule.jobs:
+            return None
+        # Prefer the best frequency/opt job with elements
+        for job in reversed(molecule.jobs):
+            if job.elements and (job.gibbs_free_energy_eh is not None or job.total_enthalpy_eh is not None or job.zpe_eh is not None):
+                return job
+        # Fallback to any job with elements
+        for job in reversed(molecule.jobs):
+            if job.elements:
+                return job
+        return molecule.jobs[-1]
+
     def _side_stoichiometry(self, terms: list[ReactionTerm]) -> tuple[dict[str, float], bool]:
         """Return weighted element counts for one side and whether all are known."""
 
         totals: defaultdict[str, float] = defaultdict(float)
         for term in terms:
-            job = self._reference_job(term.molecule_name)
+            job = self._stoichiometry_job(term.molecule_name)
             if job is None or not job.elements:
                 return dict(totals), False
             for element, count in job.stoichiometry().items():
@@ -679,22 +699,15 @@ class ThermochemistryEngine:
 
         total = 0.0
         for term in terms:
-            job = self._reference_job(term.molecule_name)
+            job = self._stoichiometry_job(term.molecule_name)
             if job is None or job.metadata.charge is None:
                 return total, False
             total += term.coefficient * job.metadata.charge
         return total, True
 
     def _reference_job(self, molecule_name: str) -> JobData | None:
-        """Return the job used as the energy reference for a species."""
-
-        molecule = self._molecules.get(normalize_molecule_name(molecule_name))
-        if molecule is None or not molecule.jobs:
-            return None
-        for job in reversed(molecule.jobs):
-            if job.e_elec_eh is not None:
-                return job
-        return molecule.jobs[-1]
+        """Return the job used as reference for a species."""
+        return self._stoichiometry_job(molecule_name)
 
     def _log_consistency(self, report: ConsistencyReport) -> None:
         """Emit one warning per failed consistency check."""
@@ -748,13 +761,7 @@ class ThermochemistryEngine:
             return self._get_best_e0(molecule_name, molecule.jobs)
 
         latest_electronic = self._get_best_electronic(molecule_name, molecule.jobs)
-        freq_job = None
-        for job in reversed(molecule.jobs):
-            if (kind is EnergyKind.GIBBS and job.gibbs_free_energy_eh is not None) or \
-               (kind is EnergyKind.ENTHALPY and job.total_enthalpy_eh is not None) or \
-               (kind is EnergyKind.ENTROPY and job.entropy_term_eh is not None):
-                freq_job = job
-                break
+        freq_job = self._get_best_freq_job(molecule_name, molecule.jobs)
 
         if freq_job is None:
             LOGGER.debug("No %s reference energy found for species '%s'", kind.value, molecule_name)
@@ -794,43 +801,34 @@ class ThermochemistryEngine:
 
     def _get_best_electronic_job(self, molecule_name: str, jobs: list[JobData]) -> JobData | None:
         for job in reversed(jobs):
-            if job.e_elec_eh is not None:
+            if job.e_elec_eh is not None and job.terminated_normally is not False:
                 return job
         return None
 
     def _get_best_freq_job(self, molecule_name: str, jobs: list[JobData]) -> JobData | None:
         for job in reversed(jobs):
-            if job.gibbs_free_energy_eh is not None or job.total_enthalpy_eh is not None or job.entropy_term_eh is not None:
+            if (job.gibbs_free_energy_eh is not None or job.total_enthalpy_eh is not None or job.zpe_eh is not None or job.entropy_term_eh is not None) and job.terminated_normally is not False:
                 return job
         return None
 
     def _get_best_electronic(self, molecule_name: str, jobs: list[JobData]) -> float | None:
-        """Return final electronic energy in Hartree."""
-
-        for job in reversed(jobs):
-            if job.e_elec_eh is not None:
-                return job.e_elec_eh
+        """Return final electronic energy in Hartree from latest normally terminated job."""
+        job = self._get_best_electronic_job(molecule_name, jobs)
+        if job is not None and job.e_elec_eh is not None:
+            return job.e_elec_eh
 
         LOGGER.debug("No electronic reference energy found for species '%s'", molecule_name)
         return None
 
     def _get_best_e0(self, molecule_name: str, jobs: list[JobData]) -> float | None:
-        """Return final electronic plus ZPE energy, allowing split job blocks.
-
-        A frequency job is frequently run separately from the single point that
-        produced the electronic energy. Both are searched from the end of the
-        job list, but only within the same molecule.
-        """
-
-        electronic: float | None = None
-        zpe: float | None = None
-        for job in reversed(jobs):
-            if electronic is None and job.e_elec_eh is not None:
-                electronic = job.e_elec_eh
-            if zpe is None and job.zpe_eh is not None:
-                zpe = job.zpe_eh
-            if electronic is not None and zpe is not None:
-                return electronic + zpe
+        """Return final electronic plus ZPE energy, supporting multi-level composite calculations."""
+        latest_electronic = self._get_best_electronic(molecule_name, jobs)
+        freq_job = self._get_best_freq_job(molecule_name, jobs)
+        if freq_job is not None and freq_job.zpe_eh is not None:
+            if latest_electronic is not None:
+                return latest_electronic + freq_job.zpe_eh
+            if freq_job.e_elec_eh is not None:
+                return freq_job.e_elec_eh + freq_job.zpe_eh
 
         LOGGER.debug("No electronic+ZPE reference energy found for species '%s'", molecule_name)
         return None

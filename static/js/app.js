@@ -12,6 +12,52 @@
       .replace(/'/g, "&#039;");
   }
 
+  // Helper to extract session CSRF token from meta tag or cookie
+  function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && meta.content) return meta.content;
+    const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : "";
+  }
+
+  // Intercept window.fetch to automatically include CSRF token for mutating requests
+  const _nativeFetch = window.fetch;
+  window.fetch = function(resource, init) {
+    let opts = init ? { ...init } : {};
+    let method = "GET";
+    if (opts.method) {
+      method = opts.method.toUpperCase();
+    } else if (typeof Request !== "undefined" && resource instanceof Request) {
+      method = resource.method.toUpperCase();
+    }
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+      const csrf = getCsrfToken();
+      if (csrf) {
+        if (typeof Request !== "undefined" && resource instanceof Request) {
+          try {
+            resource.headers.set("X-CSRF-Token", csrf);
+          } catch (_) {}
+        }
+        if (!opts.headers) {
+          opts.headers = { "X-CSRF-Token": csrf };
+        } else if (typeof Headers !== "undefined" && opts.headers instanceof Headers) {
+          if (!opts.headers.has("X-CSRF-Token")) {
+            opts.headers.set("X-CSRF-Token", csrf);
+          }
+        } else if (Array.isArray(opts.headers)) {
+          if (!opts.headers.some(([k]) => k.toLowerCase() === "x-csrf-token")) {
+            opts.headers.push(["X-CSRF-Token", csrf]);
+          }
+        } else {
+          if (!opts.headers["X-CSRF-Token"] && !opts.headers["x-csrf-token"]) {
+            opts.headers["X-CSRF-Token"] = csrf;
+          }
+        }
+      }
+    }
+    return _nativeFetch.call(this, resource, opts);
+  };
+
   // Helper to determine if a job or calculation output represents a Geometry Optimization (OPT)
   function isOptimizationJob(job) {
     if (!job) return false;
@@ -158,7 +204,7 @@
   // keep their own behaviour untouched.
   const initialView = (document.body && document.body.dataset)
     ? document.body.dataset.initialView : '';
-  if (['draw', 'orca', 'quantum'].indexOf(initialView) !== -1) {
+  if (['draw', 'reactions', 'orca', 'quantum'].indexOf(initialView) !== -1) {
     try { showView(initialView); } catch (err) { console.warn('initial view activation failed:', err); }
   }
 
@@ -312,21 +358,45 @@
   function hide(el) { el.classList.add("hidden"); }
   function show(el) { el.classList.remove("hidden"); }
 
+  function escapeHtml(str) {
+    if (str == null) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   function sanitizeToastHtml(input) {
     if (input == null) return "";
     const str = String(input);
     try {
       const parser = new DOMParser();
       const doc = parser.parseFromString(str, "text/html");
-      const dangerous = doc.querySelectorAll("script, iframe, object, embed, form, link, style, base, meta");
-      dangerous.forEach(el => el.remove());
-      const all = doc.querySelectorAll("*");
-      all.forEach(el => {
+      const allowedTags = new Set(["STRONG", "B", "EM", "I", "SPAN", "BR", "CODE", "P", "DIV", "SMALL"]);
+      const allElements = Array.from(doc.body.querySelectorAll("*"));
+      allElements.forEach(el => {
+        if (!allowedTags.has(el.tagName)) {
+          const textNode = doc.createTextNode(el.textContent || "");
+          el.parentNode ? el.parentNode.replaceChild(textNode, el) : el.remove();
+          return;
+        }
         for (let i = el.attributes.length - 1; i >= 0; i--) {
           const attr = el.attributes[i];
           const name = attr.name.toLowerCase();
-          const val = attr.value.toLowerCase();
-          if (name.startsWith("on") || val.includes("javascript:") || val.includes("data:text/html") || val.includes("vbscript:")) {
+          const val = (attr.value || "").trim().toLowerCase();
+          if (
+            name.startsWith("on") ||
+            name === "href" ||
+            name === "src" ||
+            name === "action" ||
+            name === "formaction" ||
+            name === "xlink:href" ||
+            val.includes("javascript:") ||
+            val.includes("data:") ||
+            val.includes("vbscript:")
+          ) {
             el.removeAttribute(attr.name);
           }
         }
@@ -764,6 +834,50 @@
     document.getElementById("reaction-form").requestSubmit();
   });
 
+  document.getElementById("reaction-calc-thermo-btn")?.addEventListener("click", () => {
+    const reactants = document.getElementById("reaction-reactants")?.value.trim() || "";
+    const products = document.getElementById("reaction-products")?.value.trim() || "";
+    if (!reactants || !products) return;
+    const equation = `${reactants} -> ${products}`;
+
+    if (window.showChemistryView) {
+      window.showChemistryView("quantum", "thermo");
+    }
+    const thermoEquationInput = document.getElementById("thermo-equation");
+    const thermoLiveEquation = document.getElementById("thermo-live-equation");
+    if (thermoEquationInput) {
+      thermoEquationInput.value = equation;
+      thermoEquationInput.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (thermoLiveEquation) {
+      thermoLiveEquation.textContent = `${reactants} ➔ ${products}`;
+    }
+    if (window.populateThermoCardsFromEquation) {
+      window.populateThermoCardsFromEquation(equation);
+    }
+  });
+
+  document.getElementById("topbar-download-runner-btn")?.addEventListener("click", () => {
+    document.getElementById("download-agent-modal")?.classList.remove("hidden");
+  });
+
+  document.querySelectorAll("#download-agent-modal [data-os-target]").forEach(tabBtn => {
+    tabBtn.addEventListener("click", () => {
+      const targetId = tabBtn.getAttribute("data-os-target");
+      document.querySelectorAll("#download-agent-modal [data-os-target]").forEach(b => b.classList.remove("is-active"));
+      tabBtn.classList.add("is-active");
+      document.querySelectorAll("#download-agent-modal .os-panel").forEach(panel => {
+        if (panel.id === targetId) {
+          panel.classList.remove("hidden");
+          panel.classList.add("is-active");
+        } else {
+          panel.classList.add("hidden");
+          panel.classList.remove("is-active");
+        }
+      });
+    });
+  });
+
   document.getElementById("reaction-copy-word")?.addEventListener("click", () => {
     const img = document.getElementById("reaction-image");
     const eq = document.getElementById("reaction-equation")?.textContent || "Chemical Reaction Scheme";
@@ -792,7 +906,18 @@
       coordsStatus.classList.remove("is-set");
     }
     show(modal);
-    if (opts.step === "builder3d" && opts.coords) {
+    if (opts.isReactionWorkflow) {
+      wizard.isReactionWorkflow = true;
+      wizard.reactionEquation = opts.equation || "";
+      wizard.reactionReactants = opts.reactants || "";
+      wizard.reactionProducts = opts.products || "";
+      wizard.name = "reaction_" + Math.random().toString(36).substring(2, 8);
+      if (coordsStatus) {
+        coordsStatus.textContent = `Reaction: ${wizard.reactionEquation} (All species 3D ready)`;
+        coordsStatus.classList.add("is-set");
+      }
+      renderStep("calc", opts);
+    } else if (opts.step === "builder3d" && opts.coords) {
       wizard.coords = opts.coords;
       wizard.name = opts.name || "optimized_molecule";
       wizard.formula = opts.formula || "";
@@ -803,6 +928,9 @@
     }
   }
   window.openWizard = openWizard;
+  window.openOrcaWizardForReaction = function(opts) {
+    openWizard({ isReactionWorkflow: true, ...opts });
+  };
   window.openOrcaWizardWithCoords = function(coords, name, meta = {}) {
     openWizard({ step: "builder3d", coords: coords, name: name, ...meta });
   };
@@ -861,6 +989,25 @@
       else win.classList.remove("is-builder-mode");
     }
     modalBody.innerHTML = "";
+    if (wizard && wizard.isReactionWorkflow) {
+      const rxnNotice = document.createElement("div");
+      rxnNotice.className = "alert alert-info reaction-wizard-banner";
+      rxnNotice.style.cssText = "margin-bottom:1.25rem; border-left:4px solid #0ea5e9; background:rgba(14,165,233,0.12); padding:0.85rem 1rem; border-radius:8px; color:#f8fafc;";
+      rxnNotice.innerHTML = `
+        <div style="display:flex; align-items:center; gap:0.5rem; font-weight:bold; color:#38bdf8; margin-bottom:0.35rem;">
+          <span>⚡</span>
+          <span style="font-size:1rem;">Unified Reaction Quantum Calculation</span>
+          <span class="badge badge-success text-xs" style="margin-left:auto; background:#10b981; color:#fff; padding:2px 8px; border-radius:4px;">Applied to All Species</span>
+        </div>
+        <div style="font-size:0.9rem; color:#e2e8f0; line-height:1.4;">
+          <strong>Chemical Equation:</strong> <code style="color:#38bdf8; font-size:0.95rem; font-family:var(--font-mono);">${escapeHtml(wizard.reactionEquation || "")}</code>
+        </div>
+        <div style="font-size:0.84rem; color:#94a3b8; margin-top:0.4rem; line-height:1.4;">
+          📌 <strong>Important Notice:</strong> The calculation method, functional, basis set, and quantum options chosen in this wizard will be applied uniformly across <strong>all reactants and products</strong> in the reaction equation.
+        </div>
+      `;
+      modalBody.appendChild(rxnNotice);
+    }
     STEP_RENDERERS[name](opts);
   }
 
@@ -1086,18 +1233,18 @@
           </div>
           <div class="outputs-sources-grid" style="display:flex; flex-direction:column; gap:0.6rem;">
             ${availableOutputs.map(out => `
-              <div class="output-source-card" data-output-id="${out.id}">
+              <div class="output-source-card" data-output-id="${escapeHtml(out.id)}">
                 <div class="output-source-header">
-                  <span class="source-badge">${out.badge}</span>
-                  <strong>${out.name}</strong>
+                  <span class="source-badge">${escapeHtml(out.badge)}</span>
+                  <strong>${escapeHtml(out.name)}</strong>
                 </div>
                 <div class="output-source-meta">
-                  <span>Formula: <strong>${out.formula}</strong></span>
-                  <span>Atoms: <strong>${out.atomsCount}</strong></span>
-                  <span>Type: <strong>${out.calcType}</strong></span>
-                  ${out.method ? `<span>Method: <strong>${out.method} ${out.basis}</strong></span>` : ""}
+                  <span>Formula: <strong>${escapeHtml(out.formula)}</strong></span>
+                  <span>Atoms: <strong>${escapeHtml(out.atomsCount)}</strong></span>
+                  <span>Type: <strong>${escapeHtml(out.calcType)}</strong></span>
+                  ${out.method ? `<span>Method: <strong>${escapeHtml(out.method)} ${escapeHtml(out.basis)}</strong></span>` : ""}
                 </div>
-                <button type="button" class="btn btn-primary btn-small btn-select-output" data-output-id="${out.id}" style="margin-top:6px; width:100%;">
+                <button type="button" class="btn btn-primary btn-small btn-select-output" data-output-id="${escapeHtml(out.id)}" style="margin-top:6px; width:100%;">
                   ${out.fetchRequired ? '📥 Fetch & Load Geometry from Kaggle' : '🚀 Load this Output Geometry into 3D Builder'}
                 </button>
               </div>
@@ -3891,6 +4038,46 @@
         return;
       }
 
+      if (wizard && wizard.isReactionWorkflow) {
+        genBtn.disabled = true;
+        err.textContent = "Setting up unified 3D reaction inputs for all species…";
+        try {
+          const stageCfg = wizard.stages[0] || {};
+          const method = stageCfg.method || wizard.method || "B3LYP";
+          const basis = stageCfg.basis || wizard.basis || "def2-SVP";
+          const dispersion = stageCfg.dispersion || wizard.dispersion || "D3BJ";
+          let solventModel = "gas";
+          if (stageCfg.solv_model && stageCfg.solv_model !== "none") {
+            solventModel = stageCfg.solvent ? `${stageCfg.solv_model}(${stageCfg.solvent})` : stageCfg.solv_model;
+          }
+          const stagesPreset = wizard.stages.length > 1 ? "opt_freq" : (stageCfg.calc_type || "opt_freq");
+
+          const res = await postJSON("/api/v1/reactions/unified-setup", {
+            equation: wizard.reactionEquation,
+            stages_preset: stagesPreset,
+            method: method,
+            basis_set: basis,
+            dispersion: dispersion,
+            solvent_model: solventModel,
+            target_host: "server_host",
+            max_concurrency: 1
+          });
+
+          if (!res.ok) throw new Error(res.error || "Failed to setup reaction workflow");
+          closeWizard();
+          showToast(`⚡ Unified reaction workflow initialized with ${res.stages_count} stages across all species!`);
+
+          if (window.ReactionUnifiedClient && typeof window.ReactionUnifiedClient.startExecution === "function") {
+            window.ReactionUnifiedClient.startExecution(res.reaction_id);
+          }
+        } catch (e) {
+          err.textContent = e.message;
+        } finally {
+          genBtn.disabled = false;
+        }
+        return;
+      }
+
       genBtn.disabled = true;
       err.textContent = `Generating all ${totalStages} workflow files…`;
       try {
@@ -4090,15 +4277,49 @@
     finally{ if(!silent) hide(kaggleLoginLoading); }
   }
 
-  // If credentials were remembered from a previous visit, sign in silently.
-  (function autoSignIn() {
+  // If credentials were remembered from a previous visit, check server vault; migrate & purge legacy keys.
+  (async function autoSignIn() {
+    const legacyKey = localStorage.getItem("chemlab_kaggle_key");
     const savedUser = localStorage.getItem(LS_KEYS.kaggleUsername);
-    const savedKey = localStorage.getItem(LS_KEYS.kaggleKey);
-    if (savedUser && savedKey) {
+    if (legacyKey) {
+      if (savedUser) {
+        let attempts = parseInt(sessionStorage.getItem("chemlab_migration_attempts") || "0", 10);
+        if (attempts < 3) {
+          try {
+            sessionStorage.setItem("chemlab_migration_attempts", String(attempts + 1));
+            const migResp = await postJSON("/api/kaggle/credentials", { kaggle_username: savedUser, kaggle_key: legacyKey });
+            if (migResp && migResp.ok && migResp.saved_to_vault) {
+              // Delete ONLY after confirmed successful vault persistence
+              localStorage.removeItem("chemlab_kaggle_key");
+              sessionStorage.removeItem("chemlab_migration_attempts");
+            }
+          } catch (migErr) {
+            console.warn("Kaggle legacy credential migration to vault failed; retaining temporarily for retry.");
+          }
+        }
+      } else {
+        localStorage.removeItem("chemlab_kaggle_key");
+      }
+    }
+
+    try {
+      const resp = await fetch("/api/kaggle/credentials", { method: "GET" });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data.ok && data.configured) {
+          const u = data.username || savedUser || "";
+          if (kaggleUsernameInput) kaggleUsernameInput.value = u;
+          if (kaggleKeyInput) kaggleKeyInput.value = "";
+          setSignedIn(u, "");
+          sessionKaggleKey = "";
+          syncKaggleJobs(u, "", { silent: true });
+          return;
+        }
+      }
+    } catch (_) {}
+
+    if (savedUser && kaggleUsernameInput) {
       kaggleUsernameInput.value = savedUser;
-      kaggleKeyInput.value = savedKey;
-      sessionKaggleKey = savedKey;
-      attemptLogin(savedUser, savedKey, { silent: true });
     }
   })();
 
@@ -4111,20 +4332,34 @@
       return;
     }
     const ok = await attemptLogin(username, key);
-    if (ok) sessionKaggleKey = key;
-    if (ok && kaggleRememberBox.checked) {
-      localStorage.setItem(LS_KEYS.kaggleUsername, username);
-      localStorage.setItem(LS_KEYS.kaggleKey, key);
-    } else if (ok) {
-      localStorage.removeItem(LS_KEYS.kaggleUsername);
-      localStorage.removeItem(LS_KEYS.kaggleKey);
+    if (ok) {
+      sessionKaggleKey = key;
+      if (kaggleRememberBox.checked) {
+        localStorage.setItem(LS_KEYS.kaggleUsername, username);
+        try {
+          await postJSON("/api/kaggle/credentials", { kaggle_username: username, kaggle_key: key });
+        } catch (err) {
+          console.warn("Could not save to encrypted vault:", err.message);
+        }
+      } else {
+        localStorage.removeItem(LS_KEYS.kaggleUsername);
+        try {
+          await fetch("/api/kaggle/credentials", { method: "DELETE" });
+        } catch (_) {}
+      }
+      kaggleKeyInput.value = "";
     }
+    localStorage.removeItem("chemlab_kaggle_key");
   });
 
-  document.getElementById("kaggle-signout-btn").addEventListener("click", () => {
+  document.getElementById("kaggle-signout-btn").addEventListener("click", async () => {
     localStorage.removeItem(LS_KEYS.kaggleUsername);
-    localStorage.removeItem(LS_KEYS.kaggleKey);
+    localStorage.removeItem("chemlab_kaggle_key");
     sessionKaggleKey = "";
+    if (kaggleKeyInput) kaggleKeyInput.value = "";
+    try {
+      await fetch("/api/kaggle/credentials", { method: "DELETE" });
+    } catch (_) {}
     // Any credential a previous version left inside the job list goes too, so
     // "Sign out removes it" is true of every copy.
     const jobs = loadJobs();
@@ -4422,9 +4657,13 @@
       if (!data) throw new Error(`Server returned HTTP ${resp.status} with an invalid JSON response.`);
       if (!resp.ok || !data.ok) throw new Error(data.error || `Submission failed (HTTP ${resp.status}).`);
       rememberOrcaSource();
-      kaggleResult.innerHTML = `${data.message}<br><a href="${data.kaggle_url}" target="_blank" rel="noopener">${data.kaggle_url}</a>`;
+      const safeMsg = escapeHtml(data.message || "");
+      const safeUrl = escapeHtml(data.kaggle_url || "");
+      const encodedUrl = encodeURI(data.kaggle_url || "");
+      kaggleResult.innerHTML = `${safeMsg}<br><a href="${encodedUrl}" target="_blank" rel="noopener">${safeUrl}</a>`;
       show(kaggleResult);
-      showToast(`✅ Job <strong>${data.job_title || jobLabel}</strong> submitted to Kaggle successfully.`);
+      const safeTitle = escapeHtml(data.job_title || jobLabel || "Job");
+      showToast(`✅ Job <strong>${safeTitle}</strong> submitted to Kaggle successfully.`);
 
       // Clear the submitted form fields so stale input does not linger
       const inpContent = document.getElementById("kaggle-inp-content");
@@ -4470,7 +4709,7 @@
   function credsFor(job) {
     const j = (typeof job === "object" && job !== null) ? job : ((typeof job === "string" && job) ? (loadJobs().find(x => x.jobId === job || x.id === job) || {}) : {});
     const user = j.kaggleUsername || (currentKaggle && currentKaggle.username) || localStorage.getItem(LS_KEYS.kaggleUsername) || (kaggleUsernameInput ? kaggleUsernameInput.value.trim() : "") || "";
-    const key = j.kaggleKey || (currentKaggle && currentKaggle.key) || sessionKaggleKey || localStorage.getItem(LS_KEYS.kaggleKey) || (kaggleKeyInput ? kaggleKeyInput.value.trim() : "") || "";
+    const key = j.kaggleKey || (currentKaggle && currentKaggle.key) || sessionKaggleKey || (kaggleKeyInput ? kaggleKeyInput.value.trim() : "") || "";
     return {
       kaggle_username: user,
       kaggle_key: key,
@@ -6035,10 +6274,10 @@
         // Populate theoretical IR table
         if (irModesTbody) {
           irModesTbody.innerHTML = "";
-          const list = irModes.length > 0 ? irModes : vibFreqs.map((f, idx) => ({ mode: idx + 1, frequency_cm: typeof f === 'number' ? f : f.frequency_cm, intensity_km_mol: 10.0 }));
+          const list = irModes.length > 0 ? irModes : vibFreqs.map((f, idx) => ({ mode: idx + 1, frequency_cm: typeof f === 'number' ? f : (f.frequency_cm ?? f.wavenumber_cm ?? f.freq ?? 0), intensity_km_mol: (typeof f === 'object' && (f.intensity_km_mol ?? f.intensity)) != null ? (f.intensity_km_mol ?? f.intensity) : 10.0 }));
           list.forEach((m, idx) => {
-            const freq = typeof m === 'number' ? m : m.frequency_cm;
-            const t2 = (typeof m === 'object' && m.intensity_km_mol != null) ? m.intensity_km_mol : 10.0;
+            const freq = typeof m === 'number' ? m : (m.frequency_cm != null ? m.frequency_cm : (m.wavenumber_cm != null ? m.wavenumber_cm : (m.freq != null ? m.freq : 0)));
+            const t2 = (typeof m === 'object' && (m.intensity_km_mol != null || m.intensity != null)) ? (m.intensity_km_mol ?? m.intensity) : 10.0;
             const tr = document.createElement("tr");
             tr.innerHTML = `
               <td style="font-family:var(--font-mono); font-size:0.8rem;">#${m.mode || (idx + 1)}</td>
@@ -6427,6 +6666,109 @@
     return curve;
   }
 
+  function interpolatePoint(points, targetX, xKey, yKey) {
+    if (!points || points.length === 0) return null;
+    if (points.length === 1) return points[0][yKey];
+
+    const firstX = points[0][xKey];
+    const lastX = points[points.length - 1][xKey];
+    const isAsc = firstX < lastX;
+    const minX = isAsc ? firstX : lastX;
+    const maxX = isAsc ? lastX : firstX;
+
+    if (targetX < minX || targetX > maxX) return null;
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const x1 = p1[xKey];
+      const x2 = p2[xKey];
+      if ((x1 <= targetX && targetX <= x2) || (x2 <= targetX && targetX <= x1)) {
+        if (Math.abs(x2 - x1) < 1e-9) return p1[yKey];
+        const t = (targetX - x1) / (x2 - x1);
+        return p1[yKey] + t * (p2[yKey] - p1[yKey]);
+      }
+    }
+    return null;
+  }
+
+  function getUVVisBounds(activeTheos, activeExps) {
+    let minX = 180;
+    let maxX = 800;
+
+    if (spectrumViewportMode === "custom") {
+      const minInp = parseFloat(document.getElementById("spectrum-min-wl")?.value || "200");
+      const maxInp = parseFloat(document.getElementById("spectrum-max-wl")?.value || "700");
+      minX = isNaN(minInp) ? 200 : minInp;
+      maxX = isNaN(maxInp) ? 700 : maxInp;
+      if (minX >= maxX) minX = 200, maxX = 700;
+    } else if (spectrumViewportMode === "uvvis_standard") {
+      minX = 200;
+      maxX = 700;
+    } else if (spectrumViewportMode === "common" && (activeExps || []).length > 0 && (activeTheos || []).length > 0) {
+      const expMin = Math.max(...activeExps.map(e => Math.min(...e.raw_data.map(p => p.wavelength_nm))));
+      const expMax = Math.min(...activeExps.map(e => Math.max(...e.raw_data.map(p => p.wavelength_nm))));
+      minX = Math.max(180, Math.floor(expMin));
+      maxX = Math.min(800, Math.ceil(expMax));
+      if (minX >= maxX) { minX = 200; maxX = 700; }
+    } else {
+      const allMins = [
+        ...(activeExps || []).map(e => Math.min(...e.raw_data.map(p => p.wavelength_nm))),
+        180
+      ];
+      const allMaxs = [
+        ...(activeExps || []).map(e => Math.max(...e.raw_data.map(p => p.wavelength_nm))),
+        800
+      ];
+      minX = Math.max(100, Math.floor(Math.min(...allMins)));
+      maxX = Math.min(1000, Math.ceil(Math.max(...allMaxs)));
+    }
+
+    if (uvvisManualRangeEnabled) {
+      if (uvvisManualMinX !== null && !isNaN(uvvisManualMinX)) minX = uvvisManualMinX;
+      if (uvvisManualMaxX !== null && !isNaN(uvvisManualMaxX)) maxX = uvvisManualMaxX;
+      if (minX >= maxX) maxX = minX + 50;
+    }
+    return { minX, maxX };
+  }
+
+  function getUVVisPadding() {
+    return { top: showUVVisLegend ? 58 : 35, right: 65, bottom: 48, left: 65 };
+  }
+
+  function getIRBounds(activeTheos, activeExps) {
+    let minWn = 400;
+    let maxWn = 4000;
+
+    if (irViewportMode === "fingerprint") {
+      minWn = 400; maxWn = 1500;
+    } else if (irViewportMode === "functional") {
+      minWn = 1500; maxWn = 4000;
+    } else if (irViewportMode === "custom") {
+      const minInp = parseFloat(document.getElementById("ir-min-wn")?.value || "400");
+      const maxInp = parseFloat(document.getElementById("ir-max-wn")?.value || "4000");
+      minWn = isNaN(minInp) ? 400 : minInp;
+      maxWn = isNaN(maxInp) ? 4000 : maxInp;
+      if (minWn >= maxWn) maxWn = minWn + 100;
+    } else if (irViewportMode === "full" && (activeExps || []).length > 0) {
+      const allMins = activeExps.map(e => Math.min(...e.raw_data.map(p => p.wavenumber_cm)));
+      const allMaxs = activeExps.map(e => Math.max(...e.raw_data.map(p => p.wavenumber_cm)));
+      minWn = Math.max(200, Math.floor(Math.min(...allMins, 400)));
+      maxWn = Math.min(6000, Math.ceil(Math.max(...allMaxs, 4000)));
+    }
+
+    if (irManualRangeEnabled) {
+      if (irManualMinX !== null && !isNaN(irManualMinX)) minWn = irManualMinX;
+      if (irManualMaxX !== null && !isNaN(irManualMaxX)) maxWn = irManualMaxX;
+      if (minWn >= maxWn) maxWn = minWn + 100;
+    }
+    return { minWn, maxWn };
+  }
+
+  function getIRPadding() {
+    return { top: showIRLegend ? 58 : 35, right: 65, bottom: 48, left: 65 };
+  }
+
   function renderSpectrumToCanvas(canvas, scale = 1, isExport = false) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -6460,44 +6802,7 @@
     }
 
     // 1. Determine X-Axis Bounds (Viewport & Manual Range Cropping)
-    let minX = 180;
-    let maxX = 800;
-
-    if (spectrumViewportMode === "custom") {
-      const minInp = parseFloat(document.getElementById("spectrum-min-wl")?.value || "200");
-      const maxInp = parseFloat(document.getElementById("spectrum-max-wl")?.value || "700");
-      minX = isNaN(minInp) ? 200 : minInp;
-      maxX = isNaN(maxInp) ? 700 : maxInp;
-      if (minX >= maxX) {
-        maxX = minX + 50;
-      }
-    } else if (spectrumViewportMode === "uvvis_standard") {
-      minX = 200;
-      maxX = 700;
-    } else if (spectrumViewportMode === "common" && activeExps.length > 0 && activeTheos.length > 0) {
-      const expMin = Math.max(...activeExps.map(e => Math.min(...e.raw_data.map(p => p.wavelength_nm))));
-      const expMax = Math.min(...activeExps.map(e => Math.max(...e.raw_data.map(p => p.wavelength_nm))));
-      minX = Math.max(180, Math.floor(expMin));
-      maxX = Math.min(800, Math.ceil(expMax));
-      if (minX >= maxX) { minX = 200; maxX = 700; }
-    } else {
-      const allMins = [
-        ...activeExps.map(e => Math.min(...e.raw_data.map(p => p.wavelength_nm))),
-        180
-      ];
-      const allMaxs = [
-        ...activeExps.map(e => Math.max(...e.raw_data.map(p => p.wavelength_nm))),
-        800
-      ];
-      minX = Math.max(100, Math.floor(Math.min(...allMins)));
-      maxX = Math.min(1000, Math.ceil(Math.max(...allMaxs)));
-    }
-
-    if (uvvisManualRangeEnabled) {
-      if (uvvisManualMinX !== null && !isNaN(uvvisManualMinX)) minX = uvvisManualMinX;
-      if (uvvisManualMaxX !== null && !isNaN(uvvisManualMaxX)) maxX = uvvisManualMaxX;
-      if (minX >= maxX) maxX = minX + 50;
-    }
+    const { minX, maxX } = getUVVisBounds(activeTheos, activeExps);
 
     // 2. Convolute active theoretical spectra strictly without touching experimental data
     const theoCurves = activeTheos.map(theo => {
@@ -7024,8 +7329,8 @@
       }
       return {
         mode: m.mode || (idx + 1),
-        frequency_cm: m.frequency_cm || m.freq || 0,
-        intensity_km_mol: (m.intensity_km_mol != null) ? m.intensity_km_mol : 10.0,
+        frequency_cm: m.frequency_cm || m.wavenumber_cm || m.freq || 0,
+        intensity_km_mol: (m.intensity_km_mol != null) ? m.intensity_km_mol : ((m.intensity != null) ? m.intensity : 10.0),
       };
     }).filter(m => m.frequency_cm > 0);
 
@@ -7370,6 +7675,26 @@
     });
   }
 
+  function getIRSharedNormMax(scaleFactor, fwhm, shift, minWn, maxWn) {
+    if ((document.getElementById("ir-normalization-mode")?.value || "per_spectrum") !== "shared") return null;
+    let globalMaxAbs = 0;
+    loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo")).forEach(theo => {
+      const c = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2);
+      c.forEach(p2 => { if (p2.absorbance > globalMaxAbs) globalMaxAbs = p2.absorbance; });
+    });
+    return globalMaxAbs > 0 ? globalMaxAbs : null;
+  }
+
+  function irDisplayedHeaders() {
+    if (irYAxisMode === "theory_intensity") {
+      return { yHeader: "Relative_Intensity", yUnit: "km/mol" };
+    }
+    if (irYAxisMode === "absorbance") {
+      return { yHeader: "Absorbance", yUnit: "AU" };
+    }
+    return { yHeader: "Relative_Transmittance_pct", yUnit: "%" };
+  }
+
   function renderIRSpectrumToCanvas(canvas, scale = 1, isExport = false) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -7402,31 +7727,7 @@
       return;
     }
 
-    let minWn = 400;
-    let maxWn = 4000;
-
-    if (irViewportMode === "fingerprint") {
-      minWn = 400; maxWn = 1500;
-    } else if (irViewportMode === "functional") {
-      minWn = 1500; maxWn = 4000;
-    } else if (irViewportMode === "custom") {
-      const minInp = parseFloat(document.getElementById("ir-min-wn")?.value || "400");
-      const maxInp = parseFloat(document.getElementById("ir-max-wn")?.value || "4000");
-      minWn = isNaN(minInp) ? 400 : minInp;
-      maxWn = isNaN(maxInp) ? 4000 : maxInp;
-      if (minWn >= maxWn) maxWn = minWn + 100;
-    } else if (irViewportMode === "full" && activeExps.length > 0) {
-      const allMins = activeExps.map(e => Math.min(...e.raw_data.map(p => p.wavenumber_cm)));
-      const allMaxs = activeExps.map(e => Math.max(...e.raw_data.map(p => p.wavenumber_cm)));
-      minWn = Math.max(200, Math.floor(Math.min(...allMins, 400)));
-      maxWn = Math.min(6000, Math.ceil(Math.max(...allMaxs, 4000)));
-    }
-
-    if (irManualRangeEnabled) {
-      if (irManualMinX !== null && !isNaN(irManualMinX)) minWn = irManualMinX;
-      if (irManualMaxX !== null && !isNaN(irManualMaxX)) maxWn = irManualMaxX;
-      if (minWn >= maxWn) maxWn = minWn + 100;
-    }
+    const { minWn, maxWn } = getIRBounds(activeTheos, activeExps);
 
     const sharedNormMax = getIRSharedNormMax(scaleFactor, fwhm, shift, minWn, maxWn);
     const theoCurves = activeTheos.map(theo => ({
@@ -7445,7 +7746,7 @@
       ctx.fillText("No experimental spectrum loaded. Import one to compare.", width / 2, height / 2);
     }
 
-    const padding = { top: showIRLegend ? 58 : 35, right: 65, bottom: 48, left: 65 };
+    const padding = getIRPadding();
     const plotW = width - padding.left - padding.right;
     const plotH = height - padding.top - padding.bottom;
 
@@ -7541,8 +7842,11 @@
       }
     }
 
+    const irXTitle = irCustomTitles.x || "Wavenumber (cm⁻¹)";
+    const irGraphTitle = irCustomTitles.title || "Simulated IR Spectrum";
+
     ctx.font = "bold 12px Inter, sans-serif";
-    ctx.fillText(irCustomTitles.x || "Wavenumber (cm⁻¹)", padding.left + plotW / 2, padding.top + plotH + 36);
+    ctx.fillText(irXTitle, padding.left + plotW / 2, padding.top + plotH + 36);
     ctx.font = "bold 13px Inter, sans-serif";
     ctx.fillStyle = axisColor;
     ctx.textAlign = "center";
@@ -7573,8 +7877,6 @@
       yAxisTitle = isTheoOnly ? "Theoretical IR Absorbance (AU)" : "Absorbance (AU)";
     }
     if (irCustomTitles.y) yAxisTitle = irCustomTitles.y;
-    const irXTitle = irCustomTitles.x || "Wavenumber (cm^-1)";
-    const irGraphTitle = irCustomTitles.title || "Simulated IR Spectrum";
 
     ctx.save();
     ctx.translate(16, padding.top + plotH / 2);
@@ -7939,13 +8241,14 @@
     }
 
     async function processFilesWithWorker(files) {
-      if (!files || files.length === 0) return;
+      if (!files || files.length === 0) return false;
 
       const isSingleArchive = files.length === 1 && /\.(zip|tar|gz|tgz|tar\.gz|tar\.bz2|tar\.xz)$/i.test(files[0].name);
-      const isBatch = files.length > 1 || isSingleArchive;
+      // Single archives and single calculation files route directly to server endpoint for rock-solid extraction
+      const isBatch = files.length > 1;
 
       if (!isBatch) {
-        // Direct single calculation file submit
+        // Direct single calculation or single archive file submit
         return false;
       }
 
@@ -8087,6 +8390,51 @@
             if (!resp.ok || !data.ok) throw new Error(data.error || "Failed to parse ORCA output file.");
           } else {
             data = await postJSON("/api/orca/engine/parse", { content: textContent, name: "pasted_calculation" });
+          }
+
+          if (data.is_archive && data.archive_entries && data.archive_entries.length > 0) {
+            const archiveBar = document.getElementById("engine-archive-bar");
+            const archiveSelect = document.getElementById("engine-archive-select");
+            const switchBtn = document.getElementById("engine-archive-switch-btn");
+            if (archiveBar && archiveSelect) {
+              archiveSelect.innerHTML = "";
+              data.archive_entries.forEach(entry => {
+                const opt = document.createElement("option");
+                opt.value = entry.filename || entry.basename;
+                opt.textContent = `${entry.basename || entry.filename} (${entry.jobs_count || 1} job(s))`;
+                archiveSelect.appendChild(opt);
+              });
+              archiveSelect.value = data.selected_file || data.archive_entries[0].filename || data.archive_entries[0].basename;
+              archiveBar.classList.remove("hidden");
+
+              const switchCalculation = () => {
+                const selectedVal = archiveSelect.value;
+                const found = data.archive_entries.find(e => (e.filename === selectedVal || e.basename === selectedVal));
+                if (found) {
+                  const viewData = {
+                    ok: true,
+                    is_archive: true,
+                    archive_filename: data.archive_filename,
+                    archive_entries: data.archive_entries,
+                    selected_file: found.filename || found.basename,
+                    raw_text: found.raw_text,
+                    name: found.molecule_name || found.basename,
+                    molecule: found.molecule,
+                    jobs_count: found.jobs_count,
+                    jobs: (found.molecule && found.molecule.jobs) || (found.jobs) || [found.latest_job],
+                    latest_job: found.latest_job,
+                  };
+                  renderEngineResults(viewData);
+                  showToast(`Loaded calculation: <strong>${escapeHtml(found.basename || found.filename)}</strong>`);
+                }
+              };
+
+              archiveSelect.onchange = switchCalculation;
+              if (switchBtn) switchBtn.onclick = switchCalculation;
+            }
+          } else {
+            const archiveBar = document.getElementById("engine-archive-bar");
+            if (archiveBar) archiveBar.classList.add("hidden");
           }
 
           renderEngineResults(data);
@@ -8609,55 +8957,82 @@
 
     if (uvvisCanvas && uvvisTooltip) {
       uvvisCanvas.addEventListener("mousemove", (e) => {
-        const rect = uvvisCanvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        const scaleX = uvvisCanvas.width / rect.width;
-        const scaleY = uvvisCanvas.height / rect.height;
-        const canvasX = mouseX * scaleX;
-        const canvasY = mouseY * scaleY;
-
-        const padding = { top: 35, right: loadedExperimentalSpectra.some(e => e.visible) ? 65 : 30, bottom: 45, left: 65 };
-        const plotW = uvvisCanvas.width - padding.left - padding.right;
-
-        if (canvasX < padding.left || canvasX > uvvisCanvas.width - padding.right) {
+        const activeTheos = loadedTheoreticalSpectra.filter(t => t.visible && uvViewAllows("theo"));
+        const activeExps = loadedExperimentalSpectra.filter(e => e.visible && uvViewAllows("exp"));
+        if (!activeTheos.length && !activeExps.length) {
           uvvisTooltip.classList.add("hidden");
           return;
         }
 
-        // Determine wavelength at mouse position
-        let minX = 180, maxX = 800;
-        if (spectrumViewportMode === "uvvis_standard") { minX = 200; maxX = 700; }
+        const rect = uvvisCanvas.getBoundingClientRect();
+        const canvasRectW = rect.width || uvvisCanvas.clientWidth || uvvisCanvas.width || 1000;
+        const canvasRectH = rect.height || uvvisCanvas.clientHeight || uvvisCanvas.height || 380;
+        const mouseX = (e.clientX != null && rect.left != null) ? (e.clientX - rect.left) : (e.offsetX || 300);
+        const mouseY = (e.clientY != null && rect.top != null) ? (e.clientY - rect.top) : (e.offsetY || 150);
+        const scaleX = uvvisCanvas.width / canvasRectW;
+        const scaleY = uvvisCanvas.height / canvasRectH;
+        const canvasX = mouseX * scaleX;
+        const canvasY = mouseY * scaleY;
+
+        const padding = getUVVisPadding();
+        const plotW = uvvisCanvas.width - padding.left - padding.right;
+        const plotH = uvvisCanvas.height - padding.top - padding.bottom;
+
+        if (canvasX < padding.left || canvasX > uvvisCanvas.width - padding.right || canvasY < padding.top || canvasY > uvvisCanvas.height - padding.bottom) {
+          uvvisTooltip.classList.add("hidden");
+          return;
+        }
+
+        // Determine exact wavelength at mouse position
+        const { minX, maxX } = getUVVisBounds(activeTheos, activeExps);
         const wlHover = minX + ((canvasX - padding.left) / plotW) * (maxX - minX);
 
-        let tooltipHtml = `<strong>λ: ${wlHover.toFixed(1)} nm</strong><br>`;
+        let tooltipHtml = `<div style="font-weight:700; border-bottom:1px solid rgba(255,255,255,0.2); margin-bottom:4px; padding-bottom:2px;">Wavelength (λ): ${wlHover.toFixed(2)} nm</div>`;
         let hasReadings = false;
 
-        // Find nearest theoretical values
         const sigma = parseFloat(document.getElementById("engine-sigma-slider")?.value || "20");
         const shift = parseFloat(document.getElementById("engine-shift-slider")?.value || "0");
-        loadedTheoreticalSpectra.filter(t => t.visible && uvViewAllows("theo")).forEach(theo => {
+
+        // Precise theoretical calculation and interpolation
+        activeTheos.forEach(theo => {
           const curve = computeUvvisConvolution(theo.transitions, sigma, shift, minX, maxX, 1);
-          const nearest = curve.find(p => Math.abs(p.wavelength_nm - wlHover) <= 1.0);
-          if (nearest) {
+          const intensity = interpolatePoint(curve, wlHover, "wavelength_nm", "intensity");
+          if (intensity !== null && !isNaN(intensity)) {
             hasReadings = true;
-            tooltipHtml += `<span style="color:${theo.color};">● ${escapeHtml(theo.name)}:</span> ε = ${nearest.intensity.toFixed(2)}<br>`;
+            let valStr = "";
+            if (spectrumNormalizeMode in { "all": 1, "theoretical_only": 1 }) {
+              const maxI = Math.max(...curve.map(p => p.intensity), 1.0);
+              valStr = `Norm = ${(intensity / maxI).toFixed(3)}`;
+            } else {
+              valStr = `ε = ${intensity.toFixed(2)} L·mol⁻¹·cm⁻¹`;
+            }
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${theo.color}; font-size:1.1em;">●</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
-        // Find nearest experimental values
-        loadedExperimentalSpectra.filter(exp => exp.visible).forEach(exp => {
-          const nearest = exp.raw_data.find(p => Math.abs(p.wavelength_nm - wlHover) <= 1.5);
-          if (nearest) {
+        // Precise experimental interpolation
+        activeExps.forEach(exp => {
+          const abs = interpolatePoint(exp.raw_data, wlHover, "wavelength_nm", "absorbance");
+          if (abs !== null && !isNaN(abs)) {
             hasReadings = true;
-            tooltipHtml += `<span style="color:${exp.color};">■ ${escapeHtml(exp.label || exp.file_name)}:</span> Abs = ${nearest.absorbance.toFixed(4)} AU<br>`;
+            let valStr = "";
+            if (spectrumNormalizeMode in { "all": 1, "experimental_only": 1 }) {
+              const maxA = Math.max(...exp.raw_data.map(p => p.absorbance), 1.0);
+              valStr = `Norm = ${(abs / maxA).toFixed(3)}`;
+            } else {
+              valStr = `Abs = ${abs.toFixed(4)} AU`;
+            }
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${exp.color}; font-size:1.1em;">■</span> <span>${escapeHtml(exp.label || exp.file_name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
         if (hasReadings) {
           uvvisTooltip.innerHTML = tooltipHtml;
-          uvvisTooltip.style.left = `${Math.min(mouseX + 15, rect.width - 200)}px`;
-          uvvisTooltip.style.top = `${Math.max(mouseY - 40, 10)}px`;
+          const tooltipWidth = 240;
+          const posX = (mouseX + 15 + tooltipWidth > rect.width) ? (mouseX - tooltipWidth - 10) : (mouseX + 15);
+          const posY = Math.max(10, Math.min(mouseY - 20, rect.height - 80));
+          uvvisTooltip.style.left = `${posX}px`;
+          uvvisTooltip.style.top = `${posY}px`;
           uvvisTooltip.classList.remove("hidden");
         } else {
           uvvisTooltip.classList.add("hidden");
@@ -9024,24 +9399,6 @@
       });
     }
 
-    function getIRSharedNormMax(scaleFactor, fwhm, shift, minWn, maxWn) {
-      if ((document.getElementById("ir-normalization-mode")?.value || "per_spectrum") !== "shared") return null;
-      let globalMaxAbs = 0;
-      loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo")).forEach(theo => {
-        const c = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2);
-        c.forEach(p2 => { if (p2.absorbance > globalMaxAbs) globalMaxAbs = p2.absorbance; });
-      });
-      return globalMaxAbs > 0 ? globalMaxAbs : null;
-    }
-    function irDisplayedHeaders() {
-      if (irYAxisMode === "theory_intensity") {
-        return { yHeader: "Relative_Intensity", yUnit: "km/mol" };
-      }
-      if (irYAxisMode === "absorbance") {
-        return { yHeader: "Absorbance", yUnit: "AU" };
-      }
-      return { yHeader: "Relative_Transmittance_pct", yUnit: "%" };
-    }
     function exportIRXYSingle(kind, idx) {
       const scaleFactor = parseFloat(irScaleSlider?.value || "1.0");
       const fwhm = parseFloat(irFwhmSlider?.value || "15.0");
@@ -9480,76 +9837,90 @@
     // Interactive Hover Tooltip for IR Canvas
     if (irCanvas && irTooltip) {
       irCanvas.addEventListener("mousemove", (e) => {
-        const rect = irCanvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        const scaleX = irCanvas.width / rect.width;
-        const scaleY = irCanvas.height / rect.height;
-        const canvasX = mouseX * scaleX;
-        const canvasY = mouseY * scaleY;
-
-        const padding = { top: 35, right: 40, bottom: 48, left: 65 };
-        const plotW = irCanvas.width - padding.left - padding.right;
-
-        if (canvasX < padding.left || canvasX > irCanvas.width - padding.right) {
+        const activeTheos = loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo"));
+        const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp"));
+        if (!activeTheos.length && !activeExps.length) {
           irTooltip.classList.add("hidden");
           return;
         }
 
-        let minWn = 400, maxWn = 4000;
-        if (irViewportMode === "fingerprint") { minWn = 400; maxWn = 1500; }
-        else if (irViewportMode === "functional") { minWn = 1500; maxWn = 4000; }
-        else if (irViewportMode === "custom") {
-          minWn = parseFloat(irMinWnInp?.value || "400");
-          maxWn = parseFloat(irMaxWnInp?.value || "4000");
+        const rect = irCanvas.getBoundingClientRect();
+        const canvasRectW = rect.width || irCanvas.clientWidth || irCanvas.width || 1000;
+        const canvasRectH = rect.height || irCanvas.clientHeight || irCanvas.height || 380;
+        const mouseX = (e.clientX != null && rect.left != null) ? (e.clientX - rect.left) : (e.offsetX || 300);
+        const mouseY = (e.clientY != null && rect.top != null) ? (e.clientY - rect.top) : (e.offsetY || 150);
+        const scaleX = irCanvas.width / canvasRectW;
+        const scaleY = irCanvas.height / canvasRectH;
+        const canvasX = mouseX * scaleX;
+        const canvasY = mouseY * scaleY;
+
+        const padding = getIRPadding();
+        const plotW = irCanvas.width - padding.left - padding.right;
+        const plotH = irCanvas.height - padding.top - padding.bottom;
+
+        if (canvasX < padding.left || canvasX > irCanvas.width - padding.right || canvasY < padding.top || canvasY > irCanvas.height - padding.bottom) {
+          irTooltip.classList.add("hidden");
+          return;
         }
 
+        const { minWn, maxWn } = getIRBounds(activeTheos, activeExps);
         const wnHover = maxWn - ((canvasX - padding.left) / plotW) * (maxWn - minWn);
-        let tooltipHtml = `<strong>ν̃: ${wnHover.toFixed(1)} cm⁻¹</strong><br>`;
+
+        let tooltipHtml = `<div style="font-weight:700; border-bottom:1px solid rgba(255,255,255,0.2); margin-bottom:4px; padding-bottom:2px;">Wavenumber (ν̃): ${wnHover.toFixed(2)} cm⁻¹</div>`;
         let hasReadings = false;
 
         const scaleFactor = parseFloat(irScaleSlider?.value || "1.0");
         const fwhm = parseFloat(irFwhmSlider?.value || "15.0");
         const shift = parseFloat(irShiftSlider?.value || "0");
+        const sharedNormMax = getIRSharedNormMax(scaleFactor, fwhm, shift, minWn, maxWn);
 
-        loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo")).forEach(theo => {
-          const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2);
-          const nearest = curve.find(p => Math.abs(p.wavenumber_cm - wnHover) <= 3.0);
-          if (nearest) {
+        // Precise theoretical calculation/interpolation
+        activeTheos.forEach(theo => {
+          const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2, sharedNormMax);
+          const ptAbs = interpolatePoint(curve, wnHover, "wavenumber_cm", "absorbance");
+          const ptTrans = interpolatePoint(curve, wnHover, "wavenumber_cm", "transmittance_pct");
+          const ptNorm = interpolatePoint(curve, wnHover, "wavenumber_cm", "absorbance_norm");
+
+          if (ptAbs !== null && !isNaN(ptAbs)) {
             hasReadings = true;
             let valStr = "";
             if (irYAxisMode === "theory_intensity") {
               const maxModeInt = theo.modes.length ? Math.max(...theo.modes.map(m => m.intensity_km_mol || 0), 10) : 100;
-              valStr = `${(nearest.absorbance_norm * maxModeInt).toFixed(1)} km/mol`;
+              valStr = `${((ptNorm !== null ? ptNorm : ptAbs) * maxModeInt).toFixed(2)} km/mol`;
             } else if (irYAxisMode === "transmittance") {
-              valStr = `${nearest.transmittance_pct.toFixed(1)} %T`;
+              valStr = `${(ptTrans !== null ? ptTrans : (100 * Math.pow(10, -ptAbs))).toFixed(2)} %T`;
             } else {
-              valStr = `Abs = ${nearest.absorbance.toFixed(3)} AU`;
+              valStr = `Abs = ${ptAbs.toFixed(4)} AU`;
             }
-            tooltipHtml += `<span style="color:${theo.color};">● ${escapeHtml(theo.name)}:</span> ${valStr}<br>`;
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${theo.color}; font-size:1.1em;">●</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
-        loadedExperimentalIRSpectra.filter(exp => exp.visible).forEach(exp => {
-          const nearest = exp.raw_data.find(p => Math.abs(p.wavenumber_cm - wnHover) <= 4.0);
-          if (nearest) {
+        // Precise experimental interpolation
+        activeExps.forEach(exp => {
+          const ptAbs = interpolatePoint(exp.raw_data, wnHover, "wavenumber_cm", "absorbance");
+          const ptTrans = interpolatePoint(exp.raw_data, wnHover, "wavenumber_cm", "transmittance_pct");
+
+          if (ptAbs !== null && !isNaN(ptAbs)) {
             hasReadings = true;
             let valStr = "";
             if (irYAxisMode === "transmittance") {
-              valStr = `${nearest.transmittance_pct.toFixed(1)} %T`;
-            } else if (irYAxisMode === "theory_intensity") {
-              valStr = `Abs = ${nearest.absorbance.toFixed(3)} AU`;
+              const transVal = (ptTrans !== null && !isNaN(ptTrans)) ? ptTrans : (100 * Math.pow(10, -ptAbs));
+              valStr = `${transVal.toFixed(2)} %T`;
             } else {
-              valStr = `Abs = ${nearest.absorbance.toFixed(3)} AU`;
+              valStr = `Abs = ${ptAbs.toFixed(4)} AU`;
             }
-            tooltipHtml += `<span style="color:${exp.color};">■ ${escapeHtml(exp.label || exp.file_name)}:</span> ${valStr}<br>`;
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${exp.color}; font-size:1.1em;">■</span> <span>${escapeHtml(exp.label || exp.file_name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
         if (hasReadings) {
           irTooltip.innerHTML = tooltipHtml;
-          irTooltip.style.left = `${Math.min(mouseX + 15, rect.width - 220)}px`;
-          irTooltip.style.top = `${Math.max(mouseY - 40, 10)}px`;
+          const tooltipWidth = 240;
+          const posX = (mouseX + 15 + tooltipWidth > rect.width) ? (mouseX - tooltipWidth - 10) : (mouseX + 15);
+          const posY = Math.max(10, Math.min(mouseY - 20, rect.height - 80));
+          irTooltip.style.left = `${posX}px`;
+          irTooltip.style.top = `${posY}px`;
           irTooltip.classList.remove("hidden");
         } else {
           irTooltip.classList.add("hidden");
@@ -10291,12 +10662,33 @@
         const primaryInp = card.querySelector(".primary-file-input");
         if (primaryDrop && primaryInp) {
           primaryDrop.addEventListener("click", () => primaryInp.click());
+          
+          const handlePrimaryFile = async (file) => {
+            if (!file) return;
+            if (/\.(zip|rar|tar|gz|tgz|tar\.gz)$/i.test(file.name)) {
+              handleArchiveUpload(file);
+              return;
+            }
+            item.content = await file.text();
+            item.primaryName = file.name;
+            renderSpeciesCards(container, list, isReactant);
+          };
+
           primaryInp.addEventListener("change", async () => {
             if (primaryInp.files && primaryInp.files[0]) {
-              const file = primaryInp.files[0];
-              item.content = await file.text();
-              item.primaryName = file.name;
-              renderSpeciesCards(container, list, isReactant);
+              await handlePrimaryFile(primaryInp.files[0]);
+            }
+          });
+
+          ["dragenter", "dragover"].forEach(evt => {
+            primaryDrop.addEventListener(evt, (e) => { e.preventDefault(); primaryDrop.classList.add("drag-over"); });
+          });
+          ["dragleave", "drop"].forEach(evt => {
+            primaryDrop.addEventListener(evt, (e) => { e.preventDefault(); primaryDrop.classList.remove("drag-over"); });
+          });
+          primaryDrop.addEventListener("drop", async (e) => {
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+              await handlePrimaryFile(e.dataTransfer.files[0]);
             }
           });
         }
@@ -10333,13 +10725,34 @@
         const spInp = card.querySelector(".sp-file-input");
         if (spDrop && spInp) {
           spDrop.addEventListener("click", () => spInp.click());
+
+          const handleSpFile = async (file) => {
+            if (!file) return;
+            if (/\.(zip|rar|tar|gz|tgz|tar\.gz)$/i.test(file.name)) {
+              handleArchiveUpload(file);
+              return;
+            }
+            item.sp_content = await file.text();
+            item.spName = file.name;
+            showToast(`Attached high-level SP for <strong>${item.name || 'species'}</strong>. Multi-level composite energy will be evaluated.`);
+            renderSpeciesCards(container, list, isReactant);
+          };
+
           spInp.addEventListener("change", async () => {
             if (spInp.files && spInp.files[0]) {
-              const file = spInp.files[0];
-              item.sp_content = await file.text();
-              item.spName = file.name;
-              showToast(`Attached high-level SP for <strong>${item.name || 'species'}</strong>. Multi-level composite energy will be evaluated.`);
-              renderSpeciesCards(container, list, isReactant);
+              await handleSpFile(spInp.files[0]);
+            }
+          });
+
+          ["dragenter", "dragover"].forEach(evt => {
+            spDrop.addEventListener(evt, (e) => { e.preventDefault(); spDrop.classList.add("drag-over"); });
+          });
+          ["dragleave", "drop"].forEach(evt => {
+            spDrop.addEventListener(evt, (e) => { e.preventDefault(); spDrop.classList.remove("drag-over"); });
+          });
+          spDrop.addEventListener("drop", async (e) => {
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+              await handleSpFile(e.dataTransfer.files[0]);
             }
           });
         }
@@ -10443,7 +10856,7 @@
 
     async function handleArchiveUpload(file) {
       if (archiveStatus) {
-        archiveStatus.textContent = `Extracting ${file.name}…`;
+        archiveStatus.textContent = `Processing ${file.name}…`;
         archiveStatus.className = "prop-badge badge-primary";
         archiveStatus.classList.remove("hidden");
       }
@@ -10452,40 +10865,104 @@
         formData.append("file", file);
         const resp = await fetch("/api/orca/engine/parse", { method: "POST", body: formData });
         const data = await resp.json();
-        if (!resp.ok || !data.ok) throw new Error(data.error || "Could not parse archive.");
+        if (!resp.ok || !data.ok) throw new Error(data.error || "Could not parse file.");
 
-        if (data.is_archive && data.archive_entries) {
+        if (data.is_archive && data.archive_entries && data.archive_entries.length > 0) {
           data.archive_entries.forEach(entry => {
             const base = entry.basename.toLowerCase().replace(/\.[^/.]+$/, "");
             state.extractedArchiveFiles[entry.basename] = entry.raw_text;
+            state.extractedArchiveFiles[entry.basename.toLowerCase()] = entry.raw_text;
             state.extractedArchiveFiles[base] = entry.raw_text;
+            const formula = entry.molecule?.chemical_formula || entry.latest_job?.chemical_formula || entry.latest_job?.formula;
+            if (formula) {
+              state.extractedArchiveFiles[formula] = entry.raw_text;
+              state.extractedArchiveFiles[formula.toLowerCase()] = entry.raw_text;
+            }
           });
           if (archiveStatus) {
             archiveStatus.textContent = `✓ Extracted ${data.archive_entries.length} calculations`;
             archiveStatus.className = "prop-badge badge-success";
           }
           // Auto-match to current reactants & products
+          let matchedCount = 0;
           [...state.reactants, ...state.products].forEach(sp => {
             const clean = sp.name.toLowerCase().trim();
             for (const entry of data.archive_entries) {
               const entryBase = entry.basename.toLowerCase();
-              if (entryBase.includes(clean) || clean.includes(entryBase.replace(/\.[^/.]+$/, ""))) {
+              const formula = (entry.molecule?.chemical_formula || entry.latest_job?.chemical_formula || entry.latest_job?.formula || "").toLowerCase();
+              if (entryBase.includes(clean) || clean.includes(entryBase.replace(/\.[^/.]+$/, "")) || (formula && (formula === clean || clean.includes(formula)))) {
                 sp.content = entry.raw_text;
                 sp.primaryName = entry.basename;
+                matchedCount++;
                 break;
               }
             }
           });
+          // If some species remain unmatched and there are unassigned archive entries, assign in order
+          const unassignedEntries = data.archive_entries.filter(e => ![...state.reactants, ...state.products].some(s => s.content === e.raw_text));
+          let unassignedIdx = 0;
+          [...state.reactants, ...state.products].forEach(sp => {
+            if (!sp.content && unassignedIdx < unassignedEntries.length) {
+              const entry = unassignedEntries[unassignedIdx++];
+              sp.content = entry.raw_text;
+              sp.primaryName = entry.basename;
+              matchedCount++;
+            }
+          });
+
           renderSpeciesCards(reactantsList, state.reactants, true);
           renderSpeciesCards(productsList, state.products, false);
-          showToast(`Archive <strong>${file.name}</strong> unpacked: ${data.archive_entries.length} calculations matched.`);
+          showToast(`Archive <strong>${file.name}</strong> unpacked: ${data.archive_entries.length} calculations extracted, ${matchedCount} matched.`);
+        } else {
+          // Single .out / .log calculation file uploaded to the dropzone
+          const text = data.raw_text || "";
+          const base = (data.name || file.name).replace(/\.[^/.]+$/, "");
+          state.extractedArchiveFiles[file.name] = text;
+          state.extractedArchiveFiles[file.name.toLowerCase()] = text;
+          state.extractedArchiveFiles[base] = text;
+          state.extractedArchiveFiles[base.toLowerCase()] = text;
+          const formula = data.molecule?.chemical_formula || data.latest_job?.chemical_formula || data.latest_job?.formula;
+          if (formula) {
+            state.extractedArchiveFiles[formula] = text;
+            state.extractedArchiveFiles[formula.toLowerCase()] = text;
+          }
+
+          // Match to an empty species or matching species
+          let matched = false;
+          const allSp = [...state.reactants, ...state.products];
+          for (const sp of allSp) {
+            const clean = sp.name.toLowerCase().trim();
+            if (clean && (file.name.toLowerCase().includes(clean) || (formula && clean.includes(formula.toLowerCase())))) {
+              sp.content = text;
+              sp.primaryName = file.name;
+              matched = true;
+              break;
+            }
+          }
+          if (!matched) {
+            // Assign to first empty species
+            const emptySp = allSp.find(s => !s.content);
+            if (emptySp) {
+              emptySp.content = text;
+              emptySp.primaryName = file.name;
+              matched = true;
+            }
+          }
+
+          if (archiveStatus) {
+            archiveStatus.textContent = `✓ Loaded calculation for ${file.name}`;
+            archiveStatus.className = "prop-badge badge-success";
+          }
+          renderSpeciesCards(reactantsList, state.reactants, true);
+          renderSpeciesCards(productsList, state.products, false);
+          showToast(`Calculation <strong>${file.name}</strong> loaded and attached to reaction.`);
         }
       } catch (err) {
         if (archiveStatus) {
           archiveStatus.textContent = `Error: ${err.message}`;
           archiveStatus.className = "prop-badge badge-error";
         }
-        showToast(`Archive extraction error: ${err.message}`);
+        showToast(`File error: ${err.message}`, "error");
       }
     }
 
@@ -10551,9 +11028,17 @@
             if (r.atom_balanced && r.charge_balanced) {
               balanceBadge.className = "prop-badge badge-success";
               balanceBadge.textContent = "Stoichiometrically Balanced";
-            } else {
+            } else if (r.atom_balanced === false) {
               balanceBadge.className = "prop-badge badge-warning";
-              balanceBadge.textContent = "Equation Imbalanced";
+              const imb = r.atom_imbalance || {};
+              const parts = Object.entries(imb).map(([el, d]) => `${el}${d > 0 ? '+' + d : d}`);
+              balanceBadge.textContent = parts.length > 0 ? `Atom Imbalance (${parts.join(', ')})` : "Equation Atom Imbalanced";
+            } else if (r.charge_balanced === false) {
+              balanceBadge.className = "prop-badge badge-warning";
+              balanceBadge.textContent = `Charge Imbalance (Net ${r.charge_imbalance > 0 ? '+' : ''}${r.charge_imbalance})`;
+            } else {
+              balanceBadge.className = "prop-badge badge-neutral";
+              balanceBadge.textContent = "Balance Unchecked (No coordinates)";
             }
           }
 
@@ -10625,10 +11110,29 @@
             };
 
             const renderBadge = (info) => {
-              if (info.is_composite) return ' <span class="prop-badge badge-neutral" style="font-size:0.7rem;">Multi-Level</span>';
+              if (info.is_composite) return ' <span class="prop-badge badge-primary" style="font-size:0.7rem;" title="Multi-Level Composite: High-Level SP electronic energy with lower-level thermal corrections">⚡ Multi-Level (SP+Freq)</span>';
               if (info.is_electronic_only) return ' <span class="prop-badge badge-warning" style="font-size:0.7rem;" title="Electronic energy only - no vibrational frequency calculation found in output file">Electronic Only</span>';
               if (info.enthalpy_eh != null) return ' <span class="prop-badge badge-success" style="font-size:0.7rem;">Opt + Freq</span>';
               return '';
+            };
+
+            const renderEnergyCell = (info, field, label) => {
+              const val = info[field];
+              if (val == null) return '<span style="color:var(--text-muted); font-size:0.75rem;">-</span>';
+              if (info.is_composite && field === 'e_elec_eh') {
+                return `<span class="mono">${val.toFixed(6)} Eh</span><br><span style="color:var(--primary); font-size:0.75rem;">SP: ${info.method_sp || 'High-Level SP'}</span>`;
+              }
+              if (info.is_composite && field === 'enthalpy_eh') {
+                const corr = info.h_thermal_corr_eh;
+                const corrStr = corr != null ? `ΔH<sub>therm</sub>: ${corr >= 0 ? '+' : ''}${corr.toFixed(5)} Eh` : '';
+                return `<span class="mono">${val.toFixed(6)} Eh</span><br><span style="color:var(--text-muted); font-size:0.75rem;">${corrStr}</span>`;
+              }
+              if (info.is_composite && field === 'gibbs_eh') {
+                const corr = info.g_thermal_corr_eh;
+                const corrStr = corr != null ? `ΔG<sub>therm</sub>: ${corr >= 0 ? '+' : ''}${corr.toFixed(5)} Eh` : '';
+                return `<span class="mono">${val.toFixed(6)} Eh</span><br><span style="color:var(--text-muted); font-size:0.75rem;">${corrStr}</span>`;
+              }
+              return `<span class="mono">${val.toFixed(6)} Eh</span>`;
             };
 
             const renderEntropyCell = (info) => {
@@ -10647,9 +11151,9 @@
                 <td><span class="prop-badge badge-primary">Reactant</span></td>
                 <td class="mono font-bold">${rItem.coeff}</td>
                 <td><strong>${rItem.name}</strong>${renderBadge(info)}</td>
-                <td class="mono">${info.e_elec_eh != null ? info.e_elec_eh.toFixed(6) + ' Eh' : "-"}</td>
-                <td class="mono">${info.enthalpy_eh != null ? info.enthalpy_eh.toFixed(6) + ' Eh' : '<span style="color:var(--text-muted); font-size:0.75rem;" title="Requires frequency calculation">N/A (No Freq)</span>'}</td>
-                <td class="mono">${info.gibbs_eh != null ? info.gibbs_eh.toFixed(6) + ' Eh' : '<span style="color:var(--text-muted); font-size:0.75rem;" title="Requires frequency calculation">N/A (No Freq)</span>'}</td>
+                <td>${renderEnergyCell(info, 'e_elec_eh', 'Electronic')}</td>
+                <td>${renderEnergyCell(info, 'enthalpy_eh', 'Enthalpy')}</td>
+                <td>${renderEnergyCell(info, 'gibbs_eh', 'Gibbs')}</td>
                 <td class="mono">${renderEntropyCell(info)}</td>
               `;
               tbody.appendChild(tr);
@@ -10661,9 +11165,9 @@
                 <td><span class="prop-badge badge-success">Product</span></td>
                 <td class="mono font-bold">${pItem.coeff}</td>
                 <td><strong>${pItem.name}</strong>${renderBadge(info)}</td>
-                <td class="mono">${info.e_elec_eh != null ? info.e_elec_eh.toFixed(6) + ' Eh' : "-"}</td>
-                <td class="mono">${info.enthalpy_eh != null ? info.enthalpy_eh.toFixed(6) + ' Eh' : '<span style="color:var(--text-muted); font-size:0.75rem;" title="Requires frequency calculation">N/A (No Freq)</span>'}</td>
-                <td class="mono">${info.gibbs_eh != null ? info.gibbs_eh.toFixed(6) + ' Eh' : '<span style="color:var(--text-muted); font-size:0.75rem;" title="Requires frequency calculation">N/A (No Freq)</span>'}</td>
+                <td>${renderEnergyCell(info, 'e_elec_eh', 'Electronic')}</td>
+                <td>${renderEnergyCell(info, 'enthalpy_eh', 'Enthalpy')}</td>
+                <td>${renderEnergyCell(info, 'gibbs_eh', 'Gibbs')}</td>
                 <td class="mono">${renderEntropyCell(info)}</td>
               `;
               tbody.appendChild(tr);

@@ -24,37 +24,39 @@ export function validateAuth(request: Request, env: Env): Response | null {
     return errorResponse(
       "Control plane authentication token is not configured on the Worker (FAIL CLOSED).",
       503,
-      "CONFIG_ERROR"
+      "CONFIG_ERROR",
+      request,
+      env
     );
   }
 
   const authHeader = request.headers.get("Authorization");
   if (!authHeader) {
-    return errorResponse("Missing Authorization header.", 401, "UNAUTHORIZED");
+    return errorResponse("Missing Authorization header.", 401, "UNAUTHORIZED", request, env);
   }
 
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
   if (!match) {
-    return errorResponse("Malformed Authorization header.", 401, "UNAUTHORIZED");
+    return errorResponse("Malformed Authorization header.", 401, "UNAUTHORIZED", request, env);
   }
 
   const token = match[1].trim();
   if (token !== expectedToken) {
-    return errorResponse("Invalid API token.", 401, "UNAUTHORIZED");
+    return errorResponse("Invalid API token.", 401, "UNAUTHORIZED", request, env);
   }
 
   // CW-6: Strict Project ID and Namespace validation against Worker environment
   if (env.CONTROL_PLANE_PROJECT_ID) {
     const projHeader = request.headers.get("X-Project-Id");
     if (!projHeader || projHeader.trim() !== env.CONTROL_PLANE_PROJECT_ID) {
-      return errorResponse("Missing or mismatched X-Project-Id header.", 403, "FORBIDDEN");
+      return errorResponse("Missing or mismatched X-Project-Id header.", 403, "FORBIDDEN", request, env);
     }
   }
 
   if (env.CONTROL_PLANE_NAMESPACE) {
     const nsHeader = request.headers.get("X-Namespace");
     if (!nsHeader || nsHeader.trim() !== env.CONTROL_PLANE_NAMESPACE) {
-      return errorResponse("Missing or mismatched X-Namespace header.", 403, "FORBIDDEN");
+      return errorResponse("Missing or mismatched X-Namespace header.", 403, "FORBIDDEN", request, env);
     }
   }
 

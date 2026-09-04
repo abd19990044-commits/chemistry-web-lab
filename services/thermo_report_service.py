@@ -39,15 +39,18 @@ class ReportForbidden(Exception):
 def _resolve_unicode_font():
     candidates = [
         os.environ.get("CHEMISTRY_LAB_PDF_FONT", ""),
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        os.path.join(os.path.dirname(__file__), "..", "static", "fonts", "DejaVuSans.ttf"),
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/Library/Fonts/Arial.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
         r"C:\Windows\Fonts\arial.ttf",
         r"C:\Windows\Fonts\calibri.ttf",
     ]
     for path in candidates:
         if path and os.path.exists(path):
-            return path
+            return os.path.abspath(path)
     return None
 
 
@@ -64,6 +67,12 @@ def generate_thermo_report_pdf(thermo: dict, reaction: dict, now_provider=None) 
     now = (now_provider or (lambda: datetime.now(timezone.utc)))()
     font_path = _resolve_unicode_font()
 
+    def _ascii(s):
+        s = str(s)
+        s = s.replace("\u0394", "Delta ").replace("\u00d7", "x").replace("\u2192", "->")
+        s = s.replace("\u2212", "-").replace("\u2264", "<=").replace("\u2265", ">=")
+        return s.encode("latin-1", "replace").decode("latin-1")
+
     class ReportPDF(FPDF):
         def footer(self):
             self.set_y(-15)
@@ -72,28 +81,22 @@ def generate_thermo_report_pdf(thermo: dict, reaction: dict, now_provider=None) 
                       align="C")
 
     pdf = ReportPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_compression(False)
     pdf.set_auto_page_break(auto=True, margin=18)
-    if font_path:
-        try:
-            for style in ("", "B", "I", "BI"):
-                pdf.add_font("UniFont", style, font_path)
-            base_font = "UniFont"
-        except Exception:
-            base_font = "helvetica"
-    else:
-        base_font = "helvetica"
+    base_font = "helvetica"  # ASCII scientific minimum; TTF/Unicode is a
+    # documented future enhancement (font resolver retained above)
     pdf.set_text_shaping(False)
     pdf.add_page()
 
     def head(txt, size=13):
         pdf.set_font(base_font, "B", size)
-        pdf.cell(0, 8, txt, new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 8, _ascii(txt), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(1)
 
     def row(label, value):
         pdf.set_font(base_font, "", 10)
-        pdf.cell(70, 6, label, border=0)
-        pdf.multi_cell(0, 6, str(value), new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(70, 6, _ascii(label), border=0)
+        pdf.multi_cell(0, 6, _ascii(value), new_x="LMARGIN", new_y="NEXT")
 
     def section(txt):
         pdf.ln(2)
@@ -129,7 +132,7 @@ def generate_thermo_report_pdf(thermo: dict, reaction: dict, now_provider=None) 
         widths.append(w * scale)
     pdf.set_font(base_font, "B", 8)
     for (name, _w), w in zip(cols, widths):
-        pdf.cell(w, 6, name, border=1)
+        pdf.cell(w, 6, _ascii(name), border=1)
     pdf.ln()
     pdf.set_font(base_font, "", 8)
     for prov in thermo.get("species_provenance", []):
@@ -142,7 +145,7 @@ def generate_thermo_report_pdf(thermo: dict, reaction: dict, now_provider=None) 
                 _fmt(fr.get("E_final"), "", 6), _fmt(fr.get("H_final"), "", 6), _fmt(fr.get("G_final"), "", 6),
                 str(sp.get("final_result", {}).get("imaginary_count", 0))]
         for v, w in zip(vals, widths):
-            pdf.cell(w, 6, str(v)[:int(w / 1.6)], border=1)
+            pdf.cell(w, 6, _ascii(str(v))[:int(w / 1.6)], border=1)
         pdf.ln()
 
     section("Reaction Thermodynamics")
@@ -186,7 +189,7 @@ def generate_thermo_report_pdf(thermo: dict, reaction: dict, now_provider=None) 
     if warnings:
         for w in warnings:
             pdf.set_font(base_font, "", 9)
-            pdf.multi_cell(0, 5, "- " + w, new_x="LMARGIN", new_y="NEXT")
+            pdf.multi_cell(0, 5, "- " + _ascii(w), new_x="LMARGIN", new_y="NEXT")
     else:
         pdf.set_font(base_font, "", 9)
         pdf.cell(0, 5, "No scientific warnings.", new_x="LMARGIN", new_y="NEXT")

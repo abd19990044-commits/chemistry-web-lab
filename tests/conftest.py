@@ -122,3 +122,36 @@ def isolated_orchestrator_environment(monkeypatch):
         pass
 
     shutil.rmtree(temp_state_dir, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# orca_engine test fixtures
+# ---------------------------------------------------------------------------
+from pathlib import Path  # noqa: E402
+from orca_engine.models import JobData  # noqa: E402
+from orca_engine.parser import OrcaParser  # noqa: E402
+
+DATA_DIR = Path(_BASE_DIR) / "orca_engine" / "tests" / "data"
+
+
+def parse_fixture(name: str) -> list[JobData]:
+    """Parse one fixture file from ``orca_engine/tests/data``."""
+    path = DATA_DIR / name
+    with path.open("r", encoding="utf-8") as stream:
+        return OrcaParser(stream, source_name=str(path)).parse()
+
+
+@pytest.fixture
+def data_dir() -> Path:
+    """Return the fixture data directory."""
+    return DATA_DIR
+
+
+@pytest.fixture
+def reaction_dir(tmp_path: Path):
+    """Return a directory holding only the balanced reaction fixtures."""
+    for name in ("rxn_h2.out", "rxn_o.out", "rxn_h2o.out"):
+        (tmp_path / name).write_text(
+            (DATA_DIR / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+    yield tmp_path

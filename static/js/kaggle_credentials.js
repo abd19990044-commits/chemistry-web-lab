@@ -3,18 +3,69 @@
 
   const USER_KEY = "chemlab_kaggle_username";
   const KEY_KEY = "chemlab_kaggle_key";
+
   const username = document.getElementById("kaggle-username");
   const key = document.getElementById("kaggle-key");
   const remember = document.getElementById("kaggle-remember");
   const form = document.getElementById("kaggle-login-form");
+
   if (username && key && remember && form) {
-    const row = document.createElement("div"); row.className = "form-row kaggle-credential-tools";
-    row.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"><button type="button" id="kaggle-forget-saved" class="btn btn-ghost btn-small">Forget saved Kaggle credentials</button><span id="kaggle-saved-status" class="field-hint" aria-live="polite"></span></div><span class="field-hint">When “Remember me” is enabled, the username and API key/token stay only in this browser's local storage. They are not uploaded as a saved file.</span>`;
-    form.appendChild(row); const status = document.getElementById("kaggle-saved-status"), forget = document.getElementById("kaggle-forget-saved");
-    function hasSavedCredentials() { return Boolean(localStorage.getItem(USER_KEY) && localStorage.getItem(KEY_KEY)); }
-    function render() { const saved = hasSavedCredentials(); remember.checked = saved || remember.checked; status.textContent = saved ? `Saved on this browser for ${localStorage.getItem(USER_KEY)}.` : "No Kaggle credentials are saved on this browser."; forget.disabled = !saved; }
-    forget.addEventListener("click", () => { localStorage.removeItem(USER_KEY); localStorage.removeItem(KEY_KEY); username.value = ""; key.value = ""; remember.checked = false; document.getElementById("kaggle-signout-btn")?.click(); render(); });
-    form.addEventListener("submit", () => setTimeout(render, 0)); render();
+    const row = document.createElement("div");
+    row.className = "form-row kaggle-credential-tools";
+    row.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"><button type="button" id="kaggle-forget-saved" class="btn btn-ghost btn-small">Forget saved Kaggle credentials</button><span id="kaggle-saved-status" class="field-hint" aria-live="polite"></span></div><span class="field-hint">When “Remember me” is enabled, credentials are encrypted and stored in your account's secure server vault (AES-256-GCM AEAD). The raw API token is never kept in browser local storage.</span>`;
+    form.appendChild(row);
+
+    const status = document.getElementById("kaggle-saved-status");
+    const forget = document.getElementById("kaggle-forget-saved");
+
+    async function checkVaultStatus() {
+      try {
+        const resp = await fetch("/api/kaggle/credentials", { method: "GET" });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.ok && data.configured) {
+            return {
+              saved: true,
+              user: data.username || localStorage.getItem(USER_KEY) || "account",
+              tokenMasked: data.token_masked || "********",
+            };
+          }
+        }
+      } catch (_) {}
+      return { saved: false, user: "", tokenMasked: "" };
+    }
+
+    async function render() {
+      const { saved, user, tokenMasked } = await checkVaultStatus();
+      if (saved) {
+        try { localStorage.removeItem(KEY_KEY); } catch (_) {}
+        status.textContent = `Encrypted in secure account vault for ${user} (${tokenMasked}).`;
+        forget.disabled = false;
+        if (username && !username.value && user) {
+          username.value = user;
+        }
+      } else {
+        status.textContent = "No Kaggle credentials are saved in account vault.";
+        forget.disabled = true;
+      }
+    }
+
+    forget.addEventListener("click", async () => {
+      forget.disabled = true;
+      try {
+        await fetch("/api/kaggle/credentials", { method: "DELETE" });
+      } catch (_) {}
+      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(KEY_KEY);
+      if (username) username.value = "";
+      if (key) key.value = "";
+      if (remember) remember.checked = false;
+      document.getElementById("kaggle-signout-btn")?.click();
+      await render();
+    });
+
+    form.addEventListener("submit", () => setTimeout(render, 500));
+    render();
   }
 
   // ORCA generated input: style only the ORCA output container/editor.

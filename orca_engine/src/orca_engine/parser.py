@@ -47,6 +47,15 @@ class OrcaParser:
         source_name: Source label used in log messages.
     """
 
+    @classmethod
+    def from_file(cls, file_path: str | Path, encoding: str = "utf-8") -> OrcaParser:
+        """Stream lines lazily from file without loading entire file into memory."""
+        def _line_stream() -> Iterator[str]:
+            with open(file_path, "r", encoding=encoding, errors="replace") as f:
+                for line in f:
+                    yield line.rstrip("\r\n")
+        return cls(_line_stream(), source_name=str(file_path))
+
     def __init__(self, file_iterator: Iterator[str] | Sequence[str] | str, source_name: str = "<stream>") -> None:
         """Initialize the parser for one input stream.
 
@@ -426,7 +435,11 @@ class OrcaParser:
                 "frequency_cm": freq_cm,
                 "intensity_km_mol": t2,
             })
-            if not self.job.vibrational_frequencies_cm:
+            if freq_cm < 0.0:
+                if freq_cm not in self.job.imaginary_frequencies_cm:
+                    self.job.imaginary_frequencies_cm.append(freq_cm)
+                    self.job.imaginary_frequencies_count = len(self.job.imaginary_frequencies_cm)
+            if not self.job.vibrational_frequencies_cm or len(self.job.vibrational_frequencies_cm) < len(self.job.ir_frequencies_cm):
                 self.job.vibrational_frequencies_cm.append(freq_cm)
             return
 

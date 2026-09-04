@@ -21,8 +21,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from api.routes import analysis as analysis_routes
+from api.routes import compound as compound_routes
 from api.routes import health as health_routes
 from api.routes import kaggle as kaggle_routes
+from api.routes import local_agent as local_agent_routes
 from api.routes import orca as orca_routes
 
 
@@ -39,16 +42,43 @@ def _create_app() -> FastAPI:
         title="Chemistry Lab API",
         version="1.0.3",
         description="Versioned API for ORCA-powered computational chemistry "
-                    "workflows (generation, Kaggle execution, artifacts, analysis).",
+                    "workflows (generation, Kaggle execution, local agent, artifacts, analysis).",
         docs_url="/api/v1/docs",
         redoc_url="/api/v1/redoc",
         openapi_url="/api/v1/openapi.json",
         lifespan=lifespan,
     )
 
+    import os
+    from fastapi.middleware.cors import CORSMiddleware
+
+    allowed_origins_raw = os.environ.get("CHEMISTRY_LAB_ALLOWED_ORIGINS", "")
+    if allowed_origins_raw.strip():
+        allowed_origins = [o.strip() for o in allowed_origins_raw.split(",") if o.strip()]
+    else:
+        allowed_origins = [
+            "http://localhost:7860",
+            "http://127.0.0.1:7860",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+            "http://localhost:5000",
+            "http://127.0.0.1:5000",
+        ]
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+    )
+
     application.include_router(health_routes.router, prefix="/api/v1")
     application.include_router(orca_routes.router, prefix="/api/v1")
     application.include_router(kaggle_routes.router, prefix="/api/v1")
+    application.include_router(local_agent_routes.router, prefix="/api/v1")
+    application.include_router(analysis_routes.router, prefix="/api/v1")
+    application.include_router(compound_routes.router, prefix="/api/v1")
 
     return application
 
@@ -90,14 +120,11 @@ async def _unhandled_error(request: Request, exc: Exception):
 
 
 # ── Legacy Flask app (UI pages + legacy /api/* routes) as a WSGI mount ──────
-# Mounted LAST so the /api/v1 routes above always win. This keeps the three
-# primary pages (/ /lab /calculations /analysis) and every legacy route
-# working in the same process/port during the migration.
 try:
     from app import app as flask_app  # noqa: E402  (runs orchestrator boot once)
 
     app.mount("/", WSGIMiddleware(flask_app), name="flask-legacy")
-except Exception:  # noqa: BLE001  - pragma: no cover
-    # The API can still boot without the legacy UI mounted (e.g. API-only
-    # deployments); the mount is what makes the single-port deployment work.
-    pass
+except Exception as exc:
+    import logging
+    logging.getLogger("chemlab.fastapi").exception("Failed to mount Flask WSGI compatibility layer: %s", exc)
+    raise RuntimeError(f"Fatal startup failure: could not mount Flask WSGI app: {exc}") from exc

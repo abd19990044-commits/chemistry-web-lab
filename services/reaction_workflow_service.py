@@ -59,9 +59,16 @@ STAGE_CAPABILITIES = {
                     "produces_electronic_energy": False, "produces_frequencies": False,
                     "produces_thermochemistry": False},
 }
-REACTION_STATES = ("DRAFT", "READY", "RUNNING", "WAITING", "COMPLETE", "FAILED", "CANCELLED")
-SPECIES_STATES = ("PENDING", "RUNNING", "PAUSED", "COMPLETE", "FAILED")
-STAGE_STATES = ("PENDING", "SUBMITTING", "SUBMITTED", "RUNNING", "VALIDATING", "COMPLETE", "FAILED", "CANCELLED")
+REACTION_STATES = ("DRAFT", "READY", "RUNNING", "WAITING", "COMPLETE", "FAILED", "CANCELLED", "PAUSED")
+SPECIES_STATES = ("PENDING", "RUNNING", "PAUSED", "COMPLETE", "FAILED", "CANCELLED")
+STAGE_STATES = (
+    "PENDING", "BLOCKED_BY_DEPENDENCY", "READY", "QUEUED",
+    "SUBMITTING", "SUBMITTED", "RUNNING", "VALIDATING",
+    "COMPLETE", "FAILED", "CANCELLED", "PAUSED"
+)
+DEFAULT_KAGGLE_CONCURRENCY = 5
+DEFAULT_LOCAL_ORCA_CONCURRENCY = 1
+ACTIVE_EXECUTION_STATES = {"SUBMITTING", "SUBMITTED", "RUNNING", "VALIDATING"}
 _REPORT_RETENTION_HOURS = 48
 _REPORT_CLEANUP_MIN_INTERVAL_S = 3600
 
@@ -144,7 +151,7 @@ def parse_reaction_equation(equation: str):
                     "Stoichiometric coefficients must be positive: %r" % m.group(2))
             raw = m.group(2)
             if raw == "e-":
-                species.append({"raw_term": raw, "name": "e-", "charge_hint": -1,
+                species.append({"raw_term": raw, "name": "e-", "charge": -1, "charge_hint": -1,
                                 "coefficient": coeff, "role": role, "nu": -coeff, "electron": True})
                 parsed_terms += 1
                 pos = m.end()
@@ -177,6 +184,7 @@ def parse_reaction_equation(equation: str):
                 raise ReactionValidationError(
                     "Invalid species term: %r contains no chemical element." % raw)
             species.append({"raw_term": raw, "name": core,
+                            "charge": charge_hint,
                             "charge_hint": charge_hint,
                             "coefficient": coeff, "role": role,
                             "nu": coeff if role == "product" else -coeff})
@@ -228,13 +236,14 @@ def validate_reaction_balance(species):
 
 
 # ------------------------- stage engine -------------------------
-def new_stage(kind: str, label: str = "", order: int = 0) -> dict:
+def new_stage(kind: str, label: str = "", order: int = 0, backend: str = "local") -> dict:
     kind = (kind or "").upper()
     if kind not in STAGE_KINDS:
         raise ReactionValidationError("Unknown stage kind: %r" % kind)
     stage = {
         "stage_id": uuid.uuid4().hex, "kind": kind, "label": label or kind.title(),
-        "order": order, "state": "PENDING", "input_text": "", "input_hash": None,
+        "order": order, "state": "PENDING", "backend": backend or "local",
+        "input_text": "", "input_hash": None,
         "output_text": "", "output_hash": None, "source": "new", "parent_stage_id": None,
         "geometry_source_stage_id": None, "geometry_hash": None, "attempt_id": None,
         "error": None, "parsed": None,
@@ -271,7 +280,7 @@ def extract_stage_result(output_text: str):
                 for i, c in enumerate(coords))
         except (TypeError, ValueError, IndexError):
             geom_text = None
-    geometry_hash_v = getattr(job, "geometry_hash", None) or (geometry_hash(geom_text) if geom_text else None)
+    geometry_hash_v = (geometry_hash(geom_text) if geom_text else None) or getattr(job, "geometry_hash", None)
     freqs = list(getattr(job, "vibrational_frequencies_cm", []) or [])
     imaginary = sum(1 for f in freqs if f < 0) or int(getattr(job, "imaginary_frequencies_count", 0) or 0)
     entropy_j = _num(getattr(job, "total_entropy_cal_mol_k", None))
@@ -283,6 +292,23 @@ def extract_stage_result(output_text: str):
     temperature_k = float(temp_match.group(1)) if temp_match else None
     converged = bool(getattr(job, "terminated_normally", True))
     has_geom = geom_text is not None or geometry_hash_v is not None
+    meta = getattr(job, "metadata", None)
+    method_val = (getattr(meta, "method", None) or getattr(job, "method", None)) if meta else getattr(job, "method", None)
+    basis_val = (getattr(meta, "basis_set", None) or getattr(job, "basis_set", None)) if meta else getattr(job, "basis_set", None)
+    solvent_val = (getattr(meta, "solvent", None) or getattr(job, "solvent", None)) if meta else getattr(job, "solvent", None)
+    solvation_val = (getattr(meta, "solvation", None) or getattr(job, "solvation_model", None)) if meta else getattr(job, "solvation_model", None)
+
+    if (not method_val or method_val == "Unknown") and output_text:
+        m_match = re.search(r"!\s*(?:(?:NO)?AUTOSTART\s+)*([A-Za-z0-9\-_/]+)", output_text)
+        if m_match:
+            cand = m_match.group(1).upper()
+            if cand not in ("OPT", "FREQ", "NUMFREQ", "SP", "ENGRAD"):
+                method_val = cand
+    if (not basis_val or basis_val == "Unknown") and output_text:
+        b_match = re.search(r"!\s*.*?\b(def2-[A-Z0-9]+|cc-pV[A-Z0-9]+|6-311?[+][+]?G[*]*|STO-3G)\b", output_text, re.IGNORECASE)
+        if b_match:
+            basis_val = b_match.group(1)
+
     return {
         "energy_hartree": _num(getattr(job, "e_elec_eh", None)),
         "geometry_xyz": geom_text,
@@ -296,10 +322,10 @@ def extract_stage_result(output_text: str):
         "enthalpy_hartree": _num(getattr(job, "total_enthalpy_eh", None)),
         "gibbs_hartree": _num(getattr(job, "gibbs_free_energy_eh", None)),
         "entropy_j_mol_k": entropy_j,
-        "method": None,
-        "basis_set": None,
-        "solvent_model": None,
-        "solvent": None,
+        "method": method_val,
+        "basis_set": basis_val,
+        "solvent_model": solvation_val,
+        "solvent": solvent_val,
         "stationary_point_status": getattr(job, "stationary_point_status", None),
         "terminated_normally": bool(getattr(job, "terminated_normally", True)),
     }
@@ -324,28 +350,53 @@ def stage_capabilities_valid(kind: str, result: dict, output_text: str = "") -> 
 
 
 def validate_workflow_stages(stage_list: list):
-    """Geometry handoff + stale detection over an ordered stage list."""
+    """Geometry handoff + stale detection over an ordered stage list.
+    Pass 1: Find final valid geometry of the workflow.
+    Pass 2: Compare each preceding non-geometry stage against the final geometry.
+    """
     warnings = []
     latest_geom_stage = None
     latest_geom_hash = None
     ordered = sorted(stage_list, key=lambda s: s.get("order", 0))
-    for st in ordered:
+
+    # Pass 1: Find latest valid geometry
+    for st in reversed(ordered):
         if st.get("state") != "COMPLETE":
             continue
         caps = STAGE_CAPABILITIES.get(st.get("kind"), {})
         if caps.get("produces_geometry") and st.get("geometry_hash") and st.get("converged"):
             latest_geom_stage = st["stage_id"]
             latest_geom_hash = st["geometry_hash"]
-        if not caps.get("produces_geometry") and st.get("geometry_hash") and latest_geom_hash \
-                and st["geometry_hash"] != latest_geom_hash:
-            if caps.get("produces_thermochemistry"):
-                st["thermal_stale"] = True
-                warnings.append("STALE THERMAL DATA: stage %s (%s) was computed on a geometry that a later "
-                                "optimization replaced." % (st.get("label"), st.get("kind")))
-            elif st.get("kind") in ("SP", "OPT"):
-                st["electronic_stale"] = True
-                warnings.append("STALE ELECTRONIC RESULT: stage %s (%s) belongs to an older geometry."
-                                % (st.get("label"), st.get("kind")))
+            break
+
+    if latest_geom_hash is None:
+        for st in reversed(ordered):
+            if st.get("state") == "COMPLETE" and st.get("geometry_hash"):
+                latest_geom_stage = st["stage_id"]
+                latest_geom_hash = st["geometry_hash"]
+                break
+
+    # Pass 2: Detect stale stages against latest geometry
+    for st in ordered:
+        if st.get("state") != "COMPLETE":
+            continue
+        caps = STAGE_CAPABILITIES.get(st.get("kind"), {})
+        if not caps.get("produces_geometry") and st.get("geometry_hash") and latest_geom_hash:
+            if st["geometry_hash"] != latest_geom_hash:
+                if caps.get("produces_thermochemistry"):
+                    st["thermal_stale"] = True
+                    warnings.append("STALE THERMAL DATA: stage %s (%s) was computed on a geometry that a later "
+                                    "optimization replaced." % (st.get("label"), st.get("kind")))
+                elif st.get("kind") in ("SP", "OPT"):
+                    st["electronic_stale"] = True
+                    warnings.append("STALE ELECTRONIC RESULT: stage %s (%s) belongs to an older geometry."
+                                    % (st.get("label"), st.get("kind")))
+            else:
+                if caps.get("produces_thermochemistry"):
+                    st["thermal_stale"] = False
+                elif st.get("kind") in ("SP", "OPT"):
+                    st["electronic_stale"] = False
+
     return True, warnings, latest_geom_stage
 
 
@@ -372,6 +423,10 @@ def assemble_final_result(stage_list: list):
     sp_stage = next((s for s in reversed(ordered)
                      if s.get("kind") == "SP" and not s.get("electronic_stale")
                      and (s.get("geometry_hash") in (None, geom_hash))), None)
+    if sp_stage is None:
+        sp_stage = next((s for s in reversed(ordered)
+                         if s.get("kind") in ("OPT", "OPTTS") and not s.get("electronic_stale")
+                         and (s.get("geometry_hash") in (None, geom_hash))), None)
     freq_res = freq_stage.get("parsed") if freq_stage else None
     sp_res = sp_stage.get("parsed") if sp_stage else None
     if freq_res is None and sp_res is None:
@@ -410,20 +465,26 @@ def assemble_final_result(stage_list: list):
         result["E_elec_final"] = result["E_SP"]
         result["H_final"] = result["E_SP"] + result["dH_thermal"]
         result["G_final"] = result["E_SP"] + result["dG_thermal"]
+        result["E0_final"] = (result["E_SP"] + result["zpe_hartree"]) if result.get("zpe_hartree") is not None else None
         result["equation_H"] = "H_final = E_SP + (H_freq - E_freq)"
         result["equation_G"] = "G_final = E_SP + (G_freq - E_freq)"
+        result["equation_E0"] = "E0_final = E_SP + ZPE_freq"
     elif freq_res:
         result["E_elec_final"] = result["E_freq"]
         result["H_final"] = result["H_freq"]
         result["G_final"] = result["G_freq"]
+        result["E0_final"] = (result["E_freq"] + result["zpe_hartree"]) if result.get("zpe_hartree") is not None else None
         result["equation_H"] = "H_final = H_freq (direct)"
         result["equation_G"] = "G_final = G_freq (direct)"
+        result["equation_E0"] = "E0_final = E_freq + ZPE_freq"
     else:
         result["E_elec_final"] = result["E_SP"]
         result["H_final"] = None
         result["G_final"] = None
+        result["E0_final"] = None
         result["equation_H"] = None
         result["equation_G"] = None
+        result["equation_E0"] = None
         result["warnings"].append("INCOMPLETE THERMOCHEMISTRY: no compatible frequency/thermal stage - "
                                   "G is not available from SP-only results.")
     result["E_final"] = result["E_elec_final"]
@@ -465,6 +526,7 @@ def compute_reaction_thermodynamics(species_results, temperature_tolerance_k=0.0
         if fr.get("entropy_j_mol_k") is not None:
             S_rxn += nu * float(fr["entropy_j_mol_k"])
     deltas["S"] = S_rxn
+    dE0_hartree = deltas["E_elec"] + deltas["ZPE"]
     for s in species_results:
         imag = s.get("final_result", {}).get("imaginary_count") or 0
         if imag and s.get("role") != "transition_state":
@@ -489,8 +551,12 @@ def compute_reaction_thermodynamics(species_results, temperature_tolerance_k=0.0
     return {
         "temperature_k": temperature_k,
         "dE_elec_hartree": deltas["E_elec"], "dZPE_hartree": deltas["ZPE"],
+        "dE0_hartree": dE0_hartree, "delta_E0_hartree": dE0_hartree,
         "dH_hartree": deltas["H"], "dS_j_mol_k": deltas["S"], "dG_hartree": deltas["G"],
+        "delta_E_elec_hartree": deltas["E_elec"], "delta_ZPE_hartree": deltas["ZPE"],
+        "delta_H_hartree": deltas["H"], "delta_S_j_mol_k": deltas["S"], "delta_G_hartree": deltas["G"],
         "dE_elec_kj_mol": deltas["E_elec"] * HARTREE_KJ_MOL, "dZPE_kj_mol": deltas["ZPE"] * HARTREE_KJ_MOL,
+        "dE0_kj_mol": dE0_hartree * HARTREE_KJ_MOL, "delta_E0_kj_mol": dE0_hartree * HARTREE_KJ_MOL,
         "dH_kj_mol": deltas["H"] * HARTREE_KJ_MOL, "dG_kj_mol": deltas["G"] * HARTREE_KJ_MOL,
         "ln_k": ln_k, "log10_k": log10_k, "k": k_value, "k_note": k_note,
         "warnings": warnings, "species_count": len(species_results),
@@ -510,7 +576,9 @@ class ReactionStore:
         self.reactions_path = os.path.join(state_dir, "reaction_workflows.json")
         self.reports_path = os.path.join(state_dir, "thermo_reports_meta.json")
         self.now_provider = now_provider or (lambda: datetime.now(timezone.utc))
-        self._lock = threading.Lock()
+        from services.local_orca_service import CrossProcessFileLock
+        self.lock_path = os.path.join(state_dir, ".reaction_store.lock")
+        self._lock = CrossProcessFileLock(self.lock_path)
         self._last_cleanup = 0.0
 
     def _read(self, path, default):
@@ -613,6 +681,168 @@ class ReactionStore:
             return self.cleanup_expired_reports(now_provider)
         return []
 
+    def reserve_execution_slot(self, backend: str = "local", max_concurrency: int = None, owner: str = None):
+        """Atomically reserves an execution slot respecting backend concurrency limits, FIFO order, and Kaggle enablement."""
+        if backend == "kaggle":
+            try:
+                from services.local_orca_service import get_local_orca_settings
+                if not get_local_orca_settings(state_dir=self.state_dir).get("kaggle_enabled", False):
+                    return None
+            except Exception:
+                return None
+
+        max_concurrency = max_concurrency or (
+            DEFAULT_LOCAL_ORCA_CONCURRENCY if backend == "local" else DEFAULT_KAGGLE_CONCURRENCY
+        )
+        now_iso = utcnow_iso(self.now_provider)
+        with self._lock:
+            items = self._read(self.reactions_path, [])
+            active_count = 0
+            candidates = []
+            for r in items:
+                if r.get("state") in ("PAUSED", "CANCELLED"):
+                    continue
+                for sp in r.get("species", []):
+                    if sp.get("state") in ("PAUSED", "CANCELLED"):
+                        continue
+                    for st in sp.get("stages", []):
+                        st_backend = st.get("backend") or "local"
+                        if st_backend == backend and st.get("state") in ACTIVE_EXECUTION_STATES:
+                            active_count += 1
+                        elif st_backend == backend and st.get("state") in ("READY", "QUEUED"):
+                            if owner is None or r.get("owner") == owner:
+                                candidates.append((r, sp, st))
+            if active_count >= max_concurrency or not candidates:
+                return None
+            candidates.sort(key=lambda x: x[2].get("ready_at") or x[0].get("created_at") or "")
+            target_r, target_sp, target_st = candidates[0]
+            target_st["state"] = "SUBMITTING"
+            target_st["submitted_at"] = now_iso
+            target_sp["state"] = "RUNNING"
+            target_r["state"] = "RUNNING"
+            self._write_atomic(self.reactions_path, items)
+            return (target_r, target_sp, target_st)
+
+    def pause_reaction(self, owner: str, reaction_id: str):
+        """Pauses queued and ready stages of a reaction."""
+        with self._lock:
+            items = self._read(self.reactions_path, [])
+            target = None
+            for r in items:
+                if r.get("reaction_id") == reaction_id and (owner is None or r.get("owner") == owner):
+                    target = r
+                    break
+            if not target:
+                return None
+            target["state"] = "PAUSED"
+            for sp in target.get("species", []):
+                if sp.get("state") in ("PENDING", "RUNNING"):
+                    sp["state"] = "PAUSED"
+                for st in sp.get("stages", []):
+                    if st.get("state") in ("READY", "QUEUED"):
+                        st["state"] = "PAUSED"
+            self._write_atomic(self.reactions_path, items)
+            return target
+
+    def resume_reaction(self, owner: str, reaction_id: str):
+        """Resumes a paused reaction, re-enabling ready stages."""
+        now_iso = utcnow_iso(self.now_provider)
+        with self._lock:
+            items = self._read(self.reactions_path, [])
+            target = None
+            for r in items:
+                if r.get("reaction_id") == reaction_id and (owner is None or r.get("owner") == owner):
+                    target = r
+                    break
+            if not target:
+                return None
+            target["state"] = "RUNNING" if any(st.get("state") in ACTIVE_EXECUTION_STATES for sp in target.get("species", []) for st in sp.get("stages", [])) else "READY"
+            for sp in target.get("species", []):
+                if sp.get("state") == "PAUSED":
+                    sp["state"] = "PENDING"
+                for st in sp.get("stages", []):
+                    if st.get("state") == "PAUSED":
+                        st["state"] = "READY"
+                        st["ready_at"] = now_iso
+            self._write_atomic(self.reactions_path, items)
+            return target
+
+    def cancel_reaction(self, owner: str, reaction_id: str):
+        """Cancels remaining non-complete stages of a reaction."""
+        with self._lock:
+            items = self._read(self.reactions_path, [])
+            target = None
+            for r in items:
+                if r.get("reaction_id") == reaction_id and (owner is None or r.get("owner") == owner):
+                    target = r
+                    break
+            if not target:
+                return None
+            target["state"] = "CANCELLED"
+            for sp in target.get("species", []):
+                if sp.get("state") not in ("COMPLETE", "FAILED"):
+                    sp["state"] = "CANCELLED"
+                for st in sp.get("stages", []):
+                    if st.get("state") not in ("COMPLETE", "FAILED"):
+                        st["state"] = "CANCELLED"
+            self._write_atomic(self.reactions_path, items)
+            return target
+
+    def get_queue_summary(self, backend: str = None, owner: str = None):
+        """Aggregates queue metrics across all reactions."""
+        with self._lock:
+            items = self._read(self.reactions_path, [])
+            counts = {
+                "active": 0, "queued": 0, "ready": 0, "complete": 0,
+                "failed": 0, "cancelled": 0, "blocked": 0, "paused": 0, "total": 0
+            }
+            for r in items:
+                if owner is not None and r.get("owner") != owner:
+                    continue
+                for sp in r.get("species", []):
+                    for st in sp.get("stages", []):
+                        st_b = st.get("backend") or "local"
+                        if backend is not None and st_b != backend:
+                            continue
+                        counts["total"] += 1
+                        state = st.get("state", "PENDING")
+                        if state in ACTIVE_EXECUTION_STATES:
+                            counts["active"] += 1
+                        elif state in ("QUEUED", "READY"):
+                            counts["queued"] += 1
+                            if state == "READY":
+                                counts["ready"] += 1
+                        elif state == "COMPLETE":
+                            counts["complete"] += 1
+                        elif state == "FAILED":
+                            counts["failed"] += 1
+                        elif state == "CANCELLED":
+                            counts["cancelled"] += 1
+                        elif state == "BLOCKED_BY_DEPENDENCY":
+                            counts["blocked"] += 1
+                        elif state == "PAUSED":
+                            counts["paused"] += 1
+            return counts
+
+
+DEFAULT_SHARED_STAGES = [
+    {"kind": "OPT", "label": "Geometry Optimization", "order": 0},
+    {"kind": "FREQ", "label": "Frequency & Thermochemistry", "order": 1},
+]
+
+
+def compute_workflow_hash(stages: list) -> str:
+    simplified = [
+        {
+            "kind": (s.get("kind") or "").upper(),
+            "label": s.get("label") or "",
+            "order": s.get("order", 0),
+            "options": s.get("options") or {},
+        }
+        for s in sorted(stages, key=lambda x: x.get("order", 0))
+    ]
+    return sha256_text(json.dumps(simplified, sort_keys=True))
+
 
 # ------------------------- reaction CRUD / workflow ops -------------------------
 def create_reaction(owner: str, equation: str, store: ReactionStore, display_name: str = "") -> dict:
@@ -620,21 +850,34 @@ def create_reaction(owner: str, equation: str, store: ReactionStore, display_nam
     balanced, balance_warnings = validate_reaction_balance(
         [{**t, "formula": t["name"]} for t in species_terms])
     now = utcnow_iso(store.now_provider)
+    shared_wf_id = uuid.uuid4().hex
+    shared_wf = {
+        "shared_workflow_id": shared_wf_id,
+        "workflow_revision": 1,
+        "workflow_hash": compute_workflow_hash(DEFAULT_SHARED_STAGES),
+        "stages": list(DEFAULT_SHARED_STAGES),
+    }
     reaction = {
         "reaction_id": uuid.uuid4().hex, "owner": owner,
         "display_name": display_name or equation.strip(),
         "equation": equation.strip(), "state": "READY",
         "created_at": now, "updated_at": now,
         "balance_valid": balanced, "balance_warnings": balance_warnings,
+        "shared_workflow": shared_wf,
         "species": [],
     }
     for term in species_terms:
+        norm = term["name"].strip().upper().replace(" ", "")
+        initial_geom = STANDARD_3D_GEOMETRIES.get(norm)
         reaction["species"].append({
+            "initial_geometry": initial_geom,
             "species_id": uuid.uuid4().hex, "reaction_id": reaction["reaction_id"],
             "display_name": term["name"], "formula": term["name"], "role": term["role"],
             "nu": term["nu"], "stoichiometric_coefficient": term["coefficient"],
-            "charge": term.get("charge_hint", 0), "multiplicity": 1,
-            "initial_geometry": None, "workflow_id": uuid.uuid4().hex,
+            "charge": term.get("charge", term.get("charge_hint", 0)), "multiplicity": 1,
+            "workflow_id": uuid.uuid4().hex,
+            "workflow_source": "SHARED",
+            "workflow_hash": shared_wf["workflow_hash"],
             "stages": [], "latest_valid_geometry_stage_id": None,
             "immediately_previous_stage_id": None, "state": "PENDING",
             "final_result": None, "thermochemistry_status": "PENDING",
@@ -642,6 +885,103 @@ def create_reaction(owner: str, equation: str, store: ReactionStore, display_nam
         })
     store.save_reaction(reaction)
     return reaction
+
+
+def set_shared_workflow(reaction: dict, stage_templates: list, store: ReactionStore = None) -> dict:
+    if len(stage_templates) > MAX_STAGES_PER_SPECIES:
+        raise ReactionValidationError("Shared workflow exceeds limit of %d stages." % MAX_STAGES_PER_SPECIES)
+    cleaned = []
+    for idx, st in enumerate(stage_templates):
+        kind = (st.get("kind") or "").upper()
+        if kind not in STAGE_KINDS:
+            raise ReactionValidationError("Invalid stage kind in template: %s" % kind)
+        cleaned.append({
+            "kind": kind,
+            "label": st.get("label") or ("%s %d" % (kind.title(), idx + 1)),
+            "order": idx,
+            "options": st.get("options") or {},
+        })
+    sw = reaction.get("shared_workflow") or {}
+    shared_wf = {
+        "shared_workflow_id": sw.get("shared_workflow_id") or uuid.uuid4().hex,
+        "workflow_revision": sw.get("workflow_revision", 0) + 1,
+        "workflow_hash": compute_workflow_hash(cleaned),
+        "stages": cleaned,
+    }
+    reaction["shared_workflow"] = shared_wf
+    if store is not None:
+        store.save_reaction(reaction)
+    return shared_wf
+
+
+def apply_shared_workflow_to_species(reaction: dict, species_id: str, store: ReactionStore = None) -> dict:
+    species = _get_species(reaction, species_id)
+    shared_wf = reaction.get("shared_workflow")
+    if not shared_wf or not shared_wf.get("stages"):
+        shared_wf = set_shared_workflow(reaction, DEFAULT_SHARED_STAGES)
+    stage_templates = shared_wf["stages"]
+    now_iso = utcnow_iso(store.now_provider if store else None)
+    new_stages_list = []
+    prev_id = None
+    for idx, tmpl in enumerate(stage_templates):
+        st = new_stage(tmpl["kind"], tmpl.get("label", ""), order=idx)
+        st["parent_stage_id"] = prev_id
+        if idx == 0:
+            st["state"] = "READY"
+            st["ready_at"] = now_iso
+        else:
+            st["state"] = "BLOCKED_BY_DEPENDENCY"
+        prev_id = st["stage_id"]
+        new_stages_list.append(st)
+    species["stages"] = new_stages_list
+    species["workflow_source"] = "SHARED"
+    species["workflow_hash"] = shared_wf["workflow_hash"]
+    species["state"] = "PENDING"
+    species["latest_valid_geometry_stage_id"] = None
+    species["immediately_previous_stage_id"] = new_stages_list[-1]["stage_id"] if new_stages_list else None
+    if store is not None:
+        store.save_reaction(reaction)
+    return species
+
+
+def apply_shared_workflow_to_all(reaction: dict, store: ReactionStore = None, overwrite_custom: bool = False) -> dict:
+    for sp in reaction.get("species", []):
+        if overwrite_custom or sp.get("workflow_source") != "CUSTOM":
+            apply_shared_workflow_to_species(reaction, sp["species_id"], store=None)
+    if store is not None:
+        store.save_reaction(reaction)
+    return reaction
+
+
+def set_species_custom_workflow(reaction: dict, species_id: str, stages: list, store: ReactionStore = None) -> dict:
+    if len(stages) > MAX_STAGES_PER_SPECIES:
+        raise ReactionValidationError("Custom workflow exceeds limit of %d stages." % MAX_STAGES_PER_SPECIES)
+    species = _get_species(reaction, species_id)
+    now_iso = utcnow_iso(store.now_provider if store else None)
+    new_stages_list = []
+    prev_id = None
+    for idx, s_def in enumerate(stages):
+        kind = (s_def.get("kind") or "").upper()
+        if kind not in STAGE_KINDS:
+            raise ReactionValidationError("Invalid stage kind: %s" % kind)
+        st = new_stage(kind, s_def.get("label", ""), order=idx)
+        st["parent_stage_id"] = prev_id
+        if idx == 0:
+            st["state"] = "READY"
+            st["ready_at"] = now_iso
+        else:
+            st["state"] = "BLOCKED_BY_DEPENDENCY"
+        prev_id = st["stage_id"]
+        new_stages_list.append(st)
+    species["stages"] = new_stages_list
+    species["workflow_source"] = "CUSTOM"
+    species["workflow_hash"] = compute_workflow_hash([{"kind": s["kind"], "label": s["label"], "order": s["order"]} for s in new_stages_list])
+    species["state"] = "PENDING"
+    species["latest_valid_geometry_stage_id"] = None
+    species["immediately_previous_stage_id"] = new_stages_list[-1]["stage_id"] if new_stages_list else None
+    if store is not None:
+        store.save_reaction(reaction)
+    return species
 
 
 def _get_species(reaction, species_id):
@@ -667,6 +1007,11 @@ def add_stage(reaction: dict, species_id: str, kind: str, label: str = "") -> di
     stage = new_stage(kind, label or "%s %d" % (kind.title(), len(stages) + 1), order=len(stages))
     prev = stages[-1] if stages else None
     stage["parent_stage_id"] = prev["stage_id"] if prev else None
+    if not prev or prev.get("state") == "COMPLETE":
+        stage["state"] = "READY"
+        stage["ready_at"] = utcnow_iso()
+    else:
+        stage["state"] = "BLOCKED_BY_DEPENDENCY"
     stages.append(stage)
     species["immediately_previous_stage_id"] = prev["stage_id"] if prev else None
     species["state"] = "PENDING"
@@ -676,8 +1021,8 @@ def add_stage(reaction: dict, species_id: str, kind: str, label: str = "") -> di
 
 def set_stage_input(reaction: dict, stage_id: str, input_text: str):
     stage = _get_stage(reaction, stage_id)
-    if stage.get("state") not in ("PENDING", "FAILED"):
-        raise ReactionValidationError("stage %s is %s - only PENDING/FAILED stages accept new input."
+    if stage.get("state") not in ("PENDING", "READY", "FAILED", "BLOCKED_BY_DEPENDENCY"):
+        raise ReactionValidationError("stage %s is %s - only PENDING/READY/FAILED stages accept new input."
                                       % (stage_id, stage.get("state")))
     stage["input_text"] = input_text
     stage["input_hash"] = sha256_text(input_text)
@@ -731,8 +1076,45 @@ def complete_stage_with_output(reaction: dict, species_id: str, stage_id: str, o
         stage["state"] = "COMPLETE"
         if stage.get("produces_geometry") and stage.get("geometry_hash"):
             species["latest_valid_geometry_stage_id"] = stage["stage_id"]
+
+        # Advance next stage in species dependency chain
+        st_idx = next((i for i, s in enumerate(species["stages"]) if s["stage_id"] == stage_id), -1)
+        if st_idx >= 0 and st_idx + 1 < len(species["stages"]):
+            nxt = species["stages"][st_idx + 1]
+            if nxt.get("state") == "BLOCKED_BY_DEPENDENCY":
+                # Propagate optimized geometry if available
+                opt_xyz = stage.get("parsed", {}).get("geometry_xyz") or species.get("initial_geometry")
+                if opt_xyz and nxt.get("stage_options"):
+                    import chem_core as core
+                    opts = dict(nxt["stage_options"])
+                    opts["coords"] = opt_xyz
+                    nxt["input_text"] = core.generate_orca_6_input(opts)
+                    nxt["input_hash"] = sha256_text(nxt["input_text"])
+                nxt["state"] = "READY"
+                nxt["ready_at"] = utcnow_iso(store.now_provider if store else None)
+                nxt["parent_stage_id"] = stage["stage_id"]
+
+        all_sp_stages_done = all(s.get("state") == "COMPLETE" for s in species["stages"])
+        if all_sp_stages_done and species["stages"]:
+            assemble_species_result(reaction, species_id, store=None)
+
         species["state"] = "COMPLETE" if all(s.get("state") == "COMPLETE" for s in species["stages"]) else "RUNNING"
         reaction["state"] = "WAITING"
+
+        # Check if entire reaction completed -> Auto Thermo + PDF
+        all_species_done = all(sp.get("state") == "COMPLETE" and sp.get("final_result") for sp in reaction["species"])
+        if all_species_done and reaction["species"] and store is not None:
+            try:
+                thermo = compute_and_store_thermodynamics(reaction, store)
+                try:
+                    from services import thermo_report_service as _trs
+                    meta = _trs.create_report(store, reaction.get("owner"), reaction, thermo)
+                    reaction["thermo_report_id"] = meta.get("report_id")
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
     if store is not None:
         validate_workflow_stages(species["stages"])
         store.save_reaction(reaction)
@@ -773,3 +1155,162 @@ def compute_and_store_thermodynamics(reaction: dict, store: ReactionStore):
     reaction["thermodynamics"] = thermo
     store.save_reaction(reaction)
     return thermo
+
+# ------------------------- Standard 3D Geometries & Resolution -------------------------
+STANDARD_3D_GEOMETRIES = {
+    "H2": "H  0.000000  0.000000  0.000000\nH  0.000000  0.000000  0.741440",
+    "O2": "O  0.000000  0.000000  0.000000\nO  0.000000  0.000000  1.207500",
+    "N2": "N  0.000000  0.000000  0.000000\nN  0.000000  0.000000  1.097700",
+    "F2": "F  0.000000  0.000000  0.000000\nF  0.000000  0.000000  1.411900",
+    "CL2": "Cl 0.000000  0.000000  0.000000\nCl 0.000000  0.000000  1.987900",
+    "BR2": "Br 0.000000  0.000000  0.000000\nBr 0.000000  0.000000  2.281100",
+    "I2": "I  0.000000  0.000000  0.000000\nI  0.000000  0.000000  2.666300",
+    "HF": "F  0.000000  0.000000  0.000000\nH  0.000000  0.000000  0.916800",
+    "HCL": "Cl 0.000000  0.000000  0.000000\nH  0.000000  0.000000  1.274600",
+    "HBR": "Br 0.000000  0.000000  0.000000\nH  0.000000  0.000000  1.414400",
+    "HI": "I  0.000000  0.000000  0.000000\nH  0.000000  0.000000  1.609200",
+    "CO": "C  0.000000  0.000000  0.000000\nO  0.000000  0.000000  1.128300",
+    "CO2": "C  0.000000  0.000000  0.000000\nO  0.000000  0.000000  1.162100\nO  0.000000  0.000000 -1.162100",
+    "H2O": "O  0.000000  0.000000  0.117300\nH  0.000000  0.757200 -0.469200\nH  0.000000 -0.757200 -0.469200",
+    "H2S": "S  0.000000  0.000000  0.102200\nH  0.000000  0.961600 -0.817500\nH  0.000000 -0.961600 -0.817500",
+    "SO2": "S  0.000000  0.000000  0.360000\nO  0.000000  1.230000 -0.360000\nO  0.000000 -1.230000 -0.360000",
+    "NH3": "N  0.000000  0.000000  0.116500\nH  0.000000  0.939700 -0.271800\nH  0.813800 -0.469900 -0.271800\nH -0.813800 -0.469900 -0.271800",
+    "CH4": "C  0.000000  0.000000  0.000000\nH  0.627600  0.627600  0.627600\nH -0.627600 -0.627600  0.627600\nH -0.627600  0.627600 -0.627600\nH  0.627600 -0.627600 -0.627600",
+    "HCN": "H  0.000000  0.000000 -1.064000\nC  0.000000  0.000000  0.000000\nN  0.000000  0.000000  1.156000",
+    "NO": "N  0.000000  0.000000  0.000000\nO  0.000000  0.000000  1.150800",
+    "NO2": "N  0.000000  0.000000  0.300000\nO  0.000000  1.080000 -0.300000\nO  0.000000 -1.080000 -0.300000",
+}
+
+
+def resolve_species_3d_geometry(name_or_formula: str, smiles: str = None) -> tuple[str | None, str | None]:
+    """Resolve chemical species name, formula, or SMILES to standard 3D Cartesian coordinates (XYZ text)."""
+    norm = name_or_formula.strip().upper().replace(" ", "")
+    if norm in STANDARD_3D_GEOMETRIES:
+        return STANDARD_3D_GEOMETRIES[norm], None
+
+    import chem_core as core
+    candidate_smiles = smiles or name_or_formula
+    try:
+        from rdkit import Chem
+        mol = Chem.MolFromSmiles(candidate_smiles)
+        if mol is not None:
+            xyz = core.xyz_from_smiles(candidate_smiles)
+            if xyz:
+                return xyz, None
+    except Exception:
+        pass
+
+    return None, f"Could not generate 3D coordinates for '{name_or_formula}'"
+
+
+def generate_unified_reaction_inputs(reaction: dict, workflow_config: dict, store: ReactionStore = None) -> dict:
+    """Configures stages for all species and generates standard ORCA 6 input decks."""
+    import chem_core as core
+    method = workflow_config.get("method", "B3LYP")
+    basis = workflow_config.get("basis", "def2-SVP")
+    disp = workflow_config.get("disp", "D3BJ")
+    solv_model = workflow_config.get("solv_model", "none")
+    solvent = workflow_config.get("solvent", "Water")
+    cores = int(workflow_config.get("cores", 4))
+    ram = int(workflow_config.get("ram", 2000))
+    backend = workflow_config.get("backend", "local")
+    target_device = workflow_config.get("target_device")
+
+    raw_stages = workflow_config.get("stages") or [
+        {"kind": "OPT", "label": "Geometry Optimization", "order": 0},
+        {"kind": "FREQ", "label": "Frequency & Thermochemistry", "order": 1},
+    ]
+
+    for sp in reaction.get("species", []):
+        # 1. Ensure 3D initial geometry
+        if not sp.get("initial_geometry"):
+            coords, _ = resolve_species_3d_geometry(sp["formula"])
+            if coords:
+                sp["initial_geometry"] = coords
+
+        sp_coords = sp.get("initial_geometry") or ""
+
+        # 2. Build stages
+        sp["stages"] = []
+        for idx, st_def in enumerate(raw_stages):
+            kind = st_def.get("kind", "OPT").upper()
+            st = new_stage(kind=kind, label=st_def.get("label", kind), order=idx, backend=backend)
+            st["target_device"] = target_device
+
+            calc_type = "opt" if kind == "OPT" else ("freq" if kind == "FREQ" else ("opt_freq" if kind in ("OPT_FREQ", "OPT_AND_FREQ") else "sp"))
+            
+            # First stage gets initial geometry and becomes READY
+            if idx == 0:
+                inp_payload = {
+                    "calc_type": calc_type,
+                    "theory": method,
+                    "basis": basis,
+                    "disp": disp,
+                    "solv_model": solv_model,
+                    "solvent": solvent,
+                    "charge": sp.get("charge", 0),
+                    "mult": sp.get("multiplicity", 1),
+                    "cores": cores,
+                    "ram": ram,
+                    "coords": sp_coords,
+                }
+                st["input_text"] = core.generate_orca_6_input(inp_payload)
+                st["input_hash"] = sha256_text(st["input_text"])
+                st["state"] = "READY"
+                st["ready_at"] = utcnow_iso(store.now_provider if store else None)
+            else:
+                st["state"] = "BLOCKED_BY_DEPENDENCY"
+                st["stage_options"] = {
+                    "calc_type": calc_type,
+                    "theory": method,
+                    "basis": basis,
+                    "disp": disp,
+                    "solv_model": solv_model,
+                    "solvent": solvent,
+                    "charge": sp.get("charge", 0),
+                    "mult": sp.get("multiplicity", 1),
+                    "cores": cores,
+                    "ram": ram,
+                }
+
+            sp["stages"].append(st)
+
+        sp["state"] = "PENDING"
+
+    reaction["state"] = "READY"
+    if store is not None:
+        store.save_reaction(reaction)
+    return reaction
+
+
+def build_reaction_outputs_zip(reaction: dict, store: ReactionStore = None) -> bytes:
+    """Builds a ZIP archive containing all inputs, outputs, and geometries for all species in the reaction."""
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        summary = {
+            "reaction_id": reaction.get("reaction_id"),
+            "equation": reaction.get("equation"),
+            "state": reaction.get("state"),
+            "thermodynamics": reaction.get("thermodynamics"),
+            "created_at": reaction.get("created_at"),
+            "species_count": len(reaction.get("species", [])),
+        }
+        zf.writestr("reaction_summary.json", json.dumps(summary, indent=2, ensure_ascii=False))
+
+        for sp in reaction.get("species", []):
+            sp_name = re.sub(r'[^A-Za-z0-9_\-\.]', '_', sp.get("display_name") or sp.get("formula") or "species")
+            if sp.get("initial_geometry"):
+                zf.writestr(f"geometries/{sp_name}_initial.xyz", sp["initial_geometry"])
+            if (sp.get("final_result") or {}).get("geometry_xyz"):
+                zf.writestr(f"geometries/{sp_name}_optimized.xyz", sp["final_result"]["geometry_xyz"])
+
+            for idx, st in enumerate(sp.get("stages", [])):
+                st_kind = st.get("kind", "STAGE")
+                if st.get("input_text"):
+                    zf.writestr(f"inputs/{sp_name}_step{idx+1}_{st_kind}.inp", st["input_text"])
+                if st.get("output_text"):
+                    zf.writestr(f"outputs/{sp_name}_step{idx+1}_{st_kind}.out", st["output_text"])
+
+    return buf.getvalue()

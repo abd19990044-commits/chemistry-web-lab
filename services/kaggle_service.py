@@ -60,28 +60,37 @@ def submit_dedup_store(idem_key, response):
 # ---------------------------------------------------------------------------
 # Credential resolution (moved from app.py._resolve_kaggle_credentials)
 # ---------------------------------------------------------------------------
-def resolve_credentials(kaggle_username, kaggle_key):
+def resolve_credentials(kaggle_username, kaggle_key, owner=None):
     """Mirrors app._resolve_kaggle_credentials exactly (clean + vault fallback)."""
     kaggle_username = (kaggle_username or "").strip()
     kaggle_key = (kaggle_key or "").strip()
     kaggle_username, kaggle_key = kaggle_runner.clean_kaggle_credentials(kaggle_username, kaggle_key)
-    if not kaggle_key and kaggle_username:
+    if not kaggle_key:
         try:
             from orca_orchestrator.credential_vault import get_vault_manager
-            loaded = get_vault_manager().load_credentials(kaggle_username)
+            vm = get_vault_manager()
+            loaded = None
+            if owner:
+                loaded = vm.load_credentials(owner)
+            if not loaded and kaggle_username:
+                loaded = vm.load_credentials(kaggle_username)
             if loaded:
                 kaggle_key = loaded.key or loaded.api_token or ""
+                if not kaggle_username and loaded.username:
+                    kaggle_username = loaded.username
         except Exception:
             pass
     return kaggle_username, kaggle_key
 
 
-def save_credentials(kaggle_username, kaggle_key):
+def save_credentials(kaggle_username, kaggle_key, owner=None):
     try:
         from orca_orchestrator.credential_vault import get_vault_manager
         from orca_orchestrator.credentials import parse as parse_credentials
         creds = parse_credentials(kaggle_username, kaggle_key)
-        get_vault_manager().save_credentials(creds.username, creds)
+        target_owner = (owner or creds.username or "").strip()
+        if target_owner:
+            get_vault_manager().save_credentials(target_owner, creds)
     except Exception:
         pass
 
@@ -89,9 +98,9 @@ def save_credentials(kaggle_username, kaggle_key):
 # ---------------------------------------------------------------------------
 # Status
 # ---------------------------------------------------------------------------
-def check_status(kaggle_username, kaggle_key, job_id):
+def check_status(kaggle_username, kaggle_key, job_id, owner=None):
     """Returns (payload, status_code)."""
-    kaggle_username, kaggle_key = resolve_credentials(kaggle_username, kaggle_key)
+    kaggle_username, kaggle_key = resolve_credentials(kaggle_username, kaggle_key, owner=owner)
     job_id = (job_id or "").strip()
     if not kaggle_username or not kaggle_key or not job_id:
         return {"ok": False, "error": "Missing username, API key, or job id."}, 400
@@ -116,7 +125,7 @@ def check_status(kaggle_username, kaggle_key, job_id):
 # ---------------------------------------------------------------------------
 def submit_job(*, kaggle_username, kaggle_key, dataset_sources_raw, orca_link,
                input_filename, input_content, job_name, idem_key=None, store=None,
-               extra_files=None, maxdisk_mb=None):
+               extra_files=None, maxdisk_mb=None, owner=None):
     """Authoritative submission used by BOTH Flask and FastAPI.
 
     Idempotency is enforced by the ORCHESTRATOR STORE (SQLite, shared across
@@ -128,7 +137,7 @@ def submit_job(*, kaggle_username, kaggle_key, dataset_sources_raw, orca_link,
     import hashlib
     import json as _json
 
-    kaggle_username, kaggle_key = resolve_credentials(kaggle_username, kaggle_key)
+    kaggle_username, kaggle_key = resolve_credentials(kaggle_username, kaggle_key, owner=owner)
 
     if not kaggle_username or not kaggle_key:
         return {"ok": False, "error": "Please enter your Kaggle username and API key/token."}, 400
@@ -231,7 +240,7 @@ def submit_job(*, kaggle_username, kaggle_key, dataset_sources_raw, orca_link,
             "message": "Job submitted to Kaggle successfully. Track progress and results below.",
         }
         store.complete_idempotent(key, response_data)
-        save_credentials(kaggle_username, kaggle_key)
+        save_credentials(kaggle_username, kaggle_key, owner=owner)
         return response_data, 200
     except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
         store.abandon_idempotent(key)
@@ -264,11 +273,11 @@ def submit_job(*, kaggle_username, kaggle_key, dataset_sources_raw, orca_link,
 # ---------------------------------------------------------------------------
 # Optimized-coordinate extraction with the scientific OPT gate
 # ---------------------------------------------------------------------------
-def fetch_archive(kaggle_username, kaggle_key, job_id):
+def fetch_archive(kaggle_username, kaggle_key, job_id, owner=None):
     """Fetches a job's results archive and returns (zip_path, cleanup_dir).
 
     The caller owns cleanup: after reading, remove cleanup_dir."""
-    kaggle_username, kaggle_key = resolve_credentials(kaggle_username, kaggle_key)
+    kaggle_username, kaggle_key = resolve_credentials(kaggle_username, kaggle_key, owner=owner)
     job_id = (job_id or "").strip()
     if not kaggle_username or not kaggle_key or not job_id:
         return None, None, {"ok": False, "error": "Missing username, API key, or job id."}, 400
@@ -300,8 +309,8 @@ def fetch_archive(kaggle_username, kaggle_key, job_id):
         return None, None, {"ok": False, "error": "Failed to fetch the archive: %s" % exc}, 502
 
 
-def extract_opt_coords(kaggle_username, kaggle_key, job_id):
-    kaggle_username, kaggle_key = resolve_credentials(kaggle_username, kaggle_key)
+def extract_opt_coords(kaggle_username, kaggle_key, job_id, owner=None):
+    kaggle_username, kaggle_key = resolve_credentials(kaggle_username, kaggle_key, owner=owner)
     job_id = (job_id or "").strip()
     if not kaggle_username or not kaggle_key or not job_id:
         return {"ok": False, "error": "Missing username, API key, or job id."}, 400

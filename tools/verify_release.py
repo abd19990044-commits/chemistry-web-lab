@@ -203,8 +203,8 @@ def verify_package_manifest(pkg_dir: Path) -> tuple[bool, str, dict]:
     if not critical_files:
         return False, f"Manifest in {pkg_dir.name} contains no runtime_critical_files", manifest
 
-    # Audit all files on disk
-    disk_files = [p for p in pkg_dir.rglob('*') if p.is_file() and p.name != 'RELEASE_MANIFEST.json']
+    # Audit all files on disk (excluding .git metadata and manifest itself)
+    disk_files = [p for p in pkg_dir.rglob('*') if p.is_file() and p.name != 'RELEASE_MANIFEST.json' and '.git' not in p.parts]
     if len(disk_files) != len(critical_files):
         return False, (
             f"File count mismatch in {pkg_dir.name}: disk has {len(disk_files)}, manifest declares {len(critical_files)}"

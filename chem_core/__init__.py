@@ -14,6 +14,10 @@ from pathlib import Path
 
 _LEGACY_MODULE_NAME = "_chem_core_legacy"
 _LEGACY_PATH = Path(__file__).resolve().parent.parent / "chem_core.py"
+if not _LEGACY_PATH.is_file():
+    _sibling = Path(__file__).resolve().parent / "chem_core.py"
+    if _sibling.is_file():
+        _LEGACY_PATH = _sibling
 _SPEC = importlib.util.spec_from_file_location(_LEGACY_MODULE_NAME, _LEGACY_PATH)
 if _SPEC is None or _SPEC.loader is None:
     raise ImportError(f"Could not load legacy chemistry core: {_LEGACY_PATH}")

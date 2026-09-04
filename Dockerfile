@@ -27,7 +27,4 @@ USER appuser
 # coordinator. Threads still allow concurrent HTTP requests while avoiding
 # duplicate worker state, inconsistent fallback Flask secret keys, and races
 # during Kaggle job polling/submission. Set SECRET_KEY in the Space secrets
-# for stable sessions across container restarts as documented in README.md.
-# --timeout is intentionally long because result downloads pull a Kaggle
-# archive and stream it to the browser in the same request.
-CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "1", "--threads", "8", "--timeout", "900", "--graceful-timeout", "30", "--keep-alive", "5", "app:app"]
+CMD ["gunicorn", "api.main:app", "-k", "uvicorn.workers.UvicornWorker", "-w", "1", "-b", "0.0.0.0:7860", "--timeout", "900"]

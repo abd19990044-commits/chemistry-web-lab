@@ -7,6 +7,8 @@ export interface Env {
   CONTROL_PLANE_API_TOKEN?: string;
   CONTROL_PLANE_PROJECT_ID?: string;
   CONTROL_PLANE_NAMESPACE?: string;
+  ALLOWED_ORIGINS?: string;
+  CHEMISTRY_LAB_ALLOWED_ORIGINS?: string;
 }
 
 export interface WorkflowStep {

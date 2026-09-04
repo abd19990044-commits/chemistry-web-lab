@@ -23,9 +23,9 @@ pinned: false
 ## 📖 Table of Contents
 - [Executive Overview](#-executive-overview)
 - [Key Features & Capabilities](#-key-features--capabilities)
-- [System Architecture](#️-system-architecture)
+- [Primary Execution: Local & HPC Companion Agent](#-primary-execution-local--hpc-companion-agent)
 - [Quantum Chemistry Engine (`orca_engine`)](#-quantum-chemistry-engine-orca_engine)
-- [Fault-Tolerant Kaggle Orchestrator (`orca_orchestrator`)](#️-fault-tolerant-kaggle-orchestrator)
+- [Optional Secondary Cloud: Kaggle Orchestrator](#️-optional-secondary-cloud-kaggle-orchestrator)
 - [Installation & Local Quickstart](#-installation--local-quickstart)
 - [Comprehensive API Endpoints](#-comprehensive-api-endpoints)
 - [Testing & Quality Assurance](#-testing--quality-assurance)
@@ -36,9 +36,11 @@ pinned: false
 
 ## 🔬 Executive Overview
 
-**Chemistry Lab** is a web-based computational chemistry platform for molecular structure exploration, ORCA quantum-chemistry workflows, scientific result analysis, spectroscopy visualization, thermochemistry, and fault-tolerant execution of long-running computational jobs. It seamlessly unifies modern interactive molecular visualization, chemistry toolsets, automated ORCA 6 input generation, an embedded quantum analysis engine (`orca_engine`), and a self-healing multi-session Kaggle orchestrator (`orca_orchestrator`).
-
-The platform bridges the gap between raw quantum chemistry output files and interactive scientific insights, allowing researchers to explore geometries in WebGL 3D, inspect frontier orbitals, examine conceptual DFT reactivity indices, generate broadened UV-Vis absorption spectra, and evaluate reaction thermochemistry in a single browser window.
+**Chemistry Lab** is a modern computational chemistry web platform for molecular structure exploration, high-performance ORCA quantum-chemistry workflows, scientific result analysis, spectroscopy visualization, and reaction thermochemistry. It seamlessly unifies:
+1. **Interactive Chemical Studios**: 2D molecule drawing, reaction stoichiometry, and PubChem 3D coordinate resolution.
+2. **Primary High-Performance Execution**: Standalone **Local & HPC Companion Agent** packages for Windows, Linux, macOS, and supercomputing clusters (Slurm, PBS, LSF) with ephemeral random pairing tokens (`CLA_...`) and full local privacy.
+3. **Quantum Chemistry Engine (`orca_engine`)**: WebGL 3D rendering, frontier orbital diagrams (HOMO/LUMO), conceptual DFT descriptors, Gaussian-convoluted UV-Vis/IR/NMR spectra, and composite thermochemistry.
+4. **Optional Secondary Cloud Fallback**: Fault-tolerant multi-session Kaggle cloud runner for users without local ORCA installations.
 
 ---
 
@@ -48,19 +50,50 @@ The platform bridges the gap between raw quantum chemistry output files and inte
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                            CHEMISTRY LAB ARCHITECTURE                           │
 ├────────────────────────┬──────────────────────────┬─────────────────────────────┤
-│   MOLECULAR STUDIO     │    QUANTUM CALCULATOR    │    ORCA RESULTS ANALYZER    │
-│  • 2D Molecule Drawer  │  • ORCA 6 Input Builder  │  • WebGL 3D Molecular View  │
-│  • SMILES / Name Query │  • Level of Theory / DFT │  • HOMO-LUMO Gap Diagram    │
-│  • PubChem 3D Resolver │  • Solvation & Dispersion│  • Conceptual DFT (CDFT)    │
-│  • MDL RXN Reaction 2D │  • Multi-Core RAM Setup  │  • TD-DFT UV-Vis Spectrum   │
-│  • Stoichiometry Check │  • Coordinate Converter  │  • Reaction Thermochemistry │
+│   MOLECULAR STUDIO     │   LOCAL & HPC RUNNER     │    ORCA RESULTS ANALYZER    │
+│  • 2D Molecule Drawer  │  • Multi-OS Agent Hub    │  • WebGL 3D Molecular View  │
+│  • SMILES / Name Query │  • Windows/Linux/macOS   │  • HOMO-LUMO Gap Diagram    │
+│  • PubChem 3D Resolver │  • HPC Slurm/PBS/LSF     │  • Conceptual DFT (CDFT)    │
+│  • MDL RXN Reaction 2D │  • Ephemeral Pairing API │  • TD-DFT UV-Vis Spectrum   │
+│  • Stoichiometry Check │  • 100% Local Privacy    │  • IR & NMR Spectroscopy    │
+│  • One-Click Thermo    │  • Full Native Speed     │  • Reaction Thermochemistry │
 ├────────────────────────┴──────────────────────────┴─────────────────────────────┤
-│                        CLOUD COMPUTATION & LIFECYCLE                            │
-│  • Ephemeral Kaggle API Execution & Automated Kernel Management                  │
-│  • Multi-Session Auto-Continuation (Bypasses 12h Session Limits)                │
-│  • State Machine Ledger, Checkpoint Validation & Wavefunction Continuity        │
+│                    OPTIONAL SECONDARY CLOUD COMPUTATION                         │
+│  • Optional Kaggle Cloud Runner with Multi-Session Auto-Continuation            │
+│  • Encrypted Credential Vault (AES-256-GCM AEAD) & State Machine Ledger         │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 💻 Primary Execution: Local & HPC Companion Agent
+
+The **primary and recommended execution pathway** for Chemistry Lab is direct execution on your own hardware using the lightweight, standalone **Chemistry Lab Companion Agent**. This eliminates cloud timeouts, keeps your research data 100% private, and leverages your workstation's or cluster's full hardware potential (multi-threading, GPU acceleration, and AVX-512 optimizations).
+
+### 1. Workflow & Connection Model
+1. **Choose Execution Platform**: Windows, Linux, macOS, or HPC Cluster.
+2. **Download Package**: From the topbar or homepage, click **📥 Download Local Runner** to retrieve the pre-packaged ZIP archive (`ChemistryLabAgent-Windows.zip`, `ChemistryLabAgent-Linux.zip`, `ChemistryLabAgent-macOS.zip`, `ChemistryLabAgent-HPC.zip`).
+3. **Extract Archive**: Extract to any directory (e.g. `C:\ChemistryLabAgent` or `~/ChemistryLabAgent`).
+4. **Run Launcher**:
+   - **Windows**: Run `install_and_run.bat` (or PowerShell `bootstrap_windows.ps1`).
+   - **Linux / macOS**: Run `bash install_and_run.sh`.
+   - **HPC Cluster**: Run `bash install_hpc_agent.sh --scheduler slurm`.
+5. **Ephemeral Connection API**: Every time the Agent script starts, it generates a **NEW** cryptographically random Connection API (`CLA_...` with >= 256 bits of entropy) and displays it in the terminal.
+6. **Copy API**: Copy the `CLA_...` token from the terminal.
+7. **Website Connection**: On the Chemistry Lab website, navigate to **Connect Computer** (or click the device icon in the topbar).
+8. **Paste API**: Enter the Connection API (and optional custom computer name) and click **Connect**.
+9. **Configure ORCA**: Specify your local ORCA installation path and working directories.
+10. **Hardware Resources**: Specify CPU cores (`%pal`), RAM (`%maxcore` with 80% safety margin), and Disk limit (`%scf MaxDisk`).
+11. **Select Device**: In the Quantum Calculator or Reaction Workflow, choose your connected computer from the device dropdown.
+12. **Run Calculation**: Submit the calculation. The job is securely dispatched to your machine and results return automatically.
+13. **Resilient Reconnection**: Temporary network drops automatically reconnect without requiring re-pairing or browser prompts.
+14. **Process Restart Model**: If you stop or restart the Agent process, the old API becomes permanently invalid and a new API must be entered.
+
+### 2. HPC Supercomputer Integration
+For university and enterprise clusters, the Agent runs on a login or service node and interfaces directly with the cluster workload manager:
+- **Architecture**: `Chemistry Lab Server -> (Secure WSS) -> HPC Agent on Login Node -> (Scheduler) -> Compute Nodes -> ORCA`.
+- **Supported Adapters**: SLURM (`sbatch`), PBS Pro / Torque (`qsub`), and IBM LSF (`bsub`).
+- **Profile-Aware**: Directives are structured and site-profile aware based on institutional MPI configurations.
 
 ---
 
@@ -107,15 +140,15 @@ Calculates fundamental reactivity parameters from frontier orbital eigenvalues:
 
 ---
 
-## ☁️ Fault-Tolerant Kaggle Orchestrator
+## ☁️ Optional Secondary Cloud: Kaggle Orchestrator
 
-Long-running calculations (high-level coupled cluster, transition-state optimizations, IRCs, molecular dynamics) frequently exceed single-session execution limits on cloud notebook providers.
+For users who do not have a local ORCA installation or need temporary remote GPU/CPU compute, Chemistry Lab provides an **optional secondary cloud fallback** powered by Kaggle notebooks.
 
-`orca_orchestrator` implements an enterprise-grade finite state machine:
+`orca_orchestrator` implements an enterprise-grade finite state machine for remote batch execution:
 - **Deterministic Checkpointing**: Stages `.gbw`, `.xyz`, `.hess`, and temporary restart vectors.
-- **Auto-Continuation Chaining**: Seamlessly creates successor kernels upon reaching timeouts or resource warnings.
+- **Auto-Continuation Chaining**: Seamlessly creates successor kernels upon reaching timeouts or resource warnings (bypasses 12h session limits).
 - **Integrity Validation**: Verifies that the calculation actually converged rather than just checking exit codes.
-- **Encrypted Credential Persistence (AES-256-GCM AEAD)**: Solves Hugging Face Space sleep/restart state loss. User Kaggle credentials are encrypted using AES-256-GCM with owner-bound associated data and stored in Cloudflare D1. Zero plaintext is stored in Cloudflare or logs. Decryption occurs strictly in backend process RAM on demand.
+- **Encrypted Credential Persistence (AES-256-GCM AEAD)**: User Kaggle credentials are encrypted using AES-256-GCM with owner-bound associated data and stored in Cloudflare D1. Zero plaintext is stored in Cloudflare or logs. Decryption occurs strictly in backend process RAM on demand.
 - **Strict Multi-Tenant Isolation**: Stalled jobs from User A recover in background threads when any user accesses the Space, without leaking credentials or outputs to other sessions.
 
 ---
@@ -123,7 +156,7 @@ Long-running calculations (high-level coupled cluster, transition-state optimiza
 ## 💻 Installation & Local Quickstart
 
 ### Prerequisites
-- Python 3.10, 3.11, or 3.12
+- Python 3.11, 3.12, or 3.13 (`>=3.11, <3.14`)
 - `git`
 
 ### 1. Clone the Repository

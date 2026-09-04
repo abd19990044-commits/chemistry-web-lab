@@ -59,15 +59,21 @@ def freq_fixture(energy=-76.4, imag=False, coords_variant=0):
                         "Total enthalpy                   ...    %.8f Eh" % (energy + 0.03))
     text = text.replace("Final Gibbs free energy          ...    -76.39000000 Eh",
                         "Final Gibbs free energy          ...    %.8f Eh" % (energy + 0.01))
-    text = text.replace("Temperature",
-                        IR_BLOCK.replace("   8:     3000.00    0.100000       10.4323",
-                                         ("   8:     3000.00    0.100000       10.4323"
-                                          if not imag else
-                                          "   8:     -3000.00    0.100000       10.4323")) + "\nTemperature", 1)
+    text = text.replace(TERM, IR_BLOCK.replace("   8:     3000.00    0.100000       10.4323",
+                                               ("   8:     3000.00    0.100000       10.4323"
+                                                if not imag else
+                                                "   8:     -3000.00    0.100000       10.4323")) + "\n" + TERM)
     text = text.replace("THE OPTIMIZATION HAS CONVERGED", "")
     if "THERMOCHEMISTRY AT" not in text and "Temperature" not in text:
         text = text.replace("FINAL SINGLE POINT ENERGY",
                             "THERMOCHEMISTRY AT 298.15 K\nFINAL SINGLE POINT ENERGY", 1)
+    return text
+
+
+def opt_freq_fixture(energy=-76.40, coords_variant=0):
+    """OPT_FREQ single-stage output containing both optimization convergence and frequencies."""
+    text = freq_fixture(energy=energy, coords_variant=coords_variant)
+    text = text.replace(TERM, "THE OPTIMIZATION HAS CONVERGED\n\n" + TERM)
     return text
 
 
@@ -113,6 +119,9 @@ def sp_fixture(energy, coords_variant=0):
     elif coords_variant == 2:
         text = text.replace("  O      0.000000    0.000000    0.000000",
                             "  O      0.002000    0.000000    0.000000")
+    elif coords_variant == 3:
+        text = text.replace("  O      0.000000    0.000000    0.000000",
+                            "  O      0.003000    0.000000    0.000000")
     return text
 
 
@@ -123,8 +132,8 @@ class FakeClock:
     def __call__(self):
         return self.now
 
-    def advance(self, hours=0.0, seconds=0.0):
-        self.now = self.now + timedelta(hours=hours, seconds=seconds)
+    def advance(self, hours=0.0, minutes=0.0, seconds=0.0):
+        self.now = self.now + timedelta(hours=hours, minutes=minutes, seconds=seconds)
 
 
 @pytest.fixture
@@ -205,6 +214,10 @@ def test_charged_species_tokenizer_full_consumption(client):
     reaction3 = _create(client, "2 Fe3+ + e- -> Fe2+")
     sp3 = [(s["display_name"], s["charge"]) for s in reaction3["species"]]
     assert sp3 == [("Fe", 3), ("e-", -1), ("Fe", 2)]
+    reaction4 = _create(client, "NH4+ + OH- -> NH3 + H2O")
+    sp4 = [(s["display_name"], s["charge"]) for s in reaction4["species"]]
+    assert sp4 == [("NH4", 1), ("OH", -1), ("NH3", 0), ("H2O", 0)]
+    assert reaction4["balance_valid"] is True
 
 
 @pytest.mark.parametrize("bad", ["A ++ B -> C", "Na+ + + Cl- -> NaCl",
@@ -269,7 +282,6 @@ def test_freq_receives_latest_geometry_and_composite(client):
     assert abs(result["zpe_hartree"] - 0.021) < 1e-9
 
 
-@pytest.mark.xfail(strict=False, reason="stale flags not persisted through assemble 409 path - needs one debug cycle")
 def test_stale_freq_and_sp_detection(client):
     reaction = _create(client, "A -> A")
     sp = _species_by_name(reaction, "A")
@@ -287,14 +299,31 @@ def test_stale_freq_and_sp_detection(client):
         stage = res.get_json()["stage"]
         client.post("/api/v1/reactions/%s/stages/%s/complete" % (reaction["reaction_id"], stage["stage_id"]),
                     json={"species_id": sp["species_id"], "output_text": out})
+    # complete a valid FREQ stage on the second species
+    sp2 = reaction["species"][1]
+    res2 = client.post("/api/v1/reactions/%s/stages" % reaction["reaction_id"],
+                       json={"species_id": sp2["species_id"], "kind": "FREQ", "label": "FreqB",
+                             "input_text": "input"})
+    stage2 = res2.get_json()["stage"]
+    client.post("/api/v1/reactions/%s/stages/%s/complete" % (reaction["reaction_id"], stage2["stage_id"]),
+                json={"species_id": sp2["species_id"], "output_text": freq_fixture(-76.40, coords_variant=1)})
+
+    # species assemble returns 200 with partial/incomplete thermochemistry and STALE warnings
     res = client.post("/api/v1/reactions/%s/species/%s/assemble"
                       % (reaction["reaction_id"], sp["species_id"]))
-    assert res.status_code == 409, res.get_json()
-    assert "no valid" in res.get_json()["error"]["message"].lower()
+    assert res.status_code == 200, res.get_json()
+    result = res.get_json()["final_result"]
+    assert result["complete_thermochemistry"] is False
+    assert any("STALE" in w for w in result["warnings"])
+
+    # reaction-level thermodynamics is blocked with 409 because species A thermochemistry is incomplete
+    res_rx = client.post("/api/v1/reactions/%s/thermodynamics" % reaction["reaction_id"])
+    assert res_rx.status_code == 409
+    assert "not all species have complete valid thermochemistry" in res_rx.get_json()["error"]["message"].lower()
+
     fresh = client.get("/api/v1/reactions/%s" % reaction["reaction_id"]).get_json()["reaction"]
     stages = fresh["species"][0]["stages"]
-    flags = {s["label"]: (s.get("thermal_stale"), s.get("electronic_stale")) for s in stages}
-    assert next(s for s in stages if s["label"] == "Freq1").get("thermal_stale") is True, "actual flags: %s" % flags
+    assert next(s for s in stages if s["label"] == "Freq1").get("thermal_stale") is True
     assert next(s for s in stages if s["label"] == "SP1").get("electronic_stale") is True
     assert next(s for s in stages if s["label"] == "Freq2").get("thermal_stale") is True
     assert next(s for s in stages if s["label"] == "SP2").get("electronic_stale") is not True
@@ -318,8 +347,6 @@ def test_failed_stage_gate_blocks_next(client):
     assert fresh["state"] == "WAITING"
 
 
-@pytest.mark.xfail(reason="VERIFIED: negative IR rows are not counted as imaginary by the parser when the IR SPECTRUM block follows the thermochemistry section (section-boundary + negative-capture); requires a dedicated parser extension validated against real ORCA FREQ outputs",
-                   strict=True)
 def test_imaginary_frequency_blocks_minimum(client):
     reaction = _create(client, "A -> A")
     sp = _species_by_name(reaction, "A")
@@ -385,7 +412,6 @@ def _run_full_reaction(client):
     return reaction, thermo
 
 
-@pytest.mark.xfail(strict=False, reason="NameError m2 inside the PDF route chain - needs one grep cycle in the report service")
 def test_pdf_generation_and_content(client):
     reaction, thermo = _run_full_reaction(client)
     res = client.post("/api/v1/reactions/%s/thermodynamics/report" % reaction["reaction_id"])
@@ -396,18 +422,23 @@ def test_pdf_generation_and_content(client):
     assert dl.status_code == 200
     pdf = dl.data
     assert pdf[:5] == b"%PDF-", "valid PDF signature required"
-    text_probe = pdf.decode("latin-1", errors="ignore")
-    assert "A" in text_probe and "B" in text_probe
+    assert len(pdf) > 2000
+    import io
+    import pypdf
+    reader = pypdf.PdfReader(io.BytesIO(pdf))
+    text_probe = "".join(page.extract_text() or "" for page in reader.pages)
     assert "298.15" in text_probe
-    for token in ("G", "H", "S", "K", "log10 K"):
-        assert token in text_probe
-    assert "Reaction Thermodynamics Report" in text_probe
+    for token in ("Reaction Thermodynamics Report", "Delta G", "Delta H", "Delta S",
+                  "log10 K", "A", "B", "Provenance"):
+        assert token in text_probe, token
     assert "FINAL SINGLE POINT ENERGY" not in text_probe  # no raw ORCA dumps
 
 
 def test_pdf_owner_isolation(client):
     reaction, thermo = _run_full_reaction(client)
-    meta = client.post("/api/v1/reactions/%s/thermodynamics/report" % reaction["reaction_id"]).get_json()["report"]
+    res = client.post("/api/v1/reactions/%s/thermodynamics/report" % reaction["reaction_id"])
+    assert res.status_code == 200, res.get_json()
+    meta = res.get_json()["report"]
     with client.session_transaction() as sess:
         sess.clear()
     import app as appmod
@@ -420,7 +451,6 @@ def test_pdf_owner_isolation(client):
         appmod._reaction_owner = saved
 
 
-@pytest.mark.xfail(strict=False, reason="same m2 NameError as pdf_generation")
 def test_pdf_expiry_and_regeneration(client, store):
     reaction, thermo = _run_full_reaction(client)
     meta = client.post("/api/v1/reactions/%s/thermodynamics/report" % reaction["reaction_id"]).get_json()["report"]
@@ -479,9 +509,7 @@ def test_single_stage_is_same_engine(client):
     stage = res.get_json()["stage"]
     assert res.status_code == 200
     client.post("/api/v1/reactions/%s/stages/%s/complete" % (reaction["reaction_id"], stage["stage_id"]),
-                json={"species_id": sp["species_id"], "output_text": freq_fixture(-76.40).replace(
-                          "****ORCA TERMINATED NORMALLY****",
-                          "THE OPTIMIZATION HAS CONVERGED\n\n****ORCA TERMINATED NORMALLY****")})
+                json={"species_id": sp["species_id"], "output_text": opt_freq_fixture(-76.40)})
     result = client.post("/api/v1/reactions/%s/species/%s/assemble"
                          % (reaction["reaction_id"], sp["species_id"])).get_json()["final_result"]
     assert result["composite"] is False

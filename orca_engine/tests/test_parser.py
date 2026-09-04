@@ -12,7 +12,13 @@ import pytest
 from orca_engine.models import CoordinateUnit, MoleculeData, SpinChannel
 from orca_engine.parser import OrcaParser
 from orca_engine.regex import RegexLibrary
-from tests.conftest import parse_fixture
+try:
+    from .conftest import parse_fixture
+except ImportError:
+    try:
+        from orca_engine.tests.conftest import parse_fixture
+    except ImportError:
+        from tests.conftest import parse_fixture
 
 
 class TestFrontierOrbitals:

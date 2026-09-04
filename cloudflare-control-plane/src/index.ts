@@ -20,7 +20,7 @@ import {
   upsertJob,
   upsertWorkflow,
 } from "./db";
-import { errorResponse, jsonResponse } from "./errors";
+import { errorResponse, jsonResponse, getCorsHeaders } from "./errors";
 import { assertNoSecrets, sanitizeOwner, validateAuth } from "./security";
 import {
   CloudflareCheckpointRecord,
@@ -41,13 +41,10 @@ export default {
 
     // 1. CORS Preflight
     if (method === "OPTIONS") {
+      const corsHeaders = getCorsHeaders(request, env);
       return new Response(null, {
         status: 204,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Project-Id, X-Namespace",
-          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        },
+        headers: corsHeaders,
       });
     }
 
