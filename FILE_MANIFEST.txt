@@ -1,8 +1,8 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-09-05T00:48:07Z
-# Package Mode: SNAPSHOT_FROM_WORKTREE
-# Source State: dirty_snapshot
-# Source Git SHA: 6d9b890d4a9e65d7655fe307bb45751c45e8e302-dirty
+# Generated: 2026-09-05T00:49:14Z
+# Package Mode: RELEASE_FROM_COMMIT
+# Source State: clean_commit
+# Source Git SHA: 7c492d8a6132566247ca77f323aea13d8a1b4be8
 # Package Tree Hash: 149d64d8ffbb9d72374a4f8f54267b8d0580093be16a13048cb96201d1e1e659
 # Total Files: 379
 # Total Size: 31,614,309 bytes (30.15 MB)

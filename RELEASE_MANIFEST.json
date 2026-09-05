@@ -3,15 +3,15 @@
   "application_name": "orca-web-lab",
   "version": "1.0.3",
   "release_type": "github-source-release",
-  "package_mode": "SNAPSHOT_FROM_WORKTREE",
-  "source_type": "dirty_worktree_snapshot",
-  "source_git_state": "dirty_snapshot",
-  "source_git_sha": "6d9b890d4a9e65d7655fe307bb45751c45e8e302-dirty",
-  "source_git_dirty": true,
+  "package_mode": "RELEASE_FROM_COMMIT",
+  "source_type": "commit",
+  "source_git_state": "clean_commit",
+  "source_git_sha": "7c492d8a6132566247ca77f323aea13d8a1b4be8",
+  "source_git_dirty": false,
   "package_tree_hash": "149d64d8ffbb9d72374a4f8f54267b8d0580093be16a13048cb96201d1e1e659",
-  "generated_at": "2026-09-05T00:48:07Z",
+  "generated_at": "2026-09-05T00:49:14Z",
   "file_count": 380,
-  "total_size_bytes": 31665401,
+  "total_size_bytes": 31665390,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -1909,8 +1909,8 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "f2ce616cea61245bf4628e658e0282f92ecc22c218303534b272f4211ed670ff",
-      "size_bytes": 51092,
+      "sha256": "d3eeabd194124cfdd5a34cf879d8f945d7d2b3d173a91b8534f6e271e178144e",
+      "size_bytes": 51081,
       "source_origin": "generated_manifest"
     }
   }
