@@ -1868,6 +1868,12 @@ def api_orca_engine_parse():
                         if parsed_jobs:
                             entry_mol_name = core.safe_filename(os.path.splitext(item["basename"])[0])
                             entry_mol = MoleculeData(name=entry_mol_name, jobs=parsed_jobs, sources=[item["filename"]])
+                            entry_canonical = None
+                            try:
+                                from tools.normalize_scientific_json import normalize_to_canonical_schema
+                                entry_canonical = normalize_to_canonical_schema(entry_mol)
+                            except Exception as c_err:
+                                log.warning("Could not build canonical schema for %s: %s", entry_mol_name, c_err)
                             archive_entries.append({
                                 "filename": item["filename"],
                                 "basename": item["basename"],
@@ -1875,6 +1881,7 @@ def api_orca_engine_parse():
                                 "molecule": molecule_to_web_json(entry_mol),
                                 "jobs_count": len(parsed_jobs),
                                 "latest_job": job_to_web_json(parsed_jobs[-1], entry_mol_name, len(parsed_jobs)),
+                                "canonical_record": entry_canonical,
                             })
                     except Exception as e:
                         log.info("Skipping non-calculation file %s: %s", item["filename"], e)
@@ -1903,6 +1910,7 @@ def api_orca_engine_parse():
                             "raw_text": e["raw_text"],
                             "molecule": e["molecule"],
                             "latest_job": e["latest_job"],
+                            "canonical_record": e.get("canonical_record"),
                         }
                         for e in archive_entries
                     ],
@@ -1913,6 +1921,7 @@ def api_orca_engine_parse():
                     "jobs_count": selected_entry["jobs_count"],
                     "jobs": selected_entry["molecule"].get("jobs", []),
                     "latest_job": selected_entry["latest_job"],
+                    "canonical_record": selected_entry.get("canonical_record"),
                     "cleanup_note": "Uploaded archive files will be automatically wiped from this server 30 minutes after your session ends.",
                 })
             else:
@@ -1942,9 +1951,14 @@ def api_orca_engine_parse():
                 422
             )
 
-
         molecule = MoleculeData(name=name, jobs=jobs, sources=[name])
         web_bundle = molecule_to_web_json(molecule)
+        canonical_record = None
+        try:
+            from tools.normalize_scientific_json import normalize_to_canonical_schema
+            canonical_record = normalize_to_canonical_schema(molecule)
+        except Exception as norm_err:
+            log.warning("Failed to normalize canonical schema for %s: %s", name, norm_err)
 
         return jsonify({
             "ok": True,
@@ -1956,11 +1970,63 @@ def api_orca_engine_parse():
             "jobs_count": len(jobs),
             "jobs": [job_to_web_json(j, name, idx) for idx, j in enumerate(jobs, 1)],
             "latest_job": job_to_web_json(jobs[-1], name, len(jobs)),
+            "canonical_record": canonical_record,
             "cleanup_note": "Uploaded files are held in ephemeral storage and automatically wiped 30 minutes after your session ends.",
         })
     except Exception as exc:  # noqa: BLE001
         log.error("api_orca_engine_parse failed:\n%s", traceback.format_exc())
         return error_response(f"Failed to parse ORCA calculation: {exc}", 500)
+
+
+@app.route("/api/orca/engine/export-ai-dataset", methods=["POST"])
+def api_orca_engine_export_ai_dataset():
+    """Export clean, canonical AI/ML-ready dataset JSON for AI model training."""
+    if not ORCA_ENGINE_AVAILABLE:
+        return error_response("ORCA Quantum Chemistry Engine is not available.", 503)
+
+    from tools.normalize_scientific_json import normalize_to_canonical_schema, sanitize_secrets, is_canonical_record
+
+    payload = request.get_json(force=True, silent=True) or {}
+    record = payload.get("canonical_record")
+
+    if not record or not is_canonical_record(record):
+        calc_data = payload.get("molecule") or payload.get("latest_job") or payload
+        raw_text = payload.get("raw_text") or payload.get("content") or ""
+        name = core.safe_filename(payload.get("name") or "molecule")
+
+        if raw_text and not payload.get("latest_job"):
+            try:
+                jobs = OrcaParser(io.StringIO(raw_text), source_name=name).parse()
+                if jobs:
+                    mol = MoleculeData(name=name, jobs=jobs, sources=[name])
+                    record = normalize_to_canonical_schema(mol)
+            except Exception:
+                pass
+
+        if not record:
+            try:
+                record = normalize_to_canonical_schema(calc_data)
+            except Exception as e:
+                return error_response(f"Could not construct canonical AI dataset: {e}", 422)
+
+    # Sanitize any accidental credentials and ensure raw text is completely removed
+    record, _ = sanitize_secrets(record)
+    record.pop("raw_text", None)
+    record.pop("raw_object", None)
+
+    mol_name = record.get("name") or "calculation"
+    safe_name = core.safe_filename(mol_name)
+    filename = f"{safe_name}_canonical_ai_dataset.json"
+
+    json_str = json.dumps(record, indent=2, ensure_ascii=False)
+    return Response(
+        json_str,
+        mimetype="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+        }
+    )
 
 
 @app.route("/api/orca/engine/convolute", methods=["POST"])
@@ -3664,6 +3730,12 @@ def api_orca_engine_analyze_job():
 
         mol_name = core.safe_filename(os.path.splitext(os.path.basename(out_name or job_id))[0])
         molecule = MoleculeData(name=mol_name, jobs=jobs, sources=[out_name or job_id])
+        canonical_record = None
+        try:
+            from tools.normalize_scientific_json import normalize_to_canonical_schema
+            canonical_record = normalize_to_canonical_schema(molecule)
+        except Exception as norm_err:
+            log.warning("Failed to normalize canonical schema for job %s: %s", job_id, norm_err)
 
         return jsonify({
             "ok": True,
@@ -3674,6 +3746,7 @@ def api_orca_engine_analyze_job():
             "molecule": molecule_to_web_json(molecule),
             "jobs": [job_to_web_json(j, mol_name, idx) for idx, j in enumerate(jobs, 1)],
             "latest_job": job_to_web_json(jobs[-1], mol_name, len(jobs)),
+            "canonical_record": canonical_record,
         })
     except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
         log.error("kaggle CLI unavailable:\n%s", traceback.format_exc())

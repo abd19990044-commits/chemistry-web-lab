@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-09-05T01:10:32Z
+# Generated: 2026-09-05T01:32:01Z
 # Package Mode: RELEASE_FROM_COMMIT
 # Source State: clean_commit
-# Source Git SHA: b5427121be8558490894d8ad286a79dfc6357727
-# Package Tree Hash: 7a1631483b3c054b414dcd8a475ca74a06309ef1f60256265011dc19b29859f4
-# Total Files: 379
-# Total Size: 31,632,958 bytes (30.17 MB)
+# Source Git SHA: 2ea9b23f859e9674ae6e7665bbc7b6ee0ad73a1b
+# Package Tree Hash: 8526b79d4d589857f41190902854754a652816cf7961a35fd79ffe352807d2d0
+# Total Files: 380
+# Total Size: 31,657,387 bytes (30.19 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -27,7 +27,7 @@ api/schemas/__init__.py                            |      2,503 B | d656d2d959df
 api/schemas/analysis.py                            |      1,070 B | b080fd9ff8ab060b3097e6804748f39c8d1095267e095f52a3ad86f71085f9b0
 api/schemas/compound.py                            |        571 B | ff722ad94af53bdb95bf595c6a2e952ae4ffac7435b4c9d82ffcc28011db75ca
 api/schemas/local_agent.py                         |      3,820 B | d7f85d6e2cd232bf68cfcbd644a34dd24143d40a47676ca135b1e9638a9712aa
-app.py                                             |    173,317 B | 606eac2fc5fdfd2c56f024e2fbc853290e4d0530b3e46dbb705a8576a314690f
+app.py                                             |    176,850 B | a798faec0f7903b30fddd3792344ab5fd8bd217e138073f867891f5f815fe7a1
 ARCHITECTURE.md                                    |     48,949 B | a50d3a2703d48a159a61037d46fea6a2279d0b3a6bf79bb9bc307675c6656f8b
 benchmarks/benzene_tddft.out                       |      1,551 B | 2510aaa519c6fe573da8436020801ca8bc2d9040b442f045f12802300a103e7c
 benchmarks/water_sp_freq.out                       |      3,095 B | a8c69da119edc8a2de9a4158a6cc7111ce015380a97e1810e9609ee0d1d9e63e
@@ -282,13 +282,13 @@ static/css/style.css                               |     86,784 B | c1babf983721
 static/css/theme.css                               |      4,191 B | 0f46f52179f51f6f9e33d6afd4c1186a55cd4bff5de3e631055a9290c21cb0da
 static/docs/ChemistryLab_User_Manual.docx          |     46,938 B | 35f84c0a37efc80a0283904d56198d18cdba7a648f2492f4c6c76f331ce9b211
 static/job_runtime_fix.js                          |      1,641 B | 9133e459435dfad6a353c774a92c10cf37656eb529f114ca61dec2be5a63c697
-static/js/app.js                                   |    548,780 B | bf20a3058bc857be064f955a4045ec19128fd3e237f79bf2746e1ef76afd2bda
+static/js/app.js                                   |    550,339 B | ae13d64fddba7aa83a8e4101003ee64269c24343b8656f493083dab0b74d6296
 static/js/kaggle_credentials.js                    |     14,638 B | 8f02d94905076f26369786bb530876752dd891e3cd8e19ac576af2fd22819fdf
 static/js/local-agent.js                           |     28,922 B | c8b6a539d1dd0e8c1a934560c3f7212b15c8714dd7992182bf25aaea11fe1ce2
 static/js/reaction-editor.js                       |      8,373 B | a11362d1a686ac234f10a365525cba3ea50ec937e14ece09f84557b889b3f4a7
 static/js/reaction-unified.js                      |     18,040 B | 9ad8499161fef08a979ae0c750c512fcc16cc0f06ebf22bfc631006b878dbc4a
 static/js/workers/archive-worker.js                |     20,420 B | 29eff680289ace2a4ee5784419c0a189f5e962a054914a5e6d6f9e2ad66073f8
-templates/index.html                               |    195,229 B | d7ac0024a86d45a4e6e0bbb0a740e4be6c36b806762af139e5a9015341f5f1ac
+templates/index.html                               |    195,367 B | 41a7b17b077261a4d85b1204f5e9b5e8f73acddab8e50e3ccb6a8be3c476d891
 tests/conftest.py                                  |      5,258 B | c826b8de0be2b711dc88c81f84ce2f9f1e37bba241c65268351677ed12cc540a
 tests/fake_orca.py                                 |     14,271 B | 61a158fae896194453358856f312794d099fce006443ddffa13e6ca4d112103c
 tests/fixtures/ORCA_Calculation_quantum_analysis_3.json |    882,023 B | bcabb84f75101646810b16e3990c0a8d202e284221036aeab29b6315fa3ecc2b
@@ -297,6 +297,7 @@ tests/fixtures/orca_parsed_data_3_2.json           |    882,023 B | bcabb84f7510
 tests/fixtures/orca_parsed_data_small.json         |      7,977 B | e2fbe3194fe463392c1939a74a1c1269a2a19a6127b6fed9a04d696c070f6469
 tests/test_account_control.py                      |        921 B | 85e5ce35d00aa3f12a9da1b8c2aef5e3e595160da4c7b89fd9e58be0ce899a8a
 tests/test_agent_job_queue_and_execution.py        |      3,657 B | 8717228054b6ac312c11f3c02638d0442a553a517be7a44928f9f4769ce8a43a
+tests/test_ai_dataset_json_export.py               |      9,236 B | cb4927953c62376546aab8bb41ba8ccd7c0cc56b34c84cda69d5ed0e3dcef2cd
 tests/test_archive_security.py                     |      5,236 B | c47b2cd22eceb0b787f5a3ba9cf14968cf252ac3df4daf4fd8dd2bf097cff674
 tests/test_asgi_live.py                            |      2,765 B | 3b8010dff6574af36a8c484bed0f4a9753c683ff983dff6599f5626093457de3
 tests/test_bootstrap_and_packaging.py              |     13,834 B | f8ff41ebdacb58b15a3e1b5aa60c69c953481693523dc51784a5325359642905
@@ -384,7 +385,7 @@ tools/build_deployment_packages.py                 |     23,952 B | c9b1a6f72de3
 tools/build_local_agent_packages.py                |      6,497 B | 971c816eba4d62c1803a343a1edf03c1d8041c8ba5c8d45702bc0cddee55bc93
 tools/export_thermochemistry_json.py               |      5,393 B | 67935274038fdd98ed60863fae016ab6d5be68d0dccc5fb8c7ebf39ef417ae54
 tools/export_training_jsonl.py                     |     15,911 B | 8574db2c2739a0c971bec008573aa4be00fb72c20f106bdabef2e1e62d3cff8e
-tools/normalize_scientific_json.py                 |     96,326 B | 21d2ccb10727c5a14b42d0c34514cca89c1ded8f8331e2becb1448f2a35b27f4
+tools/normalize_scientific_json.py                 |    106,289 B | 9587f5e10f3ae037eb0a2f40f4d0e639df04903c5cee8572e52131bd876146a2
 tools/orca_local_runner.py                         |      6,820 B | cedff2ba7b9b1458d37fe08b909482c85fa7da05513e0159d0642e74b84cdce1
 tools/sync_deploy_manager.py                       |     22,110 B | 074708cbcec0cfbd78db0fc118e73c806ed1d03187f099a0d39d0ceaa0004177
 tools/verify_release.py                            |     12,052 B | 38f0a09a910167fb46d30ad2a723d1ca6a86e8621abb76efa42e2b562d3c26d0

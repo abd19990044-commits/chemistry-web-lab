@@ -6172,7 +6172,69 @@
       viewport.innerHTML = `<div style="padding: 2rem; color: var(--text-muted); text-align: center;">Structure Coordinates Available (${atomCount} atoms)<br><pre class="mono" style="max-height: 300px; overflow: auto; text-align: left; margin-top: 1rem; font-size: 0.8rem;">${(xyzString || '').slice(0, 1000)}</pre></div>`;
     }
   }
+ 
+  function downloadCanonicalAiDataset(engineData, defaultName) {
+    const payload = engineData || (typeof currentEngineData !== "undefined" ? currentEngineData : null);
+    if (!payload) return;
 
+    const rawName = payload.name || defaultName || "molecule";
+    const baseName = String(rawName).replace(/\.[^/.]+$/, "");
+    const fileName = `${baseName}_canonical_ai_dataset.json`;
+
+    if (payload.canonical_record && typeof payload.canonical_record === "object") {
+      const exportRec = Object.assign({}, payload.canonical_record);
+      delete exportRec.raw_text;
+      delete exportRec.raw_object;
+      const blob = new Blob([JSON.stringify(exportRec, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+
+    fetch("/api/orca/engine/export-ai-dataset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      })
+      .catch(err => {
+        console.warn("Server canonical export error, using sanitized client fallback:", err);
+        const fallback = Object.assign({}, payload);
+        delete fallback.raw_text;
+        delete fallback.raw_bytes;
+        delete fallback.session_id;
+        delete fallback.cleanup_note;
+        delete fallback.ok;
+        const blob = new Blob([JSON.stringify(fallback, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+  }
 
   function renderEngineResults(data) {
     if (!data) return;
@@ -6410,19 +6472,11 @@
     const hasHirshfeld = (job.hirshfeld_charges && job.hirshfeld_charges.length > 0) || (job.crg_charges && job.crg_charges.length > 0);
     updateLabelModeDropdown(hasHirshfeld);
 
-    // Export JSON Button
+    // Export Canonical AI/ML-Ready Dataset JSON
     const exportJsonBtn = document.getElementById("engine-btn-export-json");
     if (exportJsonBtn) {
       exportJsonBtn.onclick = () => {
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${name.replace(/\.[^/.]+$/, "")}_quantum_analysis.json`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        downloadCanonicalAiDataset(data, name);
       };
     }
 
@@ -10693,20 +10747,11 @@
       });
     }
 
-    // Full JSON Export
+    // Full AI/ML Dataset JSON Export
     const exportJsonBtn = document.getElementById("engine-btn-export-json");
     if (exportJsonBtn) {
       exportJsonBtn.addEventListener("click", () => {
-        if (!currentEngineData) return;
-        const blob = new Blob([JSON.stringify(currentEngineData, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${currentEngineData.name || "orca"}_parsed_data.json`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        downloadCanonicalAiDataset(currentEngineData);
       });
     }
   }

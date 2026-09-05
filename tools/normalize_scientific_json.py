@@ -13,6 +13,7 @@ import copy
 import datetime
 import hashlib
 import json
+import math
 import re
 import uuid
 from typing import Any, Mapping, Sequence
@@ -35,6 +36,21 @@ ELEMENT_TO_Z = {
     "PA": 91, "U": 92, "NP": 93, "PU": 94, "AM": 95, "CM": 96, "BK": 97, "CF": 98,
     "ES": 99, "FM": 100, "MD": 101, "NO": 102, "LR": 103
 }
+
+ELEMENT_TO_MASS = {
+    "H": 1.008, "HE": 4.0026, "LI": 6.94, "BE": 9.0122, "B": 10.81, "C": 12.011, "N": 14.007, "O": 15.999, "F": 18.998, "NE": 20.180,
+    "NA": 22.990, "MG": 24.305, "AL": 26.982, "SI": 28.085, "P": 30.974, "S": 32.06, "CL": 35.45, "AR": 39.948,
+    "K": 39.098, "CA": 40.078, "SC": 44.956, "TI": 47.867, "V": 50.942, "CR": 51.996, "MN": 54.938, "FE": 55.845,
+    "CO": 58.933, "NI": 58.693, "CU": 63.546, "ZN": 65.38, "GA": 69.723, "GE": 72.630, "AS": 74.922, "SE": 78.971,
+    "BR": 79.904, "KR": 83.798, "RB": 85.468, "SR": 87.62, "Y": 88.906, "ZR": 91.224, "NB": 92.906, "MO": 95.95,
+    "TC": 98.0, "RU": 101.07, "RH": 102.91, "PD": 106.42, "AG": 107.87, "CD": 112.41, "IN": 114.82, "SN": 118.71,
+    "SB": 121.76, "TE": 127.60, "I": 126.90, "XE": 131.29, "CS": 132.91, "BA": 137.33, "LA": 138.91, "CE": 140.12,
+    "PR": 140.91, "ND": 144.24, "PM": 145.0, "SM": 150.36, "EU": 151.96, "GD": 157.25, "TB": 158.93, "DY": 162.50,
+    "HO": 164.93, "ER": 167.26, "TM": 168.93, "YB": 173.05, "LU": 174.97, "HF": 178.49, "TA": 180.95, "W": 183.84,
+    "RE": 186.21, "OS": 190.23, "IR": 192.22, "PT": 195.08, "AU": 196.97, "HG": 200.59, "TL": 204.38, "PB": 207.2,
+    "BI": 208.98, "TH": 232.04, "PA": 231.04, "U": 238.03
+}
+ELEMENT_TO_MASS_BY_Z = {ELEMENT_TO_Z[k]: v for k, v in ELEMENT_TO_MASS.items() if k in ELEMENT_TO_Z}
 
 SENSITIVE_KEY_PATTERNS = [
     re.compile(r"kaggle.*(?:key|token|secret|auth)", re.IGNORECASE),
@@ -88,7 +104,8 @@ KNOWN_LEGACY_KEYS = {
     "thermochemistry_reliability", "atoms_count", "coords_unit", "hirshfeld_charges",
     "mulliken_charges", "mayer_charges", "mayer_valences", "loewdin_charges",
     "atomic_charges", "elements", "xyz", "latest_job", "jobs", "sources", "molecules",
-    "levels_of_theory", "source_artifacts", "input_source", "output_source", "job"
+    "levels_of_theory", "source_artifacts", "input_source", "output_source", "job",
+    "targets", "derived_features", "canonical_record", "canonical_dataset"
 }
 
 
@@ -1739,6 +1756,166 @@ def normalize_with_report(
     if not isinstance(available_arts, list):
         available_arts = [str(available_arts)]
 
+    # ML Targets construction (lossless, standardized units, explicit physical dimensions)
+    targets_obj = clean_input.get("targets")
+    if targets_obj is None or not isinstance(targets_obj, dict):
+        targets_obj = {}
+        if e_elec is not None:
+            targets_obj["electronic_energy_hartree"] = float(e_elec)
+            targets_obj["electronic_energy_eh"] = float(e_elec)
+            targets_obj["electronic_energy_ev"] = round(float(e_elec) * 27.211386245988, 6)
+        if zpe is not None:
+            targets_obj["zero_point_energy_hartree"] = float(zpe)
+            targets_obj["zero_point_energy_eh"] = float(zpe)
+            targets_obj["zero_point_energy_ev"] = round(float(zpe) * 27.211386245988, 6)
+        if e0 is not None:
+            targets_obj["energy_zpe_corrected_hartree"] = float(e0)
+            targets_obj["energy_zpe_corrected_eh"] = float(e0)
+            targets_obj["energy_zpe_corrected_ev"] = round(float(e0) * 27.211386245988, 6)
+        if h_tot is not None:
+            targets_obj["total_enthalpy_hartree"] = float(h_tot)
+            targets_obj["total_enthalpy_eh"] = float(h_tot)
+            targets_obj["total_enthalpy_kcal_mol"] = round(float(h_tot) * 627.50947406311, 4)
+        if g_tot is not None:
+            targets_obj["gibbs_free_energy_hartree"] = float(g_tot)
+            targets_obj["gibbs_free_energy_eh"] = float(g_tot)
+            targets_obj["gibbs_free_energy_kcal_mol"] = round(float(g_tot) * 627.50947406311, 4)
+        if s_tot is not None:
+            targets_obj["total_entropy_cal_mol_k"] = float(s_tot)
+        if homo_val is not None:
+            targets_obj["homo_ev"] = float(homo_val)
+        if lumo_val is not None:
+            targets_obj["lumo_ev"] = float(lumo_val)
+        if gap_val is not None:
+            targets_obj["homo_lumo_gap_ev"] = float(gap_val)
+        if dipole_val is not None:
+            targets_obj["dipole_moment_debye"] = float(dipole_val)
+
+        cdft_dict = {}
+        if cdft_en is not None:
+            cdft_dict["electronegativity_ev"] = float(cdft_en)
+        if cdft_hard is not None:
+            cdft_dict["chemical_hardness_ev"] = float(cdft_hard)
+        if cdft_pot is not None:
+            cdft_dict["chemical_potential_ev"] = float(cdft_pot)
+        if cdft_soft is not None:
+            cdft_dict["chemical_softness_ev_inv"] = float(cdft_soft)
+        if cdft_w is not None:
+            cdft_dict["electrophilicity_index_ev"] = float(cdft_w)
+        if cdft_dict:
+            targets_obj["conceptual_dft"] = cdft_dict
+
+        if v_modes:
+            targets_obj["vibrational_frequencies_cm1"] = [float(m["frequency_cm"]) for m in v_modes]
+            if any(m.get("intensity_km_mol") is not None for m in v_modes):
+                targets_obj["ir_intensities_km_mol"] = [float(m.get("intensity_km_mol") or 0.0) for m in v_modes]
+        targets_obj["imaginary_frequencies_count"] = imag_count
+        targets_obj["is_transition_state"] = bool(clean_input.get("is_transition_state", False) or imag_count == 1)
+
+        charges_dict = {}
+        if mulliken_arr:
+            charges_dict["mulliken"] = [float(x) if x is not None else 0.0 for x in mulliken_arr]
+        if loewdin_arr:
+            charges_dict["loewdin"] = [float(x) if x is not None else 0.0 for x in loewdin_arr]
+        if hirshfeld_arr:
+            charges_dict["hirshfeld"] = [float(x) if x is not None else 0.0 for x in hirshfeld_arr]
+        if mayer_arr:
+            charges_dict["mayer"] = [float(x) if x is not None else 0.0 for x in mayer_arr]
+        if charges_dict:
+            targets_obj["atomic_charges"] = charges_dict
+
+        if uv_transitions:
+            targets_obj["electronic_transitions"] = [
+                {
+                    "transition_index": t["state"],
+                    "wavenumber_cm1": float(t["energy_cm"]),
+                    "energy_ev": round(float(t["energy_cm"]) * 0.00012398419, 4),
+                    "wavelength_nm": float(t["wavelength_nm"]) if t.get("wavelength_nm") is not None else None,
+                    "oscillator_strength": float(t["oscillator_strength"])
+                }
+                for t in uv_transitions
+            ]
+        if not targets_obj:
+            targets_obj = None
+
+    # ML Derived Features construction (coordinates, masses, center of mass, gyration radius)
+    derived_features_obj = clean_input.get("derived_features")
+    if derived_features_obj is None or not isinstance(derived_features_obj, dict):
+        if raw_atoms:
+            atomic_numbers = [a["atomic_number"] for a in raw_atoms if a.get("atomic_number") is not None]
+            elements = [a["element"] for a in raw_atoms]
+            coords_list = [[float(a["coordinates"]["x"]), float(a["coordinates"]["y"]), float(a["coordinates"]["z"])] for a in raw_atoms]
+
+            derived_features_obj = {
+                "num_atoms": len(raw_atoms),
+                "atomic_numbers": atomic_numbers,
+                "elements": elements,
+                "coordinates_angstrom": coords_list,
+                "stoichiometry_formula": formula_str,
+                "total_charge": int(clean_input.get("charge", 0)) if clean_input.get("charge") is not None else 0,
+                "spin_multiplicity": int(clean_input.get("multiplicity", 1)) if clean_input.get("multiplicity") is not None else 1,
+            }
+
+            masses = [ELEMENT_TO_MASS.get(elem.upper(), ELEMENT_TO_MASS_BY_Z.get(z, 12.011)) for elem, z in zip(elements, atomic_numbers)]
+            tot_mass = sum(masses)
+            derived_features_obj["molecular_mass_amu"] = round(tot_mass, 4)
+
+            if tot_mass > 0 and len(coords_list) == len(masses):
+                cx = sum(m * c[0] for m, c in zip(masses, coords_list)) / tot_mass
+                cy = sum(m * c[1] for m, c in zip(masses, coords_list)) / tot_mass
+                cz = sum(m * c[2] for m, c in zip(masses, coords_list)) / tot_mass
+                derived_features_obj["center_of_mass_angstrom"] = [round(cx, 5), round(cy, 5), round(cz, 5)]
+
+                rg_sq = sum(m * ((c[0] - cx) ** 2 + (c[1] - cy) ** 2 + (c[2] - cz) ** 2) for m, c in zip(masses, coords_list)) / tot_mass
+                derived_features_obj["radius_of_gyration_angstrom"] = round(math.sqrt(max(0.0, rg_sq)), 5)
+        else:
+            derived_features_obj = {
+                "num_atoms": int(clean_input.get("atoms_count") or 0),
+                "atomic_numbers": [],
+                "elements": [],
+                "coordinates_angstrom": [],
+                "stoichiometry_formula": formula_str,
+                "total_charge": int(clean_input.get("charge", 0)) if clean_input.get("charge") is not None else 0,
+                "spin_multiplicity": int(clean_input.get("multiplicity", 1)) if clean_input.get("multiplicity") is not None else 1,
+                "molecular_mass_amu": None,
+                "center_of_mass_angstrom": None,
+                "radius_of_gyration_angstrom": None,
+            }
+
+    # Refine training metadata with primary label and flags if needed
+    if not clean_input.get("training_metadata"):
+        primary_label = None
+        if g_tot is not None:
+            primary_label = float(g_tot)
+        elif e_elec is not None:
+            primary_label = float(e_elec)
+        elif thermo_obj and thermo_obj.get("gibbs_free_energy"):
+            primary_label = thermo_obj["gibbs_free_energy"].get("value")
+
+        q_flags = []
+        if geometries and len(geometries[0]["coordinates"]) > 0:
+            q_flags.append("valid_geometry")
+        if term_normal:
+            q_flags.append("normal_termination")
+        if imag_count == 0:
+            q_flags.append("ground_state_minimum")
+        elif imag_count == 1:
+            q_flags.append("transition_state")
+        if g_tot is not None:
+            q_flags.append("complete_thermochemistry")
+        if not q_flags:
+            q_flags.append("unverified")
+
+        training_meta = {
+            "task_type": "molecular_property_prediction" if record_type in ("molecule", "analysis_record") else ("reaction_energy_prediction" if record_type in ("reaction_definition", "reaction") else "vibrational_mode_prediction"),
+            "input_modality": "coordinates_and_graph" if geometries else "smiles",
+            "target_modality": "quantum_properties" if (thermo_obj or targets_obj or e_elec is not None) else "spectrum",
+            "label": primary_label,
+            "label_type": "float" if primary_label is not None else "null",
+            "quality_flags": q_flags,
+            "split_hint": "train"
+        }
+
     # Assemble canonical record
     canonical: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -1767,8 +1944,8 @@ def normalize_with_report(
             "distinction_reason": "Primary canonical instance"
         },
         "source_artifacts": available_arts,
-        "derived_features": clean_input.get("derived_features"),
-        "targets": clean_input.get("targets"),
+        "derived_features": derived_features_obj,
+        "targets": targets_obj,
         "migration_report": {
             "mapped_fields": sorted(list(set(mapped_fields))),
             "transformed_fields": sorted(list(set(transformed_fields))),
