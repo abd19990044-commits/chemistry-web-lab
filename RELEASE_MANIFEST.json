@@ -6,12 +6,12 @@
   "package_mode": "RELEASE_FROM_COMMIT",
   "source_type": "commit",
   "source_git_state": "clean_commit",
-  "source_git_sha": "0b8ae648dba1d8210b82b45ce0e0827be33e019e",
+  "source_git_sha": "b5427121be8558490894d8ad286a79dfc6357727",
   "source_git_dirty": false,
-  "package_tree_hash": "ee8bb9dcadedbe8084e21699ffa9951b17aa52256c24fd7c6de7342cbc8e60cc",
-  "generated_at": "2026-09-05T00:51:53Z",
+  "package_tree_hash": "7a1631483b3c054b414dcd8a475ca74a06309ef1f60256265011dc19b29859f4",
+  "generated_at": "2026-09-05T01:10:32Z",
   "file_count": 380,
-  "total_size_bytes": 31664320,
+  "total_size_bytes": 31684039,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -69,8 +69,8 @@
       "source_origin": "repo_source"
     },
     "api/routes/kaggle.py": {
-      "sha256": "295487b8afb023a0b3679f931c39e41e7511444d10fb33019073982e09034fe2",
-      "size_bytes": 7336,
+      "sha256": "4c4c744e0dac49e152de11c6137422a16df1fee6fb31c07d1443da81e5f0e58d",
+      "size_bytes": 8385,
       "source_origin": "repo_source"
     },
     "api/routes/local_agent.py": {
@@ -104,8 +104,8 @@
       "source_origin": "repo_source"
     },
     "app.py": {
-      "sha256": "4515c9c272c197dce13bba4e447a8808450eff93c260fd9077be2540a0640f25",
-      "size_bytes": 172246,
+      "sha256": "606eac2fc5fdfd2c56f024e2fbc853290e4d0530b3e46dbb705a8576a314690f",
+      "size_bytes": 173317,
       "source_origin": "repo_source"
     },
     "ARCHITECTURE.md": {
@@ -324,8 +324,8 @@
       "source_origin": "repo_source"
     },
     "DEPLOY.md": {
-      "sha256": "d58aa1bed81791210dea98b9fa799159ec708a13b1a9ed67c1a2268742336112",
-      "size_bytes": 9495,
+      "sha256": "0a3a2ccbac27581f346dafc369a7eef174777252d6676da2b9143b4116896c96",
+      "size_bytes": 9733,
       "source_origin": "repo_source"
     },
     "Dockerfile": {
@@ -1074,8 +1074,8 @@
       "source_origin": "repo_source"
     },
     "orca_orchestrator/legacy_compat.py": {
-      "sha256": "dd97669cc15c0cbf70e682d45002da448e60178b7c24d9b22869e347ff654de7",
-      "size_bytes": 16446,
+      "sha256": "9899718b416095ea4cd36b4761fcbcac0daee5546dd64897fa28867a8af0a0a4",
+      "size_bytes": 18145,
       "source_origin": "repo_source"
     },
     "orca_orchestrator/logging_ext.py": {
@@ -1159,8 +1159,8 @@
       "source_origin": "repo_source"
     },
     "README.md": {
-      "sha256": "adeca1cf8f18d68860994dd6b729a4a81fb6c2d6edd70099c2f320555d976e6d",
-      "size_bytes": 20794,
+      "sha256": "841ae3a8d769d4c5e5e8d558d7a665f489e1e2e62f124afe2b85c3fd8d8e3d99",
+      "size_bytes": 22703,
       "source_origin": "package_metadata"
     },
     "REPRODUCIBILITY.md": {
@@ -1284,8 +1284,8 @@
       "source_origin": "repo_source"
     },
     "SECURITY.md": {
-      "sha256": "453bcb2ee647e3c2fbe1da0ae61bb0adb692b2fe838f3cb00441e9aebb731322",
-      "size_bytes": 4799,
+      "sha256": "195d14642a9299051d202711f328ea7d07b8d9e830a414c093a40c6b7ad3fd99",
+      "size_bytes": 5759,
       "source_origin": "repo_source"
     },
     "services/__init__.py": {
@@ -1379,8 +1379,8 @@
       "source_origin": "repo_source"
     },
     "static/js/app.js": {
-      "sha256": "fddd68cefc6edd6926999c87da016884d514f9a7e6568ca22fa62893acbdbadf",
-      "size_bytes": 543521,
+      "sha256": "bf20a3058bc857be064f955a4045ec19128fd3e237f79bf2746e1ef76afd2bda",
+      "size_bytes": 548780,
       "source_origin": "repo_source"
     },
     "static/js/kaggle_credentials.js": {
@@ -1389,8 +1389,8 @@
       "source_origin": "repo_source"
     },
     "static/js/local-agent.js": {
-      "sha256": "9c9056dc778cf3c42005ec1e9189e24321cb55f2a221524774d148198365f89a",
-      "size_bytes": 27842,
+      "sha256": "c8b6a539d1dd0e8c1a934560c3f7212b15c8714dd7992182bf25aaea11fe1ce2",
+      "size_bytes": 28922,
       "source_origin": "repo_source"
     },
     "static/js/reaction-editor.js": {
@@ -1409,8 +1409,8 @@
       "source_origin": "repo_source"
     },
     "templates/index.html": {
-      "sha256": "7e8b6c5e395b62abeed0292003c9ccf4302e538ad48f8627ba9d575ebaee5998",
-      "size_bytes": 191989,
+      "sha256": "d7ac0024a86d45a4e6e0bbb0a740e4be6c36b806762af139e5a9015341f5f1ac",
+      "size_bytes": 195229,
       "source_origin": "repo_source"
     },
     "tests/conftest.py": {
@@ -1594,8 +1594,8 @@
       "source_origin": "repo_source"
     },
     "tests/test_kaggle_execution_passcode.py": {
-      "sha256": "6b71874b6af06acac21f0d9b4690017b474255e9dcc14f71d9715c058988b082",
-      "size_bytes": 11750,
+      "sha256": "9308ba119b727ec617512a901fd1f350fd03eb4e2a48ec271f6721e72ad69e76",
+      "size_bytes": 14964,
       "source_origin": "repo_source"
     },
     "tests/test_licensing.py": {
@@ -1909,7 +1909,7 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "4dbbd1a461f4d49fee2c84cfa90a64ea7ce0f0d7a0f9d17519de50d627fd8ab0",
+      "sha256": "87a7448db9ee88a26e1540f10578556b68b19788d0d4ed62cfd75b7751e93d0e",
       "size_bytes": 51081,
       "source_origin": "generated_manifest"
     }
