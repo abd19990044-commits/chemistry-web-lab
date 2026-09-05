@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-09-05T00:31:03Z
-# Package Mode: RELEASE_FROM_COMMIT
-# Source State: clean_commit
-# Source Git SHA: 6d9b890d4a9e65d7655fe307bb45751c45e8e302
-# Package Tree Hash: 88b0dd53160418bd585fbb771dd038e61e3702eb2d9f0dc6562687200fe36636
-# Total Files: 378
-# Total Size: 31,590,766 bytes (30.13 MB)
+# Generated: 2026-09-05T00:48:07Z
+# Package Mode: SNAPSHOT_FROM_WORKTREE
+# Source State: dirty_snapshot
+# Source Git SHA: 6d9b890d4a9e65d7655fe307bb45751c45e8e302-dirty
+# Package Tree Hash: 149d64d8ffbb9d72374a4f8f54267b8d0580093be16a13048cb96201d1e1e659
+# Total Files: 379
+# Total Size: 31,614,309 bytes (30.15 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -20,14 +20,14 @@ api/routes/__init__.py                             |         84 B | 78f74e694977
 api/routes/analysis.py                             |      1,361 B | bc7c5eb3fa6fcd1f5746f0af771b17dcbc258864598866b239edcb5a2803a4b3
 api/routes/compound.py                             |        807 B | 0b20bed07540c4f09fdb3f8c600b6484072fc9720e787734e9a2920699425455
 api/routes/health.py                               |        639 B | acb83867a18c3016a662cffd32ecbcad53adb22602cf170b155f24ab3430c6cc
-api/routes/kaggle.py                               |      6,287 B | 7cfb9960bb0caddaae58b54b95bcafca1c3f6282c3cea78729319779215ed00b
+api/routes/kaggle.py                               |      7,336 B | 295487b8afb023a0b3679f931c39e41e7511444d10fb33019073982e09034fe2
 api/routes/local_agent.py                          |      8,332 B | 128695982136eb95859f20ef098fa8a627421d5e526ac4042a16f77d8ab43a8c
 api/routes/orca.py                                 |        463 B | 1bb9ae8786393042e17a9af99119c581c5e9617adb7f43cfd2ecdee6d55c0581
-api/schemas/__init__.py                            |      2,389 B | 0aa04dcd1cd13d661c2ff03c176973f67a097587fba7bbbeb1e10a7aa652ead8
+api/schemas/__init__.py                            |      2,503 B | d656d2d959dfe66c7a6947ce33c0d7c3c725a1e05bac1436cdf795c6003ae212
 api/schemas/analysis.py                            |      1,070 B | b080fd9ff8ab060b3097e6804748f39c8d1095267e095f52a3ad86f71085f9b0
 api/schemas/compound.py                            |        571 B | ff722ad94af53bdb95bf595c6a2e952ae4ffac7435b4c9d82ffcc28011db75ca
 api/schemas/local_agent.py                         |      3,820 B | d7f85d6e2cd232bf68cfcbd644a34dd24143d40a47676ca135b1e9638a9712aa
-app.py                                             |    170,764 B | 50c64f427d5063fd45570da74515c31a5198c9987a20e15818c17bc513078e87
+app.py                                             |    172,246 B | 4515c9c272c197dce13bba4e447a8808450eff93c260fd9077be2540a0640f25
 ARCHITECTURE.md                                    |     48,949 B | a50d3a2703d48a159a61037d46fea6a2279d0b3a6bf79bb9bc307675c6656f8b
 benchmarks/benzene_tddft.out                       |      1,551 B | 2510aaa519c6fe573da8436020801ca8bc2d9040b442f045f12802300a103e7c
 benchmarks/water_sp_freq.out                       |      3,095 B | a8c69da119edc8a2de9a4158a6cc7111ce015380a97e1810e9609ee0d1d9e63e
@@ -206,7 +206,7 @@ orca_engine/tests/test_thermochemistry_scientific_audit.py |     23,083 B | ad3c
 orca_engine/tests/test_web_adapter.py              |      3,152 B | 519dddba1e338489c6b96463ada76faab112c33c22968938bdc0e1ad41b821ac
 orca_orchestrator/__init__.py                      |      1,109 B | 3cfce6947555822b251654afb293faf5d4f716dcb50c47277dbd1dbf0b930757
 orca_orchestrator/account_control.py               |      3,862 B | d0347a10449b198c30b3f300cd3f537cdb4a004082d83b837b4c278d2b83d408
-orca_orchestrator/api.py                           |     12,820 B | 134cdb1e03ff7eeaf3e05fb25f19ad5f1ef8b82fd0122fbf9ab357790f7936d7
+orca_orchestrator/api.py                           |     13,675 B | c44ffb97f3ed614bd424faa0fa0ab52c37edc124655e5d3efe373c424c8a1018
 orca_orchestrator/checkpoints.py                   |     20,609 B | 073786731b099108146e11f5dc0b9fa9433628286f3b5e0ec997237c042ce581
 orca_orchestrator/cloudflare_controller/__init__.py |      1,335 B | 8f6ea2b8cd8489f40bede0d64f9b32438d847dcd249f84c16e490a83232491fd
 orca_orchestrator/cloudflare_controller/client.py  |     23,252 B | 24da14a5df8582c76b63f9db8d73f6c3f9341eb043634c364cd572ca5dadce6d
@@ -221,7 +221,7 @@ orca_orchestrator/errors.py                        |      5,750 B | 6e96d66b34d3
 orca_orchestrator/hashing.py                       |      4,561 B | a256e824a7c0285113ba1be7d53b87ce5a767cdf03b3996039546fc4dedfb877
 orca_orchestrator/kaggle_api.py                    |     26,978 B | ba080a6f5ea0feb9cbcaf8f2e3a37c59599509428000fa6cd6564c0996729041
 orca_orchestrator/ledger.py                        |     17,968 B | b12360b034d962965fbc7d18128a6f972638d39dc60ffcd4c7f44f23b28fc0d1
-orca_orchestrator/legacy_compat.py                 |     15,591 B | 8743602a130f273a16d1333cec29782b579956753b2bd77d46b55bdd7fbbe5a8
+orca_orchestrator/legacy_compat.py                 |     16,446 B | dd97669cc15c0cbf70e682d45002da448e60178b7c24d9b22869e347ff654de7
 orca_orchestrator/logging_ext.py                   |     10,269 B | 1f313cf81a1aa0b12106663d3c319dc1a8bea39d31cb813ef60d882b4d4b11dd
 orca_orchestrator/models.py                        |     19,247 B | 56d8d3a1cc11ffc23de2081734f8c564e9fc50e496b53ef8f54e43ffa056c039
 orca_orchestrator/orca_artifacts.py                |     47,320 B | 3a4b2c560d4f09f8cfcafb09ac0faf5172a1f106539366a1607048733ad5192d
@@ -282,13 +282,13 @@ static/css/style.css                               |     86,784 B | c1babf983721
 static/css/theme.css                               |      4,191 B | 0f46f52179f51f6f9e33d6afd4c1186a55cd4bff5de3e631055a9290c21cb0da
 static/docs/ChemistryLab_User_Manual.docx          |     46,938 B | 35f84c0a37efc80a0283904d56198d18cdba7a648f2492f4c6c76f331ce9b211
 static/job_runtime_fix.js                          |      1,641 B | 9133e459435dfad6a353c774a92c10cf37656eb529f114ca61dec2be5a63c697
-static/js/app.js                                   |    541,387 B | 7f9f8dc915fce5f4ffafe70dfd7680592150e96c2834330b3a52271fbc505a36
+static/js/app.js                                   |    543,521 B | fddd68cefc6edd6926999c87da016884d514f9a7e6568ca22fa62893acbdbadf
 static/js/kaggle_credentials.js                    |     14,638 B | 8f02d94905076f26369786bb530876752dd891e3cd8e19ac576af2fd22819fdf
-static/js/local-agent.js                           |     27,014 B | 9e33f1acb0781ded8451d22a1288ead0c0227562ab3b2810208eab4b666465a2
+static/js/local-agent.js                           |     27,842 B | 9c9056dc778cf3c42005ec1e9189e24321cb55f2a221524774d148198365f89a
 static/js/reaction-editor.js                       |      8,373 B | a11362d1a686ac234f10a365525cba3ea50ec937e14ece09f84557b889b3f4a7
 static/js/reaction-unified.js                      |     18,040 B | 9ad8499161fef08a979ae0c750c512fcc16cc0f06ebf22bfc631006b878dbc4a
 static/js/workers/archive-worker.js                |     20,420 B | 29eff680289ace2a4ee5784419c0a189f5e962a054914a5e6d6f9e2ad66073f8
-templates/index.html                               |    188,583 B | 3d53e79f8514be1bb8f9bfdc23bd4c635d171d6da1739b6d359316d1fc1cf322
+templates/index.html                               |    192,775 B | c9eae24cca077a8a85ebc4674ab3b1a9cc631660ba44eea2634ee7edf2e6f464
 tests/conftest.py                                  |      5,258 B | c826b8de0be2b711dc88c81f84ce2f9f1e37bba241c65268351677ed12cc540a
 tests/fake_orca.py                                 |     14,271 B | 61a158fae896194453358856f312794d099fce006443ddffa13e6ca4d112103c
 tests/fixtures/ORCA_Calculation_quantum_analysis_3.json |    882,023 B | bcabb84f75101646810b16e3990c0a8d202e284221036aeab29b6315fa3ecc2b
@@ -325,6 +325,7 @@ tests/test_ir_spectrum_orientation.py              |     14,336 B | b598a325886a
 tests/test_kaggle_credential_security.py           |     19,001 B | dbbdc2811b0a7edb6037a73a4a2a67c212114c5049380a7b88fd30762ae54f3c
 tests/test_kaggle_credential_vault.py              |     19,055 B | a0e83eb39b208cf36cef5528917212949a01d99d6ef249009e13ac0890fef9d4
 tests/test_kaggle_dataset_normalization.py         |      3,836 B | bd367eefd9566e1a649d0f1f7fedc33120726b5034a4a55d80b72ebb54de2b70
+tests/test_kaggle_execution_passcode.py            |     12,034 B | fdfe0b83528ca41231638da369c178acf4a8bd04265b1f4c684f433497ae5da2
 tests/test_licensing.py                            |     13,999 B | 7388cd0d326289d85619757e234a4a016af1411b463dd59e179307711cbb0562
 tests/test_licensing_compliance.py                 |      7,884 B | 74698183b03a43a4ae37c6dfbe69ec1d2ccd12b04d959480d678601086d3cb73
 tests/test_lifecycle_simulation.py                 |     18,558 B | 7d77a9d7542f25bf1723db50e108f910183fe2b380c5f1c287150101ded88ea5

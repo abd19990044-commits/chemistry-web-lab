@@ -91,6 +91,11 @@
             if (enableKaggleBtn && kaggleModal) {
                 enableKaggleBtn.addEventListener('click', () => {
                     kaggleModal.classList.remove('hidden');
+                    try {
+                        const savedP = sessionStorage.getItem('orca_kaggle_passcode');
+                        const pInput = document.getElementById('modal-kaggle-passcode');
+                        if (pInput && savedP) pInput.value = savedP;
+                    } catch (e) {}
                 });
             }
 
@@ -104,17 +109,27 @@
                 saveKaggleBtn.addEventListener('click', async () => {
                     const uInput = document.getElementById('modal-kaggle-username');
                     const kInput = document.getElementById('modal-kaggle-key');
+                    const pInput = document.getElementById('modal-kaggle-passcode');
                     const errBox = document.getElementById('kaggle-modal-error');
                     if (errBox) errBox.classList.add('hidden');
 
                     const username = (uInput ? uInput.value : '').trim();
                     const key = (kInput ? kInput.value : '').trim();
+                    const passcode = (pInput ? pInput.value : '').trim();
                     if (!username || !key) {
                         if (errBox) {
                             errBox.textContent = 'Please enter both Kaggle username and API key.';
                             errBox.classList.remove('hidden');
                         }
                         return;
+                    }
+
+                    if (passcode) {
+                        try {
+                            sessionStorage.setItem('orca_kaggle_passcode', passcode);
+                            const kPass = document.getElementById('kaggle-passcode');
+                            if (kPass) kPass.value = passcode;
+                        } catch (e) {}
                     }
 
                     try {

@@ -17,6 +17,7 @@ from services.execution_backend import (
 import concurrent.futures
 
 import base64
+import hmac
 import logging
 import os
 import io
@@ -454,10 +455,17 @@ def _render_lab_index(initial_view: str):
     through the existing showView() switcher."""
     if "csrf_token" not in session:
         session["csrf_token"] = secrets.token_hex(32)
+    required_passcode = (
+        os.environ.get("KAGGLE_EXECUTION_PASSCODE")
+        or os.environ.get("KAGGLE_ACCESS_CODE")
+        or os.environ.get("KAGGLE_PASSCODE")
+        or ""
+    ).strip()
     return render_template(
         "index.html",
         initial_view=initial_view,
         csrf_token=session["csrf_token"],
+        kaggle_passcode_required=bool(required_passcode),
         calc_types=core.CALC_TYPES,
         composite_methods=core.COMPOSITE_METHODS,
         dft_functionals=core.DFT_FUNCTIONALS,
@@ -1156,8 +1164,42 @@ def api_kaggle_test():
 
 
 
+@app.route("/api/kaggle/config", methods=["GET"])
+def api_kaggle_config():
+    required_passcode = (
+        os.environ.get("KAGGLE_EXECUTION_PASSCODE")
+        or os.environ.get("KAGGLE_ACCESS_CODE")
+        or os.environ.get("KAGGLE_PASSCODE")
+        or ""
+    ).strip()
+    return jsonify({
+        "ok": True,
+        "passcode_required": bool(required_passcode),
+    })
+
+
 @app.route("/api/kaggle/submit", methods=["POST"])
 def api_kaggle_submit():
+    required_passcode = (
+        os.environ.get("KAGGLE_EXECUTION_PASSCODE")
+        or os.environ.get("KAGGLE_ACCESS_CODE")
+        or os.environ.get("KAGGLE_PASSCODE")
+        or ""
+    ).strip()
+    if required_passcode:
+        provided = (
+            request.form.get("kaggle_passcode")
+            or (request.get_json(silent=True) or {}).get("kaggle_passcode")
+            or request.headers.get("X-Kaggle-Passcode")
+            or ""
+        ).strip()
+        if not provided or not hmac.compare_digest(provided, required_passcode):
+            return jsonify({
+                "ok": False,
+                "error": "INVALID_KAGGLE_PASSCODE",
+                "message": "Invalid or missing Kaggle execution passcode. A valid access code configured for this site is required to run Kaggle calculations.",
+            }), 403
+
     idem_key = request.headers.get("Idempotency-Key")
     cached = _submit_dedup_lookup(idem_key)
     if cached is not None:

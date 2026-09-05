@@ -32,12 +32,41 @@ def _payload_or_http(payload, status):
     return payload
 
 
+@router.get("/config")
+def get_kaggle_config():
+    required_passcode = (
+        os.environ.get("KAGGLE_EXECUTION_PASSCODE")
+        or os.environ.get("KAGGLE_ACCESS_CODE")
+        or os.environ.get("KAGGLE_PASSCODE")
+        or ""
+    ).strip()
+    return {
+        "ok": True,
+        "passcode_required": bool(required_passcode),
+    }
+
+
 @router.post("/jobs")
 def submit_job(req: JobSubmitRequest,
-               idempotency_key: str | None = Header(default=None)):
+               idempotency_key: str | None = Header(default=None),
+               x_kaggle_passcode: str | None = Header(default=None)):
     """Submits a Kaggle calculation. Authoritative idempotency lives in the
     orchestrator store (SQLite, shared across workers/processes): the same
     Idempotency-Key - or the same payload - can never create a second kernel."""
+    required_passcode = (
+        os.environ.get("KAGGLE_EXECUTION_PASSCODE")
+        or os.environ.get("KAGGLE_ACCESS_CODE")
+        or os.environ.get("KAGGLE_PASSCODE")
+        or ""
+    ).strip()
+    if required_passcode:
+        provided = (req.kaggle_passcode or x_kaggle_passcode or "").strip()
+        import hmac
+        if not provided or not hmac.compare_digest(provided, required_passcode):
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid or missing Kaggle execution passcode. A valid access code configured for this site is required to run Kaggle calculations."
+            )
     payload, status = kaggle_service.submit_job(
         kaggle_username=req.kaggle_username,
         kaggle_key=req.kaggle_key,

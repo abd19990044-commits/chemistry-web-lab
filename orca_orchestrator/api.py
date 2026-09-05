@@ -135,6 +135,27 @@ def workflow_detail(workflow_id):
 
 @bp.route("/submit", methods=["POST"])
 def submit():
+    required_passcode = (
+        os.environ.get("KAGGLE_EXECUTION_PASSCODE")
+        or os.environ.get("KAGGLE_ACCESS_CODE")
+        or os.environ.get("KAGGLE_PASSCODE")
+        or ""
+    ).strip()
+    if required_passcode:
+        provided = (
+            request.form.get("kaggle_passcode")
+            or (request.get_json(silent=True) or {}).get("kaggle_passcode")
+            or request.headers.get("X-Kaggle-Passcode")
+            or ""
+        ).strip()
+        import hmac
+        if not provided or not hmac.compare_digest(provided, required_passcode):
+            return jsonify({
+                "ok": False,
+                "error": "INVALID_KAGGLE_PASSCODE",
+                "message": "Invalid or missing Kaggle execution passcode. A valid access code configured for this site is required to run Kaggle calculations.",
+            }), 403
+
     form = request.form; creds = _credentials_from(form)
     input_filename = (form.get("input_filename") or "molecule.inp").strip()
     input_content = form.get("input_content") or ""

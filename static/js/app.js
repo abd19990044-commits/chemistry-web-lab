@@ -155,6 +155,24 @@
     console.error("Error parsing orca-config JSON:", e);
   }
 
+  // Kaggle execution authorization passcode initialization
+  try {
+    const savedPasscode = (typeof sessionStorage !== "undefined") ? (sessionStorage.getItem("orca_kaggle_passcode") || "") : "";
+    const passcodeEl = document.getElementById("kaggle-passcode");
+    if (passcodeEl) {
+      if (savedPasscode) passcodeEl.value = savedPasscode;
+      passcodeEl.addEventListener("input", () => {
+        try {
+          sessionStorage.setItem("orca_kaggle_passcode", passcodeEl.value.trim());
+        } catch (e) {}
+      });
+    }
+    if (CFG.kaggle_passcode_required) {
+      const passcodeRow = document.getElementById("kaggle-passcode-row");
+      if (passcodeRow) passcodeRow.classList.remove("hidden");
+    }
+  } catch (e) {}
+
   const LS_KEYS = {
     kaggleUsername: "chemlab_kaggle_username",
     kaggleKey: "chemlab_kaggle_key",
@@ -4706,6 +4724,13 @@
       form.append("aux_files", f);
     }
 
+    const passcodeEl = document.getElementById("kaggle-passcode");
+    const sessionPasscode = (typeof sessionStorage !== "undefined") ? (sessionStorage.getItem("orca_kaggle_passcode") || "") : "";
+    const passcodeVal = (passcodeEl && passcodeEl.value.trim()) ? passcodeEl.value.trim() : (window._kagglePasscode || sessionPasscode || "");
+    if (passcodeVal) {
+      form.append("kaggle_passcode", passcodeVal);
+    }
+
     try {
       const resp = await fetch("/api/kaggle/submit", {
         method: "POST",
@@ -4724,7 +4749,18 @@
         throw new Error(`Server returned HTTP ${resp.status}${detail ? `: ${detail}` : "."}`);
       }
       if (!data) throw new Error(`Server returned HTTP ${resp.status} with an invalid JSON response.`);
-      if (!resp.ok || !data.ok) throw new Error(data.error || `Submission failed (HTTP ${resp.status}).`);
+      if (!resp.ok || !data.ok) {
+        const errorMsg = (data && (data.message || data.error)) || `Submission failed (HTTP ${resp.status}).`;
+        if (resp.status === 403 && (data?.error === "INVALID_KAGGLE_PASSCODE" || (typeof errorMsg === "string" && errorMsg.toLowerCase().includes("passcode")))) {
+          const row = document.getElementById("kaggle-passcode-row");
+          if (row) row.classList.remove("hidden");
+          if (passcodeEl) {
+            passcodeEl.focus();
+            passcodeEl.classList.add("input-error");
+          }
+        }
+        throw new Error(errorMsg);
+      }
       rememberOrcaSource();
       const safeMsg = escapeHtml(data.message || "");
       const safeUrl = escapeHtml(data.kaggle_url || "");
@@ -5282,6 +5318,13 @@
             form.append("job_name", nextJob.name);
             form.append("input_filename", nextJob.input_filename || `${nextJob.name}.inp`);
             form.append("input_content", nextJob.input_content || "");
+
+            const qPasscodeEl = document.getElementById("kaggle-passcode");
+            const qSessionPasscode = (typeof sessionStorage !== "undefined") ? (sessionStorage.getItem("orca_kaggle_passcode") || "") : "";
+            const qPasscodeVal = (qPasscodeEl && qPasscodeEl.value.trim()) ? qPasscodeEl.value.trim() : (window._kagglePasscode || qSessionPasscode || "");
+            if (qPasscodeVal) {
+              form.append("kaggle_passcode", qPasscodeVal);
+            }
 
             const resp = await fetch("/api/kaggle/submit", {
               method: "POST",

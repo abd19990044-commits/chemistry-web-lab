@@ -1018,6 +1018,11 @@ Products:   12 CO2 + 6 H2O</pre>
               <input type="text" id="kaggle-job-name" placeholder="Defaults to the input file's name" maxlength="50" autocomplete="off">
               <span class="field-hint">Shown in My Jobs, and used to build the notebook's address on Kaggle.</span>
             </div>
+            <div class="form-row form-row-full {% if not kaggle_passcode_required %}hidden{% endif %}" id="kaggle-passcode-row">
+              <label for="kaggle-passcode">Kaggle execution passcode <span class="field-optional" id="kaggle-passcode-badge">{% if kaggle_passcode_required %}(Required by site){% else %}(Optional / Not required){% endif %}</span></label>
+              <input type="password" id="kaggle-passcode" placeholder="Enter site Kaggle access code if required" autocomplete="off">
+              <span class="field-hint" id="kaggle-passcode-hint">If this site has configured a Kaggle secret passcode, enter it here to launch calculations. If not set on this server, leave this blank.</span>
+            </div>
             <button type="submit" class="btn btn-primary"><span class="btn-label">🚀 Submit job to Kaggle</span></button>
           </form>
 
@@ -2233,6 +2238,7 @@ Products:   12 CO2 + 6 H2O</pre>
       <div class="legal-section" id="legal-service">
         <h3>2. What this site is (and isn't)</h3>
         <p>Chemistry Lab is a proprietary source-available scientific suite developed and owned solely by <strong>ABDULSALAM S. HASAN</strong> (Mosul, Iraq) to provide computational chemists, researchers, and students with robust, accessible quantum chemistry workflows and analysis tools. Permitted non-commercial access is provided free of charge under the ORCA Web Lab Academic and Non-Commercial License v1.1. It has no paid public tiers, runs no advertising, and does not monetize user data - see Sections 8 &amp; 9.</p>
+        <p><strong>Direct User Operation &amp; No Third-Party Intermediation:</strong> Chemistry Lab is designed to be hosted and operated individually by each user for their own research and educational workflows. The Site does not run, manage, or broker Kaggle as a third-party intermediary or shared computational backend on behalf of users; all Kaggle operations are initiated, authenticated, and executed directly and independently by each user using their own credentials and infrastructure.</p>
         <p>It's a platform for exploring and drawing chemical structures, generating ORCA input files, and - if you choose - packaging and orchestrating calculations on your own Kaggle account, provided for academic, educational, and non-commercial research use.</p>
         <p>It is <strong>not</strong> a substitute for professional scientific, safety, medical, or legal judgment. No output should be relied on for safety-critical decisions - for example, handling hazardous compounds - without independent verification by a qualified professional.</p>
       </div>
@@ -2245,13 +2251,17 @@ Products:   12 CO2 + 6 H2O</pre>
 
       <div class="legal-section" id="legal-kaggle">
         <h3>4. Your Kaggle account &amp; credentials</h3>
+        <div class="help-note" style="margin-bottom: 1rem;">
+          <p style="margin-bottom: 0.5rem;"><strong>Direct Personal Execution &amp; User Responsibility:</strong> The Site does not operate Kaggle as a third-party service provider. Each user runs their own instance and directly controls all computational jobs in their own private Kaggle environment without third-party brokering or server retention. When running calculations on Kaggle, the user is solely and entirely responsible for compliance with Kaggle's Terms of Service, Acceptable Use Policy, and community guidelines, and bears full legal and operational responsibility for any violation thereof.</p>
+          <p style="margin-bottom: 0; direction: rtl; text-align: right; font-size: 0.95rem;"><strong>إشعار الخصوصية والمسؤولية:</strong> الموقع مصمم ليتم تشغيله من قبل كل مستخدم بشكل فردي ومستقل، ولا يقوم الموقع بتشغيل منصة كاجل (Kaggle) كطرف ثالث بالنيابة عن المستخدمين. تتم جميع الحسابات مباشرة عبر بيئة وحساب كاجل الخاص بكل مستخدم وبمفاتيحه الخاصة دون أي وسيط أو احتفاظ بالبيانات، ويكون المستخدم هو المسؤول الوحيد عن أي انتهاك لشروط وسياسات منصة كاجل (Kaggle) عند تشغيل الحسابات.</p>
+        </div>
         <p>The Kaggle Launcher submits and manages jobs using <strong>your own</strong> Kaggle account and its compute quota - never ours. Concretely:</p>
         <ul>
           <li>Your Kaggle username and API key/token are sent to our server only at the moment of a sign-in, submission, status-check, download, or delete request.</li>
           <li>They are held in memory strictly while active. If you enable "remember credentials", your credentials are stored encrypted at rest using AES-256-GCM AEAD bound to your authenticated user account in the secure vault. Plaintext API secrets are never stored in browser local storage.</li>
           <li>If you sign out or choose to forget credentials, they are permanently deleted from both browser memory and the secure server vault.</li>
           <li>Job results are streamed directly from Kaggle's own servers to your browser; we don't keep a copy of your input files, coordinates, or results once a request finishes.</li>
-          <li>Any compute time, storage, or other usage on Kaggle is billed against, and governed by the terms of, your own Kaggle account - see Kaggle's own <a href="https://www.kaggle.com/terms" target="_blank" rel="noopener">Terms of Use</a>.</li>
+          <li>Any compute time, storage, or other usage on Kaggle is billed against, and governed by the terms of, your own Kaggle account - see Kaggle's own <a href="https://www.kaggle.com/terms" target="_blank" rel="noopener">Terms of Use</a>. The user is solely responsible for ensuring all runs comply with Kaggle's rules and acceptable use policies; the Site operator accepts no liability for any user violation on Kaggle.</li>
         </ul>
       </div>
 
@@ -2274,7 +2284,7 @@ Products:   12 CO2 + 6 H2O</pre>
         <p><strong>ABDULSALAM S. HASAN</strong>, academic developer operating this Site from Mosul, Iraq, is the data controller for personal data processed directly by this Site - separate from Kaggle, Google, PubChem, or other third parties you interact with, who act as independent controllers for their own services. Contact: <a href="mailto:abd.19990044@gmail.com">abd.19990044@gmail.com</a>.</p>
         <h4>What we process, and why</h4>
         <ul>
-          <li><strong>Kaggle credentials</strong> - processed transiently to carry out your explicit request (sign in, submit, check status, download, delete). Basis: performance of your request (Art. 6(1)(b)) and our legitimate interest in operating the feature (Art. 6(1)(f)).</li>
+          <li><strong>Kaggle credentials</strong> - processed transiently strictly to carry out your explicit request (sign in, submit, check status, download, delete). The Site is designed for individual user operation and does not run Kaggle as a third-party broker or intermediary; jobs execute directly in your own private Kaggle environment. Basis: performance of your request (Art. 6(1)(b)) and our legitimate interest in operating the feature (Art. 6(1)(f)).</li>
           <li><strong>Google account info</strong> (name, email, profile photo) - only if you choose to sign in with Google; used solely to show your name/photo in the header. Basis: consent (Art. 6(1)(a)), given by starting that sign-in.</li>
           <li><strong>Compound/reaction queries</strong> - sent to PubChem/Wikipedia to fetch structures and data; not linked to your identity by us. Basis: legitimate interest in providing the tool (Art. 6(1)(f)).</li>
           <li><strong>Basic technical interactions</strong> - processed instantly to serve the webpage and deleted immediately. We absolutely do not retain server logs tracking your IP address or activity.</li>
@@ -2317,7 +2327,7 @@ Products:   12 CO2 + 6 H2O</pre>
         <h3>11. Third-party services</h3>
         <p>Using this Site involves several independent services, each governed by its own terms and privacy policy, which we encourage you to read:</p>
         <ul>
-          <li><strong>Kaggle</strong> (job execution) - <a href="https://www.kaggle.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>, <a href="https://www.kaggle.com/terms" target="_blank" rel="noopener">Terms of Use</a></li>
+          <li><strong>Kaggle</strong> (direct user execution) - The Site does not run Kaggle as a third party on your behalf; the suite is designed for individual operation where you directly execute jobs in your own private Kaggle environment under Kaggle's own <a href="https://www.kaggle.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://www.kaggle.com/terms" target="_blank" rel="noopener">Terms of Use</a>. The user is solely and exclusively responsible for compliance with Kaggle's policies and terms, and bears full liability for any violation thereof.</li>
           <li><strong>ORCA / FACCTs GmbH</strong> (the software you supply) - see the EULA on the <a href="https://orcaforum.kofo.mpg.de/" target="_blank" rel="noopener">ORCA Forum</a></li>
           <li><strong>Google Sign-In</strong> (optional identity display) - <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a></li>
           <li><strong>PubChem / NCBI</strong> (U.S. National Library of Medicine - compound data)</li>
@@ -2717,6 +2727,12 @@ Products:   12 CO2 + 6 H2O</pre>
         <span class="small text-muted mt-1" style="display: block;">Get this from Kaggle &rarr; Settings &rarr; API &rarr; Create New Token.</span>
       </div>
 
+      <div class="form-group mb-3 {% if not kaggle_passcode_required %}hidden{% endif %}" id="modal-kaggle-passcode-group">
+        <label for="modal-kaggle-passcode" class="form-label font-bold">Execution Passcode <span class="field-optional" id="modal-kaggle-passcode-badge">{% if kaggle_passcode_required %}(Required by site){% else %}(Optional){% endif %}</span></label>
+        <input type="password" id="modal-kaggle-passcode" class="form-control" placeholder="Enter site Kaggle access code if required" autocomplete="off">
+        <span class="small text-muted mt-1" style="display: block;">Site authorization code if configured in server secrets.</span>
+      </div>
+
       <div id="kaggle-modal-error" class="alert alert-error hidden mb-3"></div>
 
       <div class="modal-actions" style="margin-top: 1.25rem; justify-content: flex-end; gap: 0.5rem;">
@@ -2729,6 +2745,7 @@ Products:   12 CO2 + 6 H2O</pre>
 
 <script id="orca-config" type="application/json">
 {
+  "kaggle_passcode_required": {{ kaggle_passcode_required | default(false) | tojson }},
   "calc_types": {{ calc_types | tojson }},
   "composite_methods": {{ composite_methods | tojson }},
   "dft_functionals": {{ dft_functionals | tojson }},

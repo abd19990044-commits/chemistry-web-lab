@@ -55,6 +55,7 @@ class JobSubmitRequest(KaggleCredentials):
     dataset_sources: str = Field(default="", description="comma/space separated Kaggle dataset ids holding the licensed ORCA package")
     orca_link: str = Field(default="", description="direct ORCA package download link (alternative to dataset_sources)")
     maxdisk_mb: int | None = Field(default=None, ge=1, description="optional per-job MaxDisk budget override (MB); default 20000")
+    kaggle_passcode: str = Field(default="", description="Optional site Kaggle execution authorization passcode")
 
 
 class JobStatusRequest(KaggleCredentials):
