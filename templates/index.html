@@ -881,21 +881,49 @@ Products:   12 CO2 + 6 H2O</pre>
               Optional remote execution on Kaggle notebooks if you do not have a local ORCA installation on your machine.
             </p>
           </div>
-          <button type="button" id="btn-toggle-kaggle-section" class="btn btn-outline btn-small" onclick="const sec = document.getElementById('kaggle-full-config-section'); if (sec) { sec.classList.toggle('hidden'); if (!sec.classList.contains('hidden')) sec.scrollIntoView({behavior:'smooth'}); }">
+          <button type="button" id="btn-toggle-kaggle-section" class="btn btn-outline btn-small">
             ☁️ Connect Kaggle Account &amp; Settings →
           </button>
         </div>
 
         <div id="kaggle-full-config-section" class="hidden" style="margin-top: 1.5rem; border-top: 1px dashed var(--border-color, #2d3748); padding-top: 1.25rem;">
           <div class="alert alert-info" style="margin-bottom: 1.25rem;">
-            This feature does not distribute the ORCA program. You must provide your own licensed
-            ORCA package (downloaded from the official ORCA forum after your own registration) - either as a <strong>private Kaggle Dataset</strong> attached to the job, or via a
-            <strong>Google Drive / direct download link</strong> that the job downloads and
-            extracts into <code>/tmp</code> itself. Your credentials are used once to submit the
-            job and are never stored on the server - only in your own browser.
+            <strong>Direct User Operation Notice:</strong> Chemistry Lab is designed for direct personal user operation and does not operate Kaggle as a third-party intermediary. All calculations run directly within your own private Kaggle environment under your personal credentials without server retention or third-party brokering. Users are solely and entirely responsible for compliance with Kaggle's Terms of Service and Acceptable Use Policies and bear full legal and operational responsibility for any violation. You must provide your own licensed ORCA package (either as a private Kaggle Dataset attached to the job, or via a direct download link that the job downloads and extracts into scratch storage).
           </div>
 
-          <details class="help-disclosure">
+          <!-- Passcode Access Gate -->
+          <div id="kaggle-passcode-gate" class="card" style="border: 1px solid var(--border-color, #2d3748); border-radius: 8px; padding: 1.25rem; background: rgba(30, 41, 59, 0.6); margin-bottom: 1.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <span style="font-size: 1.25rem;">🔐</span>
+              <h4 style="margin: 0; font-size: 1.05rem;">Kaggle Access Authorization</h4>
+            </div>
+            <p style="font-size: 0.88rem; color: var(--text-muted, #94a3b8); margin-bottom: 1rem; line-height: 1.4;">
+              If running locally: leave this field empty and press <strong>Enter</strong> to open the Kaggle login fields.<br>
+              If hosted on cloud infrastructure or a custom domain: enter the secret passcode configured by the site administrator.
+            </p>
+            <form id="kaggle-gate-form" class="tool-form" onsubmit="return false;" style="margin-bottom: 0;">
+              <div class="form-row" style="margin-bottom: 0.75rem;">
+                <label for="kaggle-gate-passcode">Access Passcode <span class="field-optional">(Press Enter if local)</span></label>
+                <input type="password" id="kaggle-gate-passcode" placeholder="Leave empty and press Enter if local, or enter secret..." autocomplete="off">
+              </div>
+              <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <button type="button" id="btn-unlock-kaggle-gate" class="btn btn-primary btn-small">
+                  <span>🔓</span> Unlock Kaggle Login (Enter)
+                </button>
+                <span class="small text-muted" id="kaggle-gate-status-text">Reaction Thermochemistry, Analyzer, Spectra Studios, and 3D Builder remain freely available without a passcode.</span>
+              </div>
+            </form>
+            <div id="kaggle-gate-error" class="alert alert-error hidden" style="margin-top: 0.75rem;"></div>
+          </div>
+
+          <div id="kaggle-passcode-unlocked-banner" class="alert alert-success hidden" style="margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <span>✅ <strong>Kaggle Access Unlocked:</strong> Credentials fields are ready.</span>
+            <button type="button" id="btn-relock-kaggle" class="link-button" style="font-size: 0.82rem; color: inherit; text-decoration: underline;">Re-lock Access</button>
+          </div>
+
+          <!-- Unlocked Content (Revealed after entering passcode or pressing Enter locally) -->
+          <div id="kaggle-unlocked-content" class="hidden">
+            <details class="help-disclosure">
             <summary>📋 How do I get my Kaggle username and API key/token?</summary>
             <div class="help-body">
               <h4>1 - Create a free Kaggle account</h4>
@@ -1029,6 +1057,7 @@ Products:   12 CO2 + 6 H2O</pre>
           <div id="kaggle-error" class="alert alert-error hidden"></div>
           <div id="kaggle-loading" class="loading-row hidden"><span class="spinner"></span> Packaging and pushing the job to Kaggle…</div>
           <div id="kaggle-result" class="alert alert-success hidden"></div>
+        </div>
         </div>
       </div>
     </div>
@@ -2711,25 +2740,30 @@ Products:   12 CO2 + 6 H2O</pre>
     </div>
 
     <div class="modal-body">
-      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.25rem;">
+      <div class="alert alert-info" style="font-size: 0.82rem; margin-bottom: 1rem;">
+        <strong>Direct User Operation Notice:</strong> Chemistry Lab does not act as a third-party broker for Kaggle. Calculations run directly in your own private Kaggle environment under your credentials. Users are solely and entirely responsible for compliance with Kaggle's Terms of Service and policies.
+      </div>
+      <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1.25rem;">
         Use your Kaggle account to run calculations on cloud GPUs/CPUs. Your API key is encrypted and stored only in your browser session.
       </p>
 
-      <div class="form-group mb-3">
-        <label for="modal-kaggle-username" class="form-label font-bold">Kaggle Username <span class="text-danger">*</span></label>
-        <input type="text" id="modal-kaggle-username" class="form-control" placeholder="e.g. janesmith" autocomplete="off">
+      <div class="form-group mb-3" id="modal-kaggle-passcode-group">
+        <label for="modal-kaggle-passcode" class="form-label font-bold">Execution Passcode <span class="field-optional" id="modal-kaggle-passcode-badge">{% if kaggle_passcode_required %}(Required by site){% else %}(Leave blank if local){% endif %}</span></label>
+        <input type="password" id="modal-kaggle-passcode" class="form-control" placeholder="Leave empty and press Enter if local, or enter secret..." autocomplete="off">
+        <span class="small text-muted mt-1" style="display: block;">Press Enter to proceed. If running locally, leave this empty. For cloud hosting or custom domains, enter the administrator secret passcode.</span>
       </div>
 
-      <div class="form-group mb-3">
-        <label for="modal-kaggle-key" class="form-label font-bold">Kaggle API Key <span class="text-danger">*</span></label>
-        <input type="password" id="modal-kaggle-key" class="form-control mono" placeholder="From kaggle.json: 32-character key" autocomplete="off">
-        <span class="small text-muted mt-1" style="display: block;">Get this from Kaggle &rarr; Settings &rarr; API &rarr; Create New Token.</span>
-      </div>
+      <div id="modal-kaggle-credentials-fields">
+        <div class="form-group mb-3">
+          <label for="modal-kaggle-username" class="form-label font-bold">Kaggle Username <span class="text-danger">*</span></label>
+          <input type="text" id="modal-kaggle-username" class="form-control" placeholder="e.g. janesmith" autocomplete="off">
+        </div>
 
-      <div class="form-group mb-3 {% if not kaggle_passcode_required %}hidden{% endif %}" id="modal-kaggle-passcode-group">
-        <label for="modal-kaggle-passcode" class="form-label font-bold">Execution Passcode <span class="field-optional" id="modal-kaggle-passcode-badge">{% if kaggle_passcode_required %}(Required by site){% else %}(Optional){% endif %}</span></label>
-        <input type="password" id="modal-kaggle-passcode" class="form-control" placeholder="Enter site Kaggle access code if required" autocomplete="off">
-        <span class="small text-muted mt-1" style="display: block;">Site authorization code if configured in server secrets.</span>
+        <div class="form-group mb-3">
+          <label for="modal-kaggle-key" class="form-label font-bold">Kaggle API Key <span class="text-danger">*</span></label>
+          <input type="password" id="modal-kaggle-key" class="form-control mono" placeholder="From kaggle.json: 32-character key" autocomplete="off">
+          <span class="small text-muted mt-1" style="display: block;">Get this from Kaggle &rarr; Settings &rarr; API &rarr; Create New Token.</span>
+        </div>
       </div>
 
       <div id="kaggle-modal-error" class="alert alert-error hidden mb-3"></div>

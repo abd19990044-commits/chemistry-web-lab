@@ -124,9 +124,28 @@
                         return;
                     }
 
+                    if (errBox) errBox.classList.add('hidden');
+                    try {
+                        const vResp = await fetch('/api/kaggle/verify-passcode', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ passcode: passcode })
+                        });
+                        const vData = await vResp.json().catch(() => ({}));
+                        if (!vResp.ok || !vData.ok) {
+                            if (errBox) {
+                                errBox.textContent = vData.message || 'Invalid execution passcode. On cloud/domain deployments, please enter the administrator secret passcode.';
+                                errBox.classList.remove('hidden');
+                            }
+                            if (pInput) pInput.focus();
+                            return;
+                        }
+                    } catch (e) {}
+
                     if (passcode) {
                         try {
                             sessionStorage.setItem('orca_kaggle_passcode', passcode);
+                            sessionStorage.setItem('orca_kaggle_unlocked', 'true');
                             const kPass = document.getElementById('kaggle-passcode');
                             if (kPass) kPass.value = passcode;
                         } catch (e) {}

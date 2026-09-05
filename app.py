@@ -1178,6 +1178,36 @@ def api_kaggle_config():
     })
 
 
+@app.route("/api/kaggle/verify-passcode", methods=["POST"])
+def api_kaggle_verify_passcode():
+    required_passcode = (
+        os.environ.get("KAGGLE_EXECUTION_PASSCODE")
+        or os.environ.get("KAGGLE_ACCESS_CODE")
+        or os.environ.get("KAGGLE_PASSCODE")
+        or ""
+    ).strip()
+    data = request.get_json(silent=True) or request.form or {}
+    provided = (
+        data.get("passcode")
+        or data.get("kaggle_passcode")
+        or request.headers.get("X-Kaggle-Passcode")
+        or ""
+    ).strip()
+    if required_passcode:
+        import hmac
+        if not provided or not hmac.compare_digest(provided, required_passcode):
+            return jsonify({
+                "ok": False,
+                "error": "INVALID_KAGGLE_PASSCODE",
+                "message": "Invalid execution passcode. On cloud/domain deployments, please enter the administrator secret passcode.",
+            }), 403
+    return jsonify({
+        "ok": True,
+        "message": "Passcode verified successfully.",
+        "passcode_required": bool(required_passcode),
+    })
+
+
 @app.route("/api/kaggle/submit", methods=["POST"])
 def api_kaggle_submit():
     required_passcode = (

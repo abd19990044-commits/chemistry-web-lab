@@ -173,6 +173,143 @@
     }
   } catch (e) {}
 
+  // Kaggle Access Gate controller
+  function initKaggleAccessGate() {
+    const toggleBtn = document.getElementById("btn-toggle-kaggle-section");
+    const fullSec = document.getElementById("kaggle-full-config-section");
+    const gateCard = document.getElementById("kaggle-passcode-gate");
+    const gateInput = document.getElementById("kaggle-gate-passcode");
+    const unlockBtn = document.getElementById("btn-unlock-kaggle-gate");
+    const gateError = document.getElementById("kaggle-gate-error");
+    const unlockedBanner = document.getElementById("kaggle-passcode-unlocked-banner");
+    const relockBtn = document.getElementById("btn-relock-kaggle");
+    const unlockedContent = document.getElementById("kaggle-unlocked-content");
+    const mainPasscodeEl = document.getElementById("kaggle-passcode");
+    const modalPasscodeEl = document.getElementById("modal-kaggle-passcode");
+    const usernameInput = document.getElementById("kaggle-username");
+
+    let isUnlocked = (typeof sessionStorage !== "undefined") && (sessionStorage.getItem("orca_kaggle_unlocked") === "true");
+    const initialPasscode = (typeof sessionStorage !== "undefined") ? (sessionStorage.getItem("orca_kaggle_passcode") || "") : "";
+
+    if (gateInput && initialPasscode) gateInput.value = initialPasscode;
+    if (mainPasscodeEl && initialPasscode) mainPasscodeEl.value = initialPasscode;
+    if (modalPasscodeEl && initialPasscode) modalPasscodeEl.value = initialPasscode;
+
+    function applyUnlockedState(unlocked) {
+      isUnlocked = !!unlocked;
+      try {
+        if (isUnlocked) sessionStorage.setItem("orca_kaggle_unlocked", "true");
+        else sessionStorage.removeItem("orca_kaggle_unlocked");
+      } catch (e) {}
+
+      if (isUnlocked) {
+        if (gateCard) gateCard.classList.add("hidden");
+        if (unlockedBanner) unlockedBanner.classList.remove("hidden");
+        if (unlockedContent) unlockedContent.classList.remove("hidden");
+      } else {
+        if (gateCard) gateCard.classList.remove("hidden");
+        if (unlockedBanner) unlockedBanner.classList.add("hidden");
+        if (unlockedContent) unlockedContent.classList.add("hidden");
+        if (gateError) gateError.classList.add("hidden");
+      }
+    }
+
+    applyUnlockedState(isUnlocked);
+
+    async function handleUnlock() {
+      const entered = gateInput ? gateInput.value.trim() : "";
+      if (gateError) { gateError.textContent = ""; gateError.classList.add("hidden"); }
+      if (unlockBtn) unlockBtn.disabled = true;
+
+      try {
+        const resp = await fetch("/api/kaggle/verify-passcode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ passcode: entered })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+          const msg = data.message || data.error || "Invalid execution passcode. On cloud or domain deployments, please enter the administrator secret passcode.";
+          if (gateError) {
+            gateError.textContent = msg;
+            gateError.classList.remove("hidden");
+          }
+          if (gateInput) gateInput.focus();
+          return;
+        }
+
+        try {
+          sessionStorage.setItem("orca_kaggle_passcode", entered);
+        } catch (e) {}
+        if (mainPasscodeEl) mainPasscodeEl.value = entered;
+        if (modalPasscodeEl) modalPasscodeEl.value = entered;
+
+        applyUnlockedState(true);
+        if (usernameInput) {
+          setTimeout(() => usernameInput.focus(), 150);
+        }
+        if (typeof showToast === "function") {
+          showToast("Kaggle login fields unlocked.");
+        }
+      } catch (err) {
+        if (gateError) {
+          gateError.textContent = "Could not verify passcode: " + err.message;
+          gateError.classList.remove("hidden");
+        }
+      } finally {
+        if (unlockBtn) unlockBtn.disabled = false;
+      }
+    }
+
+    if (unlockBtn) {
+      unlockBtn.addEventListener("click", handleUnlock);
+    }
+
+    if (gateInput) {
+      gateInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleUnlock();
+        }
+      });
+    }
+
+    if (relockBtn) {
+      relockBtn.addEventListener("click", () => {
+        applyUnlockedState(false);
+        if (gateInput) {
+          gateInput.value = "";
+          gateInput.focus();
+        }
+        try {
+          sessionStorage.removeItem("orca_kaggle_passcode");
+        } catch (e) {}
+        if (mainPasscodeEl) mainPasscodeEl.value = "";
+        if (modalPasscodeEl) modalPasscodeEl.value = "";
+        if (typeof showToast === "function") {
+          showToast("Kaggle access re-locked.");
+        }
+      });
+    }
+
+    if (toggleBtn && fullSec) {
+      toggleBtn.addEventListener("click", () => {
+        fullSec.classList.toggle("hidden");
+        if (!fullSec.classList.contains("hidden")) {
+          fullSec.scrollIntoView({ behavior: "smooth" });
+          if (!isUnlocked && gateInput) {
+            setTimeout(() => gateInput.focus(), 200);
+          } else if (isUnlocked && usernameInput) {
+            setTimeout(() => usernameInput.focus(), 200);
+          }
+        }
+      });
+    }
+
+    window.unlockKaggleGate = () => applyUnlockedState(true);
+  }
+  initKaggleAccessGate();
+
   const LS_KEYS = {
     kaggleUsername: "chemlab_kaggle_username",
     kaggleKey: "chemlab_kaggle_key",
@@ -4262,6 +4399,7 @@
     show(kaggleForm);
     jobsSigninRequired.classList.add("hidden");
     jobsSignedInArea.classList.remove("hidden");
+    if (window.unlockKaggleGate) window.unlockKaggleGate();
   }
   window.setKaggleSignedIn = setSignedIn;
 
@@ -8579,8 +8717,8 @@
       });
     }
 
-    const chgBtn = document.getElementById("engine-3d-load-chg-btn") || document.getElementById("engine-3d-load-crg-btn");
-    const chgInput = document.getElementById("engine-3d-chg-input") || document.getElementById("engine-3d-crg-input");
+    const chgBtn = document.getElementById("engine-3d-load-chg-btn");
+    const chgInput = document.getElementById("engine-3d-chg-input");
     if (chgBtn && chgInput) {
       chgBtn.addEventListener("click", () => {
         chgInput.click();

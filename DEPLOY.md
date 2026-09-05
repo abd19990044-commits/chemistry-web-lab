@@ -67,6 +67,7 @@ In **Settings → Variables and secrets**, add one secret:
 |---|---|---|
 | `SECRET_KEY` | any long random string | Without it each gunicorn worker derives its own session key, and with `--workers 2` a signed-in user is silently signed out on roughly half their requests |
 | `ORCA_STATE_DIR` | `/app/.state` | Optional but recommended. Pins every worker to one database explicitly, so the leases and idempotency keys that prevent duplicate work definitely coordinate across workers |
+| `KAGGLE_EXECUTION_PASSCODE` | your custom secret code | Required for cloud/domain hosting to gate Kaggle access. If running locally or left unset, users leave the password input empty and press Enter to unlock the Kaggle login fields |
 
 Generate one with:
 

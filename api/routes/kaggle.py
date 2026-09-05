@@ -46,6 +46,32 @@ def get_kaggle_config():
     }
 
 
+@router.post("/verify-passcode")
+def verify_kaggle_passcode(req: dict | None = None,
+                           x_kaggle_passcode: str | None = Header(default=None)):
+    required_passcode = (
+        os.environ.get("KAGGLE_EXECUTION_PASSCODE")
+        or os.environ.get("KAGGLE_ACCESS_CODE")
+        or os.environ.get("KAGGLE_PASSCODE")
+        or ""
+    ).strip()
+    provided = ""
+    if req and isinstance(req, dict):
+        provided = req.get("passcode") or req.get("kaggle_passcode") or ""
+    if not provided and x_kaggle_passcode:
+        provided = x_kaggle_passcode
+    provided = provided.strip()
+    if required_passcode:
+        import hmac
+        if not provided or not hmac.compare_digest(provided, required_passcode):
+            raise HTTPException(status_code=403, detail="Invalid execution passcode. On cloud/domain deployments, please enter the administrator secret passcode.")
+    return {
+        "ok": True,
+        "message": "Passcode verified successfully.",
+        "passcode_required": bool(required_passcode),
+    }
+
+
 @router.post("/jobs")
 def submit_job(req: JobSubmitRequest,
                idempotency_key: str | None = Header(default=None),

@@ -283,3 +283,70 @@ def test_privacy_policy_contains_no_third_party_and_user_operation_statements(cl
     # 4. Section 11 Third-party services & sole responsibility
     assert "The Site does not run Kaggle as a third party on your behalf" in html
     assert "user is solely and exclusively responsible for compliance with Kaggle's policies and terms" in html
+
+
+# ===========================================================================
+# 6. Verify Passcode Endpoint Tests (/api/kaggle/verify-passcode)
+# ===========================================================================
+def test_verify_passcode_endpoint_unset_allows_blank(client, monkeypatch):
+    """When secret is unset, /api/kaggle/verify-passcode accepts blank passcode (local mode)."""
+    _clean_env(monkeypatch)
+    resp = client.post("/api/kaggle/verify-passcode", json={"passcode": ""})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["passcode_required"] is False
+
+
+def test_verify_passcode_endpoint_configured_rejects_wrong(client, monkeypatch):
+    """When secret is configured, wrong or empty passcode is rejected with HTTP 403."""
+    monkeypatch.setenv("KAGGLE_EXECUTION_PASSCODE", "site_super_secret_999")
+
+    # Empty passcode
+    resp_empty = client.post("/api/kaggle/verify-passcode", json={"passcode": ""})
+    assert resp_empty.status_code == 403
+    assert resp_empty.get_json()["error"] == "INVALID_KAGGLE_PASSCODE"
+
+    # Wrong passcode
+    resp_wrong = client.post("/api/kaggle/verify-passcode", json={"passcode": "wrong_code"})
+    assert resp_wrong.status_code == 403
+    assert resp_wrong.get_json()["error"] == "INVALID_KAGGLE_PASSCODE"
+
+
+def test_verify_passcode_endpoint_configured_accepts_valid(client, monkeypatch):
+    """When secret is configured, correct passcode returns HTTP 200."""
+    monkeypatch.setenv("KAGGLE_EXECUTION_PASSCODE", "site_super_secret_999")
+    resp = client.post("/api/kaggle/verify-passcode", json={"passcode": "site_super_secret_999"})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["passcode_required"] is True
+
+
+def test_verify_passcode_endpoint_configured_accepts_header(client, monkeypatch):
+    """Header X-Kaggle-Passcode is accepted for passcode verification."""
+    monkeypatch.setenv("KAGGLE_EXECUTION_PASSCODE", "site_super_secret_999")
+    resp = client.post("/api/kaggle/verify-passcode", headers={"X-Kaggle-Passcode": "site_super_secret_999"})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True
+
+
+def test_readme_and_security_documentation_contain_passcode_and_liability_rules():
+    """Verify README.md, DEPLOY.md, and SECURITY.md contain local vs cloud passcode rules and user liability."""
+    with open("README.md", "r", encoding="utf-8") as f:
+        readme = f.read()
+    assert "Direct Operation Without Third-Party Intermediation" in readme
+    assert "solely and entirely responsible for compliance with Kaggle's Terms of Service" in readme
+    assert "leave the password field empty and press **Enter**" in readme
+    assert "KAGGLE_EXECUTION_PASSCODE" in readme
+
+    with open("DEPLOY.md", "r", encoding="utf-8") as f:
+        deploy = f.read()
+    assert "KAGGLE_EXECUTION_PASSCODE" in deploy
+    assert "leave the password input empty and press Enter" in deploy
+
+    with open("SECURITY.md", "r", encoding="utf-8") as f:
+        sec = f.read()
+    assert "Direct User Execution & Cloud Passcode Protection" in sec
+    assert "KAGGLE_EXECUTION_PASSCODE" in sec

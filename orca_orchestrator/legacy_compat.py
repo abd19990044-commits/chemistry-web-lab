@@ -254,6 +254,48 @@ def resume():
     return jsonify({"ok": True, "job": get_service().resume(creds, (data.get("job_id") or "").strip())})
 
 
+def config():
+    required_passcode = (
+        os.environ.get("KAGGLE_EXECUTION_PASSCODE")
+        or os.environ.get("KAGGLE_ACCESS_CODE")
+        or os.environ.get("KAGGLE_PASSCODE")
+        or ""
+    ).strip()
+    return jsonify({
+        "ok": True,
+        "passcode_required": bool(required_passcode),
+    })
+
+
+def verify_passcode():
+    required_passcode = (
+        os.environ.get("KAGGLE_EXECUTION_PASSCODE")
+        or os.environ.get("KAGGLE_ACCESS_CODE")
+        or os.environ.get("KAGGLE_PASSCODE")
+        or ""
+    ).strip()
+    data = request.get_json(silent=True) or request.form or {}
+    provided = (
+        data.get("passcode")
+        or data.get("kaggle_passcode")
+        or request.headers.get("X-Kaggle-Passcode")
+        or ""
+    ).strip()
+    if required_passcode:
+        import hmac
+        if not provided or not hmac.compare_digest(provided, required_passcode):
+            return jsonify({
+                "ok": False,
+                "error": "INVALID_KAGGLE_PASSCODE",
+                "message": "Invalid execution passcode. On cloud/domain deployments, please enter the administrator secret passcode.",
+            }), 403
+    return jsonify({
+        "ok": True,
+        "message": "Passcode verified successfully.",
+        "passcode_required": bool(required_passcode),
+    })
+
+
 from functools import wraps
 from .errors import (
     AuthenticationError, ConcurrencyError, KaggleUnavailableError, NetworkError,
@@ -306,6 +348,8 @@ LEGACY_ROUTES = {
     "/api/kaggle/delete": _wrap_handler(delete),
     "/api/kaggle/cancel": _wrap_handler(cancel),
     "/api/kaggle/resume": _wrap_handler(resume),
+    "/api/kaggle/config": _wrap_handler(config),
+    "/api/kaggle/verify-passcode": _wrap_handler(verify_passcode),
 }
 
 
@@ -337,3 +381,5 @@ def install_legacy_route_adapter(app):
     # is complete and both operations reach OrchestratorService.
     app.add_url_rule("/api/kaggle/cancel", endpoint="legacy_cancel", view_func=_wrap_handler(cancel), methods=["POST"])
     app.add_url_rule("/api/kaggle/resume", endpoint="legacy_resume", view_func=_wrap_handler(resume), methods=["POST"])
+    app.add_url_rule("/api/kaggle/config", endpoint="legacy_config", view_func=_wrap_handler(config), methods=["GET"])
+    app.add_url_rule("/api/kaggle/verify-passcode", endpoint="legacy_verify_passcode", view_func=_wrap_handler(verify_passcode), methods=["POST"])

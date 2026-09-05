@@ -144,6 +144,17 @@ Calculates fundamental reactivity parameters from frontier orbital eigenvalues:
 
 For users who do not have a local ORCA installation or need temporary remote GPU/CPU compute, Chemistry Lab provides an **optional secondary cloud fallback** powered by Kaggle notebooks.
 
+### Direct User Operation & Legal Responsibility
+- **Direct Operation Without Third-Party Intermediation**: Chemistry Lab does NOT operate Kaggle as a third-party service provider or broker. The platform is designed for direct personal user operation; all calculations are executed directly within the user's private Kaggle account using their own personal credentials without server retention.
+- **Sole User Liability**: When running calculations on Kaggle, the user is solely and entirely responsible for compliance with Kaggle's Terms of Service, Acceptable Use Policy, and community rules, and bears full legal and operational liability for any violation thereof.
+
+### Execution Modes & Passcode Security (Local vs. Cloud / Domain)
+When clicking the Kaggle button in the user interface, an access password field is presented:
+- **Local Execution**: If Chemistry Lab is run locally on your own machine (where no secret is configured), simply leave the password field empty and press **Enter** (or click Unlock) to immediately open the Kaggle login fields (`Kaggle Username` and `Kaggle API Key`).
+- **Cloud Hosting / Custom Domain**: If Chemistry Lab is deployed to a cloud host (e.g. Hugging Face Spaces, Render, AWS, Docker) or configured with a custom domain, an execution passcode must be set in the server environment secrets (`KAGGLE_EXECUTION_PASSCODE`, `KAGGLE_ACCESS_CODE`, or `KAGGLE_PASSCODE`). Entering this secret passcode and pressing **Enter** unlocks the Kaggle login fields; unauthorized access is blocked.
+- **Platform Independence**: All other studios and tools (Reaction Thermochemistry, Analyzer, Spectra Studios, 3D Builder, Local/HPC Companion Agent) remain completely unrestricted and operate freely without requiring any passcode.
+
+### Technical Architecture
 `orca_orchestrator` implements an enterprise-grade finite state machine for remote batch execution:
 - **Deterministic Checkpointing**: Stages `.gbw`, `.xyz`, `.hess`, and temporary restart vectors.
 - **Auto-Continuation Chaining**: Seamlessly creates successor kernels upon reaching timeouts or resource warnings (bypasses 12h session limits).
@@ -279,6 +290,7 @@ To deploy as a Hugging Face Space:
 3. Configure Space Secrets:
    - `SECRET_KEY`: Random 64-character hex string.
    - `ORCA_STATE_DIR`: `/data` (for persistent storage).
+   - `KAGGLE_EXECUTION_PASSCODE`: Secret passcode required for cloud deployments to unlock Kaggle calculation submission.
 
 ---
 

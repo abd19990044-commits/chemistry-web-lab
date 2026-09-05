@@ -50,6 +50,12 @@ If you discover a security vulnerability within Chemistry Lab, please report it 
 - **Memory-Only In-Process Decryption:** Decryption occurs strictly in process RAM on Hugging Face / Chemistry Lab backend. When a Space sleeps or restarts, credentials are reconstituted in memory on demand for background reconciliation and watchdog sweeps.
 - **Strict Multi-Tenant Isolation:** When User B visits or wakes a shared Space, background recovery processes User A's stalled jobs without exposing User A's credentials, tokens, or job outputs to User B's session or browser.
 
+### F. Direct User Execution & Cloud Passcode Protection
+- **No Third-Party Intermediation:** Chemistry Lab is designed for direct personal user operation and does not act as a third-party broker or proxy for Kaggle. All calculations run directly within the user's private Kaggle account under their personal credentials without server retention.
+- **Sole User Liability:** Users are solely and entirely responsible for compliance with Kaggle's Terms of Service and Acceptable Use Policies and bear full liability for any violation.
+- **Access Passcode Gating:** When deployed on public cloud hosting or custom domains, the server environment variable `KAGGLE_EXECUTION_PASSCODE` provides constant-time authorization (`hmac.compare_digest`) before Kaggle submission endpoints and login fields are unlocked.
+- **Local Mode Access:** When executed locally with no secret configured, users leave the passcode prompt blank and press Enter to unlock login fields.
+
 ---
 
 ## 4. Release Integrity and CI Quality Gate
