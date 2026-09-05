@@ -234,3 +234,19 @@ def test_too_many_files_rejected(client):
     files = [("f%d.out" % i, FREQ_A) for i in range(25)]
     res = _post(client, files)
     assert res.status_code == 413
+
+
+def test_archive_import_extracts_and_loads_spectra(client):
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("nested_dir/sample_ir.out", FREQ_A)
+        zf.writestr("nested_dir/sample_uv.out", UV_ONLY)
+    data = _post(client, [("bundle.zip", buf.getvalue())]).get_json()
+    assert data["ok"] is True
+    assert data["loaded"] == 2
+    ir_entry = _by_name(data, "sample_ir.out")
+    uv_entry = _by_name(data, "sample_uv.out")
+    assert ir_entry["status"] == "loaded" and ir_entry["capabilities"]["ir"] is True
+    assert uv_entry["status"] == "loaded" and uv_entry["capabilities"]["uv"] is True
+

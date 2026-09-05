@@ -5763,26 +5763,27 @@
     }
   }
 
-  function parseMultiWfnCrgText(text) {
+  function parseMultiWfnChgText(text) {
     if (!text || typeof text !== "string") return [];
     const lines = text.trim().split(/\r?\n/);
     const charges = [];
     for (const line of lines) {
       const l = line.trim();
-      if (!l || l.startsWith("#") || l.startsWith("//") || /^atom/i.test(l) || /^sum/i.test(l) || /^charge/i.test(l) || /^total/i.test(l) || /^---/.test(l)) {
+      if (!l || l.startsWith("#") || l.startsWith("//") || l.startsWith(";") || /^atom/i.test(l) || /^sum/i.test(l) || /^charge/i.test(l) || /^total/i.test(l) || /^---/.test(l) || /^===/.test(l) || /^coord/i.test(l)) {
         continue;
       }
       const tokens = l.split(/\s+/);
       if (tokens.length === 1) {
         const val = parseFloat(tokens[0]);
-        if (!isNaN(val)) charges.push(val);
+        if (!isNaN(val) && isFinite(val)) charges.push(val);
       } else if (tokens.length >= 2) {
         const val = parseFloat(tokens[tokens.length - 1]);
-        if (!isNaN(val)) charges.push(val);
+        if (!isNaN(val) && isFinite(val)) charges.push(val);
       }
     }
     return charges;
   }
+  const parseMultiWfnCrgText = parseMultiWfnChgText;
 
   function updateLabelModeDropdown(hasHirshfeld) {
     const select = document.getElementById("engine-3d-label-mode");
@@ -5799,12 +5800,12 @@
     if (hasHirshfeld) {
       const opt1 = document.createElement("option");
       opt1.value = "hirshfeld";
-      opt1.textContent = "⚡ Hirshfeld Charges (.crg / MultiWfn)";
+      opt1.textContent = "⚡ Hirshfeld / Multiwfn Charges (.chg)";
       select.appendChild(opt1);
 
       const opt2 = document.createElement("option");
       opt2.value = "both_hirshfeld";
-      opt2.textContent = "🏷+⚡ Atom & Hirshfeld";
+      opt2.textContent = "🏷+⚡ Atom & Hirshfeld (.chg)";
       select.appendChild(opt2);
     }
 
@@ -5882,9 +5883,9 @@
         showToast("No Mulliken charges found in this calculation output.", "warning");
       }
     } else if (currentMode === "hirshfeld" || currentMode === "both_hirshfeld") {
-      charges = (job.hirshfeld_charges && job.hirshfeld_charges.length) ? job.hirshfeld_charges : ((job.crg_charges && job.crg_charges.length) ? job.crg_charges : []);
+      charges = (job.hirshfeld_charges && job.hirshfeld_charges.length) ? job.hirshfeld_charges : ((job.chg_charges && job.chg_charges.length) ? job.chg_charges : ((job.crg_charges && job.crg_charges.length) ? job.crg_charges : []));
       if (!charges.length && currentMode === "hirshfeld") {
-        showToast("No Hirshfeld charges found. Upload a MultiWfn .crg file.", "warning");
+        showToast("No Hirshfeld charges found. Upload a Multiwfn .chg file.", "warning");
       }
     }
 
@@ -7014,7 +7015,7 @@
     ctx.fillStyle = axisColor;
     ctx.font = "bold 12px Inter, -apple-system, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Wavelength λ (nm)", padding.left + plotW / 2, height - 12);
+    ctx.fillText(uvCustomTitles.x || "Wavelength λ (nm)", padding.left + plotW / 2, padding.top + plotH + 36);
 
     ctx.save();
     ctx.rotate(-Math.PI / 2);
@@ -7026,10 +7027,6 @@
       ctx.fillText(spectrumNormalizeMode in { "all": 1, "experimental_only": 1 } ? "Exp Absorbance (Norm)" : "Experimental Absorbance (AU)", -(padding.top + plotH / 2), width - 12);
     }
     ctx.restore();
-    ctx.font = "bold 11px Inter, sans-serif";
-    ctx.fillStyle = isLight ? "#0f172a" : "#CBD5E1";
-    ctx.textAlign = "center";
-    ctx.fillText(uvCustomTitles.x || "Wavelength (nm)", padding.left + plotW / 2, padding.top + plotH + 18);
     ctx.font = "bold 13px Inter, sans-serif";
     ctx.fillStyle = isLight ? "#0f172a" : "#e2e8f0";
     ctx.fillText(uvCustomTitles.title || "UV-Vis Spectrum", width / 2, 14);
@@ -8539,42 +8536,73 @@
       });
     }
 
-    const crgBtn = document.getElementById("engine-3d-load-crg-btn");
-    const crgInput = document.getElementById("engine-3d-crg-input");
-    if (crgBtn && crgInput) {
-      crgBtn.addEventListener("click", () => {
-        crgInput.click();
+    const chgBtn = document.getElementById("engine-3d-load-chg-btn") || document.getElementById("engine-3d-load-crg-btn");
+    const chgInput = document.getElementById("engine-3d-chg-input") || document.getElementById("engine-3d-crg-input");
+    if (chgBtn && chgInput) {
+      chgBtn.addEventListener("click", () => {
+        chgInput.click();
       });
-      crgInput.addEventListener("change", () => {
-        if (!crgInput.files || !crgInput.files.length) return;
-        const file = crgInput.files[0];
+      chgInput.addEventListener("change", () => {
+        if (!chgInput.files || !chgInput.files.length) return;
+        const file = chgInput.files[0];
         const reader = new FileReader();
         reader.onload = (e) => {
           const text = e.target.result;
-          const parsed = parseMultiWfnCrgText(text);
+          const parsed = parseMultiWfnChgText(text);
           if (!parsed.length) {
-            showToast("Failed to parse charges from .crg file. Please check file format.", "error");
+            showToast("Failed to parse charges from .chg file. Please check file format.", "error");
             return;
           }
           const job = currentEngineData ? (currentEngineData.latest_job || (currentEngineData.jobs && currentEngineData.jobs[currentEngineData.jobs.length - 1]) || (currentEngineData.jobs && currentEngineData.jobs[0]) || currentEngineData) : null;
           if (job) {
             job.hirshfeld_charges = parsed;
+            job.chg_charges = parsed;
             job.crg_charges = parsed;
             if (!job.atomic_charges) job.atomic_charges = {};
             job.atomic_charges["hirshfeld"] = parsed;
+            job.atomic_charges["chg"] = parsed;
             job.atomic_charges["crg"] = parsed;
             updateLabelModeDropdown(true);
             const labelModeSelect = document.getElementById("engine-3d-label-mode");
             if (labelModeSelect) labelModeSelect.value = "hirshfeld";
             applyViewer3DStyle();
-            showToast(`Loaded <strong>${parsed.length}</strong> Hirshfeld charges from MultiWfn .crg file.`);
+            showToast(`Loaded <strong>${parsed.length}</strong> atomic charges from Multiwfn .chg file.`);
           } else {
             showToast("No active molecule loaded in 3D viewer.", "warning");
           }
-
         };
         reader.readAsText(file);
-        crgInput.value = "";
+        chgInput.value = "";
+      });
+    }
+
+    const downloadChgBtn = document.getElementById("engine-download-chg-btn");
+    if (downloadChgBtn) {
+      downloadChgBtn.addEventListener("click", () => {
+        const job = currentEngineData ? (currentEngineData.latest_job || (currentEngineData.jobs && currentEngineData.jobs[currentEngineData.jobs.length - 1]) || (currentEngineData.jobs && currentEngineData.jobs[0]) || currentEngineData) : null;
+        if (!job) {
+          showToast("No active molecule loaded.", "warning");
+          return;
+        }
+        const elements = job.elements || [];
+        const coords = job.coords || [];
+        const charges = (job.hirshfeld_charges && job.hirshfeld_charges.length) ? job.hirshfeld_charges :
+                        ((job.chg_charges && job.chg_charges.length) ? job.chg_charges :
+                        ((job.mulliken_charges && job.mulliken_charges.length) ? job.mulliken_charges :
+                        ((job.charges && job.charges.length) ? job.charges : [])));
+        if (!charges || !charges.length) {
+          showToast("No atomic charges available to export. Run a population analysis or upload a .chg file.", "warning");
+          return;
+        }
+        const lines = ["# Multiwfn atomic charges file (.chg)", "# Element         X              Y              Z            Charge"];
+        elements.forEach((el, idx) => {
+          const c = coords[idx] || [0.0, 0.0, 0.0];
+          const q = typeof charges[idx] === "number" ? charges[idx] : 0.0;
+          lines.push(`${String(el).padEnd(6)} ${c[0].toFixed(6).padStart(14)} ${c[1].toFixed(6).padStart(14)} ${c[2].toFixed(6).padStart(14)} ${q.toFixed(6).padStart(14)}`);
+        });
+        const molName = sanitizeFileStem(job.molecule || job.name || currentEngineData?.name || "molecule");
+        downloadTextFile(`${molName}_charges.chg`, lines.join("\n") + "\n");
+        showToast(`Exported <strong>${charges.length}</strong> atomic charges to <strong>${molName}_charges.chg</strong>.`);
       });
     }
 
@@ -10518,6 +10546,12 @@
     const archiveFileInput = document.getElementById("thermo-archive-file-input");
     const archiveBrowseBtn = document.getElementById("thermo-archive-browse-btn");
     const archiveStatus = document.getElementById("thermo-archive-status");
+    const archivePanel = document.getElementById("thermo-archive-assignment-panel");
+    const archiveCount = document.getElementById("thermo-archive-count");
+    const archiveTbody = document.getElementById("thermo-archive-assignment-tbody");
+    const archiveDismissBtn = document.getElementById("thermo-archive-dismiss-btn");
+    const archiveAutoMapBtn = document.getElementById("thermo-archive-auto-map-btn");
+    const archiveApplyBtn = document.getElementById("thermo-archive-apply-btn");
     const loadingEl = document.getElementById("thermo-loading");
     const errorEl = document.getElementById("thermo-error");
     const resultCard = document.getElementById("thermo-result");
@@ -10563,7 +10597,8 @@
           spMode: "upload"
         }
       ],
-      extractedArchiveFiles: {}
+      extractedArchiveFiles: {},
+      archiveEntries: []
     };
 
     function updateLiveEquation() {
@@ -10639,6 +10674,14 @@
                     <span>${item.content ? `✓ Attached: ${item.primaryName || 'Opt/Freq Output'}` : '📄 Click to attach Opt/Freq .out/.log'}</span>
                     <input type="file" class="primary-file-input hidden" accept=".out,.log,.property.txt,.txt">
                   </div>
+                  ${state.archiveEntries && state.archiveEntries.length > 0 ? `
+                    <div style="margin-top:0.35rem;">
+                      <select class="select-small species-archive-select" style="width:100%; font-size:0.75rem;">
+                        <option value="">📂 Or pick from uploaded archive (${state.archiveEntries.length} files)…</option>
+                        ${state.archiveEntries.map(e => `<option value="${escapeHtml(e.basename)}" ${item.primaryName === e.basename ? 'selected' : ''}>${escapeHtml(e.basename)} (${escapeHtml(e.molecule?.chemical_formula || e.latest_job?.chemical_formula || 'Molecule')})</option>`).join('')}
+                      </select>
+                    </div>
+                  ` : ''}
                 `}
               </div>
             </div>
@@ -10758,6 +10801,20 @@
           primaryDrop.addEventListener("drop", async (e) => {
             if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
               await handlePrimaryFile(e.dataTransfer.files[0]);
+            }
+          });
+        }
+
+        // Primary archive select picker
+        const archiveSel = card.querySelector(".species-archive-select");
+        if (archiveSel) {
+          archiveSel.addEventListener("change", (e) => {
+            const chosen = e.target.value;
+            if (chosen && state.extractedArchiveFiles[chosen]) {
+              item.content = state.extractedArchiveFiles[chosen];
+              item.primaryName = chosen;
+              renderSpeciesCards(container, list, isReactant);
+              showToast(`Attached <strong>${escapeHtml(chosen)}</strong> to ${escapeHtml(item.name || 'species')}.`);
             }
           });
         }
@@ -10952,36 +11009,12 @@
             archiveStatus.textContent = `✓ Extracted ${data.archive_entries.length} calculations`;
             archiveStatus.className = "prop-badge badge-success";
           }
-          // Auto-match to current reactants & products
-          let matchedCount = 0;
-          [...state.reactants, ...state.products].forEach(sp => {
-            const clean = sp.name.toLowerCase().trim();
-            for (const entry of data.archive_entries) {
-              const entryBase = entry.basename.toLowerCase();
-              const formula = (entry.molecule?.chemical_formula || entry.latest_job?.chemical_formula || entry.latest_job?.formula || "").toLowerCase();
-              if (entryBase.includes(clean) || clean.includes(entryBase.replace(/\.[^/.]+$/, "")) || (formula && (formula === clean || clean.includes(formula)))) {
-                sp.content = entry.raw_text;
-                sp.primaryName = entry.basename;
-                matchedCount++;
-                break;
-              }
-            }
-          });
-          // If some species remain unmatched and there are unassigned archive entries, assign in order
-          const unassignedEntries = data.archive_entries.filter(e => ![...state.reactants, ...state.products].some(s => s.content === e.raw_text));
-          let unassignedIdx = 0;
-          [...state.reactants, ...state.products].forEach(sp => {
-            if (!sp.content && unassignedIdx < unassignedEntries.length) {
-              const entry = unassignedEntries[unassignedIdx++];
-              sp.content = entry.raw_text;
-              sp.primaryName = entry.basename;
-              matchedCount++;
-            }
-          });
-
+          state.archiveEntries = data.archive_entries;
+          autoMatchArchiveEntriesToReaction();
+          renderArchiveAssignmentPanel();
           renderSpeciesCards(reactantsList, state.reactants, true);
           renderSpeciesCards(productsList, state.products, false);
-          showToast(`Archive <strong>${file.name}</strong> unpacked: ${data.archive_entries.length} calculations extracted, ${matchedCount} matched.`);
+          showToast(`Archive <strong>${file.name}</strong> unpacked: ${data.archive_entries.length} calculations extracted. Select Reactants & Products below.`);
         } else {
           // Single .out / .log calculation file uploaded to the dropzone
           const text = data.raw_text || "";
@@ -11033,6 +11066,205 @@
         }
         showToast(`File error: ${err.message}`, "error");
       }
+    }
+
+    function autoMatchArchiveEntriesToReaction() {
+      if (!state.archiveEntries || state.archiveEntries.length === 0) return;
+
+      const entries = state.archiveEntries;
+      const count = entries.length;
+
+      entries.forEach((entry, idx) => {
+        const base = (entry.basename || "").toLowerCase();
+        const formula = (entry.molecule?.chemical_formula || entry.latest_job?.chemical_formula || "").toLowerCase();
+
+        let matchedRole = null;
+        let matchedCoeff = 1;
+
+        for (const r of state.reactants) {
+          const rName = (r.name || "").toLowerCase().trim();
+          if (rName && (base.includes(rName) || (formula && formula === rName) || (formula && rName.includes(formula)))) {
+            matchedRole = "reactant";
+            matchedCoeff = r.coeff || 1;
+            break;
+          }
+        }
+
+        if (!matchedRole) {
+          for (const p of state.products) {
+            const pName = (p.name || "").toLowerCase().trim();
+            if (pName && (base.includes(pName) || (formula && formula === pName) || (formula && pName.includes(formula)))) {
+              matchedRole = "product";
+              matchedCoeff = p.coeff || 1;
+              break;
+            }
+          }
+        }
+
+        if (!matchedRole) {
+          if (base.includes("react") || base.includes("sm") || base.includes("start") || base.includes("r1") || base.includes("r2") || base.includes("reactant")) {
+            matchedRole = "reactant";
+          } else if (base.includes("prod") || base.includes("p1") || base.includes("p2") || base.includes("product")) {
+            matchedRole = "product";
+          } else if (base.includes("ts") || base.includes("trans")) {
+            matchedRole = "product";
+          } else if (count === 2) {
+            matchedRole = idx === 0 ? "reactant" : "product";
+          } else if (idx < Math.ceil(count / 2)) {
+            matchedRole = "reactant";
+          } else {
+            matchedRole = "product";
+          }
+        }
+
+        entry._role = matchedRole || "reactant";
+        entry._coeff = matchedCoeff || 1;
+      });
+    }
+
+    function renderArchiveAssignmentPanel() {
+      if (!archivePanel || !archiveTbody) return;
+      if (!state.archiveEntries || state.archiveEntries.length === 0) {
+        archivePanel.classList.add("hidden");
+        return;
+      }
+
+      archivePanel.classList.remove("hidden");
+      if (archiveCount) archiveCount.textContent = state.archiveEntries.length;
+      archiveTbody.innerHTML = "";
+
+      state.archiveEntries.forEach((entry, idx) => {
+        const tr = document.createElement("tr");
+
+        const formula = entry.molecule?.chemical_formula || entry.latest_job?.chemical_formula || "";
+        const jobTypes = [];
+        if (entry.latest_job?.job_type) jobTypes.push(entry.latest_job.job_type);
+        if (entry.has_freq || (entry.latest_job?.frequencies && entry.latest_job.frequencies.length > 0)) jobTypes.push("FREQ");
+        if (entry.has_opt) jobTypes.push("OPT");
+        const jobTag = jobTypes.length > 0 ? `<span class="prop-badge badge-neutral" style="margin-left:0.4rem; font-size:0.7rem;">${jobTypes.join(", ")}</span>` : "";
+
+        let energyStr = "-";
+        const gEh = entry.latest_job?.free_energy_eh || entry.free_energy_eh;
+        const eEh = entry.latest_job?.electronic_energy_eh || entry.electronic_energy_eh || entry.energy;
+        if (gEh != null) {
+          energyStr = `G: ${Number(gEh).toFixed(6)} Eh`;
+        } else if (eEh != null) {
+          energyStr = `E: ${Number(eEh).toFixed(6)} Eh`;
+        }
+
+        tr.innerHTML = `
+          <td>
+            <div style="font-weight:600; color:var(--text);">${escapeHtml(entry.basename)}</div>
+          </td>
+          <td>
+            <span>${formula ? `<strong>${escapeHtml(formula)}</strong>` : '<span style="color:var(--text-muted);">-</span>'}</span>
+            ${jobTag}
+          </td>
+          <td>
+            <select class="select-small archive-row-role-select" data-idx="${idx}" style="font-size:0.8rem; padding:0.2rem 0.5rem;">
+              <option value="reactant" ${entry._role === "reactant" ? "selected" : ""}>⬅ Reactant</option>
+              <option value="product" ${entry._role === "product" ? "selected" : ""}>➡ Product</option>
+              <option value="ignore" ${entry._role === "ignore" ? "selected" : ""}>✕ Exclude</option>
+            </select>
+          </td>
+          <td>
+            <input type="number" min="1" max="99" step="1" value="${entry._coeff || 1}" class="input-small archive-row-coeff-input" data-idx="${idx}" style="width:75px; font-size:0.8rem; padding:0.2rem 0.4rem;">
+          </td>
+          <td style="text-align:right; font-family:var(--font-mono, monospace); font-size:0.78rem; color:var(--text-muted);">
+            ${energyStr}
+          </td>
+        `;
+
+        const roleSelect = tr.querySelector(".archive-row-role-select");
+        if (roleSelect) {
+          roleSelect.addEventListener("change", (e) => {
+            entry._role = e.target.value;
+          });
+        }
+
+        const coeffInput = tr.querySelector(".archive-row-coeff-input");
+        if (coeffInput) {
+          coeffInput.addEventListener("input", (e) => {
+            entry._coeff = Math.max(1, parseInt(e.target.value, 10) || 1);
+          });
+        }
+
+        archiveTbody.appendChild(tr);
+      });
+    }
+
+    function applyArchiveAssignmentsToReaction() {
+      if (!state.archiveEntries || state.archiveEntries.length === 0) return;
+
+      const reactantsAssigned = state.archiveEntries.filter(e => e._role === "reactant");
+      const productsAssigned = state.archiveEntries.filter(e => e._role === "product");
+
+      if (reactantsAssigned.length === 0 && productsAssigned.length === 0) {
+        showToast("Please designate at least one Reactant or Product first.", "warning");
+        return;
+      }
+
+      if (reactantsAssigned.length > 0) {
+        state.reactants = reactantsAssigned.map((entry, idx) => {
+          const formula = entry.molecule?.chemical_formula || entry.latest_job?.chemical_formula || "";
+          const baseStem = (entry.basename || "").replace(/\.[^/.]+$/, "");
+          return {
+            id: "r_" + Date.now() + "_" + idx,
+            coeff: entry._coeff || 1,
+            name: formula || baseStem || ("Reactant " + (idx + 1)),
+            content: entry.raw_text || "",
+            primaryName: entry.basename || "",
+            primaryMode: "upload",
+            sp_content: "",
+            spName: "",
+            spMode: "upload"
+          };
+        });
+      }
+
+      if (productsAssigned.length > 0) {
+        state.products = productsAssigned.map((entry, idx) => {
+          const formula = entry.molecule?.chemical_formula || entry.latest_job?.chemical_formula || "";
+          const baseStem = (entry.basename || "").replace(/\.[^/.]+$/, "");
+          return {
+            id: "p_" + Date.now() + "_" + idx,
+            coeff: entry._coeff || 1,
+            name: formula || baseStem || ("Product " + (idx + 1)),
+            content: entry.raw_text || "",
+            primaryName: entry.basename || "",
+            primaryMode: "upload",
+            sp_content: "",
+            spName: "",
+            spMode: "upload"
+          };
+        });
+      }
+
+      renderSpeciesCards(reactantsList, state.reactants, true);
+      renderSpeciesCards(productsList, state.products, false);
+      updateLiveEquation();
+
+      showToast(`Applied ${reactantsAssigned.length} reactant(s) and ${productsAssigned.length} product(s) from archive.`);
+    }
+
+    if (archiveDismissBtn && archivePanel) {
+      archiveDismissBtn.addEventListener("click", () => {
+        archivePanel.classList.add("hidden");
+      });
+    }
+
+    if (archiveAutoMapBtn) {
+      archiveAutoMapBtn.addEventListener("click", () => {
+        autoMatchArchiveEntriesToReaction();
+        renderArchiveAssignmentPanel();
+        showToast("Auto match re-evaluated.");
+      });
+    }
+
+    if (archiveApplyBtn) {
+      archiveApplyBtn.addEventListener("click", () => {
+        applyArchiveAssignmentsToReaction();
+      });
     }
 
     // Initial render of cards & equation

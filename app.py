@@ -34,6 +34,31 @@ import tempfile
 try:
     import rarfile
     RAR_AVAILABLE = True
+    # Auto-detect unrar / 7z across Windows, Linux, and macOS standard locations
+    _unrar_candidates = [
+        shutil.which("unrar"),
+        shutil.which("7z"),
+        shutil.which("WinRAR"),
+        r"C:\Program Files\WinRAR\UnRAR.exe",
+        r"C:\Program Files\WinRAR\WinRAR.exe",
+        r"C:\Program Files (x86)\WinRAR\UnRAR.exe",
+        r"C:\Program Files (x86)\WinRAR\WinRAR.exe",
+        r"C:\Program Files\7-Zip\7z.exe",
+        r"C:\Program Files (x86)\7-Zip\7z.exe",
+        r"C:\ProgramData\chocolatey\bin\unrar.exe",
+        r"C:\ProgramData\chocolatey\bin\7z.exe",
+        "/usr/bin/unrar",
+        "/usr/local/bin/unrar",
+        "/opt/homebrew/bin/unrar",
+    ]
+    for _cand in _unrar_candidates:
+        if _cand and os.path.exists(_cand):
+            rarfile.UNRAR_TOOL = _cand
+            try:
+                rarfile.tool_setup()
+            except Exception:
+                pass
+            break
 except ImportError:
     RAR_AVAILABLE = False
 
@@ -1562,27 +1587,33 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
     target_real = os.path.realpath(target_dir)
     os.makedirs(target_real, exist_ok=True)
     
-    analyzable_extensions = (".out", ".log", ".property.txt", ".xyz", ".molden", ".dat")
+    analyzable_extensions = (".out", ".log", ".property.txt", ".xyz", ".molden", ".dat", ".output", ".txt")
     ignored_patterns = ("__macosx", "desktop.ini", "thumbs.db", ".tmp", ".bin", ".densities")
 
     def _is_valid_member(m_name: str) -> bool:
         if not m_name or "\0" in m_name:
             return False
-        # Prevent absolute or directory-traversing names
-        if m_name.startswith(("/", "\\")) or ".." in m_name.replace("\\", "/").split("/"):
+        norm = m_name.replace("\\", "/")
+        parts = [p for p in norm.split("/") if p]
+        if any(p == ".." or ":" in p for p in parts):
             return False
-        nl = m_name.lower()
-        if any(ig in nl for ig in ignored_patterns):
+        base = parts[-1].lower() if parts else ""
+        if not base or any(ig in base for ig in ignored_patterns):
             return False
-        return nl.endswith(analyzable_extensions) or nl.endswith(".molden.input") or (nl.endswith(".txt") and ("orca" in nl or "calc" in nl or "prop" in nl))
+        return any(base.endswith(ext) for ext in analyzable_extensions) or base.endswith(".molden.input")
 
     def _safe_write_member(m_name: str, data: bytes) -> str | None:
-        base_name = os.path.basename(m_name)
+        base_name = os.path.basename(m_name.replace("\\", "/"))
         if not base_name or ".." in base_name or "\0" in base_name:
             return None
         dest_path = os.path.realpath(os.path.join(target_real, base_name))
-        if not dest_path.startswith(target_real + os.sep) or dest_path == target_real:
+        if not dest_path.startswith(target_real + os.sep) and dest_path != target_real:
             return None
+        counter = 1
+        stem, fext = os.path.splitext(base_name)
+        while os.path.exists(dest_path):
+            dest_path = os.path.realpath(os.path.join(target_real, f"{stem}_{counter}{fext}"))
+            counter += 1
         with open(dest_path, "wb") as fh:
             fh.write(data)
         return dest_path
@@ -2850,43 +2881,31 @@ def api_orca_engine_import_orca_output():
 
     import hashlib
 
-    results = []
-    seen_hashes = {}
-    for storage in uploads:
-        raw_name = os.path.basename((storage.filename or "orca_output.txt").strip()) or "orca_output.txt"
-        entry = {"file_name": raw_name}
-        content = storage.read(ORCA_IMPORT_MAX_FILE_BYTES + 1)
-        if len(content) > ORCA_IMPORT_MAX_FILE_BYTES:
-            entry.update({"status": "rejected",
-                          "reason": "file exceeds the %d MB per-file import limit"
-                                    % (ORCA_IMPORT_MAX_FILE_BYTES // (1024 * 1024))})
-            results.append(entry)
-            continue
-        if not content.strip():
-            entry.update({"status": "rejected", "reason": "file is empty"})
-            results.append(entry)
-            continue
-        sha = hashlib.sha256(content).hexdigest()
-        entry["raw_hash"] = sha
-        entry["size"] = len(content)
-        if sha in seen_hashes:
-            entry.update({"status": "duplicate",
-                          "reason": "content identical to an already-imported file",
-                          "duplicate_of": seen_hashes[sha]})
-            results.append(entry)
-            continue
-        seen_hashes[sha] = raw_name
-
-        display_name = os.path.splitext(core.safe_filename(os.path.splitext(raw_name)[0]))[0] or "orca_output"
-        entry["display_name"] = display_name
-        text = content.decode("utf-8", errors="replace")
+    def _process_orca_import_text(file_name, content_text, raw_hash, size_bytes, seen_hashes, results):
+        if raw_hash in seen_hashes:
+            results.append({
+                "file_name": file_name,
+                "raw_hash": raw_hash,
+                "size": size_bytes,
+                "status": "duplicate",
+                "reason": "content identical to an already-imported file",
+                "duplicate_of": seen_hashes[raw_hash],
+            })
+            return
+        seen_hashes[raw_hash] = file_name
+        display_name = os.path.splitext(core.safe_filename(os.path.splitext(file_name)[0]))[0] or "orca_output"
+        entry = {
+            "file_name": file_name,
+            "raw_hash": raw_hash,
+            "size": size_bytes,
+            "display_name": display_name,
+        }
         try:
-            parsed_jobs = OrcaParser(io.StringIO(text), source_name=display_name).parse() or []
-        except Exception as exc:  # noqa: BLE001 - malformed input must not 500
-            entry.update({"status": "rejected",
-                          "reason": "malformed ORCA output (parser: %s)" % str(exc)[:120]})
+            parsed_jobs = OrcaParser(io.StringIO(content_text), source_name=display_name).parse() or []
+        except Exception as exc:
+            entry.update({"status": "rejected", "reason": "malformed ORCA output (parser: %s)" % str(exc)[:120]})
             results.append(entry)
-            continue
+            return
 
         ir_job = next((j for j in parsed_jobs
                        if getattr(j, "ir_frequencies_cm", None)
@@ -2900,7 +2919,7 @@ def api_orca_engine_import_orca_output():
                           "reason": "no usable FREQ/IR or TD-DFT/UV results found "
                                     "(SP-only, Opt-only, or unsupported output)"})
             results.append(entry)
-            continue
+            return
 
         entry["status"] = "loaded"
         if ir_job:
@@ -2947,6 +2966,42 @@ def api_orca_engine_import_orca_output():
                 "transition_count": len(transitions),
             }
         results.append(entry)
+
+    results = []
+    seen_hashes = {}
+    session_id = request.headers.get("X-Session-ID") or request.form.get("session_id") or ""
+    session_id = track_session_activity(session_id)
+    session_dir = os.path.join(UPLOADS_BASE_DIR, session_id)
+    os.makedirs(session_dir, exist_ok=True)
+
+    for storage in uploads:
+        raw_name = os.path.basename((storage.filename or "orca_output.txt").strip()) or "orca_output.txt"
+        content = storage.read(ORCA_IMPORT_MAX_FILE_BYTES + 1)
+        if len(content) > ORCA_IMPORT_MAX_FILE_BYTES:
+            results.append({"file_name": raw_name, "status": "rejected",
+                            "reason": "file exceeds the %d MB per-file import limit"
+                                      % (ORCA_IMPORT_MAX_FILE_BYTES // (1024 * 1024))})
+            continue
+        if not content.strip():
+            results.append({"file_name": raw_name, "status": "rejected", "reason": "file is empty"})
+            continue
+
+        ext = os.path.splitext(raw_name)[1].lower()
+        if ext in (".zip", ".rar", ".tar", ".gz", ".tgz", ".xz", ".bz2") or raw_name.lower().endswith((".tar.gz", ".tar.xz", ".tar.bz2")):
+            extracted = extract_calculation_files_from_archive(content, raw_name, session_dir)
+            if not extracted:
+                results.append({"file_name": raw_name, "status": "rejected",
+                                "reason": f"archive '{raw_name}' contained no recognized calculation output files (.out, .log, .property.txt)"})
+                continue
+            for item in extracted:
+                item_text = item["content"]
+                item_bytes = item_text.encode("utf-8")
+                item_hash = hashlib.sha256(item_bytes).hexdigest()
+                _process_orca_import_text(item["basename"], item_text, item_hash, len(item_bytes), seen_hashes, results)
+        else:
+            sha = hashlib.sha256(content).hexdigest()
+            text = content.decode("utf-8", errors="replace")
+            _process_orca_import_text(raw_name, text, sha, len(content), seen_hashes, results)
 
     loaded = sum(1 for r in results if r.get("status") == "loaded")
     return jsonify({"ok": True, "results": results, "loaded": loaded,

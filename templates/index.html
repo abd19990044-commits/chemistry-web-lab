@@ -1295,8 +1295,9 @@ Products:   12 CO2 + 6 H2O</pre>
               </select>
               <button type="button" id="engine-3d-label-bold" class="btn btn-primary btn-small" title="Toggle Bold Font"><strong>𝗕 Bold</strong></button>
 
-              <input type="file" id="engine-3d-crg-input" accept=".crg,.txt,.dat" class="hidden">
-              <button type="button" id="engine-3d-load-crg-btn" class="btn btn-secondary btn-small" title="Upload MultiWfn .crg atomic charges file">📂 Upload .crg (MultiWfn)</button>
+              <input type="file" id="engine-3d-chg-input" accept=".chg,.crg,.txt,.dat" class="hidden">
+              <input type="file" id="engine-3d-crg-input" accept=".chg,.crg,.txt,.dat" class="hidden">
+              <button type="button" id="engine-3d-load-chg-btn" class="btn btn-secondary btn-small" title="Upload Multiwfn .chg atomic charges file">📂 Upload .chg (Multiwfn)</button>
 
               <button type="button" id="engine-3d-spin" class="btn btn-ghost btn-small">🔄 Spin</button>
               <button type="button" id="engine-3d-dipole" class="btn btn-ghost btn-small">🧭 Dipole</button>
@@ -1311,6 +1312,7 @@ Products:   12 CO2 + 6 H2O</pre>
               <button type="button" id="engine-3d-new-calc-btn" class="btn btn-primary btn-small" title="Feed these 3D coordinates into the 3D Builder to start a new ORCA calculation">🚀 New Calculation from Geometry</button>
               <button type="button" id="engine-3d-download-png" class="btn btn-ghost btn-small" title="Export high-resolution publication PNG">📸 High-Res 3D (PNG)</button>
               <a id="engine-download-xyz-btn" class="btn btn-ghost btn-small" download="structure.xyz">⬇ Download XYZ</a>
+              <button type="button" id="engine-download-chg-btn" class="btn btn-ghost btn-small" title="Export atomic charges in standard Multiwfn .chg format">⬇ Download .chg</button>
             </div>
           </div>
         </div>
@@ -1410,10 +1412,10 @@ Products:   12 CO2 + 6 H2O</pre>
               <button type="button" id="engine-add-exp-btn" class="btn btn-secondary btn-small" title="Upload experimental UV-Vis spectrum file (.txt, .csv, .xlsx)">
                 🧪 + Upload Experimental (.xlsx, .txt, .csv)
               </button>
-              <button type="button" id="engine-uvvis-import-btn" class="btn btn-secondary btn-small" title="Import one or more ORCA output files (.out/.log/.txt) containing TD-DFT/UV results for multi-spectrum overlay">
+              <button type="button" id="engine-uvvis-import-btn" class="btn btn-secondary btn-small" title="Import ORCA output files (.out/.log) or archives (.zip/.rar) containing TD-DFT/UV results">
                 &#8986; Import ORCA TD-DFT Output
               </button>
-              <input type="file" id="engine-uvvis-import-input" accept=".out,.log,.txt" multiple class="hidden">
+              <input type="file" id="engine-uvvis-import-input" accept=".out,.log,.txt,.property.txt,.zip,.rar,.tar.gz,.tgz,.tar" multiple class="hidden">
               <button type="button" id="uv-remove-imported" class="btn btn-ghost btn-small" title="Remove all imported ORCA spectra (keeps the current calculation)">Remove Imported</button>
               <button type="button" id="engine-uvvis-legend-toggle" class="btn btn-ghost btn-small" title="Toggle Legend Labels in Top-Left Corner">🏷️ Hide Legend</button>
               <button type="button" id="engine-uvvis-theme-toggle" class="btn btn-ghost btn-small">☀️ White Theme</button>
@@ -1640,10 +1642,10 @@ Products:   12 CO2 + 6 H2O</pre>
               <button type="button" id="ir-titles-reset" class="btn btn-ghost btn-small" title="Restore scientifically correct default titles">Reset Titles</button>
               <button type="button" id="ir-export-xy-visible" class="btn btn-secondary btn-small" title="Export all visible curves as Origin-friendly tab-delimited XY text">Export Visible XY</button>
               <button type="button" id="ir-remove-imported" class="btn btn-ghost btn-small" title="Remove all imported ORCA spectra (keeps the current calculation)">Remove Imported</button>
-              <button type="button" id="engine-ir-import-freq-btn" class="btn btn-secondary btn-small" title="Import one or more ORCA output files (.out/.log/.txt) containing FREQ/IR results for multi-spectrum overlay">
+              <button type="button" id="engine-ir-import-freq-btn" class="btn btn-secondary btn-small" title="Import ORCA output files (.out/.log) or archives (.zip/.rar) containing FREQ/IR results">
                 &#8986; Import ORCA FREQ Output
               </button>
-              <input type="file" id="engine-ir-import-freq-input" accept=".out,.log,.txt" multiple class="hidden">
+              <input type="file" id="engine-ir-import-freq-input" accept=".out,.log,.txt,.property.txt,.zip,.rar,.tar.gz,.tgz,.tar" multiple class="hidden">
               <button type="button" id="engine-ir-add-exp-btn" class="btn btn-secondary btn-small" title="Upload experimental IR / FTIR spectrum file (.xlsx, .txt, .csv, .dpt)">
                 🧪 + Upload Experimental IR (.xlsx, .txt, .csv)
               </button>
@@ -1703,13 +1705,14 @@ Products:   12 CO2 + 6 H2O</pre>
                     <strong id="engine-ir-fwhm-label">15.0 cm⁻¹</strong>
                   </div>
                   <input type="range" id="engine-ir-fwhm-slider" min="2" max="60" step="1" value="15">
-                <div class="form-group" style="min-width:200px;">
+                </div>
+
+                <div class="form-group" style="min-width:0;">
                   <label for="ir-normalization-mode">Normalization:</label>
                   <select id="ir-normalization-mode" class="form-select">
                     <option value="per_spectrum" selected>Per Spectrum (each curve to its own max)</option>
                     <option value="shared">Shared (one global max - preserves cross-spectrum intensity ratios)</option>
                   </select>
-                </div>
                 </div>
 
                 <div class="slider-control">
@@ -2004,6 +2007,44 @@ Products:   12 CO2 + 6 H2O</pre>
             <input type="file" id="thermo-archive-file-input" accept=".zip,.rar,.tar.gz,.tgz,.tar" class="hidden">
             <button type="button" id="thermo-archive-browse-btn" class="btn btn-outline btn-small">Select Archive File</button>
             <span id="thermo-archive-status" class="prop-badge badge-neutral hidden"></span>
+          </div>
+
+          <!-- Interactive Archive Species Assignment Panel -->
+          <div class="thermo-archive-assignment-panel hidden" id="thermo-archive-assignment-panel">
+            <div class="archive-assign-header">
+              <div>
+                <div class="archive-assign-title">
+                  <span>📦</span>
+                  <span>Extracted Calculations from Archive (<span id="thermo-archive-count">0</span>):</span>
+                </div>
+                <div class="archive-assign-subtitle">
+                  Designate which extracted calculation is a Reactant or Product, set stoichiometric coefficients, then apply to your reaction.
+                </div>
+              </div>
+              <button type="button" id="thermo-archive-dismiss-btn" class="btn btn-ghost btn-small" title="Hide this panel">✕ Close</button>
+            </div>
+
+            <div class="archive-assign-table-wrap">
+              <table class="archive-assign-table">
+                <thead>
+                  <tr>
+                    <th>Extracted File</th>
+                    <th>Formula / Jobs</th>
+                    <th>Role in Reaction</th>
+                    <th style="width:110px;">Coefficient</th>
+                    <th style="text-align:right;">Calculated Energy</th>
+                  </tr>
+                </thead>
+                <tbody id="thermo-archive-assignment-tbody">
+                  <!-- Dynamically populated rows -->
+                </tbody>
+              </table>
+            </div>
+
+            <div class="archive-assign-actions">
+              <button type="button" id="thermo-archive-auto-map-btn" class="btn btn-ghost btn-small" title="Auto-assign based on reaction species names">⚡ Re-run Auto Match</button>
+              <button type="button" id="thermo-archive-apply-btn" class="btn btn-primary btn-small">🚀 Apply to Reactants &amp; Products</button>
+            </div>
           </div>
 
           <!-- Two-Box Dedicated Layout: Reactants & Products -->
