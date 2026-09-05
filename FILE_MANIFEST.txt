@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-09-05T00:49:14Z
+# Generated: 2026-09-05T00:51:53Z
 # Package Mode: RELEASE_FROM_COMMIT
 # Source State: clean_commit
-# Source Git SHA: 7c492d8a6132566247ca77f323aea13d8a1b4be8
-# Package Tree Hash: 149d64d8ffbb9d72374a4f8f54267b8d0580093be16a13048cb96201d1e1e659
+# Source Git SHA: 0b8ae648dba1d8210b82b45ce0e0827be33e019e
+# Package Tree Hash: ee8bb9dcadedbe8084e21699ffa9951b17aa52256c24fd7c6de7342cbc8e60cc
 # Total Files: 379
-# Total Size: 31,614,309 bytes (30.15 MB)
+# Total Size: 31,613,239 bytes (30.15 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -288,7 +288,7 @@ static/js/local-agent.js                           |     27,842 B | 9c9056dc778c
 static/js/reaction-editor.js                       |      8,373 B | a11362d1a686ac234f10a365525cba3ea50ec937e14ece09f84557b889b3f4a7
 static/js/reaction-unified.js                      |     18,040 B | 9ad8499161fef08a979ae0c750c512fcc16cc0f06ebf22bfc631006b878dbc4a
 static/js/workers/archive-worker.js                |     20,420 B | 29eff680289ace2a4ee5784419c0a189f5e962a054914a5e6d6f9e2ad66073f8
-templates/index.html                               |    192,775 B | c9eae24cca077a8a85ebc4674ab3b1a9cc631660ba44eea2634ee7edf2e6f464
+templates/index.html                               |    191,989 B | 7e8b6c5e395b62abeed0292003c9ccf4302e538ad48f8627ba9d575ebaee5998
 tests/conftest.py                                  |      5,258 B | c826b8de0be2b711dc88c81f84ce2f9f1e37bba241c65268351677ed12cc540a
 tests/fake_orca.py                                 |     14,271 B | 61a158fae896194453358856f312794d099fce006443ddffa13e6ca4d112103c
 tests/fixtures/ORCA_Calculation_quantum_analysis_3.json |    882,023 B | bcabb84f75101646810b16e3990c0a8d202e284221036aeab29b6315fa3ecc2b
@@ -325,7 +325,7 @@ tests/test_ir_spectrum_orientation.py              |     14,336 B | b598a325886a
 tests/test_kaggle_credential_security.py           |     19,001 B | dbbdc2811b0a7edb6037a73a4a2a67c212114c5049380a7b88fd30762ae54f3c
 tests/test_kaggle_credential_vault.py              |     19,055 B | a0e83eb39b208cf36cef5528917212949a01d99d6ef249009e13ac0890fef9d4
 tests/test_kaggle_dataset_normalization.py         |      3,836 B | bd367eefd9566e1a649d0f1f7fedc33120726b5034a4a55d80b72ebb54de2b70
-tests/test_kaggle_execution_passcode.py            |     12,034 B | fdfe0b83528ca41231638da369c178acf4a8bd04265b1f4c684f433497ae5da2
+tests/test_kaggle_execution_passcode.py            |     11,750 B | 6b71874b6af06acac21f0d9b4690017b474255e9dcc14f71d9715c058988b082
 tests/test_licensing.py                            |     13,999 B | 7388cd0d326289d85619757e234a4a016af1411b463dd59e179307711cbb0562
 tests/test_licensing_compliance.py                 |      7,884 B | 74698183b03a43a4ae37c6dfbe69ec1d2ccd12b04d959480d678601086d3cb73
 tests/test_lifecycle_simulation.py                 |     18,558 B | 7d77a9d7542f25bf1723db50e108f910183fe2b380c5f1c287150101ded88ea5

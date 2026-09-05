@@ -6,12 +6,12 @@
   "package_mode": "RELEASE_FROM_COMMIT",
   "source_type": "commit",
   "source_git_state": "clean_commit",
-  "source_git_sha": "7c492d8a6132566247ca77f323aea13d8a1b4be8",
+  "source_git_sha": "0b8ae648dba1d8210b82b45ce0e0827be33e019e",
   "source_git_dirty": false,
-  "package_tree_hash": "149d64d8ffbb9d72374a4f8f54267b8d0580093be16a13048cb96201d1e1e659",
-  "generated_at": "2026-09-05T00:49:14Z",
+  "package_tree_hash": "ee8bb9dcadedbe8084e21699ffa9951b17aa52256c24fd7c6de7342cbc8e60cc",
+  "generated_at": "2026-09-05T00:51:53Z",
   "file_count": 380,
-  "total_size_bytes": 31665390,
+  "total_size_bytes": 31664320,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -1409,8 +1409,8 @@
       "source_origin": "repo_source"
     },
     "templates/index.html": {
-      "sha256": "c9eae24cca077a8a85ebc4674ab3b1a9cc631660ba44eea2634ee7edf2e6f464",
-      "size_bytes": 192775,
+      "sha256": "7e8b6c5e395b62abeed0292003c9ccf4302e538ad48f8627ba9d575ebaee5998",
+      "size_bytes": 191989,
       "source_origin": "repo_source"
     },
     "tests/conftest.py": {
@@ -1594,8 +1594,8 @@
       "source_origin": "repo_source"
     },
     "tests/test_kaggle_execution_passcode.py": {
-      "sha256": "fdfe0b83528ca41231638da369c178acf4a8bd04265b1f4c684f433497ae5da2",
-      "size_bytes": 12034,
+      "sha256": "6b71874b6af06acac21f0d9b4690017b474255e9dcc14f71d9715c058988b082",
+      "size_bytes": 11750,
       "source_origin": "repo_source"
     },
     "tests/test_licensing.py": {
@@ -1909,7 +1909,7 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "d3eeabd194124cfdd5a34cf879d8f945d7d2b3d173a91b8534f6e271e178144e",
+      "sha256": "4dbbd1a461f4d49fee2c84cfa90a64ea7ce0f0d7a0f9d17519de50d627fd8ab0",
       "size_bytes": 51081,
       "source_origin": "generated_manifest"
     }
