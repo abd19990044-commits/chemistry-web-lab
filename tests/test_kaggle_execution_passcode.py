@@ -272,12 +272,10 @@ def test_privacy_policy_contains_no_third_party_and_user_operation_statements(cl
     assert "Direct User Operation &amp; No Third-Party Intermediation" in html
     assert "does not run, manage, or broker Kaggle as a third-party intermediary" in html
 
-    # 2. Section 4 direct execution, user sole responsibility, and Arabic policy notice
+    # 2. Section 4 direct execution and user sole responsibility
     assert "Direct Personal Execution &amp; User Responsibility:" in html
     assert "solely and entirely responsible for compliance with Kaggle's Terms of Service" in html
-    assert "الموقع مصمم ليتم تشغيله من قبل كل مستخدم بشكل فردي ومستقل" in html
-    assert "ولا يقوم الموقع بتشغيل منصة كاجل" in html
-    assert "ويكون المستخدم هو المسؤول الوحيد عن أي انتهاك لشروط وسياسات منصة كاجل" in html
+    assert "bears full legal and operational responsibility for any violation thereof" in html
 
     # 3. Section 7 GDPR / EU notice
     assert "The Site is designed for individual user operation and does not run Kaggle as a third-party broker or intermediary" in html
