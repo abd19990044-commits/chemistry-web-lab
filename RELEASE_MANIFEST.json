@@ -6,12 +6,12 @@
   "package_mode": "RELEASE_FROM_COMMIT",
   "source_type": "commit",
   "source_git_state": "clean_commit",
-  "source_git_sha": "35f23a4f16e7a91a884ff797b1be4fca24377753",
+  "source_git_sha": "6d9b890d4a9e65d7655fe307bb45751c45e8e302",
   "source_git_dirty": false,
-  "package_tree_hash": "494a9225b7361f8710141436397ba6cd61d41c750dab20cb5caf7d9a12cf9e65",
-  "generated_at": "2026-09-04T22:27:45Z",
+  "package_tree_hash": "88b0dd53160418bd585fbb771dd038e61e3702eb2d9f0dc6562687200fe36636",
+  "generated_at": "2026-09-05T00:31:03Z",
   "file_count": 379,
-  "total_size_bytes": 31623227,
+  "total_size_bytes": 31641714,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -104,8 +104,8 @@
       "source_origin": "repo_source"
     },
     "app.py": {
-      "sha256": "ab09b9be354e2364d563c999bc21f8d2a1d0e89eb8fdfc341863c4c75758900e",
-      "size_bytes": 168185,
+      "sha256": "50c64f427d5063fd45570da74515c31a5198c9987a20e15818c17bc513078e87",
+      "size_bytes": 170764,
       "source_origin": "repo_source"
     },
     "ARCHITECTURE.md": {
@@ -1359,8 +1359,8 @@
       "source_origin": "repo_source"
     },
     "static/css/style.css": {
-      "sha256": "3d5fe1508d4225e355302b1e98173219cd636b6ed4372a1b1ba9aefa15b2e619",
-      "size_bytes": 84676,
+      "sha256": "c1babf983721f6364b545ab0d25925316f37984ca45b401089908866f1f929a5",
+      "size_bytes": 86784,
       "source_origin": "repo_source"
     },
     "static/css/theme.css": {
@@ -1379,8 +1379,8 @@
       "source_origin": "repo_source"
     },
     "static/js/app.js": {
-      "sha256": "7a157ae86b443f289b039b4c49ed6870d1774248be14ef69b93ec1850ef86ec5",
-      "size_bytes": 530505,
+      "sha256": "7f9f8dc915fce5f4ffafe70dfd7680592150e96c2834330b3a52271fbc505a36",
+      "size_bytes": 541387,
       "source_origin": "repo_source"
     },
     "static/js/kaggle_credentials.js": {
@@ -1409,8 +1409,8 @@
       "source_origin": "repo_source"
     },
     "templates/index.html": {
-      "sha256": "94d013449fa8020adc7dbefaf559d34fc46b9464ed86cfdba0bc2a75fdc7bb67",
-      "size_bytes": 186320,
+      "sha256": "3d53e79f8514be1bb8f9bfdc23bd4c635d171d6da1739b6d359316d1fc1cf322",
+      "size_bytes": 188583,
       "source_origin": "repo_source"
     },
     "tests/conftest.py": {
@@ -1669,8 +1669,8 @@
       "source_origin": "repo_source"
     },
     "tests/test_multi_spectra_import.py": {
-      "sha256": "da09526183b2f9dab8225d194302fac34002bb865fc9bb4fa8f4af88a98af895",
-      "size_bytes": 9791,
+      "sha256": "bee7741cd76ad74dc3fda547ed8b17b63bce237f9bdc97c26c1918e7f61c144c",
+      "size_bytes": 10446,
       "source_origin": "repo_source"
     },
     "tests/test_navigation_routes.py": {
@@ -1904,7 +1904,7 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "b47d8e91224e105f1f7bff85d0d9c7355ba68a85f12da58f04e2960942b3806f",
+      "sha256": "3c3347e4c30f53207f9f850b556dd3e905ed0a72b1f693729371ecd0c1287cd6",
       "size_bytes": 50948,
       "source_origin": "generated_manifest"
     }
