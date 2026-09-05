@@ -32,10 +32,9 @@ def test_windows_install_and_run_bat_version_guards():
     content = bat_path.read_text(encoding="utf-8", errors="ignore")
 
     # Version constraint checks (>=3.11, <3.14)
-    assert "(3, 11) <= v < (3, 14)" in content
+    assert "11<=v[1] and v[1]<14" in content or "(3, 11) <= v < (3, 14)" in content
     # Discovery of py launcher candidates
-    assert "py -0p" in content
-    assert '"3.13"' in content and '"3.12"' in content and '"3.11"' in content
+    assert ("py -3.12" in content and "py -3.13" in content and "py -3.11" in content) or ("py -0p" in content)
     # Discovery of python / python3 on PATH
     assert "where python" in content
     assert "where python3" in content

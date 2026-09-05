@@ -25,7 +25,8 @@ pinned: false
 - [Key Features & Capabilities](#-key-features--capabilities)
 - [Primary Execution: Local & HPC Companion Agent](#-primary-execution-local--hpc-companion-agent)
 - [Quantum Chemistry Engine (`orca_engine`)](#-quantum-chemistry-engine-orca_engine)
-- [Optional Secondary Cloud: Kaggle Orchestrator](#️-optional-secondary-cloud-kaggle-orchestrator)
+- [AI & Machine Learning Ready Dataset Pipeline](#-ai--machine-learning-ready-dataset-pipeline)
+- [Optional Secondary Cloud: Kaggle Orchestrator & Policy Compliance](#️-optional-secondary-cloud-kaggle-orchestrator--policy-compliance)
 - [Installation & Local Quickstart](#-installation--local-quickstart)
 - [Comprehensive API Endpoints](#-comprehensive-api-endpoints)
 - [Testing & Quality Assurance](#-testing--quality-assurance)
@@ -36,11 +37,12 @@ pinned: false
 
 ## 🔬 Executive Overview
 
-**Chemistry Lab** is a modern computational chemistry web platform for molecular structure exploration, high-performance ORCA quantum-chemistry workflows, scientific result analysis, spectroscopy visualization, and reaction thermochemistry. It seamlessly unifies:
+**Chemistry Lab** is a modern computational chemistry web platform for molecular structure exploration, high-performance ORCA quantum-chemistry workflows, scientific result analysis, spectroscopy visualization, reaction thermochemistry, and AI/ML scientific dataset generation. It seamlessly unifies:
 1. **Interactive Chemical Studios**: 2D molecule drawing, reaction stoichiometry, and PubChem 3D coordinate resolution.
 2. **Primary High-Performance Execution**: Standalone **Local & HPC Companion Agent** packages for Windows, Linux, macOS, and supercomputing clusters (Slurm, PBS, LSF) with ephemeral random pairing tokens (`CLA_...`) and full local privacy.
 3. **Quantum Chemistry Engine (`orca_engine`)**: WebGL 3D rendering, frontier orbital diagrams (HOMO/LUMO), conceptual DFT descriptors, Gaussian-convoluted UV-Vis/IR/NMR spectra, and composite thermochemistry.
-4. **Optional Secondary Cloud Fallback**: Fault-tolerant multi-session Kaggle cloud runner for users without local ORCA installations.
+4. **AI & Machine Learning Ready Dataset Pipeline**: One-click generation and export of canonical, tensor-ready quantum datasets (`${name}_canonical_ai_dataset.json`) conforming to Draft 2020-12 schema, complete with GNN graphs (nodes, edges, adjacency/distance matrices), quantum target tensors, invariant physical features, and scaffold-based leak-free cross-validation keys.
+5. **Optional Secondary Cloud Fallback**: Fault-tolerant multi-session Kaggle cloud runner for users without local ORCA installations, operating under direct user control in strict compliance with Kaggle Acceptable Use Policies.
 
 ---
 
@@ -58,9 +60,17 @@ pinned: false
 │  • Stoichiometry Check │  • 100% Local Privacy    │  • IR & NMR Spectroscopy    │
 │  • One-Click Thermo    │  • Full Native Speed     │  • Reaction Thermochemistry │
 ├────────────────────────┴──────────────────────────┴─────────────────────────────┤
+│                    CANONICAL AI & MACHINE LEARNING PIPELINE                     │
+│  • 100% Canonical Schema Conformance (Draft 2020-12, Zero Raw Text Dumps)      │
+│  • GNN-Ready Graphs: Atoms (Nodes), Bonds (Edges), Adjacency & Distance Tensors │
+│  • Quantum Targets: Energies, Orbitals, Dipoles, CDFT, Partial Charges, TD-DFT  │
+│  • Invariant Features: 3D Coords, Masses, Center of Mass, Radius of Gyration    │
+│  • Deterministic Scaffold Splitting (InChIKey Hashes) for Leak-Free Training    │
+├─────────────────────────────────────────────────────────────────────────────────┤
 │                    OPTIONAL SECONDARY CLOUD COMPUTATION                         │
 │  • Optional Kaggle Cloud Runner with Multi-Session Auto-Continuation            │
-│  • Encrypted Credential Vault (AES-256-GCM AEAD) & State Machine Ledger         │
+│  • Strict Kaggle Policy Compliance: Direct User Operation, Sole User Liability  │
+│  • Protected Cloud Passcode Gate & Encrypted Credential Vault (AES-256-GCM)     │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -140,7 +150,73 @@ Calculates fundamental reactivity parameters from frontier orbital eigenvalues:
 
 ---
 
-## ☁️ Optional Secondary Cloud: Kaggle Orchestrator
+## 🤖 AI & Machine Learning Ready Dataset Pipeline
+
+Chemistry Lab transforms raw quantum chemical calculation outputs into standardized, canonical, and tensor-ready scientific datasets specifically engineered for training modern Artificial Intelligence and Machine Learning models, including Graph Neural Networks (GNNs) and Equivariant Transformers (e.g. SchNet, PaiNN, DimeNet, EGNN, Equiformer, Graphormer).
+
+### 1. Canonical Schema Standardization & Noise Elimination
+- **Strict Schema Compliance**: Every exported record validates 100% against `schema/canonical_scientific.schema.json` (Draft 2020-12) with zero validation warnings.
+- **Zero Raw Terminal Dumps**: Unstructured terminal logs (`raw_text`), temporary upload folder paths, ephemeral session identifiers, and debug keys are completely purged from the dataset payload.
+- **Normalized Field Structure**: Quantities are represented with explicit units, standardized naming, and unambiguous numeric scales.
+
+### 2. Quantum Ground-Truth Target Tensors (`targets`)
+The `targets` dictionary aggregates high-precision electronic and spectroscopic properties ready for regression and multi-task learning:
+- **Ground-State & Thermal Energetics**:
+  - `electronic_energy_hartree`, `electronic_energy_ev`: Single-point electronic ground-state energy.
+  - `zero_point_energy_hartree`, `zero_point_energy_ev`: Zero-point vibrational energy (ZPE).
+  - `e0_energy_hartree`, `e0_energy_ev`: Total ground-state energy at 0 K ($E_0 = E_{\text{elec}} + \text{ZPE}$).
+  - `enthalpy_hartree`, `enthalpy_kcal_mol`: Total molecular enthalpy ($H^\circ$).
+  - `gibbs_free_energy_hartree`, `gibbs_free_energy_kcal_mol`: Total Gibbs free energy ($G^\circ$).
+  - `entropy_cal_mol_k`: Total molecular entropy ($S^\circ$).
+- **Frontier Orbitals & Reactivity**:
+  - `homo_energy_ev`, `lumo_energy_ev`, `homo_lumo_gap_ev`: Highest occupied and lowest unoccupied molecular orbital energies and the fundamental gap.
+  - `cdft_indices`: Conceptual DFT global reactivity descriptors including chemical potential ($\mu$), electronegativity ($\chi$), chemical hardness ($\eta$), softness ($S$), and electrophilicity index ($\omega$).
+  - `dipole_moment_debye`, `dipole_moment_vector`: Total dipole moment and directional 3D vector $[D_x, D_y, D_z]$ in Debye.
+- **Vibrational Spectroscopy & Transition State Classification**:
+  - `harmonic_frequencies_cm1`: Array of harmonic vibrational frequencies ($\text{cm}^{-1}$).
+  - `ir_intensities_km_mol`: Array of infrared absorption intensities ($\text{km/mol}$).
+  - `imaginary_frequencies_count`: Integer count of imaginary vibrational frequencies ($\nu < 0\,\text{cm}^{-1}$).
+  - `is_transition_state`: Boolean ground-truth label indicating a first-order saddle point (exactly one imaginary frequency).
+- **Atomic Partial Charges & Population Analysis**:
+  - `partial_charges`: Atomic partial charges from Mulliken, Loewdin, Hirshfeld, and Mayer bond-order population analyses.
+- **Excited-State Photochemistry (TD-DFT)**:
+  - `excited_states`: Multi-state excitation energies (eV), transition wavelengths (nm), oscillator strengths ($f_{\text{osc}}$), and electronic configurations for photochemical prediction.
+
+### 3. Physical Invariant Features (`derived_features`)
+Geometric and stoichiometric descriptors calculated from standard IUPAC tables and 3D atomic coordinates:
+- `num_atoms`: Total number of atoms $N$.
+- `atomic_numbers`: Integer nuclear charges $Z \in \mathbb{Z}^N$.
+- `elements`: Ordered list of IUPAC element symbols.
+- `cartesian_coordinates_angstrom`: Geometry coordinate tensor of shape $N \times 3$ in Ångströms.
+- `stoichiometry_formula`: Standard Hill-system molecular formula string.
+- `total_charge`: Formal net charge of the molecular system.
+- `spin_multiplicity`: Spin multiplicity ($2S + 1$).
+- `molecular_mass_amu`: Accurate molecular mass based on standard IUPAC atomic weights.
+- `center_of_mass_angstrom`: Three-dimensional center-of-mass coordinate vector $[X_{\text{cm}}, Y_{\text{cm}}, Z_{\text{cm}}]$.
+- `radius_of_gyration_angstrom`: Geometric radius of gyration ($R_g$) measuring spatial molecular mass dispersion.
+
+### 4. Graph Neural Network (GNN) Molecular Graph Representation (`graph`)
+Ready for ingestion into graph machine learning frameworks (PyTorch Geometric, DGL, JAX):
+- `nodes`: List of atomic node objects containing atom index, atomic number $Z$, element symbol, exact mass, formal charge, and 3D Cartesian coordinates.
+- `edges`: List of directional edge pairs with source atom, target atom, interatomic Euclidean distance in Ångströms, and covalent bond order.
+- `adjacency_matrix`: Binary topological connectivity matrix ($N \times N$).
+- `distance_matrix`: Pairwise interatomic Euclidean distance tensor ($N \times N$) in Ångströms for distance-based spatial convolution.
+
+### 5. Leak-Free Cross-Validation Partitioning & Metadata
+- **Deterministic Split Group Keys (`split_group_key`)**: Computes a deterministic InChIKey or canonical scaffold hash. This guarantees that conformational geometries, isotopologues, or identical chemical scaffolds can be grouped consistently to prevent data leakage between training, validation, and testing partitions.
+- **Standardized Training Metadata (`training_metadata`)**:
+  - `task_type`: `quantum_property_prediction`.
+  - `input_modality`: `molecular_graph_and_3d_coordinates`.
+  - `target_modality`: `scalar_energies_and_tensors`.
+  - `quality_flags`: Captures electronic and geometric SCF convergence states.
+
+### 6. Interactive & Programmatic Export
+- **One-Click Web Export**: In the ORCA Results Analyzer, click **⬇ Export AI/ML JSON** to download a clean, production-ready `${name}_canonical_ai_dataset.json` file instantly from memory.
+- **REST API Endpoint**: Automated pipelines can fetch canonical records directly via `POST /api/orca/engine/export-ai-dataset`.
+
+---
+
+## ☁️ Optional Secondary Cloud: Kaggle Orchestrator & Policy Compliance
 
 For users who do not have a local ORCA installation or need temporary remote GPU/CPU compute, Chemistry Lab provides an **optional secondary cloud fallback** powered by Kaggle notebooks.
 
@@ -148,10 +224,22 @@ For users who do not have a local ORCA installation or need temporary remote GPU
 - **Direct Operation Without Third-Party Intermediation**: Chemistry Lab does NOT operate Kaggle as a third-party service provider or broker. The platform is designed for direct personal user operation; all calculations are executed directly within the user's private Kaggle account using their own personal credentials without server retention.
 - **Sole User Liability**: When running calculations on Kaggle, the user is solely and entirely responsible for compliance with Kaggle's Terms of Service, Acceptable Use Policy, and community rules, and bears full legal and operational liability for any violation thereof.
 
+### Kaggle Acceptable Use Policy & Ethical Compute Standards
+To ensure that all interactions with Kaggle remain fully ethical, lawful, and compliant with Kaggle's platform policies:
+1. **Legitimate Scientific & Educational Workloads Only**: Calculations dispatched to Kaggle are strictly confined to legitimate computational chemistry simulations, educational demonstrations, and academic modeling using ORCA. General-purpose arbitrary code execution, bot hosting, and background proxies are not permitted.
+2. **Zero Commercial Compute Resale**: Chemistry Lab is an academic, non-commercial software project. It does NOT resell, broker, sub-license, or monetize Kaggle compute resources.
+3. **Individual Account Authenticity**: Every job runs under the user's individual Kaggle account using their personal API token. The platform does not provide shared pool accounts, public tokens, or automated multi-account rotation.
+4. **Adherence to Platform Quotas & Resource Limits**: Users must strictly respect Kaggle's resource limits (e.g. weekly GPU/TPU hours and 12-hour session limits). Chemistry Lab does not attempt to circumvent quotas, bypass resource restrictions, or run denial-of-service workloads.
+5. **Strictly Prohibited Activities**: In accordance with Kaggle's Acceptable Use Policy, users are strictly prohibited from using Chemistry Lab or its Kaggle integration for:
+   - Cryptocurrency mining or distributed ledger operations;
+   - Denial-of-service (DoS) attacks or abusive network port scanning;
+   - Web scraping, bulk crawling, or data harvesting bots;
+   - Any activity violating applicable national, international, or institutional export control laws.
+
 ### Execution Modes & Passcode Security (Local vs. Cloud / Domain)
 When clicking the Kaggle button in the user interface, an access password field is presented:
 - **Local Execution**: If Chemistry Lab is run locally on your own machine (where no secret is configured), simply leave the password field empty and press **Enter** (or click Unlock) to immediately open the Kaggle login fields (`Kaggle Username` and `Kaggle API Key`).
-- **Cloud Hosting / Custom Domain**: If Chemistry Lab is deployed to a cloud host (e.g. Hugging Face Spaces, Render, AWS, Docker) or configured with a custom domain, an execution passcode must be set in the server environment secrets (`KAGGLE_EXECUTION_PASSCODE`, `KAGGLE_ACCESS_CODE`, or `KAGGLE_PASSCODE`). Entering this secret passcode and pressing **Enter** unlocks the Kaggle login fields; unauthorized access is blocked.
+- **Cloud Hosting / Custom Domain**: If Chemistry Lab is deployed to a cloud host (e.g. Hugging Face Spaces, Render, AWS, Docker) or configured with a custom domain, an execution passcode must be set in the server environment secrets (`KAGGLE_EXECUTION_PASSCODE`, `KAGGLE_ACCESS_CODE`, or `KAGGLE_PASSCODE`). Entering this secret passcode and pressing **Enter** unlocks the Kaggle login fields; unauthorized access is blocked. This safeguard prevents open, unauthenticated third parties from accessing the Kaggle submission interface on public deployments.
 - **Platform Independence**: All other studios and tools (Reaction Thermochemistry, Analyzer, Spectra Studios, 3D Builder, Local/HPC Companion Agent) remain completely unrestricted and operate freely without requiring any passcode.
 
 ### Technical Architecture
@@ -208,6 +296,7 @@ Open your browser and navigate to: **`http://127.0.0.1:7860`**
 | `/health` | `GET` | System health check, ORCA engine status, and Kaggle CLI readiness. |
 | `/api/orca/engine/status` | `GET` | Reports quantum engine availability, capabilities, and version. |
 | `/api/orca/engine/parse` | `POST` | Parses raw ORCA output text or uploaded `.out`/`.log` files into structured JSON. |
+| `/api/orca/engine/export-ai-dataset` | `POST` | Streams clean, canonical AI/ML dataset JSON (`${name}_canonical_ai_dataset.json`) with targets and GNN graphs. |
 | `/api/orca/engine/convolute` | `POST` | Computes Gaussian spectral convolution for UV-Vis transitions. |
 | `/api/orca/engine/thermochemistry` | `POST` | Evaluates reaction energetics ($\Delta G^\circ, \Delta H^\circ, \Delta S^\circ, K_{eq}$) from multiple species. |
 | `/api/orca/engine/samples` | `GET` | Lists and loads built-in calculation outputs for instant demonstration. |
@@ -215,6 +304,7 @@ Open your browser and navigate to: **`http://127.0.0.1:7860`**
 | `/api/orca/coords` | `POST` | Resolves compound names and SMILES to 3D Cartesian coordinates via PubChem. |
 | `/api/orca/generate` | `POST` | Generates validated ORCA 6 calculation input blocks. |
 | `/api/reaction` | `POST` | Processes and renders 2D reaction diagrams with stoichiometry and MDL RXN file. |
+| `/api/kaggle/verify-passcode` | `POST` | Verifies execution passcode for Kaggle submission gate (`KAGGLE_EXECUTION_PASSCODE`). |
 | `/api/kaggle/submit` | `POST` | Submits a long-running ORCA calculation to Kaggle supporting Dataset or Direct Link. |
 | `/api/kaggle/sync` | `POST` | Synchronizes active and completed calculations for the signed-in user. |
 | `/api/kaggle/download` | `GET` | Downloads the complete verified scientific result bundle (`.zip`) containing Molden, `.out`, `.xyz`, and scratch files. |

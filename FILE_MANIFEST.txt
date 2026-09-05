@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-09-05T01:32:01Z
+# Generated: 2026-09-05T01:49:07Z
 # Package Mode: RELEASE_FROM_COMMIT
 # Source State: clean_commit
-# Source Git SHA: 2ea9b23f859e9674ae6e7665bbc7b6ee0ad73a1b
-# Package Tree Hash: 8526b79d4d589857f41190902854754a652816cf7961a35fd79ffe352807d2d0
+# Source Git SHA: f0440913cf560bb8aff89b2e16c73c9e9976ef61
+# Package Tree Hash: 01bebceef769746cd53808ac1e87ae31a1d56b698335ed36b0586f79b03aade9
 # Total Files: 380
-# Total Size: 31,657,387 bytes (30.19 MB)
+# Total Size: 31,667,077 bytes (30.20 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -27,7 +27,7 @@ api/schemas/__init__.py                            |      2,503 B | d656d2d959df
 api/schemas/analysis.py                            |      1,070 B | b080fd9ff8ab060b3097e6804748f39c8d1095267e095f52a3ad86f71085f9b0
 api/schemas/compound.py                            |        571 B | ff722ad94af53bdb95bf595c6a2e952ae4ffac7435b4c9d82ffcc28011db75ca
 api/schemas/local_agent.py                         |      3,820 B | d7f85d6e2cd232bf68cfcbd644a34dd24143d40a47676ca135b1e9638a9712aa
-app.py                                             |    176,850 B | a798faec0f7903b30fddd3792344ab5fd8bd217e138073f867891f5f815fe7a1
+app.py                                             |    176,996 B | 02f26e31bc9e1ecd7c6c9df48f1a004ba7486bb78dd9f21f39acc984dc193ce1
 ARCHITECTURE.md                                    |     48,949 B | a50d3a2703d48a159a61037d46fea6a2279d0b3a6bf79bb9bc307675c6656f8b
 benchmarks/benzene_tddft.out                       |      1,551 B | 2510aaa519c6fe573da8436020801ca8bc2d9040b442f045f12802300a103e7c
 benchmarks/water_sp_freq.out                       |      3,095 B | a8c69da119edc8a2de9a4158a6cc7111ce015380a97e1810e9609ee0d1d9e63e
@@ -69,7 +69,7 @@ data/examples/canonical_thermochemistry.json       |      6,032 B | 2b5289e0d1f5
 data/examples/canonical_workflow.json              |      8,050 B | f925f0a3f356ab4f765786a2899782953b48257b32cf11ecd6042824d159b30a
 data/examples/training_dataset_h2o.jsonl           |        919 B | a702f4c373aef0a15a3a7025b6438f44d088c7ffa5a2bd3737dec5f3f391f2fc
 data/examples/training_manifest_h2o.json           |        565 B | a0f20d3db8376be41b6e6a7e129aca337f050243f56ac922bc673a952bf70a42
-data/local_agent_registry.db                       |    126,976 B | f9b5ea74c9e9598bdaae01e2790196f67b9f8cc38b59e91e4410d180e00104cd
+data/local_agent_registry.db                       |    126,976 B | 4dd447567810d39527f55a2c71e9218f3c4a2321a6deac1f837c43c393704717
 data/local_orca_settings.json                      |        374 B | 8ebd2cddf18393c2afc3ad32e3bfc128b4d723326f6d3b80b42e22f550f1ac17
 DEPLOY.md                                          |      9,733 B | 0a3a2ccbac27581f346dafc369a7eef174777252d6676da2b9143b4116896c96
 Dockerfile                                         |      1,183 B | b421984ab252be2b779320050f415b49a1778469fc6499db3cd2c455acc83557
@@ -238,7 +238,7 @@ orca_orchestrator/watchdog.py                      |     19,189 B | 5c68c3979911
 pyproject.toml                                     |      3,118 B | bc30dea21e22f8844634e43be15ccfc7e715a37ca3d599e8204caa4041d7ea2e
 pytest.ini                                         |        207 B | 0d2b61bb36bce05f864c51d27b2648d3b85089bebd844bf255a9fbd16411638c
 reaction_conditions.py                             |      3,085 B | 6a2c5e254658c10f64b02bb7eb72724b5c711e22818ff0759890729d259913b7
-README.md                                          |     22,703 B | 841ae3a8d769d4c5e5e8d558d7a665f489e1e2e62f124afe2b85c3fd8d8e3d99
+README.md                                          |     32,208 B | 31e64ce7cb5450f0e25cef7d1c8390614820cf312433f1d399300dc89a38f8ee
 REPRODUCIBILITY.md                                 |      3,865 B | 891bf9662224ed0278904006d0af18724dcde6f0a604d4ed2142e5cbf3a81474
 requirements.txt                                   |        884 B | a1b0574fb6e5f9fe82bb6af9ac6618c6317cedc8aa07dc4459d3ba2f5bd087b9
 schema/canonical_scientific.schema.json            |     52,197 B | c80e3978f82296f0da4c8379ad2966dbccab18ad82092c698bd5d8eb2a446fcd
@@ -300,7 +300,7 @@ tests/test_agent_job_queue_and_execution.py        |      3,657 B | 8717228054b6
 tests/test_ai_dataset_json_export.py               |      9,236 B | cb4927953c62376546aab8bb41ba8ccd7c0cc56b34c84cda69d5ed0e3dcef2cd
 tests/test_archive_security.py                     |      5,236 B | c47b2cd22eceb0b787f5a3ba9cf14968cf252ac3df4daf4fd8dd2bf097cff674
 tests/test_asgi_live.py                            |      2,765 B | 3b8010dff6574af36a8c484bed0f4a9753c683ff983dff6599f5626093457de3
-tests/test_bootstrap_and_packaging.py              |     13,834 B | f8ff41ebdacb58b15a3e1b5aa60c69c953481693523dc51784a5325359642905
+tests/test_bootstrap_and_packaging.py              |     13,873 B | 08a585c2ca22fc80fc116a93f43c308a644a6b0ada23fca729592b5707c1da1d
 tests/test_canonical_analyzer_refinement.py        |     18,359 B | 00cbaee6b1b60d69a6799f3bd3a76e784803f866e2cd863374959d92f5f7511d
 tests/test_canonical_scientific_schema.py          |     28,439 B | 1028571f88562460d5f9901259b0e3e330ca3b8c8beb4c14427def64451c9f98
 tests/test_clean_ir_visualization.py               |      2,279 B | 1d7f7fc2e2231d32eec4decc47cd195a42265ea913707822103f0fe5ff456789

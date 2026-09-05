@@ -6,12 +6,12 @@
   "package_mode": "RELEASE_FROM_COMMIT",
   "source_type": "commit",
   "source_git_state": "clean_commit",
-  "source_git_sha": "2ea9b23f859e9674ae6e7665bbc7b6ee0ad73a1b",
+  "source_git_sha": "f0440913cf560bb8aff89b2e16c73c9e9976ef61",
   "source_git_dirty": false,
-  "package_tree_hash": "8526b79d4d589857f41190902854754a652816cf7961a35fd79ffe352807d2d0",
-  "generated_at": "2026-09-05T01:32:01Z",
+  "package_tree_hash": "01bebceef769746cd53808ac1e87ae31a1d56b698335ed36b0586f79b03aade9",
+  "generated_at": "2026-09-05T01:49:07Z",
   "file_count": 381,
-  "total_size_bytes": 31708601,
+  "total_size_bytes": 31718291,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -104,8 +104,8 @@
       "source_origin": "repo_source"
     },
     "app.py": {
-      "sha256": "a798faec0f7903b30fddd3792344ab5fd8bd217e138073f867891f5f815fe7a1",
-      "size_bytes": 176850,
+      "sha256": "02f26e31bc9e1ecd7c6c9df48f1a004ba7486bb78dd9f21f39acc984dc193ce1",
+      "size_bytes": 176996,
       "source_origin": "repo_source"
     },
     "ARCHITECTURE.md": {
@@ -314,7 +314,7 @@
       "source_origin": "repo_source"
     },
     "data/local_agent_registry.db": {
-      "sha256": "f9b5ea74c9e9598bdaae01e2790196f67b9f8cc38b59e91e4410d180e00104cd",
+      "sha256": "4dd447567810d39527f55a2c71e9218f3c4a2321a6deac1f837c43c393704717",
       "size_bytes": 126976,
       "source_origin": "repo_source"
     },
@@ -1159,8 +1159,8 @@
       "source_origin": "repo_source"
     },
     "README.md": {
-      "sha256": "841ae3a8d769d4c5e5e8d558d7a665f489e1e2e62f124afe2b85c3fd8d8e3d99",
-      "size_bytes": 22703,
+      "sha256": "31e64ce7cb5450f0e25cef7d1c8390614820cf312433f1d399300dc89a38f8ee",
+      "size_bytes": 32208,
       "source_origin": "package_metadata"
     },
     "REPRODUCIBILITY.md": {
@@ -1469,8 +1469,8 @@
       "source_origin": "repo_source"
     },
     "tests/test_bootstrap_and_packaging.py": {
-      "sha256": "f8ff41ebdacb58b15a3e1b5aa60c69c953481693523dc51784a5325359642905",
-      "size_bytes": 13834,
+      "sha256": "08a585c2ca22fc80fc116a93f43c308a644a6b0ada23fca729592b5707c1da1d",
+      "size_bytes": 13873,
       "source_origin": "repo_source"
     },
     "tests/test_canonical_analyzer_refinement.py": {
@@ -1914,7 +1914,7 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "e87eb2ccee0051156f8379f606f8ab6f48b609451333247f63ce46d9d5ed848f",
+      "sha256": "d55a994363095009f80066ff7bc75017b8bfa1103c1cc0d70232b894e4aba332",
       "size_bytes": 51214,
       "source_origin": "generated_manifest"
     }

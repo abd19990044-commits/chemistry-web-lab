@@ -1666,6 +1666,8 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
         if not m_name or "\0" in m_name:
             return False
         norm = m_name.replace("\\", "/")
+        if norm.startswith("/") or norm.startswith("\\") or os.path.isabs(m_name) or (len(norm) > 1 and norm[1] == ":"):
+            return False
         parts = [p for p in norm.split("/") if p]
         if any(p == ".." or ":" in p for p in parts):
             return False
