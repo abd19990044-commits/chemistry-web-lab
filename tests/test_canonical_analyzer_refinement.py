@@ -55,6 +55,8 @@ def canonical_schema():
 @pytest.fixture(scope="module")
 def real_analyzer_data():
     data_path = os.path.join(REPO_ROOT, "orca_engine", "ORCA_Parsed_Data.json")
+    if not os.path.isfile(data_path):
+        pytest.skip("optional legacy ORCA_Parsed_Data.json corpus is not shipped in this repository")
     with open(data_path, "r", encoding="utf-8") as f:
         return json.load(f)
 

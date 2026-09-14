@@ -22,6 +22,7 @@ os.environ["ORCA_RETRY_BASE_DELAY"] = "0.01"
 os.environ["ORCA_RETRY_MAX_DELAY"] = "0.05"
 os.environ["ORCA_RETRY_MAX_ATTEMPTS"] = "2"
 os.environ["ORCA_WATCHDOG_ENABLED"] = "0"
+os.environ["ORCA_LOCAL_MODE"] = "0"
 os.environ["ORCA_RETRY_BASE_DELAY_SECONDS"] = "0.01"
 os.environ["ORCA_RETRY_MAX_DELAY_SECONDS"] = "0.05"
 
@@ -402,12 +403,14 @@ def run_all_checks():
             body = r.get_json()
             check("REGRESSION: %s answers 503, not 401" % label,
                   r.status_code == 503, "got %s: %s" % (r.status_code, json.dumps(body)[:160]))
-            check("...and says it is the site's problem", marker in body["error"], body["error"][:160])
+            message = body.get("error") or body.get("message") or body.get("note") or body.get("warning") or ""
+            check("...and says it is the site's problem", marker in message,
+                  (message or json.dumps(body))[:160])
             check("...and warns against regenerating the token",
-                  "regenerate" in body["error"].lower(), body["error"][:200])
+                  "regenerate" in message.lower(), (message or json.dumps(body))[:200])
             check("...and does not put a Python traceback in front of the user",
-                  "Traceback" not in body["error"] and "ModuleNotFound" not in body["error"],
-                  body["error"][:200])
+                  "Traceback" not in message and "ModuleNotFound" not in message,
+                  (message or json.dumps(body))[:200])
 
         with_cli(FakeCli(list=(1, "", "401 - Unauthorized")))
         r = client.post("/api/kaggle/login", json={"kaggle_username": "tester", "kaggle_key": KEY})

@@ -465,9 +465,9 @@ class TestServiceAndApiIntegration:
     def test_service_submit_and_list_workflows(self, in_memory_backend, temp_store):
         creds = KaggleCredentials(username="Dr_Chemistry", key="112233445566778899aabbccddeeff00")
         service = OrchestratorService(store=temp_store, start_watchdog=False)
-        service.cf_controller.client = in_memory_backend
 
-        # Mock push_kernel so submission doesn't make real external Kaggle call
+        # Mock push_kernel. Workflow durability is now verified through the
+        # Kaggle-backed JobManifest rather than an external Cloudflare record. so submission doesn't make real external Kaggle call
         class FakeKaggleClient:
             def __init__(self, creds):
                 self.creds = creds
@@ -477,8 +477,11 @@ class TestServiceAndApiIntegration:
                 slug = expected_slug or "chem-tools-test"
                 return PushResult(slug=slug, owner="dr_chemistry", url=f"https://kaggle.com/code/dr_chemistry/{slug}", requested_slug=slug)
 
-            def list_kernels(self):
+            def list_kernels(self, *args, **kwargs):
                 return []
+
+            def kernel_exists(self, slug):
+                return True
 
         import orca_orchestrator.service as s_mod
         orig_kc = s_mod.KaggleClient

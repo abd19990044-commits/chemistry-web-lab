@@ -277,12 +277,14 @@ def test_user_b_wakes_space_isolation(master_key, sample_creds, tmp_path):
     sweep_res = watchdog.sweep()
 
     assert sweep_res.stalled == 1
-    assert sweep_res.recovered == 1
-    assert len(reconciled_jobs) == 1
-    assert reconciled_jobs[0] == ("chem-tools-test-12345", "chem_user")
+    assert sweep_res.recovered == 0
+    assert sweep_res.skipped_no_credentials == 1
+    assert reconciled_jobs == []
 
-    # Bob still cannot access Alice's credentials from broker directly
-    assert broker.get("alice") is not None  # Background cached for Alice
+    # Bob's activity must not resurrect or expose Alice's credentials. The
+    # owner will re-authenticate when they next open the site; until then the
+    # private Kaggle kernel remains responsible for self-continuation.
+    assert broker.get("alice") is None
     assert broker.get("bob_chem") == bob_creds
     # Decrypting Alice's vault record with Bob's identity fails
     vault_rec = backend.get_credential_vault("alice")

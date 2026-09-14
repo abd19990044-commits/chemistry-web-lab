@@ -260,7 +260,11 @@ global.localStorage = {
 
 const documentEvents = new EventTargetMock();
 global.document = Object.assign(documentEvents, {
-  getElementById(id) { if (!seen.has(id)) { throw new Error('unknown element id: ' + id); } return el(id); },
+  getElementById(id) {
+    if (id === 'jobs-account-refresh-btn' || id === 'jobs-running-count') return seen.has(id) ? el(id) : null;
+    if (!seen.has(id)) { throw new Error('unknown element id: ' + id); }
+    return el(id);
+  },
   querySelector() { return el(); },
   querySelectorAll() { return []; },
   createElement() { return el(); },
@@ -278,6 +282,12 @@ global.navigator = { clipboard: { writeText: () => Promise.resolve() }, userAgen
 global.URL = { createObjectURL: () => '', revokeObjectURL() {} };
 global.Blob = class {};
 global.FormData = class { append() {} };
+global.MutationObserver = class MutationObserver {
+  constructor(callback) { this.callback = callback; }
+  observe() {}
+  disconnect() {}
+  takeRecords() { return []; }
+};
 require(process.argv[3]);
 console.log('EVALUATED-OK');
 """

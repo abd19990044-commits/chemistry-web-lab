@@ -165,7 +165,7 @@ class TestCloudflareOutageResilience:
 
         creds = KaggleCredentials(username="Researcher_Beta", key="112233445566778899aabbccddeeff00")
         service = OrchestratorService(store=temp_store, start_watchdog=False)
-        service.cf_controller.client = http_client
+        assert not hasattr(service, "cf_controller")
 
         # Mock push_kernel
         class FakeKaggleClient:
@@ -176,8 +176,11 @@ class TestCloudflareOutageResilience:
                 slug = expected_slug or "chem-tools-test"
                 return PushResult(slug=slug, owner="researcher_beta", url=f"https://kaggle.com/code/researcher_beta/{slug}", requested_slug=slug)
 
-            def list_kernels(self):
+            def list_kernels(self, *args, **kwargs):
                 return []
+
+            def kernel_exists(self, slug):
+                return True
 
         import orca_orchestrator.service as s_mod
         orig_kc = s_mod.KaggleClient
