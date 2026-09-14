@@ -95,5 +95,10 @@ replace_once(
     '''            check("...and warns against regenerating the token",\n                  "regenerate" in body["error"].lower(), body["error"][:200])''',
     '''            check("...and warns against regenerating the token",\n                  "regenerate" in message.lower(), (message or json.dumps(body))[:200])'''
 )
+replace_once(
+    'tests/test_web_routes.py',
+    '''            check("...and does not put a Python traceback in front of the user",\n                  "Traceback" not in body["error"] and "ModuleNotFound" not in body["error"],\n                  body["error"][:200])''',
+    '''            check("...and does not put a Python traceback in front of the user",\n                  "Traceback" not in message and "ModuleNotFound" not in message,\n                  (message or json.dumps(body))[:200])'''
+)
 
 print('CI contract cleanup applied')
