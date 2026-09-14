@@ -295,6 +295,10 @@ def classify_outcome(out_text: str, *, job_kind: str, killed_by: str | None = No
         return make(OUTCOME_DISK, "the run was stopped by the disk watchdog before ORCA finished")
     if killed_by == "time":
         return make(OUTCOME_INCOMPLETE, "the run was stopped by the session-time watchdog")
+    if killed_by == "launch":
+        return make(OUTCOME_FATAL,
+                    "the ORCA executable could not be launched; restarting the same kernel "
+                    "cannot repair a missing or non-executable binary")
 
     # 2. Disk exhaustion reported by ORCA or the OS.
     if _has_any(low, DISK_FRAGMENTS):

@@ -193,23 +193,16 @@ class Watchdog:
                     continue
                 result.stalled += 1
 
+                # Runtime is deliberately Cloudflare-free. The server may only act
+                # with credentials recently supplied by the user; otherwise the
+                # self-continuing Kaggle kernel remains responsible for the chain.
                 creds = self.broker.get(job.owner)
-                if creds is None:
-                    try:
-                        vm = self.vault_manager
-                        if vm is None:
-                            from .credential_vault import get_vault_manager
-                            vm = get_vault_manager()
-                        creds = vm.load_credentials(job.owner)
-                    except Exception as exc:
-                        log.debug("Could not load credentials from vault for owner %s: %s", job.owner, exc)
-
                 if creds is None:
                     result.skipped_no_credentials += 1
                     log_event(
                         log, "watchdog_unreachable",
                         "a stalled job cannot be driven from the server because no "
-                        "credentials for its owner are cached or available in vault; the Kaggle kernel remains "
+                        "credentials for its owner are cached in RAM; the Kaggle kernel remains "
                         "responsible for continuing the chain",
                         job_id=job.job_id, owner=job.owner, state=job.state.value,
                         **verdict.to_dict(),

@@ -224,17 +224,17 @@ def wake_site():
     url = _callback_url("/api/orca/wake")
     if not url:
         return False
-    for attempt in range(4):
+    for attempt in range(2):
         try:
             req = urllib.request.Request(url, method="GET", headers={"User-Agent": "ORCA-Kaggle-Runner/1"})
-            with urllib.request.urlopen(req, timeout=20 + attempt * 10) as resp:
+            with urllib.request.urlopen(req, timeout=5 + attempt * 2) as resp:
                 if 200 <= int(getattr(resp, "status", 200)) < 500:
                     emit("site_wake_ok", "site answered the wake request", attempt=attempt + 1)
                     return True
         except Exception as exc:
             emit("site_wake_retry", "site wake request did not answer yet",
                  attempt=attempt + 1, detail=_scrub(str(exc))[:180])
-        time.sleep(3 * (attempt + 1))
+        time.sleep(1.5 * (attempt + 1))
     return False
 
 
@@ -265,7 +265,7 @@ def notify_site_from_state(reason="state_update"):
                 "X-ORCA-Callback-Token": token,
             },
         )
-        with urllib.request.urlopen(req, timeout=45) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:
             ok = 200 <= int(getattr(resp, "status", 200)) < 300
         emit("site_update_sent" if ok else "site_update_rejected",
              "sent Kaggle state to the site" if ok else "site rejected the Kaggle state",
@@ -1009,6 +1009,8 @@ class Execution:
             )
         except OSError as exc:
             out_fh.close()
+            self.stop_reason = "launch"
+            self.stop_detail = str(exc)
             fail_log("starting ORCA", str(exc),
                      "none: the executable could not be launched at all",
                      "failing the job; without a runnable ORCA binary nothing can proceed")
@@ -1585,11 +1587,17 @@ def write_state(state, *, checkpoint=None, note="", error=None, extra=None,
     written at every significant transition, not only at the end, so a window
     that is killed without warning still leaves behind an accurate account of
     how far it got."""
+    # A successful successor push means the durable view has advanced even
+    # though this document is written by the predecessor window. Recording the
+    # next epoch/current slug prevents My Jobs from briefly regressing to the old
+    # window after a handoff callback.
+    durable_epoch = EPOCH + 1 if (state == "QUEUED" and next_slug) else EPOCH
+    durable_slug = next_slug if (state == "QUEUED" and next_slug) else (os.environ.get("KAGGLE_KERNEL_SLUG", "") or JOB_ID)
     job = {
         "job_id": JOB_ID, "owner": H["kaggle_username"], "title": H.get("title") or JOB_ID,
         "created_at": START_TIME, "updated_at": time.time(),
-        "state": state, "epoch": EPOCH,
-        "current_slug": os.environ.get("KAGGLE_KERNEL_SLUG", "") or JOB_ID,
+        "state": state, "epoch": durable_epoch,
+        "current_slug": durable_slug,
         "chain_slugs": [], "run_token": RUN_TOKEN,
         "last_heartbeat_at": time.time(),
         "input_filename": H["input_filename"],
@@ -1606,11 +1614,18 @@ def write_state(state, *, checkpoint=None, note="", error=None, extra=None,
         "total_runtime_seconds": time.time() - START_TIME,
         "last_note": note, "last_error": error,
         "disk_report": disk_snapshot(),
+        # Non-secret callback metadata survives server restarts in Kaggle.
+        "callback_base_url": H.get("callback_base_url") or "",
+        "callback_token_sha256": __import__("hashlib").sha256(
+            str(H.get("callback_token") or "").encode("utf-8")
+        ).hexdigest() if H.get("callback_token") else "",
     }
     document = {
         "schema_version": 2, "written_at": time.time(), "run_token": RUN_TOKEN,
         "job": job, "checkpoint": checkpoint, "disk_report": job["disk_report"],
         "extra": dict(extra or {}, next_slug=next_slug, next_url=next_url,
+                      producer_epoch=EPOCH, callback_base_url=H.get("callback_base_url") or "",
+                      callback_token_sha256=job.get("callback_token_sha256") or "",
                       outcome=outcome.to_dict() if outcome is not None else None),
     }
     import hashlib

@@ -18,7 +18,6 @@ from __future__ import annotations
 import os
 import hashlib
 import json
-import secrets
 import re
 import shutil
 import tempfile
@@ -27,6 +26,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import ledger as ledger_mod
+from . import callback_auth
 from .config import CONFIG, STATE_DIR_DIAGNOSTIC
 from .credentials import BROKER, KaggleCredentials, parse as parse_credentials
 from .errors import (ConcurrencyError, IntegrityError, NotFoundError, OrchestratorError,
@@ -215,7 +215,7 @@ class OrchestratorService:
                         "step_count": step_count,
                         "step_name": step_name,
                         "callback_base_url": (callback_base_url or "").rstrip("/"),
-                        "callback_token": secrets.token_urlsafe(32),
+                        "callback_token": callback_auth.issue(job_id),
                     },
                 )
                 self.store.put_job(job)
@@ -385,9 +385,11 @@ class OrchestratorService:
         self._last_listing_creds = creds
         auth_creds = self.ensure_authenticated(creds)
         client = KaggleClient(auth_creds)
+        listing_ok = True
         try:
             remote = ledger_mod.discover_jobs(client)
         except Exception as exc:
+            listing_ok = False
             log.warning("Kaggle bulk listing unavailable; serving warm local cache: %s", exc)
             remote = []
 
@@ -432,6 +434,19 @@ class OrchestratorService:
                 described["not_returned_by_kaggle_listing"] = True
                 described["deleted_on_kaggle"] = False
                 described["state_source"] = "local_cache_pending_kaggle"
+                if listing_ok:
+                    # A successful bulk listing that omits a job is ambiguous for a
+                    # short period after submission. Resolve that ambiguity with an
+                    # exact status lookup; only a verified 404 becomes deletion.
+                    try:
+                        exact = client.kernel_exists(job.current_slug or job.job_id)
+                        if exact is None:
+                            described["deleted_on_kaggle"] = True
+                            described["state_source"] = "kaggle_verified_deleted"
+                            described["phase"] = "Deleted on Kaggle"
+                            described["note"] = "The Kaggle kernel no longer exists."
+                    except OrchestratorError:
+                        pass
                 merged.append(described)
 
         def stamp(item):
@@ -457,8 +472,8 @@ class OrchestratorService:
         job_id = str(job_data.get("job_id") or "").strip()
         if not is_valid_slug(job_id) or not job_id.startswith(CONFIG.job_id_prefix):
             raise ValidationError("kernel update has an invalid job id")
-        if not callback_token or len(callback_token) < 24:
-            raise ValidationError("kernel callback token is missing or invalid")
+        if not callback_auth.verify(job_id, callback_token):
+            raise ValidationError("kernel callback token is missing, invalid, or not bound to this job")
 
         # Verify STATE.json's own digest before accepting it into the warm cache.
         digest = state.get("_digest")
@@ -472,20 +487,13 @@ class OrchestratorService:
                 raise IntegrityError("kernel STATE.json digest mismatch")
 
         current = self.store.get_job(job_id)
+        incoming = JobManifest.from_dict(job_data)
         if current is not None:
-            expected = str((current._extra or {}).get("callback_token") or "")
-            if expected and not secrets.compare_digest(expected, callback_token):
-                raise ValidationError("kernel callback token does not match this job")
-            manifest = current
-            incoming = JobManifest.from_dict(job_data)
-            # Preserve local-only callback/workflow metadata while copying durable fields.
+            # Preserve local-only metadata while copying the durable Kaggle view.
             keep_extra = dict(current._extra or {})
             incoming._extra.update({k: v for k, v in keep_extra.items() if k not in incoming._extra})
-            incoming._extra["callback_token"] = callback_token
-            manifest = incoming
-        else:
-            manifest = JobManifest.from_dict(job_data)
-            manifest._extra["callback_token"] = callback_token
+        incoming._extra["callback_token"] = callback_token
+        manifest = incoming
         self.store.put_job(manifest)
         return {"job_id": job_id, "state": manifest.state.value,
                 "epoch": manifest.epoch, "source": "kaggle_callback"}
@@ -718,6 +726,11 @@ class OrchestratorService:
                 "credential_owners_cached": len(BROKER.known_owners()),
             },
             "startup_recovery": self.startup_report,
+            "callback_auth": {
+                "configured": callback_auth.is_configured(),
+                "mode": "stateless_hmac",
+                "required_secret": "ORCA_CALLBACK_SECRET",
+            },
             "config": {
                 "time_limit_seconds": CONFIG.runner.time_limit_seconds,
                 "handoff_reserve_seconds": CONFIG.runner.handoff_reserve_seconds,
