@@ -27,10 +27,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import ledger as ledger_mod
-from .cloudflare_controller import CloudflareController
 from .config import CONFIG, STATE_DIR_DIAGNOSTIC
 from .credentials import BROKER, KaggleCredentials, parse as parse_credentials
-from .errors import (ConcurrencyError, NotFoundError, OrchestratorError,
+from .errors import (ConcurrencyError, IntegrityError, NotFoundError, OrchestratorError,
                      ValidationError)
 from .hashing import content_id, sha256_bytes
 from .kaggle_api import KaggleClient, is_valid_slug
@@ -86,12 +85,8 @@ class OrchestratorService:
     def __init__(self, store: JobStore | None = None, *, start_watchdog: bool = True) -> None:
         self.store = store or get_store()
         self.reconciler = Reconciler(self.store)
-        self.cf_controller = CloudflareController(store=self.store)
         self.result_store = ResultArtifactStore()
-        self.watchdog = Watchdog(
-            self.store, self.reconciler, BROKER,
-            workflow_driver=self._reconcile_and_drive_workflows,
-        )
+        self.watchdog = Watchdog(self.store, self.reconciler, BROKER)
         self.startup_report = recover_after_restart(self.store)
         if start_watchdog:
             self.watchdog.start()
@@ -495,284 +490,25 @@ class OrchestratorService:
         return {"job_id": job_id, "state": manifest.state.value,
                 "epoch": manifest.epoch, "source": "kaggle_callback"}
 
-    # -- workflow execution -------------------------------------------------
-    def _workflow_result_payload(self, creds: KaggleCredentials, parent_job_id: str,
-                                 step) -> tuple[str, dict[str, bytes]]:
-        """Build the next step from the predecessor's actual calculated geometry."""
-        parent = self.store.get_job(parent_job_id)
-        zip_path, cleanup_dir = self.fetch_results(creds, parent_job_id)
-        if not zip_path or not os.path.exists(zip_path):
-            raise ValidationError(
-                "the predecessor finished but its Kaggle output is not available yet; "
-                "the workflow will retry this READY step"
-            )
-
-        try:
-            with zipfile.ZipFile(zip_path, "r") as zf:
-                file_names = [n for n in zf.namelist() if not n.endswith("/")]
-                xyz_names = [n for n in file_names if n.lower().endswith(".xyz")]
-                if not xyz_names:
-                    raise ValidationError(
-                        "the predecessor result contains no XYZ geometry, so the next "
-                        "calculation cannot be started safely"
-                    )
-
-                wanted = ""
-                if parent and parent.input_filename:
-                    wanted = os.path.splitext(os.path.basename(parent.input_filename))[0].lower() + ".xyz"
-
-                def xyz_rank(name: str) -> tuple[int, str]:
-                    base = os.path.basename(name).lower()
-                    if wanted and base == wanted:
-                        return (0, base)
-                    if base == "last_geometry.xyz":
-                        return (1, base)
-                    if not base.endswith("_trj.xyz"):
-                        return (2, base)
-                    return (3, base)
-
-                geometry_text = None
-                for name in sorted(xyz_names, key=xyz_rank):
-                    try:
-                        raw = zf.read(name).decode("utf-8", errors="replace")
-                        frames = read_trajectory_frames(raw, is_text=True)
-                    except Exception:
-                        frames = []
-                    if frames:
-                        geometry_text = frames[-1].rstrip() + "\n"
-                        break
-                if not geometry_text:
-                    raise ValidationError(
-                        "XYZ files were present in the predecessor output, but none contained "
-                        "a complete geometry frame"
-                    )
-
-                geom_name = f"workflow_step_{step.step_index}_geometry.xyz"
-                aux = {geom_name: geometry_text.encode("utf-8")}
-
-                geometry_aliases = {"geometry", "xyz", "optimized_geometry", "optimised_geometry"}
-                by_base = {os.path.basename(n).lower(): n for n in file_names}
-                for requested in step.required_artifacts or []:
-                    req = str(requested).strip()
-                    if not req or req.lower() in geometry_aliases:
-                        continue
-                    match = by_base.get(os.path.basename(req).lower())
-                    if not match:
-                        matches = [n for n in file_names if n.lower().endswith(req.lower())]
-                        match = matches[0] if matches else None
-                    if not match:
-                        raise ValidationError(
-                            f"required workflow artefact '{req}' is absent from predecessor "
-                            f"job {parent_job_id}"
-                        )
-                    data = zf.read(match)
-                    if len(data) > CONFIG.runner.inline_carry_limit_bytes // 2:
-                        raise ValidationError(
-                            f"required workflow artefact '{req}' is too large for safe inline "
-                            "handoff; put it in a Kaggle Dataset or use a restartable single job"
-                        )
-                    aux[os.path.basename(match)] = data
-
-            template = step.input_template or ""
-            if not template.strip():
-                raise ValidationError(f"workflow step {step.step_index} has no ORCA input template")
-            charge, mult = extract_charge_mult(template)
-            rewritten = set_geometry(template, geom_name, charge, mult)
-            if rewritten == template and not re.search(r"(?i)\*\s*xyzfile\b", template):
-                raise ValidationError(
-                    "the next workflow step has no replaceable ORCA geometry block; include "
-                    "a '* xyz charge multiplicity ... *' block in its input template"
-                )
-            return rewritten, aux
-        finally:
-            if cleanup_dir:
-                shutil.rmtree(cleanup_dir, ignore_errors=True)
-
-    def _drive_ready_workflows(self, creds: KaggleCredentials,
-                               workflow_id: str | None = None) -> list[dict[str, Any]]:
-        """Launch READY workflow steps exactly once using durable Cloudflare fencing."""
-        owner = creds.username.lower()
-        workflows = ([self.cf_controller.get_workflow(workflow_id, owner)] if workflow_id
-                     else self.cf_controller.list_user_workflows(owner))
-        workflows = [wf for wf in workflows if wf is not None]
-        try:
-            jobs = self.cf_controller.client.list_user_jobs(owner)
-        except Exception:
-            jobs = []
-        existing = {(j.workflow_id, int(j.step_index)): j for j in jobs if j.workflow_id}
-        launched = []
-
-        for wf in workflows:
-            if wf.status in ("COMPLETED", "FAILED", "PAUSED"):
-                continue
-            for step in sorted(wf.steps, key=lambda s: s.step_index):
-                if step.status != "READY":
-                    continue
-
-                prior = existing.get((wf.workflow_id, int(step.step_index)))
-                if prior:
-                    step.job_id = prior.kaggle_job_ref
-                    if prior.local_state in ("COMPLETED", "REMOTE_COMPLETED"):
-                        step.status = "COMPLETED"
-                    elif prior.local_state in ("FAILED", "REMOTE_FAILED", "REMOTE_DELETED"):
-                        step.status = "FAILED"
-                    else:
-                        step.status = "RUNNING"
-                    wf.current_step_index = max(wf.current_step_index, step.step_index)
-                    wf.updated_at = now()
-                    self.cf_controller.client.put_workflow(wf)
-                    break
-
-                parent_step = None
-                if step.prerequisites:
-                    completed = [wf.get_step(i) for i in step.prerequisites]
-                    completed = [s for s in completed if s and s.status == "COMPLETED" and s.job_id]
-                    if completed:
-                        parent_step = max(completed, key=lambda s: s.step_index)
-                elif step.step_index > 0:
-                    candidate = wf.get_step(step.step_index - 1)
-                    if candidate and candidate.status == "COMPLETED" and candidate.job_id:
-                        parent_step = candidate
-
-                try:
-                    if step.step_index > 0:
-                        if parent_step is None:
-                            raise ValidationError(
-                                f"workflow step {step.step_index} is READY but has no completed "
-                                "predecessor with a job id"
-                            )
-                        input_content, step_aux = self._workflow_result_payload(
-                            creds, parent_step.job_id, step
-                        )
-                        parent_job_id = parent_step.job_id
-                    else:
-                        input_content = step.input_template
-                        step_aux = {}
-                        parent_job_id = None
-
-                    launch_cfg = dict(wf.metadata.get("launch_config") or {})
-                    step_datasets = list(launch_cfg.get("dataset_sources") or [])
-                    if not step_datasets and parent_job_id:
-                        parent_manifest = self.store.get_job(parent_job_id)
-                        if parent_manifest:
-                            step_datasets = list(parent_manifest.dataset_sources or [])
-                    sub = self.submit(
-                        creds,
-                        input_filename=f"{slugify(step.step_name) or 'step'}-{step.step_index}.inp",
-                        input_content=input_content,
-                        job_name=f"{wf.title}-{step.step_name}",
-                        aux_files=step_aux,
-                        dataset_sources=step_datasets,
-                        orca_link=launch_cfg.get("orca_link") or None,
-                        idempotency_key=f"workflow:{wf.workflow_id}:step:{step.step_index}",
-                        workflow_id=wf.workflow_id,
-                        parent_job_id=parent_job_id,
-                        step_index=step.step_index,
-                        step_count=len(wf.steps),
-                        step_name=step.step_name,
-                    )
-                except Exception as exc:
-                    step.result_data["last_launch_error"] = f"{type(exc).__name__}: {exc}"
-                    step.result_data["last_launch_attempt_at"] = now()
-                    wf.updated_at = now()
-                    self.cf_controller.client.put_workflow(wf)
-                    log.warning("Could not launch READY workflow %s step %s: %s",
-                                wf.workflow_id, step.step_index, exc)
-                    break
-
-                step.job_id = sub.job_id
-                step.status = "RUNNING"
-                step.result_data.pop("last_launch_error", None)
-                wf.status = "IN_PROGRESS"
-                wf.current_step_index = step.step_index
-                wf.updated_at = now()
-                self.cf_controller.client.put_workflow(wf)
-                launched.append({"workflow_id": wf.workflow_id,
-                                 "step_index": step.step_index,
-                                 "job_id": sub.job_id})
-                break
-        return launched
-
-    def _reconcile_and_drive_workflows(self, creds: KaggleCredentials) -> None:
-        """Watchdog hook: advance workflows even when the browser is closed."""
-        try:
-            self.cf_controller.reconcile_user_session(creds, KaggleClient(creds))
-            self._drive_ready_workflows(creds)
-        except Exception as exc:
-            log.warning("Background workflow reconciliation degraded: %s", exc)
-
     # -- workflows ---------------------------------------------------------
-    def submit_workflow(
-        self,
-        creds: KaggleCredentials,
-        title: str,
-        steps: list[dict[str, Any]],
-        *,
-        aux_files: dict[str, bytes] | None = None,
-        dataset_sources: list[str] | None = None,
-        orca_link: str | None = None,
-    ) -> dict[str, Any]:
-        """Creates a multi-step workflow and launches step 0."""
-        if not steps:
-            raise ValidationError("A workflow must define at least one step.")
-
-        BROKER.remember(creds)
-        wf = self.cf_controller.register_workflow(title=title, owner=creds.username, step_specs=steps)
-        wf.metadata["launch_config"] = {
-            "dataset_sources": list(dataset_sources or []),
-            "orca_link": orca_link,
-        }
-        self.cf_controller.client.put_workflow(wf)
-
-        # Launch Step 0
-        step0 = wf.steps[0]
-        step0_input = step0.input_template
-        if not step0_input.strip():
-            raise ValidationError(f"Step 0 ({step0.step_name}) has no input content.")
-
-        sub_res = self.submit(
-            creds,
-            input_filename=f"{step0.step_name.lower()}.inp",
-            input_content=step0_input,
-            job_name=f"{title}-{step0.step_name}",
-            aux_files=aux_files,
-            dataset_sources=dataset_sources,
-            orca_link=orca_link,
-            workflow_id=wf.workflow_id,
-            step_index=0,
-            step_count=len(wf.steps),
-            step_name=step0.step_name,
+    # Cloudflare-backed workflow orchestration has been retired. Restart chains
+    # are now Kaggle-native and self-continuing. The legacy workflow API stays
+    # readable so older frontends do not crash, but it no longer creates any
+    # external control-plane dependency.
+    def submit_workflow(self, creds: KaggleCredentials, title: str, steps: list[dict[str, Any]],
+                        *, aux_files: dict[str, bytes] | None = None,
+                        dataset_sources: list[str] | None = None,
+                        orca_link: str | None = None) -> dict[str, Any]:
+        raise ValidationError(
+            "Cloudflare-backed multi-step workflows were removed. Submit the ORCA job "
+            "normally; restart/continuation state is now carried entirely by Kaggle."
         )
-        step0.job_id = sub_res.job_id
-        step0.status = "RUNNING"
-        wf.status = "IN_PROGRESS"
-        self.cf_controller.client.put_workflow(wf)
-        return {
-            "ok": True,
-            "workflow_id": wf.workflow_id,
-            "workflow": wf.to_dict(),
-            "step_0_job": sub_res.to_dict(),
-        }
 
     def get_workflow(self, creds: KaggleCredentials, workflow_id: str) -> dict[str, Any] | None:
-        BROKER.remember(creds)
-        try:
-            self.cf_controller.reconcile_user_session(creds, KaggleClient(creds))
-            self._drive_ready_workflows(creds, workflow_id=workflow_id)
-        except Exception as exc:
-            log.warning("Workflow reconciliation degraded for %s: %s", workflow_id, exc)
-        wf = self.cf_controller.get_workflow(workflow_id, creds.username)
-        return wf.to_dict() if wf else None
+        return None
 
     def list_workflows(self, creds: KaggleCredentials) -> list[dict[str, Any]]:
-        BROKER.remember(creds)
-        try:
-            self.cf_controller.reconcile_user_session(creds, KaggleClient(creds))
-            self._drive_ready_workflows(creds)
-        except Exception as exc:
-            log.warning("Workflow listing reconciliation degraded: %s", exc)
-        wfs = self.cf_controller.list_user_workflows(creds.username)
-        return [w.to_dict() for w in wfs]
+        return []
 
 
     # -- results -----------------------------------------------------------
@@ -842,20 +578,12 @@ class OrchestratorService:
         # 1. Transition to DOWNLOADING
         job.result_state = ResultDurabilityState.DOWNLOADING.value
         self.store.put_job(job)
-        try:
-            self.cf_controller.sync_job_state(job)
-        except Exception:
-            pass
 
         # 2. Retrieve output from Kaggle (or local store)
         zip_path, cleanup_dir = self.fetch_results(auth_creds, job_id, slug=slug)
         if not zip_path or not os.path.exists(zip_path):
             job.result_state = ResultDurabilityState.DOWNLOAD_FAILED.value
             self.store.put_job(job)
-            try:
-                self.cf_controller.sync_job_state(job)
-            except Exception:
-                pass
             return None
 
         job.result_downloaded_at = now()
@@ -891,11 +619,6 @@ class OrchestratorService:
             job.result_archived_at = manifest.archived_at
             self.store.put_job(job)
 
-            try:
-                self.cf_controller.sync_job_state(job)
-            except Exception as exc:
-                log.warning("Could not sync archived result state to Cloudflare: %s", exc)
-
             log_event(
                 log,
                 "result_archived",
@@ -910,10 +633,6 @@ class OrchestratorService:
             log.warning("Archiving job result failed for %s: %s", job_id, exc)
             job.result_state = ResultDurabilityState.ARCHIVE_FAILED.value
             self.store.put_job(job)
-            try:
-                self.cf_controller.sync_job_state(job)
-            except Exception:
-                pass
             return None
         finally:
             if cleanup_dir and cleanup_dir != self.result_store._job_dir(auth_creds.username, job_id):
@@ -980,10 +699,6 @@ class OrchestratorService:
 
         self.store.delete_job(job_id)
         self.result_store.delete(job_id, auth_creds.username)
-        try:
-            self.cf_controller.client.delete_job(job_id, auth_creds.username)
-        except Exception:
-            pass
         log_event(log, "job_deleted", "job and its whole window chain removed",
                   job_id=job_id, deleted=len(deleted), failed=0)
         return {"job_id": job_id, "deleted": deleted, "failed": []}
