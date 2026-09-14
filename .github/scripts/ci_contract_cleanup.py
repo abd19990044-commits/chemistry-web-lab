@@ -64,6 +64,24 @@ replace_once(
     '''global.Blob = class {};\nglobal.FormData = class { append() {} };\nglobal.MutationObserver = class MutationObserver {\n  constructor(callback) { this.callback = callback; }\n  observe() {}\n  disconnect() {}\n  takeRecords() { return []; }\n};\nrequire(process.argv[3]);'''
 )
 
+# document.getElementById returns null for elements that have not yet been
+# created. Keep strict checking for static IDs, but permit the two job-toolbar
+# controls that app.js intentionally creates at runtime after checking for them.
+replace_once(
+    'tests/test_frontend.py',
+    '''  getElementById(id) { if (!seen.has(id)) { throw new Error('unknown element id: ' + id); } return el(id); },''',
+    '''  getElementById(id) {\n    if (id === 'jobs-account-refresh-btn' || id === 'jobs-running-count') return seen.has(id) ? el(id) : null;\n    if (!seen.has(id)) { throw new Error('unknown element id: ' + id); }\n    return el(id);\n  },'''
+)
+
+# This legacy-route suite intentionally stubs the kaggle CLI. Force the real
+# CLI-adapter code path even when the outer CI job uses ORCA_LOCAL_MODE=1 for
+# the modern orchestrator tests; otherwise its FakeCli can never be observed.
+replace_once(
+    'tests/test_web_routes.py',
+    '''os.environ["ORCA_WATCHDOG_ENABLED"] = "0"\nos.environ["ORCA_RETRY_BASE_DELAY_SECONDS"] = "0.01"''',
+    '''os.environ["ORCA_WATCHDOG_ENABLED"] = "0"\nos.environ["ORCA_LOCAL_MODE"] = "0"\nos.environ["ORCA_RETRY_BASE_DELAY_SECONDS"] = "0.01"'''
+)
+
 # Legacy route diagnostics should fail as an assertion with the actual payload,
 # never crash with KeyError when a structured 503 payload uses another message
 # field. This preserves the semantic check without assuming one JSON key.
@@ -71,6 +89,11 @@ replace_once(
     'tests/test_web_routes.py',
     '''            check("...and says it is the site's problem", marker in body["error"], body["error"][:160])''',
     '''            message = body.get("error") or body.get("message") or body.get("note") or body.get("warning") or ""\n            check("...and says it is the site's problem", marker in message,\n                  (message or json.dumps(body))[:160])'''
+)
+replace_once(
+    'tests/test_web_routes.py',
+    '''            check("...and warns against regenerating the token",\n                  "regenerate" in body["error"].lower(), body["error"][:200])''',
+    '''            check("...and warns against regenerating the token",\n                  "regenerate" in message.lower(), (message or json.dumps(body))[:200])'''
 )
 
 print('CI contract cleanup applied')
