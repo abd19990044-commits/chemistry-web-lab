@@ -182,7 +182,7 @@ def fail_log(what, why, recovery, next_action, **fields):
          recovery_attempted=recovery, next_action=next_action, **fields)
 
 
-_SECRET_RE = re.compile(r"(KGAT_[A-Za-z0-9_\-]{6,}|\b[0-9a-f]{32}\b)")
+_SECRET_RE = re.compile(r"(KGAT_[A-Za-z0-9_\-]{6,}|hf_[A-Za-z0-9]{20,}|\b[0-9a-f]{32}\b)")
 
 
 def _scrub(text):
@@ -715,38 +715,122 @@ def download_orca(link, dest):
     return ok
 
 
+def _openmpi_version(exe):
+    try:
+        res = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=15)
+        text = (res.stdout or "") + "\n" + (res.stderr or "")
+    except Exception:
+        return None
+    m = re.search(r"(?:Open MPI|OpenRTE|PRRTE)[^0-9]*(\d+)\.(\d+)(?:\.(\d+))?", text, re.I)
+    if not m:
+        return None
+    return tuple(int(x or 0) for x in m.groups())
+
+
+def _expected_openmpi(orca_dir):
+    """Infer the OpenMPI ABI family encoded in common ORCA package names."""
+    probe = os.path.realpath(orca_dir).lower()
+    m = re.search(r"openmpi(\d)(\d)(\d)", probe)
+    if m:
+        return tuple(int(x) for x in m.groups())
+    m = re.search(r"openmpi[_-]?(\d+)\.(\d+)(?:\.(\d+))?", probe)
+    if m:
+        return tuple(int(x or 0) for x in m.groups())
+    return None
+
+
+def _mpi_compatible(version, expected):
+    if version is None:
+        return False
+    if expected is None:
+        # ORCA 6.x Linux shared builds are normally distributed for OpenMPI 4.1.x.
+        # Unknown builds are therefore accepted only for that ABI family; otherwise
+        # falling back to serial is safer than launching with an incompatible MPI.
+        return version[:2] == (4, 1)
+    return version[:2] == expected[:2]
+
+
 def find_mpirun(orca_dir):
-    found = shutil.which("mpirun") or shutil.which("orterun") or shutil.which("prterun")
-    if found:
-        return found
+    expected = _expected_openmpi(orca_dir)
+    candidates = []
+    for name in ("mpirun", "orterun", "prterun"):
+        found = shutil.which(name)
+        if found:
+            candidates.append(found)
     for pattern in ("mpirun", os.path.join("*", "mpirun"), os.path.join("*", "bin", "mpirun")):
-        for candidate in (glob.glob(os.path.join(orca_dir, pattern))
-                          + glob.glob(os.path.join(os.path.dirname(orca_dir), pattern))):
-            if os.path.isfile(candidate):
-                os.environ["PATH"] = os.path.dirname(candidate) + os.pathsep + os.environ["PATH"]
-                try:
-                    os.chmod(candidate, 0o755)
-                except OSError:
-                    pass
-                return candidate
+        candidates.extend(glob.glob(os.path.join(orca_dir, pattern)))
+        candidates.extend(glob.glob(os.path.join(os.path.dirname(orca_dir), pattern)))
+
+    seen = set()
+    for candidate in candidates:
+        candidate = os.path.realpath(candidate)
+        if candidate in seen or not os.path.isfile(candidate):
+            continue
+        seen.add(candidate)
+        version = _openmpi_version(candidate)
+        if not _mpi_compatible(version, expected):
+            emit("mpi_rejected", "ignoring an incompatible MPI launcher",
+                 launcher=candidate, detected_version=version, expected_version=expected)
+            continue
+        os.environ["PATH"] = os.path.dirname(candidate) + os.pathsep + os.environ.get("PATH", "")
+        try:
+            os.chmod(candidate, 0o755)
+        except OSError:
+            pass
+        emit("mpi_selected", "selected a compatible OpenMPI launcher",
+             launcher=candidate, detected_version=version, expected_version=expected)
+        return candidate
+
+    # A distro package may help only if it lands on the required ABI family.
     for cmd in (["apt-get", "-y", "-qq", "update"],
                 ["apt-get", "-y", "-qq", "install", "openmpi-bin", "libopenmpi3"]):
         try:
             subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None
-    return shutil.which("mpirun")
+    candidate = shutil.which("mpirun")
+    if candidate and _mpi_compatible(_openmpi_version(candidate), expected):
+        return candidate
+    return None
+
+
+def _cgroup_memory_limit_mb():
+    candidates = (
+        "/sys/fs/cgroup/memory.max",
+        "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+    )
+    limits = []
+    for path in candidates:
+        try:
+            with open(path) as fh:
+                raw = fh.read().strip()
+            if not raw or raw == "max":
+                continue
+            value = int(raw)
+            # Ignore sentinel/unlimited values commonly used by cgroup v1.
+            if 0 < value < (1 << 60):
+                limits.append(value // (1 << 20))
+        except (OSError, ValueError):
+            pass
+    return min(limits) if limits else None
 
 
 def total_ram_mb():
+    proc_total = None
     try:
         with open("/proc/meminfo") as fh:
             for line in fh:
                 if line.startswith("MemTotal:"):
-                    return int(line.split()[1]) // 1024
+                    proc_total = int(line.split()[1]) // 1024
+                    break
     except OSError:
         pass
-    return 12000
+    cgroup_total = _cgroup_memory_limit_mb()
+    candidates = [x for x in (proc_total, cgroup_total) if x and x > 0]
+    effective = min(candidates) if candidates else 12000
+    emit("memory_detected", "effective memory limit established",
+         proc_memtotal_mb=proc_total, cgroup_limit_mb=cgroup_total, effective_mb=effective)
+    return effective
 
 
 # ---------------------------------------------------------------------------
@@ -880,6 +964,11 @@ def time_remaining():
 # ---------------------------------------------------------------------------
 # 4. Continuation input
 # ---------------------------------------------------------------------------
+def is_numerical_frequency(input_text):
+    """True only for ORCA NumFreq; analytical Freq is not partially restartable."""
+    return bool(re.search(r"(?i)(?<![a-z])numfreq(?![a-z])", input_text or ""))
+
+
 def build_continuation(original_text, out_text, job_kind, outcome):
     """Produces the input the successor will run, plus the files it needs.
 
@@ -892,6 +981,7 @@ def build_continuation(original_text, out_text, job_kind, outcome):
     """
     charge, mult = art.extract_charge_mult(original_text)
     text = art.strip_moread(original_text)
+    numerical_freq = is_numerical_frequency(original_text)
     carried, notes = [], []
 
     def carry(path, priority=50):
@@ -967,24 +1057,30 @@ def build_continuation(original_text, out_text, job_kind, outcome):
                 carry(path, 20)
 
     elif job_kind == "freq" or (job_kind == "opt_freq" and outcome.opt_converged):
-        block = re.search(r"(?is)%\s*freq\b.*?\bend\b", text)
-        if block and "restart" not in block.group(0).lower():
-            text = re.sub(r"(?i)(%\s*freq\b)", lambda m: m.group(0) + "\n  Restart true",
-                          text, count=1)
-        elif not block and re.search(r"(?i)\bnumfreq\b", text):
-            text = re.sub(r"(?i)(![^\n]*\bnumfreq\b[^\n]*)",
-                          lambda m: m.group(0) + "\n%freq Restart true end", text, count=1)
-        for path in sorted(glob.glob(wp(BASENAME + ".res.*"))):
-            carry(path, 15)
+        if numerical_freq:
+            block = re.search(r"(?is)%\s*freq\b.*?\bend\b", text)
+            if block and "restart" not in block.group(0).lower():
+                text = re.sub(r"(?i)(%\s*freq\b)", lambda m: m.group(0) + "\n  Restart true",
+                              text, count=1)
+            elif not block and re.search(r"(?i)\bnumfreq\b", text):
+                text = re.sub(r"(?i)(![^\n]*\bnumfreq\b[^\n]*)",
+                              lambda m: m.group(0) + "\n%freq Restart true end", text, count=1)
+            for path in sorted(glob.glob(wp(BASENAME + ".res.*"))):
+                carry(path, 15)
         if outcome.opt_converged and os.path.exists(wp(BASENAME + ".xyz")):
             # The optimisation is done; drop it and continue with frequencies
             # only, so the successor does not redo a converged geometry.
             text = re.sub(r"(?i)\bopt(ts)?\b", "", text, count=1)
             text = art.set_geometry(text, BASENAME + ".xyz", charge, mult)
             carry(wp(BASENAME + ".xyz"), 10)
-            notes.append("optimisation converged; continuing with frequencies only")
+            if numerical_freq:
+                notes.append("optimisation converged; continuing resumable numerical frequencies only")
+            else:
+                notes.append("optimisation converged; analytical frequencies restart from the beginning")
+        elif numerical_freq:
+            notes.append("numerical frequency calculation resumed from .res.* files")
         else:
-            notes.append("frequency calculation resumed from its partial Hessian columns")
+            notes.append("analytical frequency calculations are not partially restartable")
 
     else:
         if frames:
@@ -1503,7 +1599,9 @@ def main():
 
     with open(inp_path, "r", encoding="utf-8", errors="replace") as fh:
         original_text = fh.read()
-    job_kind = H.get("job_kind") or art.detect_job_kind(original_text)
+    job_kind = H.get("job_kind")
+    if not job_kind or job_kind == "unknown":
+        job_kind = art.detect_job_kind(original_text)
 
     write_heartbeat("READY")
     orca_exe = locate_orca()
@@ -1541,7 +1639,7 @@ def main():
         nprocs = 1
 
     text = art.set_nprocs(original_text, nprocs)
-    text, clamp = art.clamp_maxcore(text, nprocs, total_ram_mb())
+    text, clamp = art.clamp_maxcore(text, nprocs, total_ram_mb(), fraction=0.75)
     if clamp:
         emit("maxcore_clamped",
              "%%maxcore was reduced to fit this machine, avoiding an out-of-memory kill",
@@ -1578,7 +1676,7 @@ def main():
         out_text = read_output(out_path)
         outcome = art.classify_outcome(out_text, job_kind=job_kind,
                                        killed_by=execution.stop_reason)
-        cumulative = int(H.get("cumulative_opt_cycles") or 0) + outcome.opt_cycles
+        cumulative += outcome.opt_cycles
 
         emit("orca_outcome", outcome.reason,
              pass_number=passes, **outcome.to_dict(),
@@ -1599,7 +1697,7 @@ def main():
             except OSError:
                 pass
             nprocs = 1
-            text, _c = art.clamp_maxcore(art.set_nprocs(text, 1), 1, total_ram_mb())
+            text, _c = art.clamp_maxcore(art.set_nprocs(text, 1), 1, total_ram_mb(), fraction=0.75)
             atomic_write_bytes(inp_path, text.encode("utf-8"))
             continue
 
@@ -1693,6 +1791,20 @@ def main():
         # Reclaim room before anything else touches the disk, so the tiny
         # handoff files and the push have somewhere to go.
         purge_scratch()
+
+    if (job_kind == "freq" and not is_numerical_frequency(original_text)
+            and outcome.kind != art.OUTCOME_DISK):
+        note = ("Analytical ORCA frequency calculations cannot be resumed from partial "
+                "Hessian columns. This window did not finish, so automatically chaining "
+                "another window would restart the same frequency calculation from zero. "
+                "Use NumFreq for restartable frequencies or provide a window large enough "
+                "for analytical Freq to finish.")
+        write_state("FAILED", note=note, job_kind=job_kind,
+                    error={"code": "analytical_freq_not_resumable"},
+                    cumulative_cycles=cumulative, disk_epochs=disk_epochs, outcome=outcome)
+        purge_scratch()
+        package_results(note=note)
+        return 1
 
     if not art.is_iterative(job_kind) and outcome.kind != art.OUTCOME_DISK:
         note = ("This job (a single point or TD-DFT with no optimisation, scan, MD or "
