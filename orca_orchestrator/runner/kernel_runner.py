@@ -66,6 +66,8 @@ import tarfile
 import threading
 import time
 import traceback
+import urllib.error
+import urllib.request
 import uuid
 import zipfile
 
@@ -110,6 +112,8 @@ def _header() -> dict:
     header.setdefault("predecessor_slug", "")
     header.setdefault("dataset_sources", [])
     header.setdefault("orca_link", None)
+    header.setdefault("callback_base_url", None)
+    header.setdefault("callback_token", None)
     header.setdefault("kaggle_username", "")
     header.setdefault("kaggle_key", None)
     header.setdefault("kaggle_api_token", None)
@@ -201,6 +205,76 @@ def _excepthook(exc_type, exc, tb):
 
 
 sys.excepthook = _excepthook
+
+
+# ---------------------------------------------------------------------------
+# Site wake-up + state callback
+# ---------------------------------------------------------------------------
+def _callback_url(path):
+    base = str(H.get("callback_base_url") or "").strip().rstrip("/")
+    return (base + path) if base else ""
+
+
+def wake_site():
+    """Best-effort wake request before a state POST.
+
+    Sleeping Hugging Face/Render-style services may need one request to start the
+    container. Failure is harmless because Kaggle remains the authoritative ledger.
+    """
+    url = _callback_url("/api/orca/wake")
+    if not url:
+        return False
+    for attempt in range(4):
+        try:
+            req = urllib.request.Request(url, method="GET", headers={"User-Agent": "ORCA-Kaggle-Runner/1"})
+            with urllib.request.urlopen(req, timeout=20 + attempt * 10) as resp:
+                if 200 <= int(getattr(resp, "status", 200)) < 500:
+                    emit("site_wake_ok", "site answered the wake request", attempt=attempt + 1)
+                    return True
+        except Exception as exc:
+            emit("site_wake_retry", "site wake request did not answer yet",
+                 attempt=attempt + 1, detail=_scrub(str(exc))[:180])
+        time.sleep(3 * (attempt + 1))
+    return False
+
+
+def notify_site_from_state(reason="state_update"):
+    url = _callback_url("/api/orca/kernel-update")
+    token = str(H.get("callback_token") or "")
+    if not url or not token or not os.path.exists(STATE_FILE):
+        return False
+    # Visit first to wake the service, exactly as requested. The POST remains
+    # best-effort: a sleeping/unreachable site must never stop a calculation.
+    wake_site()
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as fh:
+            state = json.load(fh)
+        payload = json.dumps({
+            "schema_version": 1,
+            "reason": reason,
+            "job_id": JOB_ID,
+            "epoch": EPOCH,
+            "kernel_slug": os.environ.get("KAGGLE_KERNEL_SLUG", "") or JOB_ID,
+            "state": state,
+        }, sort_keys=True, default=str).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=payload, method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "ORCA-Kaggle-Runner/1",
+                "X-ORCA-Callback-Token": token,
+            },
+        )
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            ok = 200 <= int(getattr(resp, "status", 200)) < 300
+        emit("site_update_sent" if ok else "site_update_rejected",
+             "sent Kaggle state to the site" if ok else "site rejected the Kaggle state",
+             reason=reason)
+        return ok
+    except Exception as exc:
+        emit("site_update_failed", "Kaggle state remains saved even though callback failed",
+             reason=reason, detail=_scrub(str(exc))[:240])
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -1553,6 +1627,11 @@ def write_state(state, *, checkpoint=None, note="", error=None, extra=None,
             atomic_write_bytes(LEGACY_NEXT_URL, (next_url or "").encode("utf-8"))
         except OSError:
             pass
+
+    # Do not phone home for every RUNNING heartbeat. Important durable transitions
+    # are enough to update the UI while keeping callback traffic tiny.
+    if state in ("QUEUED", "CHECKPOINTING", "RESTARTING", "ROLLING_BACK", "FINISHED", "FAILED"):
+        notify_site_from_state(reason=state.lower())
 
 
 # ---------------------------------------------------------------------------

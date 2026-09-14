@@ -93,12 +93,12 @@ def reconnect():
     creds = _credentials_from(_json())
     service = get_service()
     service.authenticate(creds.username, creds.key or creds.api_token)
-    report = service.cf_controller.reconcile_user_session(creds)
+    jobs = service.list_jobs(creds)
     return jsonify({
         "ok": True,
         "owner": creds.username,
-        "reconciliation": report,
-        "jobs": service.list_jobs(creds),
+        "reconciliation": {"source": "kaggle", "cloudflare_used": False},
+        "jobs": jobs,
         "workflows": service.list_workflows(creds),
     })
 
@@ -167,10 +167,26 @@ def submit():
         creds, input_filename=input_filename, input_content=input_content,
         job_name=(form.get("job_name") or "").strip(), aux_files=aux_files,
         dataset_sources=datasets, orca_link=orca_link,
-        idempotency_key=request.headers.get("Idempotency-Key"))
+        idempotency_key=request.headers.get("Idempotency-Key"),
+        callback_base_url=request.url_root.rstrip("/"))
     return jsonify({"ok": True, **result.to_dict(),
                     "max_active_jobs": max_active_jobs_per_account(),
                     "message": "Job submitted. It will continue automatically across Kaggle sessions until it finishes."})
+
+
+@bp.route("/wake", methods=["GET", "HEAD"])
+def wake():
+    # Deliberately tiny: Kaggle calls this first to wake a sleeping Space before
+    # posting the heavier state payload. No credentials are required.
+    return jsonify({"ok": True, "service": "orca", "awake": True})
+
+
+@bp.route("/kernel-update", methods=["POST"])
+def kernel_update():
+    payload = _json()
+    token = request.headers.get("X-ORCA-Callback-Token") or payload.get("callback_token") or ""
+    result = get_service().ingest_kernel_update(payload, token)
+    return jsonify({"ok": True, **result})
 
 
 @bp.route("/status", methods=["POST"])

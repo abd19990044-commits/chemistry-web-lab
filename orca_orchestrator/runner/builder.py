@@ -92,7 +92,9 @@ def encode_inline_files(files: dict[str, bytes]) -> str:
 def build_header(*, job: JobManifest, epoch: int, creds: KaggleCredentials,
                  inline_files: dict[str, bytes] | None = None,
                  checkpoint: CheckpointManifest | None = None,
-                 predecessor_slug: str = "", orca_link: str | None = None) -> dict:
+                 predecessor_slug: str = "", orca_link: str | None = None,
+                 callback_base_url: str | None = None,
+                 callback_token: str | None = None) -> dict:
     """Assembles the parameter block injected ahead of the runner body.
 
     Every key the runner reads has a default on the runner side as well, so a
@@ -128,6 +130,8 @@ def build_header(*, job: JobManifest, epoch: int, creds: KaggleCredentials,
         "job_kind": job.job_kind,
         "dataset_sources": list(job.dataset_sources),
         "orca_link": orca_link,
+        "callback_base_url": callback_base_url or (job._extra.get("callback_base_url") if getattr(job, "_extra", None) else None),
+        "callback_token": callback_token or (job._extra.get("callback_token") if getattr(job, "_extra", None) else None),
         "kaggle_username": creds.username,
         "kaggle_key": creds.key,
         "kaggle_api_token": creds.api_token,
@@ -197,6 +201,8 @@ def build_window_directory(
     inline_files: dict[str, bytes] | None = None,
     orca_link: str | None = None,
     predecessor_slug: str = "",
+    callback_base_url: str | None = None,
+    callback_token: str | None = None,
 ) -> str:
     """Writes a push-ready directory and returns the slug it targets."""
     os.makedirs(target_dir, exist_ok=True)
@@ -220,6 +226,7 @@ def build_window_directory(
     header = build_header(
         job=job, epoch=epoch, creds=creds, inline_files=inline_files,
         checkpoint=checkpoint, predecessor_slug=predecessor_slug, orca_link=orca_link,
+        callback_base_url=callback_base_url, callback_token=callback_token,
     )
     script = render_script(header)
     size = len(script.encode("utf-8"))

@@ -16,6 +16,9 @@ ways a user accidentally launches the same expensive calculation twice.
 from __future__ import annotations
 
 import os
+import hashlib
+import json
+import secrets
 import re
 import shutil
 import tempfile
@@ -149,6 +152,7 @@ class OrchestratorService:
         step_index: int = 0,
         step_count: int = 1,
         step_name: str = "CALC",
+        callback_base_url: str | None = None,
     ) -> SubmitResult:
         """Creates a job and pushes its first window.
 
@@ -215,6 +219,8 @@ class OrchestratorService:
                         "step_index": step_index,
                         "step_count": step_count,
                         "step_name": step_name,
+                        "callback_base_url": (callback_base_url or "").rstrip("/"),
+                        "callback_token": secrets.token_urlsafe(32),
                     },
                 )
                 self.store.put_job(job)
@@ -225,21 +231,7 @@ class OrchestratorService:
                 )
                 self.store.put_job(job, expected_version=job._extra.get("_version"))
 
-                # Persist durable metadata BEFORE pushing to Kaggle. If this process dies
-                # after Kaggle accepts the notebook but before the HTTP request returns,
-                # My Jobs can still recover the job from Cloudflare on the next request.
-                try:
-                    self.cf_controller.register_job(
-                        job,
-                        workflow_id=workflow_id,
-                        parent_job_id=parent_job_id,
-                        step_index=step_index,
-                        step_count=step_count,
-                        step_name=step_name,
-                    )
-                except Exception as exc:
-                    log.warning("Could not pre-register job in Cloudflare control plane: %s", exc)
-
+                # Kaggle output is the durable job ledger; no Cloudflare registration.
                 inline = {input_filename: input_content.encode("utf-8")}
                 inline.update(aux_files)
 
@@ -248,6 +240,8 @@ class OrchestratorService:
                     build_window_directory(
                         work_dir, job=job, epoch=0, creds=creds,
                         inline_files=inline, orca_link=orca_link,
+                        callback_base_url=job._extra.get("callback_base_url"),
+                        callback_token=job._extra.get("callback_token"),
                     )
                     result = KaggleClient(creds).push_kernel(
                         work_dir, expected_slug=job_id, skip_if_active=False)
@@ -264,12 +258,7 @@ class OrchestratorService:
                 )
                 self.store.put_job(job, expected_version=job._extra.get("_version"))
 
-                # Finalise the durable metadata with the real Kaggle slug/URL.
-                try:
-                    self.cf_controller.sync_job_state(job)
-                except Exception as exc:
-                    log.warning("Could not sync pushed job to Cloudflare control plane: %s", exc)
-
+                # No external control plane: Kaggle retains the authoritative ledger.
                 response = SubmitResult(job_id=job.job_id, slug=result.slug,
                                         url=result.url, title=job.title)
                 self.store.complete_idempotent(key, response.to_dict())
@@ -307,10 +296,6 @@ class OrchestratorService:
 
         if reconcile:
             job = self.reconciler.reconcile(job_id, auth_creds, actor="api")
-            try:
-                self.cf_controller.sync_job_state(job)
-            except Exception:
-                pass
 
         return self.describe(job)
 
@@ -358,7 +343,7 @@ class OrchestratorService:
             "result_state": res_state,
             "storage_durability": getattr(job, "storage_durability", "persistent_volume" if self.result_store.is_persistent else "ephemeral_local"),
             "is_durable": bool(res_state == ResultDurabilityState.ARCHIVED_PERSISTENT.value),
-            "cf_sync_status": getattr(job, "cf_sync_status", "SYNCED" if getattr(self.cf_controller.client, "is_durable", False) else "DEGRADED_UNSYNCED"),
+            "cf_sync_status": "KAGGLE_LEDGER",
             "result_available": bool(
                 is_archived
                 or self.result_store.exists(job.job_id, job.owner)
@@ -396,127 +381,119 @@ class OrchestratorService:
 
     # -- listing -----------------------------------------------------------
     def list_jobs(self, creds: KaggleCredentials) -> list[dict]:
-        """Merges what Kaggle knows with what Cloudflare and local cache know.
+        """List jobs with Kaggle as the only durable source of truth.
 
-        Kaggle is authoritative about *existence* -- it owns the notebooks. The
-        Cloudflare control plane is authoritative about *durable metadata and workflows*.
-        The local store is a fast cache."""
+        Kaggle's kernel list discovers chains; each chain is rebuilt/reconciled from
+        STATE.json in saved output. The local SQLite store is only a warm cache and is
+        never required for recovery after a Space restart.
+        """
         self._last_listing_creds = creds
-        BROKER.remember(creds)
-        client = KaggleClient(creds)
-
-        # 1. Reconcile external Cloudflare metadata across restarts
-        try:
-            self.cf_controller.reconcile_user_session(creds, client)
-        except Exception as exc:
-            log.warning("Session reconciliation with Cloudflare control plane degraded: %s", exc)
-
-        # Snapshot durable job metadata after exact per-job reconciliation.
-        try:
-            cf_by_ref = {j.kaggle_job_ref: j for j in self.cf_controller.client.list_user_jobs(creds.username)}
-        except Exception:
-            cf_by_ref = {}
-
-        # Reconciliation may have completed a workflow step. Launch at most one READY
-        # successor before reading the bulk Kaggle list; the newly submitted job is kept
-        # visible from local/Cloudflare metadata even while Kaggle listing catches up.
-        try:
-            self._drive_ready_workflows(creds)
-        except Exception as exc:
-            log.warning("Workflow driver degraded during job listing: %s", exc)
-
-        # 2. Discover jobs on Kaggle. The bulk listing endpoint is advisory for UI
-        # discovery, not a single point of failure: Cloudflare/local metadata must remain
-        # visible when Kaggle rate-limits or transiently rejects `kernels list`.
+        auth_creds = self.ensure_authenticated(creds)
+        client = KaggleClient(auth_creds)
         try:
             remote = ledger_mod.discover_jobs(client)
         except Exception as exc:
-            log.warning("Kaggle bulk job listing degraded; serving durable metadata: %s", exc)
+            log.warning("Kaggle bulk listing unavailable; serving warm local cache: %s", exc)
             remote = []
-        merged = []
-        seen = set()
+
+        merged, seen = [], set()
         for entry in remote:
             job_id = entry["job_id"]
             seen.add(job_id)
             try:
+                # Always rebuild if the cache is absent; otherwise reconcile against the
+                # newest saved Kaggle output. No Cloudflare metadata is consulted.
                 job = self.store.get_job(job_id)
                 if job is None:
                     job = ledger_mod.rebuild_from_kaggle(client, job_id)
                     self.store.put_job(job)
-                    log_event(log, "job_adopted", "adopted discovered Kaggle job during listing", job_id=job_id)
                 if not job.is_terminal:
-                    job = self.reconciler.reconcile(job_id, creds, actor="list")
-                # Sync state to Cloudflare
-                try:
-                    self.cf_controller.sync_job_state(job)
-                except Exception:
-                    pass
+                    job = self.reconciler.reconcile(job_id, auth_creds, actor="list")
                 described = self.describe(job)
                 described["chain_slugs"] = sorted(
                     set(described.get("chain_slugs", [])) | set(entry.get("chain_slugs", []))
                 )
                 described["last_run"] = entry.get("last_run")
+                described["state_source"] = "kaggle"
                 merged.append(described)
             except Exception as exc:
                 merged.append({
                     "job_id": job_id, "title": entry.get("title", job_id),
-                    "state": "VERIFYING", "phase": "Verifying Kaggle status",
+                    "state": "VERIFYING", "phase": "Verifying Kaggle state",
                     "epoch": entry.get("epoch", 0), "window": entry.get("epoch", 0) + 1,
                     "current_slug": entry.get("current_slug"),
                     "kaggle_url": entry.get("kaggle_url"),
                     "chain_slugs": entry.get("chain_slugs", []),
                     "is_terminal": False, "needs_reconcile": True,
-                    "last_run": entry.get("last_run"),
-                    "note": f"Status check will retry: {type(exc).__name__}",
+                    "last_run": entry.get("last_run"), "state_source": "kaggle",
+                    "note": f"Kaggle status check will retry: {type(exc).__name__}",
                 })
 
-        # 3. Include durable/local jobs not returned by the bulk Kaggle listing.
-        # `kernels list` is eventually consistent and occasionally incomplete, so an
-        # omission must never be translated into "deleted". Exact reconciliation of the
-        # Cloudflare record is the source of that flag.
-        for job in self.store.list_jobs(creds.username):
+        # A just-submitted kernel can take a short time to appear in Kaggle's bulk list.
+        # Keep it visible from the warm cache, but label the source honestly.
+        for job in self.store.list_jobs(auth_creds.username):
             if job.job_id not in seen:
-                seen.add(job.job_id)
                 described = self.describe(job)
-                cf_rec = cf_by_ref.get(job.job_id)
                 described["not_returned_by_kaggle_listing"] = True
-                described["deleted_on_kaggle"] = bool(getattr(cf_rec, "remote_deleted", False))
+                described["deleted_on_kaggle"] = False
+                described["state_source"] = "local_cache_pending_kaggle"
                 merged.append(described)
 
-        def _sort_timestamp(item: dict) -> float:
-            val = item.get("updated_at")
-            if isinstance(val, (int, float)):
-                return float(val)
-            if isinstance(val, str) and val.strip():
-                try:
-                    return float(val.strip())
-                except ValueError:
-                    pass
-                try:
-                    import datetime
-                    s = val.strip().replace("Z", "+00:00").replace(" ", "T")
-                    return datetime.datetime.fromisoformat(s).timestamp()
-                except Exception:
-                    pass
-
-            last_run = item.get("last_run")
-            if isinstance(last_run, (int, float)):
-                return float(last_run)
-            if isinstance(last_run, str) and last_run.strip():
-                try:
-                    return float(last_run.strip())
-                except ValueError:
-                    pass
-                try:
-                    import datetime
-                    s = last_run.strip().replace("Z", "+00:00").replace(" ", "T")
-                    return datetime.datetime.fromisoformat(s).timestamp()
-                except Exception:
-                    pass
+        def stamp(item):
+            for key in ("updated_at", "last_run", "created_at"):
+                value = item.get(key)
+                if isinstance(value, (int, float)):
+                    return float(value)
             return 0.0
-
-        merged.sort(key=_sort_timestamp, reverse=True)
+        merged.sort(key=stamp, reverse=True)
         return merged
+
+    def ingest_kernel_update(self, payload: dict[str, Any], callback_token: str) -> dict[str, Any]:
+        """Warm the local cache from a signed-by-possession Kaggle callback.
+
+        This endpoint is intentionally not authoritative: user-facing status is still
+        reconciled against Kaggle. The per-job callback token is random, lives inside the
+        private Kaggle kernel header, and is checked whenever the local job record exists.
+        """
+        state = payload.get("state") or payload.get("document") or {}
+        job_data = state.get("job") if isinstance(state, dict) else None
+        if not isinstance(job_data, dict):
+            raise ValidationError("kernel update is missing state.job")
+        job_id = str(job_data.get("job_id") or "").strip()
+        if not is_valid_slug(job_id) or not job_id.startswith(CONFIG.job_id_prefix):
+            raise ValidationError("kernel update has an invalid job id")
+        if not callback_token or len(callback_token) < 24:
+            raise ValidationError("kernel callback token is missing or invalid")
+
+        # Verify STATE.json's own digest before accepting it into the warm cache.
+        digest = state.get("_digest")
+        if digest:
+            body = {k: v for k, v in state.items() if k != "_digest"}
+            actual = hashlib.sha256(
+                json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+                           default=str).encode("utf-8")
+            ).hexdigest()
+            if actual != digest:
+                raise IntegrityError("kernel STATE.json digest mismatch")
+
+        current = self.store.get_job(job_id)
+        if current is not None:
+            expected = str((current._extra or {}).get("callback_token") or "")
+            if expected and not secrets.compare_digest(expected, callback_token):
+                raise ValidationError("kernel callback token does not match this job")
+            manifest = current
+            incoming = JobManifest.from_dict(job_data)
+            # Preserve local-only callback/workflow metadata while copying durable fields.
+            keep_extra = dict(current._extra or {})
+            incoming._extra.update({k: v for k, v in keep_extra.items() if k not in incoming._extra})
+            incoming._extra["callback_token"] = callback_token
+            manifest = incoming
+        else:
+            manifest = JobManifest.from_dict(job_data)
+            manifest._extra["callback_token"] = callback_token
+        self.store.put_job(manifest)
+        return {"job_id": job_id, "state": manifest.state.value,
+                "epoch": manifest.epoch, "source": "kaggle_callback"}
 
     # -- workflow execution -------------------------------------------------
     def _workflow_result_payload(self, creds: KaggleCredentials, parent_job_id: str,
