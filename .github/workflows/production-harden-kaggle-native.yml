@@ -1,5 +1,6 @@
 name: Production harden Kaggle-native ORCA
 
+# Trigger file for the verified production hardening pass.
 on:
   push:
     paths:
