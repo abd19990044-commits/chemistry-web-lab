@@ -163,11 +163,12 @@ class SweepResult:
 class Watchdog:
     def __init__(self, store: JobStore, reconciler: Reconciler | None = None,
                  broker: CredentialBroker | None = None, vault_manager: Any | None = None,
-                 *, config=CONFIG) -> None:
+                 *, config=CONFIG, workflow_driver=None) -> None:
         self.store = store
         self.reconciler = reconciler or Reconciler(store, config=config)
         self.broker = broker or BROKER
         self.vault_manager = vault_manager
+        self.workflow_driver = workflow_driver
         self.config = config
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -231,6 +232,11 @@ class Watchdog:
 
                 try:
                     self.reconciler.reconcile(job.job_id, creds, actor="watchdog")
+                    if self.workflow_driver is not None:
+                        try:
+                            self.workflow_driver(creds)
+                        except Exception as exc:
+                            log.warning("Workflow driver failed after watchdog reconciliation: %s", exc)
                     result.recovered += 1
                     result.details.append({"job_id": job.job_id, "action": "reconciled",
                                            **verdict.to_dict()})

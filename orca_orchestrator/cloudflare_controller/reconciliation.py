@@ -220,10 +220,7 @@ def validate_workflow_step_prerequisites(
             ):
                 return False, f"Prerequisite job {prereq_step.job_id} is in state {job_rec.local_state}, not COMPLETED."
 
-        # Check required artifacts if specified
-        for req_art in step.required_artifacts:
-            if prereq_step.result_data and not prereq_step.result_data.get(req_art):
-                # If result_data specifically misses the required artifact
-                pass
+        # Required artefact bytes are validated by OrchestratorService immediately
+        # before launching the READY step, because Cloudflare stores metadata only.
 
     return True, "All prerequisites satisfied."

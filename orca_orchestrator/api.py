@@ -117,7 +117,7 @@ def workflows():
         except Exception:
             datasets = [s.strip() for s in raw_datasets.split(",") if s.strip()]
         orca_link = (payload.get("orca_link") or "").strip() or None
-        res = service.submit_workflow(creds, title=title, steps=steps, dataset_sources=datasets, orca_link=orca_link)
+        res = service.submit_workflow(creds, title=title, steps=payload.get("steps") or [], dataset_sources=datasets, orca_link=orca_link)
         return jsonify(res)
     return jsonify({"ok": True, "workflows": service.list_workflows(creds)})
 
