@@ -48,6 +48,7 @@ jobs:
         run: |
           pytest -q \
             tests/test_kaggle_native_production.py \
+            tests/test_kaggle_native_workflow.py \
             tests/test_continuation.py \
             tests/test_lifecycle_simulation.py \
             tests/test_end_to_end_chain.py \
@@ -68,6 +69,7 @@ jobs:
           svc = Path('orca_orchestrator/service.py').read_text()
           wd = Path('orca_orchestrator/watchdog.py').read_text()
           runner = Path('orca_orchestrator/runner/kernel_runner.py').read_text()
+          builder = Path('orca_orchestrator/runner/builder.py').read_text()
           auth = Path('orca_orchestrator/callback_auth.py').read_text()
           assert 'CloudflareController' not in svc
           assert 'self.cf_controller' not in svc
@@ -76,7 +78,11 @@ jobs:
           assert 'callback_token_sha256' in runner
           assert 'durable_epoch = EPOCH + 1' in runner
           assert '_FALLBACK_ENV = "SECRET_KEY"' in auth
-          print('Kaggle-native ORCA runtime architecture verified')
+          assert 'def advance_workflow_stage' in runner
+          assert 'workflow_plan' in builder
+          assert 'def _normalise_workflow_steps' in svc
+          assert 'Cloudflare-backed multi-step workflows were removed' not in svc
+          print('Kaggle-native ORCA runtime and workflow architecture verified')
           PY
 
   lint-and-static-check:
@@ -157,14 +163,22 @@ jobs:
 
       - name: Run Pytest Test Suite
         run: |
-          pytest -v --junitxml=pytest-report.xml
+          pytest -v --ignore=tests/test_web_routes.py --junitxml=pytest-report.xml
 
-      - name: Upload pytest report
+      - name: Run legacy Kaggle CLI routes in isolated process
+        env:
+          ORCA_LOCAL_MODE: "0"
+        run: |
+          pytest -v tests/test_web_routes.py --junitxml=pytest-web-routes-report.xml
+
+      - name: Upload pytest reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pytest-${{ matrix.os }}-py${{ matrix.python-version }}
-          path: pytest-report.xml
+          path: |
+            pytest-report.xml
+            pytest-web-routes-report.xml
           if-no-files-found: ignore
 
   security-and-secret-audit:
