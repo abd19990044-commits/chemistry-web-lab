@@ -1,5 +1,5 @@
 name: CI contract cleanup
-# verification revision: 4
+# verification revision: 5
 
 on:
   push:
@@ -27,7 +27,7 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pytest pytest-cov jsonschema numpy
           python -m pip install -e ./orca_engine
-      - name: Run formerly failing contract tests
+      - name: Run modern Kaggle-native contract tests
         env:
           ORCA_CALLBACK_SECRET: contract-test-secret-0123456789abcdef012345
           ORCA_LOCAL_MODE: '1'
@@ -40,8 +40,16 @@ jobs:
             tests/test_cloudflare_recovery.py::TestCloudflareOutageResilience::test_service_operates_normally_when_cloudflare_is_unreachable \
             tests/test_kaggle_credential_vault.py::test_user_b_wakes_space_isolation \
             tests/test_frontend.py::test_suite \
-            tests/test_web_routes.py::test_suite \
             2>&1 | tee ci-contract-diagnostics.txt
+      - name: Run legacy CLI route contract in isolated process
+        env:
+          ORCA_CALLBACK_SECRET: contract-test-secret-0123456789abcdef012345
+          ORCA_LOCAL_MODE: '0'
+        shell: bash
+        run: |
+          set -o pipefail
+          pytest -vv -s tests/test_web_routes.py::test_suite \
+            2>&1 | tee -a ci-contract-diagnostics.txt
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
