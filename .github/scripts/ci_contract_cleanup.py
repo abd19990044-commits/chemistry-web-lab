@@ -30,7 +30,7 @@ replace_once(
 replace_once(
     'tests/test_cloudflare_controller.py',
     '''            def list_kernels(self):\n                return []''',
-    '''            def list_kernels(self, *args, **kwargs):\n                return []'''
+    '''            def list_kernels(self, *args, **kwargs):\n                return []\n\n            def kernel_exists(self, slug):\n                return True'''
 )
 
 # Cloudflare-outage resilience is now stronger: the service has no Cloudflare
@@ -44,7 +44,7 @@ replace_once(
 replace_once(
     'tests/test_cloudflare_recovery.py',
     '''            def list_kernels(self):\n                return []''',
-    '''            def list_kernels(self, *args, **kwargs):\n                return []'''
+    '''            def list_kernels(self, *args, **kwargs):\n                return []\n\n            def kernel_exists(self, slug):\n                return True'''
 )
 
 # The watchdog intentionally no longer decrypts another user's Cloudflare vault
@@ -54,6 +54,23 @@ replace_once(
     'tests/test_kaggle_credential_vault.py',
     '''    assert sweep_res.stalled == 1\n    assert sweep_res.recovered == 1\n    assert len(reconciled_jobs) == 1\n    assert reconciled_jobs[0] == ("chem-tools-test-12345", "chem_user")\n\n    # Bob still cannot access Alice's credentials from broker directly\n    assert broker.get("alice") is not None  # Background cached for Alice\n    assert broker.get("bob_chem") == bob_creds''',
     '''    assert sweep_res.stalled == 1\n    assert sweep_res.recovered == 0\n    assert sweep_res.skipped_no_credentials == 1\n    assert reconciled_jobs == []\n\n    # Bob's activity must not resurrect or expose Alice's credentials. The\n    # owner will re-authenticate when they next open the site; until then the\n    # private Kaggle kernel remains responsible for self-continuation.\n    assert broker.get("alice") is None\n    assert broker.get("bob_chem") == bob_creds'''
+)
+
+# Browser code legitimately uses MutationObserver. The Node smoke harness must
+# emulate that browser primitive instead of reporting a false load-time failure.
+replace_once(
+    'tests/test_frontend.py',
+    '''global.Blob = class {};\nglobal.FormData = class { append() {} };\nrequire(process.argv[3]);''',
+    '''global.Blob = class {};\nglobal.FormData = class { append() {} };\nglobal.MutationObserver = class MutationObserver {\n  constructor(callback) { this.callback = callback; }\n  observe() {}\n  disconnect() {}\n  takeRecords() { return []; }\n};\nrequire(process.argv[3]);'''
+)
+
+# Legacy route diagnostics should fail as an assertion with the actual payload,
+# never crash with KeyError when a structured 503 payload uses another message
+# field. This preserves the semantic check without assuming one JSON key.
+replace_once(
+    'tests/test_web_routes.py',
+    '''            check("...and says it is the site's problem", marker in body["error"], body["error"][:160])''',
+    '''            message = body.get("error") or body.get("message") or body.get("note") or body.get("warning") or ""\n            check("...and says it is the site's problem", marker in message,\n                  (message or json.dumps(body))[:160])'''
 )
 
 print('CI contract cleanup applied')
