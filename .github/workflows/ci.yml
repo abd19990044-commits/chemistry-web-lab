@@ -7,11 +7,70 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  orca-production-hardening:
+    name: ORCA Kaggle-native Production Hardening
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply hardening patch
+        run: python .github/scripts/production_hardening_kaggle_native.py
+      - name: Install focused dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+      - name: Compile hardened runtime
+        run: |
+          python -m py_compile orca_orchestrator/callback_auth.py orca_orchestrator/api.py orca_orchestrator/service.py orca_orchestrator/watchdog.py orca_orchestrator/runner/builder.py orca_orchestrator/runner/kernel_runner.py
+      - name: Test hardened runtime
+        env:
+          ORCA_CALLBACK_SECRET: test-only-callback-secret-0123456789abcdef
+          ORCA_LOCAL_MODE: "1"
+        run: |
+          pytest -q tests/test_kaggle_native_production.py tests/test_continuation.py tests/test_lifecycle_simulation.py tests/test_end_to_end_chain.py tests/test_orca_builder.py tests/test_account_control.py
+      - name: Verify architecture
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          svc = Path('orca_orchestrator/service.py').read_text()
+          wd = Path('orca_orchestrator/watchdog.py').read_text()
+          runner = Path('orca_orchestrator/runner/kernel_runner.py').read_text()
+          assert 'CloudflareController' not in svc
+          assert 'self.cf_controller' not in svc
+          assert 'credential_vault' not in wd
+          assert 'get_vault_manager' not in wd
+          assert 'callback_token_sha256' in runner
+          assert 'durable_epoch = EPOCH + 1' in runner
+          print('Kaggle-native ORCA runtime architecture verified')
+          PY
+      - name: Commit verified hardening
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .env.example orca_orchestrator/callback_auth.py orca_orchestrator/service.py orca_orchestrator/watchdog.py orca_orchestrator/runner/kernel_runner.py tests/test_kaggle_native_production.py
+          if git diff --cached --quiet; then
+            echo 'No hardening changes to commit.'
+          else
+            git commit -m 'fix: production-harden Kaggle-native ORCA orchestration'
+            git push origin HEAD:main
+          fi
+
   lint-and-static-check:
     name: Lint & Static Validation
     runs-on: ubuntu-latest
