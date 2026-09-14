@@ -114,6 +114,12 @@ def _header() -> dict:
     header.setdefault("orca_link", None)
     header.setdefault("callback_base_url", None)
     header.setdefault("callback_token", None)
+    header.setdefault("workflow_id", None)
+    header.setdefault("workflow_title", None)
+    header.setdefault("workflow_plan", [])
+    header.setdefault("workflow_step_index", 0)
+    header.setdefault("workflow_step_count", 1)
+    header.setdefault("workflow_step_name", "CALC")
     header.setdefault("kaggle_username", "")
     header.setdefault("kaggle_key", None)
     header.setdefault("kaggle_api_token", None)
@@ -1381,7 +1387,8 @@ def encode_inline_payload(manifest):
     return blob
 
 
-def push_successor(manifest, next_epoch, job_kind, cumulative_cycles, disk_epochs):
+def push_successor(manifest, next_epoch, job_kind, cumulative_cycles, disk_epochs,
+                   header_overrides=None):
     """RESTARTING. Builds and pushes the next window.
 
     Deliberately runs BEFORE result packaging. Packaging is the step that runs
@@ -1416,6 +1423,8 @@ def push_successor(manifest, next_epoch, job_kind, cumulative_cycles, disk_epoch
         "cumulative_opt_cycles": cumulative_cycles,
         "disk_epochs_used": disk_epochs,
     })
+    if header_overrides:
+        header.update(dict(header_overrides))
 
     job_dir = os.path.join(SCRATCH_ROOT, "next_window", slug)
     shutil.rmtree(job_dir, ignore_errors=True)
@@ -1464,6 +1473,139 @@ def push_successor(manifest, next_epoch, job_kind, cumulative_cycles, disk_epoch
     emit("successor_pushed", "the next window was accepted by Kaggle",
          slug=real_slug, url=url, diverged=real_slug != slug)
     return real_slug, url
+
+
+def _workflow_plan():
+    plan = H.get("workflow_plan") or []
+    return plan if isinstance(plan, list) else []
+
+
+def _workflow_geometry_for_next_step(next_index):
+    """Return a verified complete XYZ copied under a stage-stable name."""
+    candidates = []
+    preferred = wp(BASENAME + ".xyz")
+    if os.path.isfile(preferred):
+        candidates.append(preferred)
+    for path in sorted(glob.glob(wp("*.xyz"))):
+        if path not in candidates and not path.lower().endswith("_trj.xyz"):
+            candidates.append(path)
+    for path in sorted(glob.glob(wp("*_trj.xyz"))):
+        if path not in candidates:
+            candidates.append(path)
+
+    for path in candidates:
+        try:
+            frames = art.read_trajectory_frames(path)
+        except Exception:
+            frames = []
+        if not frames:
+            continue
+        geom_name = "workflow_step_%d_geometry.xyz" % next_index
+        geom_path = wp(geom_name)
+        atomic_write_bytes(geom_path, (frames[-1].rstrip() + "\n").encode("utf-8"))
+        verdict = art.validate_xyz(geom_path)
+        if verdict.ok:
+            return geom_name, geom_path
+    raise RuntimeError(
+        "the completed workflow stage produced no complete XYZ geometry; refusing to "
+        "launch the next calculation with guessed coordinates"
+    )
+
+
+def _workflow_required_artifacts(step):
+    carried = []
+    for raw in step.get("required_artifacts") or []:
+        name = os.path.basename(str(raw).strip())
+        if not name or name.lower() in ("geometry", "xyz", "optimized_geometry", "optimised_geometry"):
+            continue
+        if name.lower().endswith(".gbw"):
+            raise RuntimeError(
+                "GBW is intentionally not a workflow dependency across sessions; request "
+                "an ASCII artifact such as .xyz or .hess instead"
+            )
+        exact = wp(name)
+        matches = [exact] if os.path.isfile(exact) else sorted(glob.glob(wp("*" + name)))
+        matches = [p for p in matches if os.path.isfile(p)]
+        if not matches:
+            raise RuntimeError("required workflow artifact '%s' is missing" % name)
+        carried.append(matches[0])
+    return carried
+
+
+def advance_workflow_stage(outcome, cumulative_cycles, disk_epochs):
+    """Commit the completed stage and atomically launch the next stage in Kaggle."""
+    plan = _workflow_plan()
+    current = int(H.get("workflow_step_index") or 0)
+    next_index = current + 1
+    if not plan or next_index >= len(plan):
+        return None
+    step = dict(plan[next_index] or {})
+    template = str(step.get("input_template") or "")
+    if not template.strip():
+        raise RuntimeError("workflow step %d has an empty input template" % next_index)
+
+    geom_name, geom_path = _workflow_geometry_for_next_step(next_index)
+    charge, mult = art.extract_charge_mult(template)
+    next_text = art.set_geometry(template, geom_name, charge, mult)
+    if geom_name not in next_text:
+        raise RuntimeError(
+            "workflow step %d has no replaceable ORCA geometry block; include a '* xyz ... *' "
+            "or '* xyzfile ...' geometry declaration" % next_index
+        )
+    next_text = art.ensure_simple_keyword(next_text, "NoAutoStart")
+    next_kind = art.detect_job_kind(next_text)
+    carried = [geom_path] + _workflow_required_artifacts(step)
+
+    write_state(
+        "CHECKPOINTING", job_kind=H.get("job_kind") or "unknown",
+        cumulative_cycles=cumulative_cycles, disk_epochs=disk_epochs,
+        note="completed workflow step %d; staging verified handoff to step %d" % (current, next_index),
+        extra={"workflow_step_index": current, "workflow_next_step_index": next_index},
+        outcome=outcome,
+    )
+    manifest, verified = stage_and_verify_checkpoint(
+        next_text, carried, next_kind, outcome, 0
+    )
+    if not verified:
+        raise RuntimeError("workflow handoff checkpoint failed verification")
+
+    write_state(
+        "RESTARTING", checkpoint=manifest, job_kind=H.get("job_kind") or "unknown",
+        cumulative_cycles=cumulative_cycles, disk_epochs=disk_epochs,
+        note="workflow handoff verified; launching step %d" % next_index,
+        extra={"workflow_step_index": current, "workflow_next_step_index": next_index},
+        outcome=outcome,
+    )
+    next_name = str(step.get("step_name") or ("STEP %d" % (next_index + 1)))
+    next_slug, next_url = push_successor(
+        manifest, EPOCH + 1, next_kind, 0, disk_epochs,
+        header_overrides={
+            "workflow_step_index": next_index,
+            "workflow_step_count": len(plan),
+            "workflow_step_name": next_name,
+            "workflow_plan": plan,
+            "job_kind": next_kind,
+            "cumulative_opt_cycles": 0,
+        },
+    )
+    manifest["status"] = "committed"
+    manifest["committed_at"] = time.time()
+    atomic_write_json(CHECKPOINT_FILE, manifest)
+    write_state(
+        "QUEUED", checkpoint=manifest, job_kind=next_kind,
+        cumulative_cycles=0, disk_epochs=disk_epochs,
+        note="workflow step %d completed; step %d (%s) was accepted by Kaggle" % (
+            current, next_index, next_name),
+        extra={
+            "workflow_step_index": next_index,
+            "workflow_step_name": next_name,
+            "workflow_step_count": len(plan),
+        },
+        next_slug=next_slug, next_url=next_url, outcome=outcome,
+    )
+    emit("workflow_step_advanced", "launched the next workflow stage",
+         from_step=current, to_step=next_index, step_name=next_name, next_slug=next_slug)
+    return next_slug, next_url
 
 
 # ---------------------------------------------------------------------------
@@ -1593,6 +1735,13 @@ def write_state(state, *, checkpoint=None, note="", error=None, extra=None,
     # window after a handoff callback.
     durable_epoch = EPOCH + 1 if (state == "QUEUED" and next_slug) else EPOCH
     durable_slug = next_slug if (state == "QUEUED" and next_slug) else (os.environ.get("KAGGLE_KERNEL_SLUG", "") or JOB_ID)
+    state_extra = dict(extra or {})
+    durable_step_index = int(state_extra.get("workflow_step_index", H.get("workflow_step_index", 0)) or 0)
+    durable_step_name = state_extra.get("workflow_step_name") or (
+        (H.get("workflow_plan") or [{}])[durable_step_index].get("step_name")
+        if isinstance(H.get("workflow_plan"), list) and durable_step_index < len(H.get("workflow_plan") or [])
+        else H.get("workflow_step_name", "CALC")
+    )
     job = {
         "job_id": JOB_ID, "owner": H["kaggle_username"], "title": H.get("title") or JOB_ID,
         "created_at": START_TIME, "updated_at": time.time(),
@@ -1602,6 +1751,12 @@ def write_state(state, *, checkpoint=None, note="", error=None, extra=None,
         "last_heartbeat_at": time.time(),
         "input_filename": H["input_filename"],
         "job_kind": job_kind,
+        "workflow_id": H.get("workflow_id"),
+        "workflow_title": H.get("workflow_title"),
+        "workflow_plan": H.get("workflow_plan") or [],
+        "step_index": durable_step_index,
+        "step_count": int(H.get("workflow_step_count") or len(H.get("workflow_plan") or []) or 1),
+        "step_name": durable_step_name,
         "verified_checkpoint_id": (checkpoint or {}).get("checkpoint_id")
                                   if (checkpoint or {}).get("status") in
                                   ("verified", "committed") else None,
@@ -1623,7 +1778,7 @@ def write_state(state, *, checkpoint=None, note="", error=None, extra=None,
     document = {
         "schema_version": 2, "written_at": time.time(), "run_token": RUN_TOKEN,
         "job": job, "checkpoint": checkpoint, "disk_report": job["disk_report"],
-        "extra": dict(extra or {}, next_slug=next_slug, next_url=next_url,
+        "extra": dict(state_extra, next_slug=next_slug, next_url=next_url,
                       producer_epoch=EPOCH, callback_base_url=H.get("callback_base_url") or "",
                       callback_token_sha256=job.get("callback_token_sha256") or "",
                       outcome=outcome.to_dict() if outcome is not None else None),
@@ -1833,6 +1988,26 @@ def main():
         outcome = art.classify_outcome(out_text, job_kind=job_kind)
 
     if outcome.is_complete:
+        plan = _workflow_plan()
+        current_step = int(H.get("workflow_step_index") or 0)
+        if plan and current_step + 1 < len(plan):
+            try:
+                advance_workflow_stage(outcome, cumulative, disk_epochs)
+                purge_scratch()
+                package_results(note="Workflow stage %d completed; successor stage launched." % current_step)
+                emit("window_end", "workflow stage complete; next stage launched",
+                     wall_seconds=round(time.time() - START_TIME))
+                return 0
+            except Exception as exc:
+                note = ("The ORCA stage completed, but the verified workflow handoff failed: %s. "
+                        "No next stage was guessed or launched." % _scrub(str(exc)))
+                write_state("FAILED", note=note, job_kind=job_kind,
+                            error={"code": "workflow_handoff_failed",
+                                   "detail": _scrub(str(exc))[:400]},
+                            cumulative_cycles=cumulative, disk_epochs=disk_epochs, outcome=outcome)
+                purge_scratch()
+                package_results(note=note)
+                return 1
         note = ("The calculation finished: %s. Optimisation cycles in this window: %d; "
                 "cumulative across all windows: %d."
                 % (outcome.reason, outcome.opt_cycles, cumulative))

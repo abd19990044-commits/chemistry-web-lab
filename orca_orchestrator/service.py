@@ -148,6 +148,8 @@ class OrchestratorService:
         step_count: int = 1,
         step_name: str = "CALC",
         callback_base_url: str | None = None,
+        workflow_plan: list[dict[str, Any]] | None = None,
+        workflow_title: str | None = None,
     ) -> SubmitResult:
         """Creates a job and pushes its first window.
 
@@ -170,6 +172,8 @@ class OrchestratorService:
             "name": job_name,
             "workflow_id": workflow_id,
             "step_index": step_index,
+            "workflow_plan": workflow_plan or [],
+            "workflow_title": workflow_title or "",
         }
         payload_hash = content_id(request_payload)
         key = idempotency_key or f"submit:{creds.fingerprint}:{payload_hash}"
@@ -214,6 +218,8 @@ class OrchestratorService:
                         "step_index": step_index,
                         "step_count": step_count,
                         "step_name": step_name,
+                        "workflow_plan": list(workflow_plan or []),
+                        "workflow_title": workflow_title or job_name or "",
                         "callback_base_url": (callback_base_url or "").rstrip("/"),
                         "callback_token": callback_auth.issue(job_id),
                     },
@@ -333,6 +339,7 @@ class OrchestratorService:
             "step_index": extra.get("step_index", 0),
             "step_count": extra.get("step_count", 1),
             "step_name": extra.get("step_name", "CALC"),
+            "workflow_title": extra.get("workflow_title"),
             "resume_required": extra.get("resume_required", False) or bool(job.state == JobState.FAILED and job.verified_checkpoint_id),
             "resume_reason": extra.get("resume_reason") or ("checkpoint_present" if job.verified_checkpoint_id else None),
             "result_state": res_state,
@@ -498,25 +505,163 @@ class OrchestratorService:
         return {"job_id": job_id, "state": manifest.state.value,
                 "epoch": manifest.epoch, "source": "kaggle_callback"}
 
-    # -- workflows ---------------------------------------------------------
-    # Cloudflare-backed workflow orchestration has been retired. Restart chains
-    # are now Kaggle-native and self-continuing. The legacy workflow API stays
-    # readable so older frontends do not crash, but it no longer creates any
-    # external control-plane dependency.
+    # -- Kaggle-native workflows -------------------------------------------
+    @staticmethod
+    def _normalise_workflow_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Validate and canonicalise a deterministic linear ORCA workflow.
+
+        A single root Kaggle job owns the whole workflow. Stage transitions are
+        ordinary verified successor handoffs, so STATE.json remains the only
+        durable control plane. Branching DAGs are rejected rather than being
+        approximated with unsafe server-side scheduling.
+        """
+        if not isinstance(steps, list) or not steps:
+            raise ValidationError("A workflow must define at least one step.")
+        if len(steps) > 16:
+            raise ValidationError("A workflow may contain at most 16 sequential steps.")
+
+        plan = []
+        for index, raw in enumerate(steps):
+            if not isinstance(raw, dict):
+                raise ValidationError(f"Workflow step {index} must be an object.")
+            name = str(raw.get("step_name") or raw.get("name") or raw.get("title") or f"STEP {index + 1}").strip()
+            template = str(raw.get("input_template") or raw.get("input_content") or raw.get("input_text") or "")
+            if not template.strip():
+                raise ValidationError(f"Workflow step {index} ({name}) has no ORCA input template.")
+            required = raw.get("required_artifacts") or []
+            if isinstance(required, str):
+                required = [x.strip() for x in required.split(",") if x.strip()]
+            if not isinstance(required, list):
+                raise ValidationError(f"Workflow step {index} required_artifacts must be a list.")
+            required = [os.path.basename(str(x).strip()) for x in required if str(x).strip()]
+            if any(x.lower().endswith(".gbw") for x in required):
+                raise ValidationError(
+                    "Workflow stages cannot depend on a GBW binary restart file. Use geometry/ASCII "
+                    "artifacts (for example .xyz or .hess); the next stage will generate a fresh "
+                    "wavefunction, which is safer across Kaggle session boundaries."
+                )
+            prereq = raw.get("prerequisites")
+            if prereq is None:
+                prereq = [] if index == 0 else [index - 1]
+            try:
+                prereq = [int(x) for x in prereq]
+            except (TypeError, ValueError):
+                raise ValidationError(f"Workflow step {index} has invalid prerequisites.")
+            expected = [] if index == 0 else [index - 1]
+            if prereq != expected:
+                raise ValidationError(
+                    "Kaggle-native workflows are sequential in this release; each step after "
+                    "the first must depend only on the immediately preceding step."
+                )
+            plan.append({
+                "step_index": index,
+                "step_name": name[:80],
+                "input_template": template,
+                "required_artifacts": required,
+                "prerequisites": prereq,
+            })
+        return plan
+
+    @staticmethod
+    def _workflow_view(job: JobManifest) -> dict[str, Any] | None:
+        extra = dict(job._extra or {})
+        workflow_id = extra.get("workflow_id")
+        plan = extra.get("workflow_plan") or []
+        if not workflow_id or not isinstance(plan, list) or not plan:
+            return None
+        current = max(0, min(int(extra.get("step_index", 0) or 0), len(plan) - 1))
+        steps = []
+        for index, spec in enumerate(plan):
+            if index < current:
+                status = "COMPLETED"
+            elif index > current:
+                status = "PENDING"
+            elif job.state == JobState.FINISHED and current == len(plan) - 1:
+                status = "COMPLETED"
+            elif job.state in (JobState.FAILED, JobState.CANCELLED):
+                status = "FAILED"
+            else:
+                status = "RUNNING"
+            steps.append({
+                "step_index": index,
+                "step_name": spec.get("step_name") or f"STEP {index + 1}",
+                "job_id": job.job_id,
+                "status": status,
+                "prerequisites": list(spec.get("prerequisites") or []),
+                "required_artifacts": list(spec.get("required_artifacts") or []),
+            })
+        if job.state == JobState.FINISHED and current == len(plan) - 1:
+            status = "COMPLETED"
+        elif job.state in (JobState.FAILED, JobState.CANCELLED):
+            status = "FAILED"
+        else:
+            status = "IN_PROGRESS"
+        return {
+            "workflow_id": workflow_id,
+            "kaggle_username": job.owner,
+            "title": extra.get("workflow_title") or job.title,
+            "status": status,
+            "steps": steps,
+            "current_step_index": current,
+            "root_job_id": job.job_id,
+            "kaggle_url": job.current_url or f"https://www.kaggle.com/code/{job.owner}/{job.current_slug}",
+            "created_at": job.created_at,
+            "updated_at": job.updated_at,
+            "state_source": "kaggle",
+        }
+
     def submit_workflow(self, creds: KaggleCredentials, title: str, steps: list[dict[str, Any]],
                         *, aux_files: dict[str, bytes] | None = None,
                         dataset_sources: list[str] | None = None,
-                        orca_link: str | None = None) -> dict[str, Any]:
-        raise ValidationError(
-            "Cloudflare-backed multi-step workflows were removed. Submit the ORCA job "
-            "normally; restart/continuation state is now carried entirely by Kaggle."
+                        orca_link: str | None = None,
+                        callback_base_url: str | None = None) -> dict[str, Any]:
+        plan = self._normalise_workflow_steps(steps)
+        workflow_id = new_id("wf_")
+        first = plan[0]
+        result = self.submit(
+            creds,
+            input_filename=f"{slugify(first['step_name']) or 'step-1'}.inp",
+            input_content=first["input_template"],
+            job_name=f"{title}-{first['step_name']}",
+            aux_files=aux_files or {},
+            dataset_sources=dataset_sources or [],
+            orca_link=orca_link,
+            idempotency_key=f"workflow:{creds.fingerprint}:{workflow_id}:step:0",
+            workflow_id=workflow_id,
+            step_index=0,
+            step_count=len(plan),
+            step_name=first["step_name"],
+            callback_base_url=callback_base_url,
+            workflow_plan=plan,
+            workflow_title=title,
         )
+        job = self.store.require_job(result.job_id)
+        return {
+            "ok": True,
+            "workflow_id": workflow_id,
+            "workflow": self._workflow_view(job),
+            "step_0_job": result.to_dict(),
+        }
 
     def get_workflow(self, creds: KaggleCredentials, workflow_id: str) -> dict[str, Any] | None:
+        auth = self.ensure_authenticated(creds)
+        self.list_jobs(auth)  # rebuild/warm the local cache from Kaggle first
+        for job in self.store.list_jobs(auth.username):
+            view = self._workflow_view(job)
+            if view and view.get("workflow_id") == workflow_id:
+                return view
         return None
 
     def list_workflows(self, creds: KaggleCredentials) -> list[dict[str, Any]]:
-        return []
+        auth = self.ensure_authenticated(creds)
+        self.list_jobs(auth)  # Kaggle is authoritative; SQLite is only a warm cache.
+        views = []
+        for job in self.store.list_jobs(auth.username):
+            view = self._workflow_view(job)
+            if view:
+                views.append(view)
+        views.sort(key=lambda x: float(x.get("updated_at") or 0), reverse=True)
+        return views
 
 
     # -- results -----------------------------------------------------------
