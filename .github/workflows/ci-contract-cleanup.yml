@@ -52,10 +52,6 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            tests/test_canonical_analyzer_refinement.py \
-            tests/test_cloudflare_controller.py \
-            tests/test_cloudflare_recovery.py \
-            tests/test_kaggle_credential_vault.py
+          git add tests/test_canonical_analyzer_refinement.py tests/test_cloudflare_controller.py tests/test_cloudflare_recovery.py tests/test_kaggle_credential_vault.py tests/test_frontend.py tests/test_web_routes.py
           git commit -m 'test: align CI contracts with Kaggle-native orchestration'
           git push origin HEAD:main
