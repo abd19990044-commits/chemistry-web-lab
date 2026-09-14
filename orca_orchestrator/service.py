@@ -425,8 +425,14 @@ class OrchestratorService:
         except Exception as exc:
             log.warning("Workflow driver degraded during job listing: %s", exc)
 
-        # 2. Discover jobs on Kaggle
-        remote = ledger_mod.discover_jobs(client)
+        # 2. Discover jobs on Kaggle. The bulk listing endpoint is advisory for UI
+        # discovery, not a single point of failure: Cloudflare/local metadata must remain
+        # visible when Kaggle rate-limits or transiently rejects `kernels list`.
+        try:
+            remote = ledger_mod.discover_jobs(client)
+        except Exception as exc:
+            log.warning("Kaggle bulk job listing degraded; serving durable metadata: %s", exc)
+            remote = []
         merged = []
         seen = set()
         for entry in remote:
@@ -668,13 +674,18 @@ class OrchestratorService:
                         parent_job_id = None
 
                     launch_cfg = dict(wf.metadata.get("launch_config") or {})
+                    step_datasets = list(launch_cfg.get("dataset_sources") or [])
+                    if not step_datasets and parent_job_id:
+                        parent_manifest = self.store.get_job(parent_job_id)
+                        if parent_manifest:
+                            step_datasets = list(parent_manifest.dataset_sources or [])
                     sub = self.submit(
                         creds,
                         input_filename=f"{slugify(step.step_name) or 'step'}-{step.step_index}.inp",
                         input_content=input_content,
                         job_name=f"{wf.title}-{step.step_name}",
                         aux_files=step_aux,
-                        dataset_sources=list(launch_cfg.get("dataset_sources") or []),
+                        dataset_sources=step_datasets,
                         orca_link=launch_cfg.get("orca_link") or None,
                         idempotency_key=f"workflow:{wf.workflow_id}:step:{step.step_index}",
                         workflow_id=wf.workflow_id,

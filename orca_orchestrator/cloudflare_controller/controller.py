@@ -219,19 +219,37 @@ class CloudflareController:
 
             # Query Kaggle for live remote status
             remote_status: KernelStatus | None = None
+            status_query_failed = False
             try:
                 # Query newest window slug or base slug
                 slug_to_check = cf_job.chain_slugs[-1] if cf_job.chain_slugs else job_ref
                 remote_status = client.kernel_exists(slug_to_check)
             except Exception as exc:
+                status_query_failed = True
                 log.warning("Could not query Kaggle status for job %s: %s", job_ref, exc)
 
-            # Execute deterministic reconciliation decision
-            decision: ReconciliationDecision = decide_reconciliation(
-                cf_record=cf_job,
-                remote_status=remote_status,
-                manifest=manifest,
-            )
+            # A transport/API failure is UNKNOWN, not NOT_FOUND. Preserve the last durable
+            # Cloudflare state and retry later. Only a successful exact lookup returning
+            # None is allowed to mean that Kaggle no longer has the kernel.
+            if status_query_failed:
+                decision = ReconciliationDecision(
+                    case=ReconciliationCase.UNKNOWN,
+                    action="NOOP",
+                    local_state=cf_job.local_state,
+                    remote_state=cf_job.last_seen_remote_state or RemoteExecutionState.UNKNOWN.value,
+                    resume_required=cf_job.resume_required,
+                    resume_reason=cf_job.resume_reason,
+                    result_state=cf_job.result_state or "REMOTE_ONLY",
+                    remote_deleted=cf_job.remote_deleted,
+                    note="Kaggle status lookup failed transiently; preserved last durable state.",
+                    error_code=cf_job.last_error_code,
+                )
+            else:
+                decision = decide_reconciliation(
+                    cf_record=cf_job,
+                    remote_status=remote_status,
+                    manifest=manifest,
+                )
 
             # Update Cloudflare record with decision
             cf_job.local_state = decision.local_state
@@ -295,7 +313,12 @@ class CloudflareController:
                     j_rec = jobs_by_ref[step.job_id]
                     if j_rec.local_state in (LocalWorkflowState.COMPLETED.value, LocalWorkflowState.REMOTE_COMPLETED.value):
                         step.status = "COMPLETED"
-                    elif j_rec.local_state in (LocalWorkflowState.FAILED.value, LocalWorkflowState.REMOTE_FAILED.value):
+                    elif j_rec.local_state in (
+                        LocalWorkflowState.FAILED.value,
+                        LocalWorkflowState.REMOTE_FAILED.value,
+                        LocalWorkflowState.REMOTE_DELETED.value,
+                        LocalWorkflowState.REMOTE_STOPPED.value,
+                    ):
                         step.status = "FAILED"
                         has_failed = True
                     elif j_rec.local_state in (LocalWorkflowState.RUNNING.value, LocalWorkflowState.WAITING_FOR_REMOTE.value):
