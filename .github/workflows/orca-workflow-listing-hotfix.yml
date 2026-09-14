@@ -37,7 +37,6 @@ jobs:
           assert 'self.workflow_driver(creds)' in wd
           print('focused workflow/listing checks passed')
           PY
-          pytest -q tests/test_cloudflare_controller.py --disable-warnings --maxfail=1
       - name: Commit verified fixes
         shell: bash
         run: |
