@@ -633,6 +633,9 @@
       lastCompound = { query, smiles: data.smiles, name: data.filename };
 
       document.getElementById("explorer-image").src = b64ToDataUrl(data.image_png_base64, "image/png");
+      if (data.cdxml_file_base64) {
+        setDownload(document.getElementById("explorer-download-cdxml"), data.cdxml_file_base64, "chemical/x-cdxml", `${data.filename}.cdxml`);
+      }
       setDownload(document.getElementById("explorer-download-mol"), data.mol_file_base64, "chemical/x-mdl-molfile", `${data.filename}.mol`);
       setDownload(document.getElementById("explorer-download-svg"), data.image_svg_base64, "image/svg+xml", `${data.filename}.svg`);
       document.getElementById("explorer-title-out").textContent = data.title || query;
@@ -915,11 +918,13 @@
 
     hide(reactionError); hide(reactionResult); show(reactionLoading);
     try {
+      const arrowStyle = document.getElementById("reaction-arrow-style")?.value || "forward";
       const data = await postJSON("/api/reaction", {
         reactants, products,
         small_as_formula: document.getElementById("reaction-small-as-formula").checked,
         arrow_top: reactionArrowTop?.value.trim() || "",
         arrow_bottom: reactionArrowBottom?.value.trim() || "",
+        arrow_style: arrowStyle,
       });
       const rxnImg = document.getElementById("reaction-image");
       rxnImg.onerror = () => {
@@ -931,6 +936,9 @@
         rxnImg.src = b64ToDataUrl(data.image_svg_base64, "image/svg+xml");
       } else if (data.image_png_base64) {
         rxnImg.src = b64ToDataUrl(data.image_png_base64, "image/png");
+      }
+      if (data.cdxml_file_base64) {
+        setDownload(document.getElementById("reaction-download-cdxml"), data.cdxml_file_base64, "chemical/x-cdxml", "reaction.cdxml");
       }
       setDownload(document.getElementById("reaction-download-rxn"), data.rxn_file_base64, "chemical/x-mdl-rxnfile", "reaction.rxn");
       setDownload(document.getElementById("reaction-download-svg"), data.image_svg_base64, "image/svg+xml", "reaction.svg");
@@ -946,17 +954,18 @@
       balanceEl.textContent = (balance.balanced ? "✓ " : "⚠️ ") + (balance.message || "");
       balanceEl.classList.toggle("hidden", !balance.message);
 
-      // The file check. This reports a STRUCTURAL validation of the MDL RXN
-      // block - ChemDraw is not installed on the server and cannot be, so the
-      // honest claim is "this is a well-formed file in the format ChemDraw
-      // imports", which is exactly what was verified.
+      // The file check. Reports structural validation of both ChemDraw XML and MDL RXN.
       const fileEl = document.getElementById("reaction-filecheck");
       const report = data.file_report || {};
+      const cdxmlRep = data.cdxml_report || {};
       if (report.valid) {
+        const cdxmlPart = cdxmlRep.valid
+          ? ` • Valid ChemDraw XML (.cdxml with ${cdxmlRep.atoms || 0} atoms, ${cdxmlRep.bonds || 0} bonds)`
+          : "";
         fileEl.className = "reaction-badge badge-ok";
         fileEl.textContent = `✓ Valid ${report.format} file (${report.reactants} reactant `
           + `component${report.reactants === 1 ? "" : "s"}, ${report.products} product `
-          + `component${report.products === 1 ? "" : "s"}) - opens in `
+          + `component${report.products === 1 ? "" : "s"})${cdxmlPart} - opens in `
           + `${(report.opens_in || []).join(", ")}.`;
       } else {
         fileEl.className = "reaction-badge badge-warn";

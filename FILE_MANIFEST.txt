@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-09-22T01:50:48Z
+# Generated: 2026-09-22T03:00:04Z
 # Package Mode: SNAPSHOT_FROM_WORKTREE
 # Source State: dirty_snapshot
 # Source Git SHA: f0440913cf560bb8aff89b2e16c73c9e9976ef61-dirty
-# Package Tree Hash: 690140d1a0af3112868dcaf5c8efb4cb54d7d1d2924318665b24429ec7866af9
-# Total Files: 430
-# Total Size: 34,550,663 bytes (32.95 MB)
+# Package Tree Hash: 8ecc28a30ff222603ce891f49952b8dae7f56765df321448af28d26f3ca3b8af
+# Total Files: 432
+# Total Size: 34,591,805 bytes (32.99 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ api/main.py                                        |      6,598 B | b7f6aaceeaca
 api/middleware.py                                  |      3,178 B | 8a1ce700fc2470a86c0d67c0da0973dda8ce7bd11ff3e0137d29e75fce0963c3
 api/routes/__init__.py                             |         84 B | 78f74e6949770ed6015d90084546ff5a07267e0783623d8f1ecb4b73b9910c2a
 api/routes/analysis.py                             |      1,361 B | bc7c5eb3fa6fcd1f5746f0af771b17dcbc258864598866b239edcb5a2803a4b3
-api/routes/compound.py                             |        807 B | 0b20bed07540c4f09fdb3f8c600b6484072fc9720e787734e9a2920699425455
+api/routes/compound.py                             |      1,599 B | 3d48a273fb24964b508e50bc0c2e78a0e32979a4b7cc5fa75ee253f95b956ace
 api/routes/health.py                               |        639 B | acb83867a18c3016a662cffd32ecbcad53adb22602cf170b155f24ab3430c6cc
 api/routes/kaggle.py                               |      8,787 B | 05f308bae7c23e8d7db651e1bdd9d455d5a57cce05947e40205b6f12a930f75f
 api/routes/local_agent.py                          |     10,491 B | 05aa3fa082e1f7bfb3ac85ddea8ab4aafd5be46cddc308eef7dc65c681008aa2
@@ -29,7 +29,7 @@ api/schemas/__init__.py                            |      3,028 B | 577911a088f4
 api/schemas/analysis.py                            |      1,115 B | e03598494b355843550a5744ed2bfae2600dd002251e20c62a365b05092fdb07
 api/schemas/compound.py                            |        615 B | 0f2a66c7153fa9e8c6da642db7d182324279e9256874252a973c3576c1cf74bc
 api/schemas/local_agent.py                         |      3,941 B | 7e42ae9dca8827b52094905466e338996bfdbef7edc461d9aba414252c1ff725
-app.py                                             |    200,376 B | 5519412518809c0285aa14accbbef31b69a9e4130491faae50eaa20651f650b5
+app.py                                             |    207,083 B | 9b6a79bed92df79d04a1961a38c1e1c5ccfd022dc8591226cc79427b7360a9b0
 ARCHITECTURE.md                                    |     48,949 B | a50d3a2703d48a159a61037d46fea6a2279d0b3a6bf79bb9bc307675c6656f8b
 benchmarks/benzene_tddft.out                       |      1,551 B | 2510aaa519c6fe573da8436020801ca8bc2d9040b442f045f12802300a103e7c
 benchmarks/water_sp_freq.out                       |      3,095 B | a8c69da119edc8a2de9a4158a6cc7111ce015380a97e1810e9609ee0d1d9e63e
@@ -43,7 +43,7 @@ bootstrap/windows/bootstrap_windows.ps1            |      5,178 B | c6305f7d981f
 bootstrap/windows/install_and_run.bat              |      5,411 B | 366604a476b82ca6959bd93fdd4085e4a1e1d98f4b47fc99a08fe248bf999b26
 chem_core/__init__.py                              |      2,052 B | 7bfe642aa4cf0aebbc3a159a34cc3c7e3f1524c0bef5595a4288e321f33e0e41
 chem_core/drawing.py                               |      4,271 B | a8fdc421bad6caf72fc27a4f0770e4ee99c9660327287ecd05a62aa0d896712c
-chem_core.py                                       |     77,293 B | eca8b31f06a42c3e3cd8c6423c6cf3e8f2e8386ec5bffaafe0ccaeb1d8f187bc
+chem_core.py                                       |     80,651 B | 48db5af2d672b540f385cc58fe80374da71e6a66b465c31ab3a1c1b3220534d3
 CITATION.cff                                       |      1,221 B | d64038dd42e6dd83a58aee6090dd9088aeea44bf160e9d6a30c3172369efa9d2
 cloudflare-control-plane/.dev.vars.example         |        299 B | 124e38e87a6f88674df2a16539913398f4f40479708700e51e568f0fe6ed3473
 cloudflare-control-plane/.github/workflows/ci.yml  |        464 B | 38a59b4d4e6e62cfe7a6bcf4dea517814b5c3c5f820da6caf7f75224b7725651
@@ -307,6 +307,7 @@ services/__init__.py                               |         66 B | 06fb368edded
 services/analysis_service.py                       |      2,314 B | 3e4bf83d698d7daa45c589c2a431232b11bd15b967ad72a403a81215a5e020c8
 services/artifact_service.py                       |      7,392 B | 89cf589a2307ff2868ee9518d787aeb74b21acd53297440ded91887f5cd49b9e
 services/auth_service.py                           |     10,278 B | e7c2598d6cbdae27e5198f4bdbcf9b44586be5cec855e45c27ba3c78bb6f2d01
+services/cdxml_service.py                          |     19,152 B | 21c8751b7159ebeaeab11b0ff379c37ecd50d3b7ea4ca4dae0c805ea96a89baf
 services/compound_service.py                       |      1,757 B | 7e9ecd524fa105081a4473d06ee96acb7b2273d81930e5ee8be7f71538c5f0b0
 services/execution_backend.py                      |      7,155 B | 5036ab7b9a092660a3f925e1bf7f5eaa1f7a3f323a2f4dc0d960c477a2023521
 services/health_service.py                         |      3,897 B | 71a2efbdab2b83325ece1574623d20c3828589e39caaf526a0d75ca2793985e4
@@ -324,13 +325,13 @@ static/css/style.css                               |     86,815 B | 4e1f34faef3f
 static/css/theme.css                               |      4,191 B | 0f46f52179f51f6f9e33d6afd4c1186a55cd4bff5de3e631055a9290c21cb0da
 static/docs/ChemistryLab_User_Manual.docx          |     46,938 B | 35f84c0a37efc80a0283904d56198d18cdba7a648f2492f4c6c76f331ce9b211
 static/job_runtime_fix.js                          |      1,641 B | 9133e459435dfad6a353c774a92c10cf37656eb529f114ca61dec2be5a63c697
-static/js/app.js                                   |    585,581 B | d7fdf92ce22bccef2961d0170589dbff8af22e2c39b25dd6c731188881375669
+static/js/app.js                                   |    586,104 B | 1d969c33b79c32404be2b41e177d21a5353170f0b0c9811002557261aa731bda
 static/js/kaggle_credentials.js                    |     14,739 B | edf3657183f78584163fb9a0f8b9823ce200262096a7973c0e4a8888f530405a
 static/js/local-agent.js                           |     30,320 B | 87021c1098d20d216535fecbeb3b96ce18ac22c8b5af906b047cbe1e8272ba13
 static/js/reaction-editor.js                       |      8,373 B | a11362d1a686ac234f10a365525cba3ea50ec937e14ece09f84557b889b3f4a7
 static/js/reaction-unified.js                      |     19,758 B | 43b954a3e05b2c399f4fb0d45a2d6152a4651a50502345e05f337f8835690103
 static/js/workers/archive-worker.js                |     20,420 B | 29eff680289ace2a4ee5784419c0a189f5e962a054914a5e6d6f9e2ad66073f8
-templates/index.html                               |    195,585 B | 57eda21d9f0db21810852f036e6aa8711e67ec35532d351fc092f9ae0db284b4
+templates/index.html                               |    196,516 B | a6df06c094565a8bde36c4b09f78a94808fc8846646f68844b66d79e92e79507
 tests/conftest.py                                  |      5,349 B | e6ee44e643b1120833aa709ade94b8602e5ec146446443fb18a88d8cc0cf120d
 tests/fake_orca.py                                 |     14,271 B | 61a158fae896194453358856f312794d099fce006443ddffa13e6ca4d112103c
 tests/fixtures/ORCA_Calculation_quantum_analysis_3.json |    882,023 B | bcabb84f75101646810b16e3990c0a8d202e284221036aeab29b6315fa3ecc2b
@@ -345,6 +346,7 @@ tests/test_asgi_live.py                            |      2,765 B | 3b8010dff657
 tests/test_bootstrap_and_packaging.py              |     13,873 B | 08a585c2ca22fc80fc116a93f43c308a644a6b0ada23fca729592b5707c1da1d
 tests/test_canonical_analyzer_refinement.py        |     18,359 B | 00cbaee6b1b60d69a6799f3bd3a76e784803f866e2cd863374959d92f5f7511d
 tests/test_canonical_scientific_schema.py          |     28,439 B | 1028571f88562460d5f9901259b0e3e330ca3b8c8beb4c14427def64451c9f98
+tests/test_cdxml_export.py                         |      9,679 B | ea83b42f0d0784c0c4e4e7a7b2d1a0e47d2e580a4a7468278c8cb2963ef2679f
 tests/test_clean_ir_visualization.py               |      2,279 B | 1d7f7fc2e2231d32eec4decc47cd195a42265ea913707822103f0fe5ff456789
 tests/test_cloudflare_controller.py                |     20,778 B | 29abf3417a5dd6268ba6685cdca81ee06aa2510510d31695d32af01607504096
 tests/test_cloudflare_recovery.py                  |      9,065 B | 7d7694c57b2349c386294162642e9cb5ba4ad5100e82beec64e02d1e70846c19

@@ -19,3 +19,22 @@ def resolve_compound(req: CompoundQueryRequest) -> Dict[str, Any]:
             detail={"code": res.get("error_code", "COMPOUND_NOT_FOUND"), "message": res.get("error")},
         )
     return res
+
+
+@router.post("/export-cdxml", summary="Export single compound to ChemDraw XML (.cdxml)")
+def export_compound_cdxml(req: CompoundQueryRequest) -> Response:
+    from fastapi.responses import Response
+    import chem_core as core
+    smiles = core.resolve_compound_to_smiles(req.query)
+    if not smiles:
+        raise HTTPException(status_code=404, detail="Compound not found")
+    cdxml_bytes = core.generate_single_compound_cdxml(smiles, title=req.query)
+    if not cdxml_bytes:
+        raise HTTPException(status_code=422, detail="Failed to generate CDXML")
+    filename = f"{core.safe_filename(req.query)}.cdxml"
+    return Response(
+        content=cdxml_bytes,
+        media_type="chemical/x-cdxml",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+

@@ -8,10 +8,10 @@
   "source_git_state": "dirty_snapshot",
   "source_git_sha": "f0440913cf560bb8aff89b2e16c73c9e9976ef61-dirty",
   "source_git_dirty": true,
-  "package_tree_hash": "690140d1a0af3112868dcaf5c8efb4cb54d7d1d2924318665b24429ec7866af9",
-  "generated_at": "2026-09-22T01:50:48Z",
-  "file_count": 431,
-  "total_size_bytes": 34608592,
+  "package_tree_hash": "8ecc28a30ff222603ce891f49952b8dae7f56765df321448af28d26f3ca3b8af",
+  "generated_at": "2026-09-22T03:00:04Z",
+  "file_count": 433,
+  "total_size_bytes": 34650000,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -69,8 +69,8 @@
       "source_origin": "repo_source"
     },
     "api/routes/compound.py": {
-      "sha256": "0b20bed07540c4f09fdb3f8c600b6484072fc9720e787734e9a2920699425455",
-      "size_bytes": 807,
+      "sha256": "3d48a273fb24964b508e50bc0c2e78a0e32979a4b7cc5fa75ee253f95b956ace",
+      "size_bytes": 1599,
       "source_origin": "repo_source"
     },
     "api/routes/health.py": {
@@ -114,8 +114,8 @@
       "source_origin": "repo_source"
     },
     "app.py": {
-      "sha256": "5519412518809c0285aa14accbbef31b69a9e4130491faae50eaa20651f650b5",
-      "size_bytes": 200376,
+      "sha256": "9b6a79bed92df79d04a1961a38c1e1c5ccfd022dc8591226cc79427b7360a9b0",
+      "size_bytes": 207083,
       "source_origin": "repo_source"
     },
     "ARCHITECTURE.md": {
@@ -184,8 +184,8 @@
       "source_origin": "repo_source"
     },
     "chem_core.py": {
-      "sha256": "eca8b31f06a42c3e3cd8c6423c6cf3e8f2e8386ec5bffaafe0ccaeb1d8f187bc",
-      "size_bytes": 77293,
+      "sha256": "48db5af2d672b540f385cc58fe80374da71e6a66b465c31ab3a1c1b3220534d3",
+      "size_bytes": 80651,
       "source_origin": "repo_source"
     },
     "CITATION.cff": {
@@ -1503,6 +1503,11 @@
       "size_bytes": 10278,
       "source_origin": "repo_source"
     },
+    "services/cdxml_service.py": {
+      "sha256": "21c8751b7159ebeaeab11b0ff379c37ecd50d3b7ea4ca4dae0c805ea96a89baf",
+      "size_bytes": 19152,
+      "source_origin": "repo_source"
+    },
     "services/compound_service.py": {
       "sha256": "7e9ecd524fa105081a4473d06ee96acb7b2273d81930e5ee8be7f71538c5f0b0",
       "size_bytes": 1757,
@@ -1589,8 +1594,8 @@
       "source_origin": "repo_source"
     },
     "static/js/app.js": {
-      "sha256": "d7fdf92ce22bccef2961d0170589dbff8af22e2c39b25dd6c731188881375669",
-      "size_bytes": 585581,
+      "sha256": "1d969c33b79c32404be2b41e177d21a5353170f0b0c9811002557261aa731bda",
+      "size_bytes": 586104,
       "source_origin": "repo_source"
     },
     "static/js/kaggle_credentials.js": {
@@ -1619,8 +1624,8 @@
       "source_origin": "repo_source"
     },
     "templates/index.html": {
-      "sha256": "57eda21d9f0db21810852f036e6aa8711e67ec35532d351fc092f9ae0db284b4",
-      "size_bytes": 195585,
+      "sha256": "a6df06c094565a8bde36c4b09f78a94808fc8846646f68844b66d79e92e79507",
+      "size_bytes": 196516,
       "source_origin": "repo_source"
     },
     "tests/conftest.py": {
@@ -1691,6 +1696,11 @@
     "tests/test_canonical_scientific_schema.py": {
       "sha256": "1028571f88562460d5f9901259b0e3e330ca3b8c8beb4c14427def64451c9f98",
       "size_bytes": 28439,
+      "source_origin": "repo_source"
+    },
+    "tests/test_cdxml_export.py": {
+      "sha256": "ea83b42f0d0784c0c4e4e7a7b2d1a0e47d2e580a4a7468278c8cb2963ef2679f",
+      "size_bytes": 9679,
       "source_origin": "repo_source"
     },
     "tests/test_clean_ir_visualization.py": {
@@ -2164,8 +2174,8 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "b1cdf2176b905297668c472f61499da18424d6b9ce7bf561c35cd2f90a7b845c",
-      "size_bytes": 57929,
+      "sha256": "08681781f3fa9d4c2bc05595b27b5aa2602eb3f171d4d4385705c2b83c413c36",
+      "size_bytes": 58195,
       "source_origin": "generated_manifest"
     }
   }

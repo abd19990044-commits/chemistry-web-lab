@@ -1053,7 +1053,8 @@ def _svg_formula_markup(formula: str, x: int, y: int, font_size: int = 44) -> st
 
 
 def render_reaction_svg(reactant_pairs, product_pairs, small_as_formula: bool = True,
-                        arrow_top: str = "", arrow_bottom: str = "") -> bytes | None:
+                        arrow_top: str = "", arrow_bottom: str = "",
+                        arrow_style: str = "forward") -> bytes | None:
     """Return a genuine vector SVG reaction scheme formatted to Q1 publication standards."""
     tokens: list[tuple[str, object]] = []
     for side_index, pairs in enumerate((reactant_pairs, product_pairs)):
@@ -1159,8 +1160,20 @@ def render_reaction_svg(reactant_pairs, product_pairs, small_as_formula: bool = 
             arrow_width = widths[i]
             arrow_end = x + arrow_width - 10
             head_x = arrow_end - 16
-            out.append(f'<line x1="{x}" y1="{y}" x2="{head_x}" y2="{y}" stroke="#141414" stroke-width="3"/>')
-            out.append(f'<path d="M {arrow_end} {y} L {head_x} {y - 8} L {head_x} {y + 8} Z" fill="#141414"/>')
+            style = (arrow_style or "forward").lower()
+            if style in ("equilibrium", "eq"):
+                off = 5
+                out.append(f'<line x1="{x}" y1="{y - off}" x2="{head_x}" y2="{y - off}" stroke="#141414" stroke-width="2.5"/>')
+                out.append(f'<path d="M {arrow_end} {y - off} L {head_x} {y - off - 6} L {head_x} {y - off + 6} Z" fill="#141414"/>')
+                out.append(f'<line x1="{x + 16}" y1="{y + off}" x2="{arrow_end}" y2="{y + off}" stroke="#141414" stroke-width="2.5"/>')
+                out.append(f'<path d="M {x} {y + off} L {x + 16} {y + off - 6} L {x + 16} {y + off + 6} Z" fill="#141414"/>')
+            elif style in ("reversible", "rev", "both"):
+                out.append(f'<line x1="{x + 16}" y1="{y}" x2="{head_x}" y2="{y}" stroke="#141414" stroke-width="2.5"/>')
+                out.append(f'<path d="M {arrow_end} {y} L {head_x} {y - 8} L {head_x} {y + 8} Z" fill="#141414"/>')
+                out.append(f'<path d="M {x} {y} L {x + 16} {y - 8} L {x + 16} {y + 8} Z" fill="#141414"/>')
+            else:
+                out.append(f'<line x1="{x}" y1="{y}" x2="{head_x}" y2="{y}" stroke="#141414" stroke-width="3"/>')
+                out.append(f'<path d="M {arrow_end} {y} L {head_x} {y - 8} L {head_x} {y + 8} Z" fill="#141414"/>')
             arrow_center = (x + arrow_end) / 2
             if arrow_top:
                 out.append(svg_annotation(arrow_top, int(arrow_center), y - 18))
@@ -1378,7 +1391,8 @@ def _draw_arrow_label(draw, center_x, baseline_y, text, font, sup_font, *, fill=
 
 def render_reaction_png(reactant_pairs, product_pairs, sub_size=REACTION_SUBIMAGE_SIZE,
                         small_as_formula: bool = True, arrow_top: str = "",
-                        arrow_bottom: str = "") -> bytes | None:
+                        arrow_bottom: str = "",
+                        arrow_style: str = "forward") -> bytes | None:
     from PIL import Image, ImageDraw
     def draw_one(smiles):
         mol = Chem.MolFromSmiles(smiles)
@@ -1472,10 +1486,30 @@ def render_reaction_png(reactant_pairs, product_pairs, sub_size=REACTION_SUBIMAG
             canvas.paste(payload, (x, (total_height - payload.height) // 2))
         elif kind == "arrow":
             mid = total_height // 2
-            pen.line([(x, mid), (x + arrow_length - arrow_head, mid)], fill=(20, 20, 20), width=max(2, arrow_head // 7))
-            pen.polygon([(x + arrow_length, mid),
-                         (x + arrow_length - arrow_head, mid - arrow_head // 2),
-                         (x + arrow_length - arrow_head, mid + arrow_head // 2)], fill=(20, 20, 20))
+            style = (arrow_style or "forward").lower()
+            if style in ("equilibrium", "eq"):
+                off = max(4, arrow_head // 3)
+                pen.line([(x, mid - off), (x + arrow_length - arrow_head, mid - off)], fill=(20, 20, 20), width=max(2, arrow_head // 7))
+                pen.polygon([(x + arrow_length, mid - off),
+                             (x + arrow_length - arrow_head, mid - off - arrow_head // 2),
+                             (x + arrow_length - arrow_head, mid - off + arrow_head // 2)], fill=(20, 20, 20))
+                pen.line([(x + arrow_head, mid + off), (x + arrow_length, mid + off)], fill=(20, 20, 20), width=max(2, arrow_head // 7))
+                pen.polygon([(x, mid + off),
+                             (x + arrow_head, mid + off - arrow_head // 2),
+                             (x + arrow_head, mid + off + arrow_head // 2)], fill=(20, 20, 20))
+            elif style in ("reversible", "rev", "both"):
+                pen.line([(x + arrow_head, mid), (x + arrow_length - arrow_head, mid)], fill=(20, 20, 20), width=max(2, arrow_head // 7))
+                pen.polygon([(x + arrow_length, mid),
+                             (x + arrow_length - arrow_head, mid - arrow_head // 2),
+                             (x + arrow_length - arrow_head, mid + arrow_head // 2)], fill=(20, 20, 20))
+                pen.polygon([(x, mid),
+                             (x + arrow_head, mid - arrow_head // 2),
+                             (x + arrow_head, mid + arrow_head // 2)], fill=(20, 20, 20))
+            else:
+                pen.line([(x, mid), (x + arrow_length - arrow_head, mid)], fill=(20, 20, 20), width=max(2, arrow_head // 7))
+                pen.polygon([(x + arrow_length, mid),
+                             (x + arrow_length - arrow_head, mid - arrow_head // 2),
+                             (x + arrow_length - arrow_head, mid + arrow_head // 2)], fill=(20, 20, 20))
             if arrow_top:
                 _draw_arrow_label(pen, x + arrow_length // 2, mid - 28, arrow_top, arrow_label_font, arrow_label_sup_font)
             if arrow_bottom:
@@ -1819,4 +1853,16 @@ def generate_orca_6_input(d: dict) -> str:
     input_text += f"{d.get('coords', '')}\n"
     input_text += "*\n"
     return input_text
+
+
+# ─────────────────────────────────────────────────────────────
+# ChemDraw XML (CDXML) & Enhanced RXN Exporters
+# ─────────────────────────────────────────────────────────────
+from services.cdxml_service import (  # noqa: E402
+    generate_single_compound_cdxml,
+    generate_reaction_cdxml,
+    generate_chemdraw_rxn_file,
+    validate_cdxml_bytes,
+)
+
 

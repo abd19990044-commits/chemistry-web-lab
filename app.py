@@ -703,6 +703,7 @@ def api_compound():
             return error_response("Could not draw a structure for this input.", 422)
         mol_bytes = core.generate_mol_file_bytes(smiles)
         svg_bytes = core.render_molecule_svg(smiles)
+        cdxml_bytes = core.generate_single_compound_cdxml(smiles, title=query)
 
         props = None
         wiki = None
@@ -731,6 +732,7 @@ def api_compound():
             "image_png_base64": b64(image_bytes),
             "image_svg_base64": b64(svg_bytes),
             "mol_file_base64": b64(mol_bytes),
+            "cdxml_file_base64": b64(cdxml_bytes) if cdxml_bytes else "",
             "filename": core.safe_filename(query),
             "formula": (props or {}).get("MolecularFormula"),
             "weight": (props or {}).get("MolecularWeight"),
@@ -825,15 +827,18 @@ def api_reaction():
 
         # Default on: writing O2 rather than drawing it is what a chemist does.
         small_as_formula = data.get("small_as_formula", True) is not False
+        arrow_style = (data.get("arrow_style") or "forward").strip()
         image_bytes = core.render_reaction_png(
             as_pairs(reactant_terms), as_pairs(product_terms),
             small_as_formula=small_as_formula,
-            arrow_top=arrow_top, arrow_bottom=arrow_bottom)
+            arrow_top=arrow_top, arrow_bottom=arrow_bottom,
+            arrow_style=arrow_style)
         image_bytes = reaction_conditions.overlay_png(image_bytes, arrow_top, arrow_bottom)
         svg_bytes = core.render_reaction_svg(
             as_pairs(reactant_terms), as_pairs(product_terms),
             small_as_formula=small_as_formula,
-            arrow_top=arrow_top, arrow_bottom=arrow_bottom)
+            arrow_top=arrow_top, arrow_bottom=arrow_bottom,
+            arrow_style=arrow_style)
         svg_bytes = reaction_conditions.overlay_svg(svg_bytes, arrow_top, arrow_bottom)
         if not image_bytes:
             return error_response("Could not draw the reaction scheme - check the formulas.", 422)
@@ -844,6 +849,15 @@ def api_reaction():
         if not rxn_bytes:
             return error_response("The reaction file could not be written.", 422)
         rxn_report = core.validate_rxn_block(rxn_bytes.decode("utf-8", errors="replace"))
+
+        cdxml_bytes = core.generate_reaction_cdxml(
+            as_pairs(reactant_terms), as_pairs(product_terms),
+            arrow_top=arrow_top, arrow_bottom=arrow_bottom,
+            arrow_style=arrow_style,
+            title=equation,
+            small_as_formula=small_as_formula,
+        )
+        cdxml_report = core.validate_cdxml_bytes(cdxml_bytes) if cdxml_bytes else {"valid": False}
 
         notes = list(interpretations)
         if factor != 1:
@@ -859,23 +873,145 @@ def api_reaction():
                 "structure appears that many times. ChemDraw will show two water molecules "
                 "rather than the text '2 H2O'; the stoichiometry is there, just not as a "
                 "numeral.")
+        if cdxml_bytes:
+            notes.append(
+                "ChemDraw XML (.cdxml) generated with native stoichiometric numerals, conditions, "
+                f"and editable fragments ({cdxml_report.get('atoms', 0)} atoms, {cdxml_report.get('bonds', 0)} bonds)."
+            )
 
         return jsonify({
             "ok": True,
             "image_png_base64": b64(image_bytes),
             "image_svg_base64": b64(svg_bytes),
             "rxn_file_base64": b64(rxn_bytes),
+            "cdxml_file_base64": b64(cdxml_bytes) if cdxml_bytes else "",
             "reaction_smiles": "%s>>%s" % (
                 ".".join(resolved[t.name] for t in reactant_terms),
                 ".".join(resolved[t.name] for t in product_terms)),
             "equation": equation,
             "balance": balance,
             "file_report": rxn_report,
+            "cdxml_report": cdxml_report,
             "notes": notes,
         })
     except Exception:  # noqa: BLE001
         log.error("api_reaction failed:\n%s", traceback.format_exc())
         return error_response("An unexpected technical error occurred.", 500)
+
+
+@app.route("/api/v1/compound/export-cdxml", methods=["POST", "GET"])
+def api_v1_compound_export_cdxml():
+    """Export single compound directly as a ChemDraw XML (.cdxml) attachment."""
+    query = request.args.get("query") if request.method == "GET" else ((request.get_json(silent=True) or {}).get("query"))
+    query = (query or "").strip()
+    if not query:
+        return jsonify({"ok": False, "error": "Query parameter 'query' is required."}), 400
+    try:
+        smiles = core.resolve_compound_to_smiles(query)
+        if not smiles:
+            return jsonify({"ok": False, "error": f"Could not recognize '{query}'."}), 404
+        cdxml_bytes = core.generate_single_compound_cdxml(smiles, title=query)
+        if not cdxml_bytes:
+            return jsonify({"ok": False, "error": "Could not generate ChemDraw XML for this compound."}), 422
+        filename = f"{core.safe_filename(query)}.cdxml"
+        return Response(
+            cdxml_bytes,
+            mimetype="chemical/x-cdxml",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        log.error("export-cdxml compound failed: %s", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/v1/reaction/export-cdxml", methods=["POST", "GET"])
+def api_v1_reaction_export_cdxml():
+    """Export reaction scheme directly as a ChemDraw XML (.cdxml) attachment."""
+    data = request.args if request.method == "GET" else (request.get_json(silent=True) or {})
+    reactants_str = (data.get("reactants") or "").strip()
+    products_str = (data.get("products") or "").strip()
+    arrow_top = (data.get("arrow_top") or "").strip()[:240]
+    arrow_bottom = (data.get("arrow_bottom") or "").strip()[:240]
+    arrow_style = (data.get("arrow_style") or "forward").strip()
+    small_as_formula = str(data.get("small_as_formula", "true")).lower() in ("true", "1", "yes")
+
+    if not reactants_str or not products_str:
+        return jsonify({"ok": False, "error": "Please provide both reactants and products."}), 400
+
+    try:
+        reactant_terms = core.split_compound_terms(reactants_str)
+        product_terms = core.split_compound_terms(products_str)
+        if not reactant_terms or not product_terms:
+            return jsonify({"ok": False, "error": "Could not parse compound list."}), 400
+
+        resolved = {}
+        for term in reactant_terms + product_terms:
+            if term.name not in resolved:
+                smiles, _ = core.resolve_species(term.name)
+                if not smiles:
+                    return jsonify({"ok": False, "error": f"Could not recognize '{term.name}'."}), 404
+                resolved[term.name] = smiles
+
+        as_pairs = lambda terms: [(t.coefficient, resolved[t.name]) for t in terms]
+        equation = core.format_equation(reactant_terms, product_terms)
+        cdxml_bytes = core.generate_reaction_cdxml(
+            as_pairs(reactant_terms), as_pairs(product_terms),
+            arrow_top=arrow_top, arrow_bottom=arrow_bottom,
+            arrow_style=arrow_style,
+            title=equation,
+            small_as_formula=small_as_formula,
+        )
+        if not cdxml_bytes:
+            return jsonify({"ok": False, "error": "Could not generate ChemDraw XML for this reaction."}), 422
+
+        return Response(
+            cdxml_bytes,
+            mimetype="chemical/x-cdxml",
+            headers={"Content-Disposition": 'attachment; filename="reaction.cdxml"'},
+        )
+    except Exception as e:
+        log.error("export-cdxml reaction failed: %s", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/v1/reaction/export-rxn", methods=["POST", "GET"])
+def api_v1_reaction_export_rxn():
+    """Export reaction scheme directly as an MDL RXN (.rxn) attachment."""
+    data = request.args if request.method == "GET" else (request.get_json(silent=True) or {})
+    reactants_str = (data.get("reactants") or "").strip()
+    products_str = (data.get("products") or "").strip()
+    if not reactants_str or not products_str:
+        return jsonify({"ok": False, "error": "Please provide both reactants and products."}), 400
+
+    try:
+        reactant_terms = core.split_compound_terms(reactants_str)
+        product_terms = core.split_compound_terms(products_str)
+        if not reactant_terms or not product_terms:
+            return jsonify({"ok": False, "error": "Could not parse compound list."}), 400
+
+        resolved = {}
+        for term in reactant_terms + product_terms:
+            if term.name not in resolved:
+                smiles, _ = core.resolve_species(term.name)
+                if not smiles:
+                    return jsonify({"ok": False, "error": f"Could not recognize '{term.name}'."}), 404
+                resolved[term.name] = smiles
+
+        _, (rxn_reactants, rxn_products) = core.scale_terms_to_integers(reactant_terms, product_terms)
+        as_pairs = lambda terms: [(t.coefficient, resolved[t.name]) for t in terms]
+        equation = core.format_equation(reactant_terms, product_terms)
+        rxn_bytes = core.generate_rxn_file_bytes(as_pairs(rxn_reactants), as_pairs(rxn_products), title=equation)
+        if not rxn_bytes:
+            return jsonify({"ok": False, "error": "Could not generate RXN file."}), 422
+
+        return Response(
+            rxn_bytes,
+            mimetype="chemical/x-mdl-rxnfile",
+            headers={"Content-Disposition": 'attachment; filename="reaction.rxn"'},
+        )
+    except Exception as e:
+        log.error("export-rxn reaction failed: %s", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ─────────────────────────────────────────────────────────────

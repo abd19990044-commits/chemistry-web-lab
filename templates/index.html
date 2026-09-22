@@ -150,6 +150,7 @@
             <img id="explorer-image" alt="Compound structure">
           </div>
           <button type="button" id="explorer-copy-word" class="btn btn-primary btn-small" title="Copy 2D structure formatted for Microsoft Word">📋 Copy for Word</button>
+          <a id="explorer-download-cdxml" class="btn btn-primary btn-small" download title="Download ChemDraw XML file for editing in ChemDraw">🧪 Download ChemDraw (.cdxml)</a>
           <a id="explorer-download-mol" class="btn btn-ghost btn-small" download>⬇ Download MOL file</a>
           <a id="explorer-download-svg" class="btn btn-outline btn-small" download>⬇ Download SVG</a>
         </div>
@@ -227,6 +228,14 @@
               <input type="checkbox" id="reaction-small-as-formula" checked>
               <span>Write small molecules as formulas (O<sub>2</sub>, H<sub>2</sub>O, CO<sub>2</sub>) instead of drawing them</span>
             </label>
+            <div class="reaction-option mt-1">
+              <label for="reaction-arrow-style" class="small font-bold mr-1">Arrow Type:</label>
+              <select id="reaction-arrow-style" class="form-select form-select-sm" style="display:inline-block; width:auto; padding: 2px 8px; font-size: 13px;">
+                <option value="forward" selected>Forward (⟶)</option>
+                <option value="equilibrium">Equilibrium (⇌)</option>
+                <option value="reversible">Reversible (⟷)</option>
+              </select>
+            </div>
           </div>
           <div class="reaction-footer-actions">
             <button type="submit" class="btn btn-primary reaction-submit-btn"><span class="btn-label">Draw reaction →</span></button>
@@ -377,6 +386,7 @@ Products:   12 CO2 + 6 H2O</pre>
         <div class="reaction-actions">
           <button type="button" id="reaction-calc-thermo-btn" class="btn btn-primary btn-small" title="Transfer drawn reaction to Thermochemistry Studio and calculate reaction energetics">⚡ Calculate Thermochemistry →</button>
           <button type="button" id="reaction-copy-word" class="btn btn-outline btn-small" title="Copy reaction scheme formatted for Microsoft Word">📋 Copy for Word</button>
+          <a id="reaction-download-cdxml" class="btn btn-primary btn-small" download title="Download ChemDraw XML reaction scheme for editing in ChemDraw">🧪 Download ChemDraw (.cdxml)</a>
           <a id="reaction-download-rxn" class="btn btn-ghost btn-small" download>⬇ Download RXN file</a>
           <a id="reaction-download-svg" class="btn btn-outline btn-small" download>⬇ Download SVG</a>
           <code id="reaction-smiles" class="mono small"></code>
