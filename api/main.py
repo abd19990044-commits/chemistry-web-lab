@@ -51,6 +51,28 @@ def _create_app() -> FastAPI:
 
     import os
     from fastapi.middleware.cors import CORSMiddleware
+    from api.middleware import NativeApiBodyLimitMiddleware
+
+    max_bytes = int(os.environ.get("CHEMISTRY_LAB_API_MAX_BODY_BYTES", 10 * 1024 * 1024))
+    application.add_middleware(NativeApiBodyLimitMiddleware, max_bytes=max_bytes)
+
+    @application.middleware("http")
+    async def _csrf_middleware(request: Request, call_next):
+        if request.url.path.startswith("/api/v1") and request.method not in {"GET", "HEAD", "OPTIONS"}:
+            from services.auth_service import browser_csrf_is_valid, _signed_flask_session_from_request
+            session = _signed_flask_session_from_request(request)
+            if session and session.get("user") and not browser_csrf_is_valid(request):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "ok": False,
+                        "error": {
+                            "code": "CSRF_FORBIDDEN",
+                            "message": "CSRF validation failed: missing or invalid CSRF token.",
+                        },
+                    },
+                )
+        return await call_next(request)
 
     allowed_origins_raw = os.environ.get("CHEMISTRY_LAB_ALLOWED_ORIGINS", "")
     if allowed_origins_raw.strip():

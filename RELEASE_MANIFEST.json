@@ -8,10 +8,10 @@
   "source_git_state": "dirty_snapshot",
   "source_git_sha": "f0440913cf560bb8aff89b2e16c73c9e9976ef61-dirty",
   "source_git_dirty": true,
-  "package_tree_hash": "2604cf67c0954687e1b98629f01c98193641c2cea651fbeca8099700799bc7a1",
-  "generated_at": "2026-09-22T01:44:53Z",
+  "package_tree_hash": "690140d1a0af3112868dcaf5c8efb4cb54d7d1d2924318665b24429ec7866af9",
+  "generated_at": "2026-09-22T01:50:48Z",
   "file_count": 431,
-  "total_size_bytes": 34606092,
+  "total_size_bytes": 34608592,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -49,8 +49,8 @@
       "source_origin": "repo_source"
     },
     "api/main.py": {
-      "sha256": "2d775cc2829e25733af3f14630544882cd722375cc3c788a9d2e79d35b05f606",
-      "size_bytes": 5471,
+      "sha256": "b7f6aaceeaca5b06955a927da2fa1b904a1b472a1ad7ca94edb0e4f735445250",
+      "size_bytes": 6598,
       "source_origin": "repo_source"
     },
     "api/middleware.py": {
@@ -504,8 +504,8 @@
       "source_origin": "repo_source"
     },
     "local_agent/agent.py": {
-      "sha256": "f1ff558d7bc9d4529b6482d7dc873633b919255a5aee21199a8fc3c092207e0d",
-      "size_bytes": 35464,
+      "sha256": "4d93cc46bb2847e1a3c8b9ac8369ef98c9e7922c3c8587e2dbeec1e17830f82a",
+      "size_bytes": 36837,
       "source_origin": "repo_source"
     },
     "local_agent/config.py": {
@@ -2164,7 +2164,7 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "b909de036f5e26f7efd342e8643eae84af468f9b0f4a4cca3ff65d28fc050ee8",
+      "sha256": "b1cdf2176b905297668c472f61499da18424d6b9ce7bf561c35cd2f90a7b845c",
       "size_bytes": 57929,
       "source_origin": "generated_manifest"
     }

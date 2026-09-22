@@ -373,6 +373,11 @@ class LocalCompanionAgent:
         """Return a process only when PID, create-time, command, and cwd match."""
         try:
             process = psutil.Process(int(record["pid"]))
+            try:
+                if process.status() == psutil.STATUS_ZOMBIE:
+                    return process
+            except (psutil.Error, OSError):
+                pass
             if abs(float(process.create_time()) - float(record["process_start_time"])) > 1.0:
                 return None
             command = [str(part) for part in process.cmdline()]
@@ -451,6 +456,22 @@ class LocalCompanionAgent:
         if not record:
             return False
         verified = self._verified_process(record)
+        if verified is not None and (not verified.is_running() or verified.status() == psutil.STATUS_ZOMBIE):
+            self._tail_progress(record, force=True)
+            self._finalize_registered_process(record)
+            return True
+        if verified is None and psutil.pid_exists(int(record["pid"])):
+            # Check if PID is actually a dead or zombie process on Linux
+            try:
+                probe = psutil.Process(int(record["pid"]))
+                if probe.status() == psutil.STATUS_ZOMBIE:
+                    verified = probe
+            except (psutil.Error, OSError):
+                pass
+        if verified is not None and (not verified.is_running() or verified.status() == psutil.STATUS_ZOMBIE):
+            self._tail_progress(record, force=True)
+            self._finalize_registered_process(record)
+            return True
         if verified is None and psutil.pid_exists(int(record["pid"])):
             # A live PID with mismatching create-time/command may be PID reuse
             # or tampering. Never adopt it and never infer that ORCA ended.
@@ -470,11 +491,18 @@ class LocalCompanionAgent:
             process = self._verified_process(record)
             self._tail_progress(record)
             if process is None and psutil.pid_exists(int(record["pid"])):
-                LOGGER.error("Recovered PID identity changed for job %s; manual recovery is required", record["job_id"])
-                return True
+                try:
+                    probe = psutil.Process(int(record["pid"]))
+                    if probe.status() == psutil.STATUS_ZOMBIE:
+                        process = probe
+                except (psutil.Error, OSError):
+                    pass
             if process is None or not process.is_running() or process.status() == psutil.STATUS_ZOMBIE:
                 self._tail_progress(record, force=True)
                 self._finalize_registered_process(record)
+                return True
+            if process is None and psutil.pid_exists(int(record["pid"])):
+                LOGGER.error("Recovered PID identity changed for job %s; manual recovery is required", record["job_id"])
                 return True
             time.sleep(interval)
         return True

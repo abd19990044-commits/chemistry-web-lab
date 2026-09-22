@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-09-22T01:44:53Z
+# Generated: 2026-09-22T01:50:48Z
 # Package Mode: SNAPSHOT_FROM_WORKTREE
 # Source State: dirty_snapshot
 # Source Git SHA: f0440913cf560bb8aff89b2e16c73c9e9976ef61-dirty
-# Package Tree Hash: 2604cf67c0954687e1b98629f01c98193641c2cea651fbeca8099700799bc7a1
+# Package Tree Hash: 690140d1a0af3112868dcaf5c8efb4cb54d7d1d2924318665b24429ec7866af9
 # Total Files: 430
-# Total Size: 34,548,163 bytes (32.95 MB)
+# Total Size: 34,550,663 bytes (32.95 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -16,7 +16,7 @@
 .gitignore                                         |      1,031 B | d00caf0ce57ec555f4ecea42279509138f5377e2ceb3902d01de60e89dd06179
 api/__init__.py                                    |        238 B | ea951dbebe30f73ec82a1c92bdc7f8c2b5c8b9788b7758dd9ea26811377767cc
 api/dependencies.py                                |        355 B | b9125004623c53196d20f98012d5a7a87aab81d2026b5adbe33a6304851d7717
-api/main.py                                        |      5,471 B | 2d775cc2829e25733af3f14630544882cd722375cc3c788a9d2e79d35b05f606
+api/main.py                                        |      6,598 B | b7f6aaceeaca5b06955a927da2fa1b904a1b472a1ad7ca94edb0e4f735445250
 api/middleware.py                                  |      3,178 B | 8a1ce700fc2470a86c0d67c0da0973dda8ce7bd11ff3e0137d29e75fce0963c3
 api/routes/__init__.py                             |         84 B | 78f74e6949770ed6015d90084546ff5a07267e0783623d8f1ecb4b73b9910c2a
 api/routes/analysis.py                             |      1,361 B | bc7c5eb3fa6fcd1f5746f0af771b17dcbc258864598866b239edcb5a2803a4b3
@@ -107,7 +107,7 @@ kaggle_runner.py                                   |    192,260 B | 4ad2ca2e627e
 LICENSE                                            |     21,091 B | 5be6f2b9d34c8d3d2ca7d26e91013abe150c6070ed5ec976dd95745c444d268e
 LICENSE.txt                                        |     21,091 B | 5be6f2b9d34c8d3d2ca7d26e91013abe150c6070ed5ec976dd95745c444d268e
 local_agent/__init__.py                            |         89 B | eb63ac249dcaa94ba6f8d9d6e3b125809a00f4799c8358264cee98cbd7dc8029
-local_agent/agent.py                               |     35,464 B | f1ff558d7bc9d4529b6482d7dc873633b919255a5aee21199a8fc3c092207e0d
+local_agent/agent.py                               |     36,837 B | 4d93cc46bb2847e1a3c8b9ac8369ef98c9e7922c3c8587e2dbeec1e17830f82a
 local_agent/config.py                              |      2,628 B | 9478db77d6b7e3ef1e24e88c95c4c971e055177c6f494af090e48d843303157d
 local_agent/hpc/__init__.py                        |         22 B | 9f216c73121826fce82ff6ca183089470805a5f2473d6eae56fb9d8198cf4c68
 local_agent/hpc/base.py                            |      7,707 B | 1cfdb95ac92b976dff9a283ed20f67f96b8d72955477e28af3868263be87bd32
