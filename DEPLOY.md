@@ -66,7 +66,7 @@ In **Settings → Variables and secrets**, add one secret:
 | Name | Value | Why |
 |---|---|---|
 | `SECRET_KEY` | any long random string | Without it each gunicorn worker derives its own session key, and with `--workers 2` a signed-in user is silently signed out on roughly half their requests |
-| `ORCA_STATE_DIR` | `/app/.state` | Optional but recommended. Pins every worker to one database explicitly, so the leases and idempotency keys that prevent duplicate work definitely coordinate across workers |
+| `CHEMISTRY_LAB_STATE_DIR` | `/data` | Required for the web process and durable local worker to use the same SQLite ledgers |
 | `KAGGLE_EXECUTION_PASSCODE` | your custom secret code | Required for cloud/domain hosting to gate Kaggle access. If running locally or left unset, users leave the password input empty and press Enter to unlock the Kaggle login fields |
 
 Generate one with:
@@ -80,12 +80,11 @@ if you want to tune budgets later.
 
 ### Optional: persistent storage
 
-If you enable paid persistent storage, also set `ORCA_STATE_DIR=/data`. This is
-a **performance** setting, not a correctness one. The orchestrator treats its
-local database as a disposable cache; the authoritative record of every job is
-the `STATE.json` each Kaggle window writes into its own saved output, so a
-wiped Space rebuilds every job from Kaggle on the next status poll. Without
-persistent storage that rebuild simply happens more often.
+If you enable paid persistent storage, mount it at `/data` and keep
+`CHEMISTRY_LAB_STATE_DIR=/data`. This is a **correctness** setting: the web
+process, local worker, reaction ledger, and orchestrator must share the same
+durable directory. A wiped volume cannot recover local jobs or reaction read
+models, so configure backups before upgrades.
 
 ---
 
@@ -103,9 +102,11 @@ looks like:
 {"event":"watchdog_started","interval_seconds":120, ...}
 ```
 
-**Every one of those lines must appear twice - once per gunicorn worker**, with
-different `pid` values. Both workers run their own watchdog; the fenced leases
-in the shared SQLite file stop them from doing the same work twice.
+The image entrypoint runs one web process and one separate local worker. Do not
+expect every line twice: the worker has its own heartbeat and the web health
+endpoint reports `local_worker_ok` when `CHEMISTRY_LAB_REQUIRE_LOCAL_WORKER=1`.
+If you deliberately run multiple web/worker processes, all of them must use
+the same state directory and the SQLite leases/fences must remain enabled.
 
 **Compare the two `db_path` values - they must be identical.** If the workers
 report different paths (one `/app/.state/...`, the other `/tmp/orca-state-...`),
@@ -113,7 +114,7 @@ they are using separate databases, and the leases and idempotency keys that stop
 duplicate work coordinate nothing between them. `store_ready` now reports
 `state_dir_shared`; if it is `false`, an ERROR line follows explaining the
 consequence, and `/api/orca/health` reports it under `state_dir_diagnostic`.
-Setting `ORCA_STATE_DIR` explicitly removes any doubt.
+Setting `CHEMISTRY_LAB_STATE_DIR` explicitly removes any doubt.
 
 Check that `store_ready` reports `"journal_mode": "wal"`. If it reports
 `"delete"` instead, the database fell back to rollback-journal mode: correct,

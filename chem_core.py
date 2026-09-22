@@ -1706,7 +1706,8 @@ def generate_orca_6_input(d: dict) -> str:
     if d.get("custom_line"):
         input_text += f"{d['custom_line']}\n\n"
     else:
-        calc_type_key = d.get("calc_type", "sp")
+        raw_calc = str(d.get("calc_type") or "sp").strip()
+        calc_norm = raw_calc.lower().replace("_", " ")
         calc_cmd_map = {
             "sp": "SP",
             "opt": "Opt",
@@ -1717,8 +1718,12 @@ def generate_orca_6_input(d: dict) -> str:
             "optts freq": "OptTS Freq",
             "tddft": "",
             "nmr": "NMR",
+            "custom orca": "",
+            "imported": "",
         }
-        calc_cmd = calc_cmd_map.get(calc_type_key, "SP")
+        if calc_norm not in calc_cmd_map:
+            raise ValueError(f"Unknown or unsupported calculation type: {raw_calc!r}")
+        calc_cmd = calc_cmd_map[calc_norm]
 
         method = d.get("theory", "").strip()
         is_composite = (

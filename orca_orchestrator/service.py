@@ -21,20 +21,27 @@ import shutil
 import tempfile
 import zipfile
 from dataclasses import dataclass
+from typing import Any
 
 from . import ledger as ledger_mod
 from .cloudflare_controller import CloudflareController
 from .config import CONFIG, STATE_DIR_DIAGNOSTIC
 from .credentials import BROKER, KaggleCredentials, parse as parse_credentials
 from .errors import (ConcurrencyError, NotFoundError, OrchestratorError,
-                     ValidationError)
+                     SubmissionUnknownError, ValidationError)
 from .hashing import content_id, sha256_bytes
 from .kaggle_api import KaggleClient, is_valid_slug
 from .logging_ext import get_logger, log_context, log_event, new_correlation_id
 from .models import Event, JobManifest, new_id, now
 from .orca_artifacts import detect_job_kind
 from .reconciler import Reconciler
-from .result_store import ResultArtifactStore, ResultDurabilityState, ResultManifest
+from .result_store import (
+    MAX_ARCHIVE_EXTRACTED_BYTES,
+    MAX_ARCHIVE_FILES,
+    ResultArtifactStore,
+    ResultDurabilityState,
+    ResultManifest,
+)
 from .runner.builder import build_window_directory
 from .states import JobState, Trigger
 from .store import JobStore, get_store
@@ -43,6 +50,36 @@ from .watchdog import Watchdog, assess, recover_after_restart
 log = get_logger("orca.service")
 
 _SLUG_STRIP = re.compile(r"[^a-z0-9]+")
+
+
+def _safe_zip_member(name: str) -> bool:
+    """Reject archive names that escape the extraction directory."""
+    raw = str(name or "")
+    normalized = raw.replace("\\", "/").rstrip("/")
+    return bool(normalized) and not normalized.startswith("/") and \
+        not re.match(r"^[A-Za-z]:/", normalized) and "\x00" not in normalized and \
+        all(part not in ("..", "") for part in normalized.split("/"))
+
+
+def _safe_zip_file(path: str) -> bool:
+    try:
+        with zipfile.ZipFile(path, "r") as archive:
+            infos = archive.infolist()
+            if len(infos) > MAX_ARCHIVE_FILES:
+                return False
+            total = 0
+            for info in infos:
+                if not _safe_zip_member(info.filename):
+                    return False
+                mode = (info.external_attr >> 16) & 0o170000
+                if mode == 0o120000:
+                    return False
+                total += int(info.file_size or 0)
+                if total > MAX_ARCHIVE_EXTRACTED_BYTES:
+                    return False
+            return True
+    except (OSError, ValueError, zipfile.BadZipFile):
+        return False
 
 
 def slugify(raw: str) -> str:
@@ -81,9 +118,14 @@ class OrchestratorService:
     def __init__(self, store: JobStore | None = None, *, start_watchdog: bool = True) -> None:
         self.store = store or get_store()
         self.reconciler = Reconciler(self.store)
-        self.watchdog = Watchdog(self.store, self.reconciler, BROKER)
         self.cf_controller = CloudflareController(store=self.store)
         self.result_store = ResultArtifactStore()
+        self.watchdog = Watchdog(
+            self.store,
+            self.reconciler,
+            BROKER,
+            result_callback=self.archive_job_results,
+        )
         self.startup_report = recover_after_restart(self.store)
         if start_watchdog:
             self.watchdog.start()
@@ -144,6 +186,7 @@ class OrchestratorService:
         step_index: int = 0,
         step_count: int = 1,
         step_name: str = "CALC",
+        application_owner: str | None = None,
     ) -> SubmitResult:
         """Creates a job and pushes its first window.
 
@@ -164,6 +207,7 @@ class OrchestratorService:
             "content_sha": sha256_bytes(input_content.encode("utf-8")),
             "aux": sorted(aux_files), "datasets": sorted(dataset_sources or []),
             "name": job_name,
+            "application_owner": (application_owner or "").strip() or None,
             "workflow_id": workflow_id,
             "step_index": step_index,
         }
@@ -192,6 +236,8 @@ class OrchestratorService:
             )
 
         job = None
+        final_submission_dir = None
+        push_started = False
         try:
             job_id = make_job_id(job_name, input_filename)
             with log_context(correlation_id=correlation_id, job_id=job_id):
@@ -206,6 +252,12 @@ class OrchestratorService:
                     orca_link_present=bool(orca_link),
                     job_kind=detect_job_kind(input_content),
                     _extra={
+                        # The Kaggle account owns the remote kernel, while the
+                        # authenticated application identity owns its UI/API
+                        # visibility.  Persist both identities so My Jobs does
+                        # not depend on a live credential-vault lookup after a
+                        # restart or credential rotation.
+                        "application_owner": (application_owner or "").strip() or None,
                         "workflow_id": workflow_id,
                         "parent_job_id": parent_job_id,
                         "step_index": step_index,
@@ -213,6 +265,22 @@ class OrchestratorService:
                         "step_name": step_name,
                     },
                 )
+                pending_root = os.path.join(self.store.config.state_dir, "pending_submissions")
+                os.makedirs(pending_root, exist_ok=True)
+                final_submission_dir = os.path.join(pending_root, job_id)
+                build_dir = tempfile.mkdtemp(prefix=f".{job_id}.", dir=pending_root)
+                try:
+                    inline = {input_filename: input_content.encode("utf-8")}
+                    inline.update(aux_files)
+                    build_window_directory(
+                        build_dir, job=job, epoch=0, creds=creds,
+                        inline_files=inline, orca_link=orca_link,
+                    )
+                    os.replace(build_dir, final_submission_dir)
+                except BaseException:
+                    shutil.rmtree(build_dir, ignore_errors=True)
+                    raise
+                job._extra["submission_dir"] = final_submission_dir
                 self.store.put_job(job)
 
                 job = self.reconciler.transition(
@@ -221,19 +289,9 @@ class OrchestratorService:
                 )
                 self.store.put_job(job, expected_version=job._extra.get("_version"))
 
-                inline = {input_filename: input_content.encode("utf-8")}
-                inline.update(aux_files)
-
-                work_dir = tempfile.mkdtemp(prefix="orca-submit-")
-                try:
-                    build_window_directory(
-                        work_dir, job=job, epoch=0, creds=creds,
-                        inline_files=inline, orca_link=orca_link,
-                    )
-                    result = KaggleClient(creds).push_kernel(
-                        work_dir, expected_slug=job_id, skip_if_active=False)
-                finally:
-                    shutil.rmtree(work_dir, ignore_errors=True)
+                push_started = True
+                result = KaggleClient(creds).push_kernel(
+                    final_submission_dir, expected_slug=job_id, skip_if_active=False)
 
                 job.current_slug = result.slug
                 job.current_url = result.url
@@ -243,7 +301,9 @@ class OrchestratorService:
                     job, Trigger.PUSH_ACK, actor="api", correlation_id=correlation_id,
                     slug=result.slug, url=result.url,
                 )
+                job._extra.pop("submission_dir", None)
                 self.store.put_job(job, expected_version=job._extra.get("_version"))
+                shutil.rmtree(final_submission_dir, ignore_errors=True)
 
                 # Persist metadata to Cloudflare Control Plane
                 try:
@@ -264,7 +324,12 @@ class OrchestratorService:
                 log_event(log, "job_submitted", "job created and its first window pushed",
                           job_id=job.job_id, slug=result.slug, job_kind=job.job_kind)
                 return response
-        except BaseException:
+        except BaseException as submit_exc:
+            if not push_started:
+                self.store.abandon_idempotent(key)
+                if final_submission_dir:
+                    shutil.rmtree(final_submission_dir, ignore_errors=True)
+                raise
             # A failure here used to release the idempotency claim, which let a
             # retry build a NEW random job id -- a second, differently-named
             # kernel for the same calculation whenever the first push had
@@ -276,9 +341,15 @@ class OrchestratorService:
             # second kernel); the orchestrator store's claim TTL bounds the
             # wait, and reconciliation drives the existing kernel regardless.
             landed = None
+            probe_answered = False
             if job is not None:
                 try:
                     landed = KaggleClient(creds).kernel_exists(job_id)
+                    # ``None`` is a definitive NotFound result; an exception
+                    # means the remote state is unknown.  These cases must not
+                    # be conflated: releasing the claim for an unknown remote
+                    # state permits a retry to create a duplicate calculation.
+                    probe_answered = True
                 except Exception as probe_exc:  # noqa: BLE001
                     log.warning(
                         "could not verify whether kernel %s landed after a submit "
@@ -286,6 +357,33 @@ class OrchestratorService:
                         "cannot create a duplicate kernel",
                         job_id, probe_exc)
             if landed is not None:
+                # The exact slug proves Kaggle accepted this logical window.
+                # Persist the acknowledgement before completing the
+                # idempotency record so My Jobs and reconciliation do not
+                # retain a misleading UPLOADING state after a lost response.
+                current = self.store.require_job(job.job_id)
+                if current.state is JobState.UPLOADING:
+                    current.current_slug = job_id
+                    current.current_url = (
+                        f"https://www.kaggle.com/code/{current.owner}/{job_id}"
+                    )
+                    if job_id not in current.chain_slugs:
+                        current.chain_slugs.append(job_id)
+                    current = self.reconciler.transition(
+                        current,
+                        Trigger.PUSH_ACK,
+                        actor="submit-recovery",
+                        correlation_id=correlation_id,
+                        slug=job_id,
+                        remote_status=landed.status,
+                    )
+                    recovered_submission_dir = current._extra.pop("submission_dir", None)
+                    self.store.put_job(
+                        current, expected_version=current._extra.get("_version")
+                    )
+                    if recovered_submission_dir:
+                        shutil.rmtree(recovered_submission_dir, ignore_errors=True)
+                job = current
                 response = SubmitResult(
                     job_id=job.job_id,
                     slug=job.current_slug or job_id,
@@ -297,11 +395,44 @@ class OrchestratorService:
                           "the push landed despite the local failure; the idempotency "
                           "key now replays the real job instead of pushing a duplicate",
                           job_id=job.job_id, slug=response.slug)
+                return response
+            # Only release the claim when Kaggle answered definitively that
+            # the deterministic slug does not exist.  On a timeout, 5xx, DNS
+            # failure, or authentication ambiguity the claim must remain so a
+            # retry cannot submit a second expensive calculation.
+            if probe_answered and landed is None:
+                if job is not None:
+                    current = self.store.get_job(job.job_id)
+                    if current is not None and current.state is JobState.UPLOADING:
+                        current.last_error = {
+                            "code": "initial_push_failed",
+                            "message": str(submit_exc)[:1000],
+                        }
+                        current = self.reconciler.transition(
+                            current, Trigger.PUSH_EXHAUSTED,
+                            actor="submit-recovery", correlation_id=correlation_id,
+                            error=current.last_error,
+                        )
+                        self.store.put_job(
+                            current, expected_version=current._extra.get("_version")
+                        )
+                self.store.abandon_idempotent(key)
                 raise
-            # Release the claim so a corrected retry is not blocked for a day
-            # by a key that never produced a job.
-            self.store.abandon_idempotent(key)
-            raise
+            if job is not None:
+                current = self.store.get_job(job.job_id)
+                if current is not None:
+                    current.last_error = {
+                        "code": "submission_unknown",
+                        "message": "The initial Kaggle push may have landed; exact-slug verification is unavailable.",
+                    }
+                    self.store.put_job(
+                        current, expected_version=current._extra.get("_version")
+                    )
+            raise SubmissionUnknownError(
+                "the initial Kaggle submission outcome is unknown; retry is held until exact-slug reconciliation",
+                job_id=job.job_id if job is not None else None,
+                cause=type(submit_exc).__name__,
+            ) from submit_exc
 
     # -- status ------------------------------------------------------------
     def status(self, creds: KaggleCredentials, job_id: str, *,
@@ -316,6 +447,9 @@ class OrchestratorService:
             raise ValidationError("that job id does not look like one of this site's jobs")
         auth_creds = self.ensure_authenticated(creds)
 
+        if self.store.is_tombstoned(job_id, auth_creds.username):
+            raise NotFoundError("this job was deleted locally", job_id=job_id)
+
         job = self.store.get_job(job_id)
         if job and job.owner != auth_creds.username.lower():
             raise ValidationError(f"Access denied: Job {job_id} does not belong to user {auth_creds.username}")
@@ -326,14 +460,29 @@ class OrchestratorService:
             log_event(log, "job_adopted", "adopted a job that was not in the local cache",
                       job_id=job_id, epoch=job.epoch, state=job.state.value)
 
+        remote_status_unknown = False
+        remote_status_error = None
         if reconcile:
-            job = self.reconciler.reconcile(job_id, auth_creds, actor="api")
+            try:
+                job = self.reconciler.reconcile(job_id, auth_creds, actor="api")
+            except Exception as exc:  # noqa: BLE001
+                # A status observation failure is not a failed chemistry job.
+                # Return the durable last-known state with an explicit marker
+                # so the UI can show “remote status unknown” and retry.
+                remote_status_unknown = True
+                remote_status_error = type(exc).__name__
+                log.warning("remote status unknown for %s: %s", job_id, exc)
             try:
                 self.cf_controller.sync_job_state(job)
             except Exception:
                 pass
 
-        return self.describe(job)
+        described = self.describe(job)
+        if remote_status_unknown:
+            described["remote_status_unknown"] = True
+            described["remote_status_error"] = remote_status_error
+            described["note"] = "Remote status is temporarily unavailable; showing the last persisted state."
+        return described
 
     def describe(self, job: JobManifest) -> dict:
         """Serialises a job for the UI, including *why* it is in its state.
@@ -433,11 +582,22 @@ class OrchestratorService:
             log.warning("Session reconciliation with Cloudflare control plane degraded: %s", exc)
 
         # 2. Discover jobs on Kaggle
-        remote = ledger_mod.discover_jobs(client)
+        remote_known = True
+        try:
+            remote = ledger_mod.discover_jobs(client)
+        except Exception as exc:  # noqa: BLE001
+            # Do not turn a temporary list/status outage into
+            # ``deleted_on_kaggle`` for every persistent job.  The local store
+            # remains a durable cache and the next reconciliation can retry.
+            remote_known = False
+            remote = []
+            log.warning("Kaggle job discovery unavailable; preserving local job list: %s", exc)
         merged = []
         seen = set()
         for entry in remote:
             job_id = entry["job_id"]
+            if self.store.is_tombstoned(job_id, creds.username):
+                continue
             seen.add(job_id)
             try:
                 job = self.store.get_job(job_id)
@@ -473,10 +633,15 @@ class OrchestratorService:
 
         # 3. Include jobs in local store/Cloudflare that are no longer present on Kaggle
         for job in self.store.list_jobs(creds.username):
+            if self.store.is_tombstoned(job.job_id, creds.username):
+                continue
             if job.job_id not in seen:
                 seen.add(job.job_id)
                 described = self.describe(job)
-                described["deleted_on_kaggle"] = True
+                described["deleted_on_kaggle"] = bool(remote_known)
+                if not remote_known:
+                    described["remote_status_unknown"] = True
+                    described["note"] = "Kaggle listing is temporarily unavailable; local state was preserved."
                 merged.append(described)
 
         def _sort_timestamp(item: dict) -> float:
@@ -575,7 +740,8 @@ class OrchestratorService:
 
     # -- results -----------------------------------------------------------
     def fetch_results(self, creds: KaggleCredentials, job_id: str,
-                      *, slug: str | None = None) -> tuple[str | None, str]:
+                      *, slug: str | None = None,
+                      timeout: int = 900) -> tuple[str | None, str]:
         """Downloads a window's output and returns `(zip_path, cleanup_dir)`.
 
         Defaults to the *newest* window, since that is where a finished job's
@@ -600,10 +766,11 @@ class OrchestratorService:
 
         # 2. Otherwise download from Kaggle
         client = KaggleClient(auth_creds)
-        out_dir = client.fetch_output(target, timeout=900, page_size=200)
+        out_dir = client.fetch_output(target, timeout=max(1, int(timeout)), page_size=200)
 
         zip_path = os.path.join(out_dir, "results.zip")
-        if os.path.exists(zip_path) and os.path.getsize(zip_path) > 0 and zipfile.is_zipfile(zip_path):
+        if (os.path.exists(zip_path) and os.path.getsize(zip_path) > 0
+                and zipfile.is_zipfile(zip_path) and _safe_zip_file(zip_path)):
             return zip_path, out_dir
 
         # No packaged archive or corrupt results.zip: bundle loose output files.
@@ -626,6 +793,32 @@ class OrchestratorService:
         job_id: str,
         *,
         slug: str | None = None,
+        download_timeout: int = 900,
+    ) -> ResultManifest | None:
+        """Archive one job under a per-job cross-process lock.
+
+        Manual/API retries and the watchdog can observe the same completed
+        Kaggle job concurrently.  Serializing the complete download/verify/
+        publish sequence prevents a late archive from deleting a valid result
+        published by an earlier request.
+        """
+        from services.local_orca_service import CrossProcessFileLock
+        owner = str(getattr(creds, "username", "") or "anonymous").strip().lower()
+        safe_job_id = os.path.basename(str(job_id or "").strip())
+        lock_dir = os.path.join(self.result_store.base_dir, ".locks")
+        lock_path = os.path.join(lock_dir, "%s-%s.lock" % (owner, safe_job_id))
+        with CrossProcessFileLock(lock_path, timeout=120.0):
+            return self._archive_job_results_unlocked(
+                creds, job_id, slug=slug, download_timeout=download_timeout
+            )
+
+    def _archive_job_results_unlocked(
+        self,
+        creds: KaggleCredentials,
+        job_id: str,
+        *,
+        slug: str | None = None,
+        download_timeout: int = 900,
     ) -> ResultManifest | None:
         """Downloads, validates, checksums, and archives result artifacts durably."""
         if not is_valid_slug(job_id):
@@ -637,33 +830,44 @@ class OrchestratorService:
         if job.owner != auth_creds.username.lower():
             raise ValidationError(f"Access denied: Job {job_id} does not belong to user {auth_creds.username}")
 
+        def persist_result_fields(**changes):
+            nonlocal job
+            fresh = self.store.require_job(job_id)
+            if fresh.owner != auth_creds.username.lower():
+                raise ValidationError("result owner changed during archival")
+            for field_name, value in changes.items():
+                setattr(fresh, field_name, value)
+            job = self.store.put_job(
+                fresh, expected_version=fresh._extra.get("_version")
+            )
+
         # 1. Transition to DOWNLOADING
-        job.result_state = ResultDurabilityState.DOWNLOADING.value
-        self.store.put_job(job)
+        persist_result_fields(result_state=ResultDurabilityState.DOWNLOADING.value)
         try:
             self.cf_controller.sync_job_state(job)
         except Exception:
             pass
 
         # 2. Retrieve output from Kaggle (or local store)
-        zip_path, cleanup_dir = self.fetch_results(auth_creds, job_id, slug=slug)
+        zip_path, cleanup_dir = self.fetch_results(
+            auth_creds, job_id, slug=slug, timeout=download_timeout
+        )
         if not zip_path or not os.path.exists(zip_path):
-            job.result_state = ResultDurabilityState.DOWNLOAD_FAILED.value
-            self.store.put_job(job)
+            persist_result_fields(result_state=ResultDurabilityState.DOWNLOAD_FAILED.value)
             try:
                 self.cf_controller.sync_job_state(job)
             except Exception:
                 pass
             return None
 
-        job.result_downloaded_at = now()
-        job.result_state = ResultDurabilityState.VALIDATING.value
-        self.store.put_job(job)
+        persist_result_fields(
+            result_downloaded_at=now(),
+            result_state=ResultDurabilityState.VALIDATING.value,
+        )
 
         try:
             # 3. Transition to ARCHIVING & store into ResultArtifactStore
-            job.result_state = ResultDurabilityState.ARCHIVING.value
-            self.store.put_job(job)
+            persist_result_fields(result_state=ResultDurabilityState.ARCHIVING.value)
 
             manifest = self.result_store.store(
                 job_id=job.job_id,
@@ -680,14 +884,15 @@ class OrchestratorService:
             )
 
             # 4. Mark ARCHIVED and record hashes/references
-            job.result_state = manifest.status
-            job.storage_durability = self.result_store.storage_durability
-            job.result_sha256 = manifest.bundle_sha256
-            job.result_size_bytes = manifest.total_size_bytes
-            job.result_storage_reference = f"{auth_creds.username}/{job.job_id}/results.zip"
-            job.result_manifest_id = manifest.manifest_id
-            job.result_archived_at = manifest.archived_at
-            self.store.put_job(job)
+            persist_result_fields(
+                result_state=manifest.status,
+                storage_durability=self.result_store.storage_durability,
+                result_sha256=manifest.bundle_sha256,
+                result_size_bytes=manifest.total_size_bytes,
+                result_storage_reference=f"{auth_creds.username}/{job.job_id}/results.zip",
+                result_manifest_id=manifest.manifest_id,
+                result_archived_at=manifest.archived_at,
+            )
 
             try:
                 self.cf_controller.sync_job_state(job)
@@ -706,8 +911,7 @@ class OrchestratorService:
             return manifest
         except Exception as exc:
             log.warning("Archiving job result failed for %s: %s", job_id, exc)
-            job.result_state = ResultDurabilityState.ARCHIVE_FAILED.value
-            self.store.put_job(job)
+            persist_result_fields(result_state=ResultDurabilityState.ARCHIVE_FAILED.value)
             try:
                 self.cf_controller.sync_job_state(job)
             except Exception:
@@ -725,10 +929,27 @@ class OrchestratorService:
             raise ValidationError(f"Access denied: Job {job_id} does not belong to user {auth_creds.username}")
         if job.is_terminal:
             return self.describe(job)
+
+        # Cancellation is a remote lifecycle operation, not merely a local
+        # label.  If the local record is marked CANCELLED while a Kaggle
+        # window is still alive, the reconciler stops following that window
+        # and the user's expensive calculation continues orphaned.  Delete
+        # every known window first; delete_kernel is intentionally idempotent
+        # for an already-gone kernel.  A transient Kaggle failure is allowed to
+        # propagate, leaving the manifest in its prior state so the UI cannot
+        # falsely report success.
+        client = KaggleClient(auth_creds)
+        slugs = set(job.chain_slugs)
+        if job.current_slug:
+            slugs.add(job.current_slug)
+        for slug in sorted(slugs):
+            client.delete_kernel(slug)
+
         job = self.reconciler.transition(job, Trigger.CANCEL, actor="operator",
                                           reason="cancelled by the user")
         self.store.put_job(job, expected_version=job._extra.get("_version"))
-        log_event(log, "job_cancelled", "job cancelled by the user", job_id=job_id)
+        log_event(log, "job_cancelled", "job and known remote windows cancelled",
+                  job_id=job_id, remote_windows=len(slugs))
         return self.describe(job)
 
     def resume(self, creds: KaggleCredentials, job_id: str) -> dict:
@@ -771,12 +992,20 @@ class OrchestratorService:
             chains = ledger_mod.group_chains(client.list_kernels())
             slugs = [w["slug"] for w in chains.get(job_id, [])] or [job_id]
 
+        # Persist the user's deletion intent before the network side effect.
+        # A remote listing or Cloudflare projection may remain stale for a
+        # while, but neither is then allowed to resurrect the local job.
+        self.store.tombstone_job(
+            job_id,
+            auth_creds.username,
+            detail={"slugs": slugs, "state": "REMOTE_DELETE_PENDING"},
+        )
+
         deleted = []
         for slug in slugs:
             client.delete_kernel(slug)
             deleted.append(slug)
 
-        self.store.delete_job(job_id)
         self.result_store.delete(job_id, auth_creds.username)
         try:
             self.cf_controller.client.delete_job(job_id, auth_creds.username)
@@ -887,4 +1116,3 @@ def reset_service() -> None:
             except Exception:
                 pass
             _service = None
-

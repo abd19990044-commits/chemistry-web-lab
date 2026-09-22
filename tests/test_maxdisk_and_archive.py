@@ -9,8 +9,11 @@ succeeded, and must contain NO molden file when it did not.
 import hashlib
 import importlib
 import os
+import stat
 import sys
+import tarfile
 import zipfile
+from io import BytesIO
 
 import pytest
 
@@ -26,7 +29,8 @@ def test_maxdisk_inserted_when_absent():
     inp = "! B3LYP Opt\n* xyz 0 1\nO 0 0 0\n*"
     out, effective, action = art.set_maxdisk(inp, 20000)
     assert out.count("MaxDisk 20000") == 1
-    assert "%maxdisk" in out
+    assert "%scf" in out
+    assert "%maxdisk" not in out
     assert (effective, action) == (20000, "inserted")
 
 
@@ -35,6 +39,8 @@ def test_maxdisk_explicit_20000_is_preserved():
     out, effective, action = art.set_maxdisk(inp, 20000)
     assert (effective, action) == (20000, "preserved")
     assert out.count("MaxDisk") == 1
+    assert "%maxdisk" not in out
+    assert "%scf" in out
 
 
 def test_maxdisk_custom_valid_value_is_preserved():
@@ -45,6 +51,8 @@ def test_maxdisk_custom_valid_value_is_preserved():
     out, effective, action = art.set_maxdisk(inp, 20000)
     assert (effective, action) == (50000, "preserved")
     assert "MaxDisk 50000" in out and out.count("MaxDisk") == 1
+    assert "%maxdisk" not in out
+    assert "%scf" in out
 
 
 def test_maxdisk_invalid_value_is_rejected_to_the_default():
@@ -52,6 +60,8 @@ def test_maxdisk_invalid_value_is_rejected_to_the_default():
     out, effective, action = art.set_maxdisk(inp, 20000)
     assert (effective, action) == (20000, "rejected-invalid")
     assert "MaxDisk 20000" in out and "not-a-number" not in out
+    assert "%maxdisk" not in out
+    assert "%scf" in out
 
 
 def test_maxdisk_duplicates_collapse_to_one():
@@ -59,6 +69,8 @@ def test_maxdisk_duplicates_collapse_to_one():
     out, effective, action = art.set_maxdisk(inp, 20000)
     assert (effective, action) == (50000, "collapsed")
     assert out.count("MaxDisk") == 1 and "MaxDisk 50000" in out
+    assert "%maxdisk" not in out
+    assert "%scf" in out
 
 
 def test_maxdisk_inserted_into_existing_block_without_duplicate():
@@ -66,6 +78,22 @@ def test_maxdisk_inserted_into_existing_block_without_duplicate():
     out, effective, action = art.set_maxdisk(inp, 20000)
     assert out.count("MaxDisk 20000") == 1
     assert (effective, action) == (20000, "inserted")
+    assert "%maxdisk" not in out
+    assert "%scf" in out
+
+
+def test_maxdisk_native_scf_block_preserved_and_inserted():
+    inp = "! B3LYP Opt\n%scf\n  MaxIter 150\nend\n* xyz 0 1\nO 0 0 0\n"
+    out, effective, action = art.set_maxdisk(inp, 20000)
+    assert out.count("MaxDisk 20000") == 1
+    assert "MaxIter 150" in out
+    assert out.count("%scf") == 1
+    assert (effective, action) == (20000, "inserted")
+
+    inp_with_disk = "! B3LYP Opt\n%scf\n  MaxDisk 40000\n  MaxIter 150\nend\n* xyz 0 1\nO 0 0 0\n"
+    out2, eff2, act2 = art.set_maxdisk(inp_with_disk, 20000)
+    assert eff2 == 40000 and act2 == "preserved"
+    assert "MaxDisk 40000" in out2 and out2.count("MaxDisk") == 1
 
 
 def test_maxdisk_does_not_touch_maxcore():
@@ -73,6 +101,7 @@ def test_maxdisk_does_not_touch_maxcore():
     out, effective, action = art.set_maxdisk(inp, 20000)
     assert "6000" in out, "%maxcore must be untouched"
     assert "MaxDisk 20000" in out
+    assert "%scf" in out
 
 
 def test_generated_kernel_script_enforces_maxdisk():
@@ -185,6 +214,65 @@ def test_failed_molden_is_excluded_and_reported(runner, tmp_path, monkeypatch):
         note = fh.read()
     assert "MOLDEN_FAILED" in note
     assert "Calculation finished." in note
+
+
+@pytest.mark.parametrize("member", ["../../escape", "/absolute/escape", "C:/escape"])
+def test_kernel_runner_rejects_zip_path_escape(runner, tmp_path, member):
+    archive = tmp_path / "evil.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr(member, b"not-orca")
+    dest = tmp_path / "extract"
+    assert runner.extract_archive(str(archive), str(dest)) is False
+    assert not dest.exists(), "a rejected archive must leave no partial executable tree"
+
+
+def test_kernel_runner_rejects_zip_symlink(runner, tmp_path):
+    archive = tmp_path / "symlink.zip"
+    info = zipfile.ZipInfo("orca-link")
+    info.create_system = 3
+    info.external_attr = (stat.S_IFLNK | 0o777) << 16
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr(info, "../../outside")
+    dest = tmp_path / "extract"
+    assert runner.extract_archive(str(archive), str(dest)) is False
+    assert not dest.exists()
+
+
+def test_kernel_runner_rejects_tar_link(runner, tmp_path):
+    archive = tmp_path / "symlink.tar"
+    with tarfile.open(archive, "w") as tf:
+        info = tarfile.TarInfo("orca-link")
+        info.type = tarfile.SYMTYPE
+        info.linkname = "../../outside"
+        tf.addfile(info)
+    dest = tmp_path / "extract"
+    assert runner.extract_archive(str(archive), str(dest)) is False
+    assert not dest.exists()
+
+
+def test_kernel_runner_rejects_archive_over_budget(runner, tmp_path, monkeypatch):
+    archive = tmp_path / "bomb.zip"
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("huge.bin", BytesIO(b"0" * 2048).getvalue())
+    monkeypatch.setattr(runner, "MAX_ARCHIVE_EXTRACTED_BYTES", 1024)
+    dest = tmp_path / "extract"
+    assert runner.extract_archive(str(archive), str(dest)) is False
+    assert not dest.exists()
+
+
+def test_kernel_runner_allows_safe_internal_tar_symlink(runner, tmp_path):
+    archive = tmp_path / "safe_symlink.tar"
+    with tarfile.open(archive, "w") as tf:
+        f = tarfile.TarInfo("lib/libreal.so")
+        f.size = 6
+        tf.addfile(f, BytesIO(b"binary"))
+        link = tarfile.TarInfo("lib/libalias.so")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "libreal.so"
+        tf.addfile(link)
+    dest = tmp_path / "extract"
+    assert runner.extract_archive(str(archive), str(dest)) is True
+    assert (dest / "lib" / "libreal.so").exists()
 
 
 if __name__ == "__main__":

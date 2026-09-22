@@ -18,6 +18,8 @@ os.environ["ORCA_RETRY_MAX_DELAY"] = "0.005"
 os.environ["ORCA_RETRY_MAX_ATTEMPTS"] = "2"
 os.environ["ORCA_WATCHDOG_ENABLED"] = "0"
 os.environ["ORCA_SQLITE_BUSY_TIMEOUT_MS"] = "100"
+os.environ["ORCA_LOCAL_MAX_MEMORY_MB"] = "16384"
+os.environ["ORCA_LOCAL_MAX_CORES"] = "16"
 
 import pytest
 

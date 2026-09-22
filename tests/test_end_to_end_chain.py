@@ -151,6 +151,15 @@ class Sandbox(object):
             fake_kaggle_py = os.path.join(self.bin, "fake_kaggle.py")
             with open(fake_kaggle_py, "w", encoding="utf-8") as fh:
                 fh.write(kaggle_script_body)
+            # Production invokes ``python -m kaggle`` on Windows to avoid
+            # shell=True/kaggle.cmd injection. Provide the same module-shaped
+            # fake in this isolated subprocess environment.
+            fake_kaggle_pkg = os.path.join(self.bin, "kaggle")
+            os.makedirs(fake_kaggle_pkg, exist_ok=True)
+            with open(os.path.join(fake_kaggle_pkg, "__init__.py"), "w", encoding="utf-8") as fh:
+                fh.write("")
+            with open(os.path.join(fake_kaggle_pkg, "__main__.py"), "w", encoding="utf-8") as fh:
+                fh.write(kaggle_script_body)
             cli = os.path.join(self.bin, "kaggle.bat")
             with open(cli, "w", encoding="utf-8") as fh:
                 fh.write(f'@echo off\n"{sys.executable}" "{fake_kaggle_py}" %*\n')
@@ -169,6 +178,7 @@ class Sandbox(object):
             "FAKE_ORCA_SCENARIO": self.scenario_path,
             "FAKE_ORCA_STATE": self.state_path,
             "PATH": self.bin + os.pathsep + os.environ.get("PATH", ""),
+            "PYTHONPATH": self.bin + os.pathsep + os.environ.get("PYTHONPATH", ""),
             "HOME": self.home,
         })
         return e

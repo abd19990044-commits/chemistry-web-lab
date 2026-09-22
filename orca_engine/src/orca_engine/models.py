@@ -197,6 +197,7 @@ class JobData:
     total_entropy_cal_mol_k: float | None = None
     elements: list[str] = field(default_factory=list)
     coords: list[tuple[float, float, float]] = field(default_factory=list)
+    coords_raw: list[tuple[str, str, str]] = field(default_factory=list)
     coords_unit: CoordinateUnit | None = None
     tddft_cm: list[float] = field(default_factory=list)
     tddft_fosc: list[float] = field(default_factory=list)

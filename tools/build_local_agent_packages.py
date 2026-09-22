@@ -111,7 +111,7 @@ def build_all_packages() -> Dict[str, Dict[str, Any]]:
 
             # Add README
             readme_text = f"""Chemistry Lab Local Agent ({cfg['display_name']})
-Version: 1.0.3
+Version: 1.0.4
 
 1. Extract all files from this ZIP.
 2. Run the platform launcher ({cfg['scripts'][0].name}).
@@ -124,7 +124,7 @@ Version: 1.0.3
             zf.writestr("README_LOCAL_AGENT.txt", readme_bytes)
             member_hashes["README_LOCAL_AGENT.txt"] = _sha256_bytes(readme_bytes)
 
-            version_bytes = b"1.0.3\n"
+            version_bytes = b"1.0.4\n"
             zf.writestr("VERSION", version_bytes)
             member_hashes["VERSION"] = _sha256_bytes(version_bytes)
 
@@ -141,7 +141,7 @@ Version: 1.0.3
             "filename": cfg["name"],
             "size_bytes": zip_path.stat().st_size,
             "sha256": sha,
-            "version": "1.0.3",
+            "version": "1.0.4",
             "file_path": str(zip_path),
             "instructions": [
                 f"Extract {cfg['name']}",

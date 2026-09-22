@@ -2,6 +2,7 @@
 """Verification tests for Kaggle sign-in, credential formats, and Server API / Companion Agent Authentication."""
 import json
 import pytest
+from fastapi.testclient import TestClient
 from app import app
 from services import local_agent_service as las
 from orca_orchestrator.credentials import parse as parse_credentials
@@ -89,6 +90,81 @@ def test_server_local_orca_settings_authentication(client):
     assert data["ok"] is True
     assert "settings" in data
     assert "concurrency" in data["settings"]
+
+
+def test_fastapi_native_routes_accept_signed_flask_browser_session(monkeypatch):
+    """The mounted UI and native FastAPI routes must share one login."""
+    import api.main as api_main
+
+    monkeypatch.setenv("CHEMISTRY_LAB_REQUIRE_AUTH", "1")
+    serializer = app.session_interface.get_signing_serializer(app)
+    assert serializer is not None
+    cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
+    signed = serializer.dumps({"user": {"sub": "browser-user-1", "email": "u@example.test"}})
+
+    with TestClient(api_main.app) as api_client:
+        api_client.cookies.set(cookie_name, signed)
+        response = api_client.get("/api/v1/local-agent/devices")
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+
+
+def test_fastapi_native_routes_reject_forged_flask_session(monkeypatch):
+    import api.main as api_main
+
+    monkeypatch.setenv("CHEMISTRY_LAB_REQUIRE_AUTH", "1")
+    cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
+    with TestClient(api_main.app) as api_client:
+        api_client.cookies.set(cookie_name, "forged-session-cookie")
+        response = api_client.get("/api/v1/local-agent/devices")
+
+    assert response.status_code == 401
+
+
+def test_fastapi_native_mutation_requires_session_bound_csrf(monkeypatch):
+    """Native routes must not bypass Flask's browser CSRF boundary."""
+    import api.main as api_main
+
+    monkeypatch.setenv("CHEMISTRY_LAB_REQUIRE_AUTH", "1")
+    serializer = app.session_interface.get_signing_serializer(app)
+    assert serializer is not None
+    cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
+    csrf_token = "a" * 64
+    signed = serializer.dumps({
+        "user": {"sub": "browser-user-csrf"},
+        "csrf_token": csrf_token,
+    })
+    payload = {"coords": "O 0 0 0", "calc_type": "sp"}
+
+    with TestClient(api_main.app) as api_client:
+        api_client.cookies.set(cookie_name, signed)
+        missing = api_client.post("/api/v1/orca/generate", json=payload)
+        accepted = api_client.post(
+            "/api/v1/orca/generate", json=payload,
+            headers={"X-CSRF-Token": csrf_token},
+        )
+
+    assert missing.status_code == 403
+    assert missing.json()["error"]["code"] == "CSRF_FORBIDDEN"
+    assert accepted.status_code == 200
+
+
+def test_fastapi_native_body_limit_counts_actual_body(monkeypatch):
+    """Chunked/missing Content-Length requests are counted, not trusted."""
+    import api.main as api_main
+
+    monkeypatch.setenv("CHEMISTRY_LAB_API_MAX_BODY_BYTES", "1024")
+    limited_app = api_main._create_app()
+    with TestClient(limited_app) as api_client:
+        response = api_client.post(
+            "/api/v1/orca/generate",
+            content=b"x" * 2048,
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "PAYLOAD_TOO_LARGE"
 
 
 def test_companion_agent_claim_format_validation(client):

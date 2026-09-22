@@ -78,38 +78,24 @@
     // minima; SP/Freq/NumFreq/TD-DFT have no optimized geometry to import.
     // Convergence itself is enforced server-side by /api/kaggle/
     // extract-opt-coords via the ORCA classifier.
-    return /geometry optimization|\bopt\b|optts|opt_ts|opt\+freq/.test(type)
+    const typeLooksLikeOpt = /geometry optimization|\bopt\b|optts|opt_ts|opt\+freq/.test(type)
       && !/scan|neb|relax/.test(type);
+    if (typeLooksLikeOpt) return true;
 
+    // Older queue entries and entries reconstructed from Kaggle do not always
+    // carry stageType/calc_type. Keep the scientific fallback reachable: an
+    // OPT marker in the actual input or a previously verified optimized
+    // geometry identifies the stage. This prevents continuation from silently
+    // falling back to the original, pre-optimization geometry.
     const name = String(job.name || "").toLowerCase();
-    if (
-      name.includes("opt") ||
-      name.includes("relax") ||
-      name.includes("geom") ||
-      name.includes("ts") ||
-      name.includes("scan")
-    ) {
-      return true;
-    }
+    if (/\b(opt|optts|optimization|optimized|geometry)\b/.test(name)
+        && !/scan|neb|relax/.test(name)) return true;
 
     const inputContent = String(job.input_content || (job.stageConfig && job.stageConfig.input_text) || "").toLowerCase();
-    if (
-      inputContent.includes("! opt") ||
-      inputContent.includes("!opt") ||
-      inputContent.includes("! tightopt") ||
-      inputContent.includes("!verytightopt") ||
-      inputContent.includes("! looseopt") ||
-      inputContent.includes("! optts") ||
-      inputContent.includes("!optts")
-    ) {
-      return true;
-    }
+    if (/!\s*(?:tight|verytight|loose)?(?:opt|optts)\b/.test(inputContent)
+        || /!\s*(?:tight|verytight|loose)?opt\+freq\b/.test(inputContent)) return true;
 
-    if (job.optimizedCoords && job.optimizedCoords.trim()) {
-      return true;
-    }
-
-    return false;
+    return Boolean(job.optimizedCoords && job.optimizedCoords.trim());
   }
 
   // Ephemeral Session Management (30-min auto-cleanup) with safe fallback
@@ -320,11 +306,15 @@
     removedJobIds: "chemlab_removed_job_ids",
   };
 
+  const MAX_ACTIVE_KAGGLE_JOBS = 5;
+  const MAX_TOTAL_JOBS = 100;
+  const TERMINAL_STATUSES = ["complete", "error", "cancelled"];
+
   let sessionKaggleKey = "";
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // View routing: home -> draw / orca / quantum / legal
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   const views = document.querySelectorAll(".view");
   const backHomeBtn = document.getElementById("back-home-btn");
   const brandHomeBtn = document.getElementById("brand-home-btn");
@@ -409,9 +399,9 @@
     brandHomeBtn.addEventListener("keydown", (e) => { if (e.key === "Enter") showView("home"); });
   }
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Academic Citation Modal & Clipboard Copy
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   function initCitationModal() {
     const citationModal = document.getElementById("citation-modal");
     const closeBtn = document.getElementById("citation-modal-close");
@@ -468,9 +458,9 @@
   }
   initCitationModal();
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Workspace sub-tabs (Molecule Explorer/Reaction, Generator/Kaggle/Jobs)
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   document.querySelectorAll(".workspace-nav").forEach(nav => {
     const tabs = nav.querySelectorAll(".ws-tab");
     const panelsRoot = nav.parentElement;
@@ -487,13 +477,19 @@
   function switchToTab(target) {
     if (!target) return;
     const tab = document.querySelector(`.ws-tab[data-target="${target}"]`);
-    if (tab) tab.click();
+    if (!tab) return;
+    const parentView = tab.closest(".view");
+    if (parentView && !parentView.classList.contains("is-active")) {
+      document.querySelectorAll(".view").forEach(v => v.classList.remove("is-active"));
+      parentView.classList.add("is-active");
+    }
+    tab.click();
   }
 
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Helpers
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   function b64ToDataUrl(b64, mime) { return `data:${mime};base64,${b64}`; }
   function setDownload(anchorEl, b64, mime, filename) {
     anchorEl.href = b64ToDataUrl(b64, mime);
@@ -586,9 +582,9 @@
     setTimeout(() => toast.remove(), timeoutMs);
   }
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Google Sign-In (identity display only)
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   const userChip = document.getElementById("user-chip");
   const googleSigninArea = document.getElementById("google-signin-area");
 
@@ -617,9 +613,9 @@
 
   fetch("/api/auth/me").then(r => r.json()).then(d => { if (d.ok && d.user) renderUser(d.user); }).catch(() => {});
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Molecule Explorer
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   const explorerForm = document.getElementById("explorer-form");
   const explorerError = document.getElementById("explorer-error");
   const explorerLoading = document.getElementById("explorer-loading");
@@ -809,9 +805,9 @@
     openWizard({ prefillQuery: lastCompound.query });
   });
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Molecule Explorer Background Switcher
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   const explorerImgStage = document.getElementById("explorer-img-stage");
   document.querySelectorAll(".btn-canvas-theme").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -823,9 +819,9 @@
     });
   });
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Reaction Drawing & Responsive Viewport
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   let rxnZoomLevel = 1.0;
   const rxnImage = document.getElementById("reaction-image");
   const rxnContainer = document.getElementById("reaction-canvas-container");
@@ -901,9 +897,9 @@
     });
   }
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Reaction Drawing
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   const reactionForm = document.getElementById("reaction-form");
   const reactionError = document.getElementById("reaction-error");
   const reactionLoading = document.getElementById("reaction-loading");
@@ -947,7 +943,7 @@
       const balanceEl = document.getElementById("reaction-balance");
       const balance = data.balance || {};
       balanceEl.className = "reaction-badge " + (balance.balanced ? "badge-ok" : "badge-warn");
-      balanceEl.textContent = (balance.balanced ? "✓ " : "⚠ ") + (balance.message || "");
+      balanceEl.textContent = (balance.balanced ? "✓ " : "⚠️ ") + (balance.message || "");
       balanceEl.classList.toggle("hidden", !balance.message);
 
       // The file check. This reports a STRUCTURAL validation of the MDL RXN
@@ -964,7 +960,7 @@
           + `${(report.opens_in || []).join(", ")}.`;
       } else {
         fileEl.className = "reaction-badge badge-warn";
-        fileEl.textContent = "⚠ The reaction file did not pass its format check: "
+        fileEl.textContent = "⚠️ The reaction file did not pass its format check: "
           + ((report.problems || []).join("; ") || "unknown problem")
           + ". Please report this - the drawing above is still correct.";
       }
@@ -1055,9 +1051,9 @@
     copyElementForWord(img, eq, smiles ? `Reaction SMILES: ${smiles}` : "", plain);
   });
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // ORCA Wizard ("options window") state machine
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   const modal = document.getElementById("orca-modal");
   const modalBody = document.getElementById("orca-modal-body");
   const modalTitle = document.getElementById("orca-modal-title");
@@ -1138,7 +1134,7 @@
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn btn-ghost";
-    btn.textContent = "◄ Back";
+    btn.textContent = "← Back";
     btn.addEventListener("click", onBack);
     return btn;
   }
@@ -1324,11 +1320,19 @@
           let cleanCoords = "";
           if (job.xyz) {
             const rawLines = job.xyz.trim().split("\n");
-            cleanCoords = (rawLines.length > 2 && /^\d+$/.test(rawLines[0].trim())) ? rawLines.slice(2).join("\n") : rawLines.join("\n");
+            const coordLines = (rawLines.length > 2 && /^\d+$/.test(rawLines[0].trim())) ? rawLines.slice(2) : rawLines;
+            cleanCoords = coordLines.map(l => {
+              const parts = l.trim().split(/\s+/);
+              return parts.length >= 4 ? `${parts[0].padEnd(3)} ${parts[1]} ${parts[2]} ${parts[3]}` : l.trim();
+            }).filter(Boolean).join("\n");
           } else if (job.elements && job.coords && job.elements.length === job.coords.length) {
             cleanCoords = job.elements.map((elem, idx) => {
-              const [x, y, z] = job.coords[idx];
-              return `${elem.padEnd(3)} ${x.toFixed(6).padStart(12)} ${y.toFixed(6).padStart(12)} ${z.toFixed(6).padStart(12)}`;
+              const c = job.coords[idx];
+              const rc = job.coords_raw ? job.coords_raw[idx] : null;
+              const sx = rc ? rc[0] : String(c[0]);
+              const sy = rc ? rc[1] : String(c[1]);
+              const sz = rc ? rc[2] : String(c[2]);
+              return `${elem.padEnd(3)} ${sx} ${sy} ${sz}`;
             }).join("\n");
           }
           if (cleanCoords) {
@@ -1502,11 +1506,19 @@
             let cleanCoords = "";
             if (job.xyz) {
               const rawLines = job.xyz.trim().split("\n");
-              cleanCoords = (rawLines.length > 2 && /^\d+$/.test(rawLines[0].trim())) ? rawLines.slice(2).join("\n") : rawLines.join("\n");
+              const coordLines = (rawLines.length > 2 && /^\d+$/.test(rawLines[0].trim())) ? rawLines.slice(2) : rawLines;
+              cleanCoords = coordLines.map(l => {
+                const parts = l.trim().split(/\s+/);
+                return parts.length >= 4 ? `${parts[0].padEnd(3)} ${parts[1]} ${parts[2]} ${parts[3]}` : l.trim();
+              }).filter(Boolean).join("\n");
             } else if (job.elements && job.coords && job.elements.length === job.coords.length) {
               cleanCoords = job.elements.map((elem, idx) => {
-                const [x, y, z] = job.coords[idx];
-                return `${elem.padEnd(3)} ${x.toFixed(6).padStart(12)} ${y.toFixed(6).padStart(12)} ${z.toFixed(6).padStart(12)}`;
+                const c = job.coords[idx];
+                const rc = job.coords_raw ? job.coords_raw[idx] : null;
+                const sx = rc ? rc[0] : String(c[0]);
+                const sy = rc ? rc[1] : String(c[1]);
+                const sz = rc ? rc[2] : String(c[2]);
+                return `${elem.padEnd(3)} ${sx} ${sy} ${sz}`;
               }).join("\n");
             }
             if (!cleanCoords) throw new Error("No 3D Cartesian coordinates found in output file.");
@@ -1540,6 +1552,120 @@
     tabOutputs.addEventListener("click", () => activateTab(tabOutputs, outputsPane));
   }
 
+  // ---- Avogadro-Standard Chemical Bond Perception Algorithm ----
+  function reconcileBondsAvogadro(model, options = {}) {
+    if (!model) return;
+    const atoms = (typeof model.selectedAtoms === "function") ? model.selectedAtoms({}) : (model.atoms || []);
+    if (!atoms || atoms.length === 0) return;
+
+    const covRadii = {
+      H: 0.31, He: 0.28, Li: 1.28, Be: 0.96, B: 0.84, C: 0.76, N: 0.71, O: 0.66,
+      F: 0.57, Ne: 0.58, Na: 1.66, Mg: 1.41, Al: 1.21, Si: 1.11, P: 1.07, S: 1.05,
+      Cl: 1.02, Ar: 1.06, K: 2.03, Ca: 1.76, Sc: 1.70, Ti: 1.60, V: 1.53, Cr: 1.39,
+      Mn: 1.39, Fe: 1.32, Co: 1.26, Ni: 1.24, Cu: 1.32, Zn: 1.22, Ga: 1.22, Ge: 1.20,
+      As: 1.19, Se: 1.20, Br: 1.20, Kr: 1.16, Rb: 2.20, Sr: 1.95, Y: 1.90, Zr: 1.75,
+      Nb: 1.64, Mo: 1.54, Tc: 1.47, Ru: 1.46, Rh: 1.42, Pd: 1.39, Ag: 1.45, Cd: 1.44,
+      In: 1.42, Sn: 1.39, Sb: 1.39, Te: 1.38, I: 1.39, Xe: 1.40, Cs: 2.44, Ba: 2.15,
+      Pt: 1.36, Au: 1.36, Hg: 1.32
+    };
+
+    const maxValenceMap = {
+      H: 1, He: 0, Li: 1, Be: 2, B: 4, C: 4, N: 4, O: 3, F: 1, Ne: 0,
+      Na: 1, Mg: 2, Al: 3, Si: 4, P: 6, S: 6, Cl: 1, Ar: 0, K: 1, Ca: 2,
+      Br: 1, I: 1, Fe: 6, Cu: 4, Zn: 4, Ru: 6, Rh: 6, Pd: 4, Pt: 4, Au: 4
+    };
+
+    // Reset 3Dmol auto-bonds to build strictly compliant Avogadro bond graph
+    atoms.forEach(a => {
+      a.bonds = [];
+      a.bondOrder = [];
+    });
+
+    // Step 1: Detect candidate bonds within covalent radius tolerance
+    const candidateBonds = [];
+    for (let i = 0; i < atoms.length; i++) {
+      const a1 = atoms[i];
+      const r1 = covRadii[a1.elem] || 1.25;
+      for (let j = i + 1; j < atoms.length; j++) {
+        const a2 = atoms[j];
+        const r2 = covRadii[a2.elem] || 1.25;
+
+        // In Builder: do not auto-bond atoms from different fragments unless explicitly drawn
+        if (options.fragmentCheck && a1.molId && a2.molId && a1.molId !== a2.molId) {
+          if (!options.explicitBonds || !options.explicitBonds.some(b => 
+            (b.a1 === a1.id && b.a2 === a2.id) || (b.a1 === a2.id && b.a2 === a1.id)
+          )) {
+            continue;
+          }
+        }
+
+        const dx = a1.x - a2.x, dy = a1.y - a2.y, dz = a1.z - a2.z;
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        // Disallow overlapping atom artifacts
+        if (d < 0.40) continue;
+
+        const maxCutoff = Math.min(2.95, r1 + r2 + 0.40);
+        if (d <= maxCutoff) {
+          candidateBonds.push({ i, j, dist: d, elem1: a1.elem, elem2: a2.elem });
+        }
+      }
+    }
+
+    // Sort ascending by distance (shortest/strongest bonds established first)
+    candidateBonds.sort((a, b) => a.dist - b.dist);
+
+    // Step 2: Enforce Avogadro valences (Hydrogen <= 1, no H-H if bonded to heavy atom, max valences)
+    const atomBondMap = atoms.map(() => []);
+
+    for (const cb of candidateBonds) {
+      const { i, j, dist, elem1, elem2 } = cb;
+      const bonds_i = atomBondMap[i];
+      const bonds_j = atomBondMap[j];
+
+      // Strict Hydrogen rule: max 1 bond
+      if (elem1 === "H" && bonds_i.length >= 1) continue;
+      if (elem2 === "H" && bonds_j.length >= 1) continue;
+
+      // H-H rule: forbidden if either hydrogen is already bonded to a heavy atom
+      if (elem1 === "H" && elem2 === "H") {
+        if (bonds_i.length > 0 || bonds_j.length > 0) continue;
+      }
+
+      const max1 = maxValenceMap[elem1] || 6;
+      const max2 = maxValenceMap[elem2] || 6;
+      if (bonds_i.length >= max1 || bonds_j.length >= max2) continue;
+
+      bonds_i.push({ partner: j, dist });
+      bonds_j.push({ partner: i, dist });
+    }
+
+    // Step 3: Populate 3Dmol atom structures
+    for (let i = 0; i < atoms.length; i++) {
+      atoms[i].bonds = atomBondMap[i].map(b => b.partner);
+      atoms[i].bondOrder = atomBondMap[i].map(() => 1);
+    }
+
+    // Step 4: Inject explicit user-drawn bonds if provided
+    if (options.explicitBonds && options.explicitBonds.length > 0) {
+      options.explicitBonds.forEach(eb => {
+        const idx1 = atoms.findIndex(a => (a.id !== undefined ? a.id === eb.a1 : false));
+        const idx2 = atoms.findIndex(a => (a.id !== undefined ? a.id === eb.a2 : false));
+        if (idx1 >= 0 && idx2 >= 0) {
+          if (!atoms[idx1].bonds.includes(idx2)) {
+            atoms[idx1].bonds.push(idx2);
+            atoms[idx1].bondOrder.push(eb.order || 1);
+          }
+          if (!atoms[idx2].bonds.includes(idx1)) {
+            atoms[idx2].bonds.push(idx1);
+            atoms[idx2].bondOrder.push(eb.order || 1);
+          }
+        }
+      });
+    }
+  }
+  window.reconcileBondsAvogadro = reconcileBondsAvogadro;
+
   // ---- Step: 3D Molecular Builder & Multi-Molecule Staging ----
   function stepBuilder3D(opts = {}) {
     setModalChrome(2, "3D Molecular Builder & Multi-Molecule Staging");
@@ -1564,6 +1690,7 @@
             id: initialAtoms.length + 1,
             elem: elem.charAt(0).toUpperCase() + elem.slice(1).toLowerCase(),
             x: x, y: y, z: z,
+            rawX: parts[1], rawY: parts[2], rawZ: parts[3],
             molId: 1,
             molName: opts.name || wizard.name || "Compound 1"
           });
@@ -1598,6 +1725,7 @@
       history: [],
       redoStack: []
     };
+    window._debugBState = bState;
 
     function saveHistory() {
       bState.history.push({
@@ -1623,7 +1751,12 @@
     }
 
     function formatXYZ(atoms) {
-      return atoms.map(a => `${a.elem.padEnd(3)} ${a.x.toFixed(6).padStart(12)} ${a.y.toFixed(6).padStart(12)} ${a.z.toFixed(6).padStart(12)}`).join("\n");
+      return atoms.map(a => {
+        const sx = (a.rawX !== undefined && parseFloat(a.rawX) === a.x) ? a.rawX : String(a.x);
+        const sy = (a.rawY !== undefined && parseFloat(a.rawY) === a.y) ? a.rawY : String(a.y);
+        const sz = (a.rawZ !== undefined && parseFloat(a.rawZ) === a.z) ? a.rawZ : String(a.z);
+        return `${a.elem.padEnd(3)} ${sx} ${sy} ${sz}`;
+      }).join("\n");
     }
 
     const container = document.createElement("div");
@@ -1639,7 +1772,7 @@
     const tools = [
       { id: "select", icon: "🔍", label: "Select / Inspect" },
       { id: "moveAtom", icon: "📍", label: "Move Single Atom" },
-      { id: "move", icon: "🖐️", label: "Move Fragment (Others Fixed)" },
+      { id: "move", icon: "✋", label: "Move Fragment (Others Fixed)" },
       { id: "bond", icon: "🔗", label: "Draw / Connect Bond" },
       { id: "delete", icon: "🗑️", label: "Delete Atom" },
       { id: "measure", icon: "📏", label: "Measure (Dist/Angle)" }
@@ -2006,8 +2139,9 @@
     const backBtn = backButton(goBack);
     const proceedBtn = document.createElement("button");
     proceedBtn.type = "button";
+    proceedBtn.id = "builder3d-proceed-btn";
     proceedBtn.className = "btn btn-primary";
-    proceedBtn.innerHTML = "<strong>Confirm 3D Structure &amp; Proceed to Calculation Settings →</strong>";
+    proceedBtn.innerHTML = "<strong>Confirm 3D Structure &amp; Proceed to Calculation Settings &rarr;</strong>";
 
     actions.append(backBtn, proceedBtn);
     container.append(topBar, mainLayout, summaryBar, actions);
@@ -2165,7 +2299,7 @@
       } else if (bState.activeTool === "moveAtom") {
         hintEl.innerHTML = "<span>📍</span> <span style='color:#f59e0b;'>Move Single Atom: click and drag atom with mouse. (Shift: axis snap, Alt / Shift+Wheel: depth).</span>";
       } else if (bState.activeTool === "move") {
-        hintEl.innerHTML = "<span>🖐️</span> <span style='color:#38bdf8;'>Move Fragment: click and drag any atom to translate active fragment rigidly (others stay fixed).</span>";
+        hintEl.innerHTML = "<span>✋</span> <span style='color:#38bdf8;'>Move Fragment: click and drag any atom to translate active fragment rigidly (others stay fixed).</span>";
       } else if (bState.activeTool === "delete") {
         hintEl.innerHTML = "<span>🗑️</span> <span style='color:#ef4444;'>Delete mode: click any atom to remove it from structure.</span>";
       } else if (bState.activeTool === "bond") {
@@ -2249,7 +2383,7 @@
       return { dx: wDx, dy: wDy, dz: wDz, pixPerAng, r20, r21, r22 };
     }
 
-    function findAtomUnderCursor(screenX, screenY, maxDistPix = 24) {
+    function findAtomUnderCursor(clientX, clientY, maxDistPix = 26) {
       if (!bState.viewer || bState.atoms.length === 0) return null;
       let bestAtom = null;
       let bestScreenDist = maxDistPix;
@@ -2264,7 +2398,7 @@
       for (const atom of bState.atoms) {
         const s = bState.viewer.modelToScreen({ x: atom.x, y: atom.y, z: atom.z });
         if (!s || isNaN(s.x) || isNaN(s.y)) continue;
-        const dPix = Math.hypot(s.x - screenX, s.y - screenY);
+        const dPix = Math.hypot(s.x - clientX, s.y - clientY);
         if (dPix <= bestScreenDist) {
           // Camera depth calculation (higher depth = closer to camera in 3Dmol)
           const camDepth = -(r20 * atom.x + r21 * atom.y + r22 * atom.z);
@@ -2328,21 +2462,21 @@
         return;
       }
 
-      // 2. Valence limits check
-      const maxValenceMap = { H: 1, He: 0, Li: 1, Be: 2, B: 4, C: 4, N: 4, O: 2, F: 1, Ne: 0, Na: 1, Mg: 2, Al: 3, Si: 4, P: 5, S: 6, Cl: 1, Br: 1, I: 1 };
+      // 2. Valence limits check (Avogadro standard)
+      const maxValenceMap = { H: 1, He: 0, Li: 1, Be: 2, B: 4, C: 4, N: 4, O: 3, F: 1, Ne: 0, Na: 1, Mg: 2, Al: 3, Si: 4, P: 6, S: 6, Cl: 1, Br: 1, I: 1 };
       const count1 = bState.bonds.filter(b => b.a1 === atom1.id || b.a2 === atom1.id).length;
       const count2 = bState.bonds.filter(b => b.a1 === atom2.id || b.a2 === atom2.id).length;
       const max1 = maxValenceMap[atom1.elem] || 6;
       const max2 = maxValenceMap[atom2.elem] || 6;
 
       if (count1 >= max1) {
-        showToast(`Cannot connect: ${atom1.elem}${atom1.id} has already reached its typical maximum valence of ${max1}.`, "warning");
+        showToast(`Cannot connect: ${atom1.elem}${atom1.id} has reached its typical maximum valence of ${max1}.`, "warning");
         bState.bondFirstAtomId = null;
         renderScene();
         return;
       }
       if (count2 >= max2) {
-        showToast(`Cannot connect: ${atom2.elem}${atom2.id} has already reached its typical maximum valence of ${max2}.`, "warning");
+        showToast(`Cannot connect: ${atom2.elem}${atom2.id} has reached its typical maximum valence of ${max2}.`, "warning");
         bState.bondFirstAtomId = null;
         renderScene();
         return;
@@ -2350,8 +2484,7 @@
 
       saveHistory();
 
-      // 3. Check inter-fragment placement
-      const isInterFragment = (atom1.molId !== atom2.molId);
+      // 3. Distance & Target Covalent Bond Length
       const dx = atom2.x - atom1.x;
       const dy = atom2.y - atom1.y;
       const dz = atom2.z - atom1.z;
@@ -2360,30 +2493,44 @@
       const covRadii = { H: 0.31, C: 0.76, N: 0.71, O: 0.66, F: 0.57, P: 1.07, S: 1.05, Cl: 1.02, Br: 1.20, I: 1.39, B: 0.84, Si: 1.11 };
       const r1 = covRadii[atom1.elem] || 0.77;
       const r2 = covRadii[atom2.elem] || 0.77;
-      const targetBondLength = Math.max(0.9, (r1 + r2) * 1.02);
+      // Logical bond length: physical range ~1.0 to 2.2 A, strictly <= 3.0 A
+      const targetBondLength = Math.min(2.80, Math.max(0.95, (r1 + r2) * 1.05));
 
-      if (isInterFragment && currentDist > targetBondLength * 1.25) {
-        // Bring Fragment 2 rigidly towards Atom 1
-        const shift = (targetBondLength - currentDist) / currentDist;
-        const tx = dx * shift;
-        const ty = dy * shift;
-        const tz = dz * shift;
+      // Translate molecule or atom so bond length reaches physical distance (<= 3.0 A)
+      if (currentDist > targetBondLength * 1.15 || currentDist > 2.8 || currentDist < 0.7) {
+        const isInterFragment = (atom1.molId !== atom2.molId);
+        const dirX = (currentDist > 0.001) ? (atom1.x - atom2.x) / currentDist : 1.0;
+        const dirY = (currentDist > 0.001) ? (atom1.y - atom2.y) / currentDist : 0.0;
+        const dirZ = (currentDist > 0.001) ? (atom1.z - atom2.z) / currentDist : 0.0;
 
-        const frag2Id = atom2.molId;
-        bState.atoms.forEach(a => {
-          if (a.molId === frag2Id) {
-            a.x += tx;
-            a.y += ty;
-            a.z += tz;
-          }
-        });
+        const dispDist = currentDist - targetBondLength;
+        const tx = dirX * dispDist;
+        const ty = dirY * dispDist;
+        const tz = dirZ * dispDist;
+
+        if (isInterFragment) {
+          // Rigidly translate entire fragment of atom2 towards atom1
+          const frag2Id = atom2.molId;
+          bState.atoms.forEach(a => {
+            if (a.molId === frag2Id) {
+              a.x += tx;
+              a.y += ty;
+              a.z += tz;
+            }
+          });
+        } else {
+          // Same molecule: translate atom2 to form bond
+          atom2.x += tx;
+          atom2.y += ty;
+          atom2.z += tz;
+        }
       }
 
       // 4. Create the bond
       bState.bonds.push({ a1: atom1.id, a2: atom2.id, order: 1 });
       bState.bondFirstAtomId = null;
 
-      showToast(`Formed bond between ${atom1.elem}${atom1.id} and ${atom2.elem}${atom2.id}. Running local UFF relaxation…`);
+      showToast(`Bond created between ${atom1.elem}${atom1.id} and ${atom2.elem}${atom2.id} (${targetBondLength.toFixed(2)} Å). Running local UFF relaxation…`);
       renderScene(false);
 
       // 5. Run preliminary local UFF relaxation
@@ -2400,16 +2547,17 @@
               bState.atoms[idx].z = parseFloat(p[3]);
             }
           });
-          showToast("✔ Bond created and geometry relaxed with UFF. (Preliminary FF relaxation).");
+          showToast("✔ Bond created and geometry relaxed with UFF.");
         } else {
-          showToast(`Bond created with initial placement. UFF local relaxation note: ${res?.error || "Kept placed geometry."}`, "info");
+          showToast(`Bond created (${targetBondLength.toFixed(2)} Å). Geometry placed.`, "info");
         }
       } catch (err) {
-        showToast("Bond created with initial placement. (UFF optimization skipped).", "info");
+        showToast(`Bond created (${targetBondLength.toFixed(2)} Å).`, "info");
       }
       updateSidebar();
       renderScene(false);
     }
+    bState.formIntelligentBond = formIntelligentBond;
 
     function handleAtomClick(atom3d) {
       if (!atom3d) return;
@@ -2464,107 +2612,229 @@
       }
     }
 
-    function renderSceneFast() {
-      if (!bState.viewer || bState.atoms.length === 0) return;
-      const v = bState.viewer;
-      v.clear();
-      const xyzStr = formatXYZ(bState.atoms);
-      const fullXyz = `${bState.atoms.length}\nORCA 3D Builder Model\n${xyzStr}`;
-      v.addModel(fullXyz, "xyz");
-      if (bState.renderStyle === "stick_ball") {
-        v.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.28 } });
-      } else if (bState.renderStyle === "stick") {
-        v.setStyle({}, { stick: { radius: 0.2 } });
-      } else if (bState.renderStyle === "sphere") {
-        v.setStyle({}, { sphere: { scale: 0.8 } });
-      } else if (bState.renderStyle === "wire") {
-        v.setStyle({}, { line: { linewidth: 2 } });
-      }
-
-      if (bState.selectedAtomId) {
-        const aIdx = bState.atoms.findIndex(a => a.id === bState.selectedAtomId);
-        if (aIdx >= 0) {
-          v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#f59e0b" }, stick: { radius: 0.25, color: "#f59e0b" } });
-        }
-      }
-      v.render();
+    function renderFallbackTable(vEl, atoms) {
+      if (!vEl) return;
+      const count = atoms ? atoms.length : 0;
+      const f = computeFormula(atoms);
+      const rowsHtml = (atoms || []).slice(0, 100).map((a, idx) => `
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+          <td style="padding: 4px 8px; font-family: var(--font-mono); font-weight: 700; color: #38bdf8;">${a.elem}${idx + 1}</td>
+          <td style="padding: 4px 8px; font-family: var(--font-mono);">${a.x.toFixed(4)}</td>
+          <td style="padding: 4px 8px; font-family: var(--font-mono);">${a.y.toFixed(4)}</td>
+          <td style="padding: 4px 8px; font-family: var(--font-mono);">${a.z.toFixed(4)}</td>
+        </tr>
+      `).join("");
+      vEl.innerHTML = `
+        <div style="padding: 1rem; color: #cbd5e1; height: 100%; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-start;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+            <span style="font-weight: 600; font-size: 0.9rem; color: #f8fafc;">🧬 Structure Coordinates (${count} atoms, ${f})</span>
+            <span style="font-size: 0.75rem; color: #94a3b8;">Coordinates Ready</span>
+          </div>
+          <table style="width: 100%; font-size: 0.82rem; text-align: left; border-collapse: collapse;">
+            <thead>
+              <tr style="color: #94a3b8; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <th style="padding: 4px 8px;">Atom</th>
+                <th style="padding: 4px 8px;">X (Å)</th>
+                <th style="padding: 4px 8px;">Y (Å)</th>
+                <th style="padding: 4px 8px;">Z (Å)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml || '<tr><td colspan="4" style="padding: 1rem; text-align: center; color: #64748b;">No coordinates entered yet.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      `;
+      updateSummary();
     }
 
+    function renderSceneFast() {
+      if (!bState.viewer || bState.atoms.length === 0) return;
+      try {
+        const v = bState.viewer;
+        if (typeof v.resize === "function") v.resize();
+        v.clear();
+        const xyzStr = formatXYZ(bState.atoms);
+        const fullXyz = `${bState.atoms.length}\nORCA 3D Builder Model\n${xyzStr}`;
+        const m = v.addModel(fullXyz, "xyz");
+
+        // Avogadro-standard bond perception
+        reconcileBondsAvogadro(m, {
+          explicitBonds: bState.bonds,
+          fragmentCheck: true
+        });
+
+        if (bState.renderStyle === "stick_ball") {
+          v.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.28 } });
+        } else if (bState.renderStyle === "stick") {
+          v.setStyle({}, { stick: { radius: 0.2 } });
+        } else if (bState.renderStyle === "sphere") {
+          v.setStyle({}, { sphere: { scale: 0.8 } });
+        } else if (bState.renderStyle === "wire") {
+          v.setStyle({}, { line: { linewidth: 2 } });
+        }
+
+        // Render explicit solid cylinders for all bonds in bState.bonds so they are always visible
+        if (bState.bonds && bState.bonds.length > 0) {
+          bState.bonds.forEach(b => {
+            const a1 = bState.atoms.find(a => a.id === b.a1);
+            const a2 = bState.atoms.find(a => a.id === b.a2);
+            if (a1 && a2) {
+              v.addCylinder({
+                start: { x: a1.x, y: a1.y, z: a1.z },
+                end: { x: a2.x, y: a2.y, z: a2.z },
+                radius: 0.14,
+                color: "#94a3b8",
+                fromCap: 1,
+                toCap: 1
+              });
+            }
+          });
+        }
+
+        if (bState.selectedAtomId) {
+          const aIdx = bState.atoms.findIndex(a => a.id === bState.selectedAtomId);
+          if (aIdx >= 0) {
+            v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#f59e0b" }, stick: { radius: 0.25, color: "#f59e0b" } });
+          }
+        }
+        v.render();
+      } catch (_) {}
+    }
+
+    let renderRetryTimer = null;
     function renderScene(zoomToFit = false) {
-      if (!window.$3Dmol) return;
       const vEl = document.getElementById("builder3d-viewport");
       if (!vEl) return;
-      
-      if (!bState.viewer) {
-        bState.viewer = $3Dmol.createViewer(vEl, {
-          defaultcolors: $3Dmol.elementColors.rasmol,
-          backgroundColor: "#090e17"
-        });
-      }
-      
-      const v = bState.viewer;
-      v.clear();
-      
-      if (bState.atoms.length === 0) {
-        v.render();
-        updateSummary();
+
+      if (!window.$3Dmol) {
+        if (!renderRetryTimer) {
+          let attempts = 0;
+          renderRetryTimer = setInterval(() => {
+            attempts++;
+            if (window.$3Dmol) {
+              clearInterval(renderRetryTimer);
+              renderRetryTimer = null;
+              renderScene(true);
+            } else if (attempts >= 25) {
+              clearInterval(renderRetryTimer);
+              renderRetryTimer = null;
+              renderFallbackTable(vEl, bState.atoms);
+            }
+          }, 120);
+        }
+        renderFallbackTable(vEl, bState.atoms);
         return;
       }
-      
-      const xyzStr = formatXYZ(bState.atoms);
-      const fullXyz = `${bState.atoms.length}\nORCA 3D Builder Model\n${xyzStr}`;
-      const m = v.addModel(fullXyz, "xyz");
-      
-      if (bState.renderStyle === "stick_ball") {
-        v.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.28 } });
-      } else if (bState.renderStyle === "stick") {
-        v.setStyle({}, { stick: { radius: 0.2 } });
-      } else if (bState.renderStyle === "sphere") {
-        v.setStyle({}, { sphere: { scale: 0.8 } });
-      } else if (bState.renderStyle === "wire") {
-        v.setStyle({}, { line: { linewidth: 2 } });
-      }
-      
-      if (bState.bondFirstAtomId) {
-        const aIdx = bState.atoms.findIndex(a => a.id === bState.bondFirstAtomId);
-        if (aIdx >= 0) {
-          v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#eab308" }, stick: { radius: 0.24, color: "#eab308" } });
-        }
-      } else if (bState.measurePicks.length > 0) {
-        bState.measurePicks.forEach(pa => {
-          const aIdx = bState.atoms.findIndex(a => a.id === pa.id);
-          if (aIdx >= 0) {
-            v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#a855f7" }, stick: { radius: 0.24, color: "#a855f7" } });
-          }
-        });
-      } else if (bState.selectedAtomId) {
-        const aIdx = bState.atoms.findIndex(a => a.id === bState.selectedAtomId);
-        if (aIdx >= 0) {
-          v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#f59e0b" }, stick: { radius: 0.25, color: "#f59e0b" } });
-        }
-      }
-      
-      m.setClickable({}, true, function(atom3d) {
-        handleAtomClick(atom3d);
-      });
-      
-      if (bState.showLabels) {
-        bState.atoms.forEach((a, idx) => {
-          v.addLabel(`${a.elem}${idx + 1}`, {
-            position: { x: a.x, y: a.y, z: a.z },
-            backgroundColor: "rgba(15,23,42,0.75)",
-            fontColor: "#ffffff",
-            fontSize: 10,
-            showBackground: true
+
+      try {
+        if (!bState.viewer) {
+          vEl.innerHTML = "";
+          bState.viewer = $3Dmol.createViewer(vEl, {
+            defaultcolors: $3Dmol.elementColors.rasmol,
+            backgroundColor: "#090e17"
           });
+        }
+        const v = bState.viewer;
+        if (!v) {
+          renderFallbackTable(vEl, bState.atoms);
+          return;
+        }
+        if (typeof v.resize === "function") {
+          v.resize();
+        }
+        v.clear();
+
+        if (bState.atoms.length === 0) {
+          v.render();
+          updateSummary();
+          return;
+        }
+
+        const xyzStr = formatXYZ(bState.atoms);
+        const fullXyz = `${bState.atoms.length}\nORCA 3D Builder Model\n${xyzStr}`;
+        const m = v.addModel(fullXyz, "xyz");
+
+        // Avogadro-standard bond perception
+        reconcileBondsAvogadro(m, {
+          explicitBonds: bState.bonds,
+          fragmentCheck: true
         });
+
+        if (bState.renderStyle === "stick_ball") {
+          v.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.28 } });
+        } else if (bState.renderStyle === "stick") {
+          v.setStyle({}, { stick: { radius: 0.2 } });
+        } else if (bState.renderStyle === "sphere") {
+          v.setStyle({}, { sphere: { scale: 0.8 } });
+        } else if (bState.renderStyle === "wire") {
+          v.setStyle({}, { line: { linewidth: 2 } });
+        }
+
+        // Render explicit solid cylinders for all bonds in bState.bonds so they are always visible
+        if (bState.bonds && bState.bonds.length > 0) {
+          bState.bonds.forEach(b => {
+            const a1 = bState.atoms.find(a => a.id === b.a1);
+            const a2 = bState.atoms.find(a => a.id === b.a2);
+            if (a1 && a2) {
+              v.addCylinder({
+                start: { x: a1.x, y: a1.y, z: a1.z },
+                end: { x: a2.x, y: a2.y, z: a2.z },
+                radius: 0.14,
+                color: "#94a3b8",
+                fromCap: 1,
+                toCap: 1
+              });
+            }
+          });
+        }
+
+        if (bState.bondFirstAtomId) {
+          const aIdx = bState.atoms.findIndex(a => a.id === bState.bondFirstAtomId);
+          if (aIdx >= 0) {
+            v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#eab308" }, stick: { radius: 0.24, color: "#eab308" } });
+          }
+        } else if (bState.measurePicks.length > 0) {
+          bState.measurePicks.forEach(pa => {
+            const aIdx = bState.atoms.findIndex(a => a.id === pa.id);
+            if (aIdx >= 0) {
+              v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#a855f7" }, stick: { radius: 0.24, color: "#a855f7" } });
+            }
+          });
+        } else if (bState.selectedAtomId) {
+          const aIdx = bState.atoms.findIndex(a => a.id === bState.selectedAtomId);
+          if (aIdx >= 0) {
+            v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#f59e0b" }, stick: { radius: 0.25, color: "#f59e0b" } });
+          }
+        }
+
+        if (typeof m.setClickable === "function") {
+          m.setClickable({}, true, function(atom3d) {
+            handleAtomClick(atom3d);
+          });
+        }
+
+        if (bState.showLabels) {
+          bState.atoms.forEach((a, idx) => {
+            v.addLabel(`${a.elem}${idx + 1}`, {
+              position: { x: a.x, y: a.y, z: a.z },
+              backgroundColor: "rgba(15,23,42,0.75)",
+              fontColor: "#ffffff",
+              fontSize: 10,
+              showBackground: true
+            });
+          });
+        }
+
+        if (zoomToFit) {
+          v.zoomTo();
+        }
+        v.render();
+        updateSummary();
+      } catch (renderErr) {
+        console.warn("3Dmol renderScene fallback engaged:", renderErr);
+        renderFallbackTable(vEl, bState.atoms);
       }
-      
-      if (zoomToFit) {
-        v.zoomTo();
-      }
-      v.render();
-      updateSummary();
     }
 
     // =========================================================================
@@ -2573,21 +2843,27 @@
     let dragState = null;
     let preDragSnapshot = null;
 
-    canvasEl.addEventListener("mousedown", (e) => {
-      if (e.button !== 0) return; // Only left-click initiates dragging
-      const rect = canvasEl.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
+    canvasEl.addEventListener("contextmenu", (e) => {
+      // Prevent browser context menu when manipulating atoms/fragments
+      const picked = findAtomUnderCursor(e.clientX, e.clientY, 26);
+      if (picked || dragState) {
+        e.preventDefault();
+      }
+    });
 
-      const pickedAtom = findAtomUnderCursor(screenX, screenY, 24);
+    canvasEl.addEventListener("mousedown", (e) => {
+      if (e.button !== 0 && e.button !== 2) return; // Left or Right click
+      const pickedAtom = findAtomUnderCursor(e.clientX, e.clientY, 26);
       if (!pickedAtom) {
-        // Click on empty space: allow default 3Dmol camera rotation
+        // Click on empty space: allow 3Dmol camera rotation/pan/zoom
+        if (bState.viewer) bState.viewer.nomouse = false;
         return;
       }
 
       // If active tool is delete:
       if (bState.activeTool === "delete") {
         e.stopPropagation();
+        e.stopImmediatePropagation();
         e.preventDefault();
         saveHistory();
         const clickedIdx = bState.atoms.findIndex(a => a.id === pickedAtom.id);
@@ -2606,6 +2882,7 @@
       // If active tool is measure:
       if (bState.activeTool === "measure") {
         e.stopPropagation();
+        e.stopImmediatePropagation();
         e.preventDefault();
         if (bState.measurePicks.length >= 4) bState.measurePicks = [];
         bState.measurePicks.push(pickedAtom);
@@ -2618,6 +2895,7 @@
       // If active tool is bond:
       if (bState.activeTool === "bond") {
         e.stopPropagation();
+        e.stopImmediatePropagation();
         e.preventDefault();
         if (!bState.bondFirstAtomId) {
           bState.bondFirstAtomId = pickedAtom.id;
@@ -2636,11 +2914,19 @@
 
       // Direct Manipulation Dragging (select, moveAtom, move):
       e.stopPropagation();
+      e.stopImmediatePropagation();
       e.preventDefault();
+
+      // Temporarily lock 3Dmol camera controls so camera does not rotate while dragging
+      if (bState.viewer) {
+        bState.viewer.nomouse = true;
+      }
+
       bState.selectedAtomId = pickedAtom.id;
       bState.selectedFragId = pickedAtom.molId;
 
-      const isFragMove = (bState.activeTool === "move");
+      // Determine whether moving whole fragment or single atom
+      const isFragMove = (bState.activeTool === "move" || e.shiftKey || e.button === 2);
       preDragSnapshot = {
         atoms: JSON.parse(JSON.stringify(bState.atoms)),
         fragments: JSON.parse(JSON.stringify(bState.fragments)),
@@ -2652,14 +2938,33 @@
         startPositions.set(a.id, { x: a.x, y: a.y, z: a.z });
       });
 
+      // Calculate centroid of fragment for rotation if right-click or Alt key
+      let fragCenter = { x: 0, y: 0, z: 0 };
+      let fragAtomCount = 0;
+      bState.atoms.forEach(a => {
+        if (a.molId === pickedAtom.molId) {
+          fragCenter.x += a.x;
+          fragCenter.y += a.y;
+          fragCenter.z += a.z;
+          fragAtomCount++;
+        }
+      });
+      if (fragAtomCount > 0) {
+        fragCenter.x /= fragAtomCount;
+        fragCenter.y /= fragAtomCount;
+        fragCenter.z /= fragAtomCount;
+      }
+
       dragState = {
         isDragging: true,
         hasMoved: false,
         dragType: isFragMove ? "fragment" : "atom",
+        isRotate: (isFragMove && (e.altKey || (e.button === 2 && !e.shiftKey))),
         atomId: pickedAtom.id,
         fragId: pickedAtom.molId,
-        startScreenX: screenX,
-        startScreenY: screenY,
+        fragCenter: fragCenter,
+        startClientX: e.clientX,
+        startClientY: e.clientY,
         refPos: { x: pickedAtom.x, y: pickedAtom.y, z: pickedAtom.z },
         startPositions: startPositions
       };
@@ -2667,39 +2972,67 @@
       canvasEl.style.cursor = "grabbing";
       updateSidebar();
       renderScene(false);
-    });
+    }, { capture: true });
 
     window.addEventListener("mousemove", (e) => {
-      const rect = canvasEl.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
-
       if (dragState && dragState.isDragging) {
         dragState.hasMoved = true;
-        const dxPix = screenX - dragState.startScreenX;
-        const dyPix = screenY - dragState.startScreenY;
+        const dxPix = e.clientX - dragState.startClientX;
+        const dyPix = e.clientY - dragState.startClientY;
 
-        const delta = screenDeltaToWorld(dxPix, dyPix, dragState.refPos, bState.viewer, e);
+        if (dragState.isRotate && dragState.dragType === "fragment") {
+          // Rigid rotation of fragment around its centroid
+          const angleX = (dyPix * 0.015);
+          const angleY = (dxPix * 0.015);
+          const cx = dragState.fragCenter.x;
+          const cy = dragState.fragCenter.y;
+          const cz = dragState.fragCenter.z;
 
-        if (dragState.dragType === "atom") {
-          const a = bState.atoms.find(at => at.id === dragState.atomId);
-          const s0 = dragState.startPositions.get(dragState.atomId);
-          if (a && s0) {
-            a.x = s0.x + delta.dx;
-            a.y = s0.y + delta.dy;
-            a.z = s0.z + delta.dz;
-          }
-        } else if (dragState.dragType === "fragment") {
           bState.atoms.forEach(a => {
             if (a.molId === dragState.fragId) {
               const s0 = dragState.startPositions.get(a.id);
               if (s0) {
-                a.x = s0.x + delta.dx;
-                a.y = s0.y + delta.dy;
-                a.z = s0.z + delta.dz;
+                const rx = s0.x - cx;
+                const ry = s0.y - cy;
+                const rz = s0.z - cz;
+                // Rotate around Y
+                const cosY = Math.cos(angleY), sinY = Math.sin(angleY);
+                const x1 = rx * cosY + rz * sinY;
+                const z1 = -rx * sinY + rz * cosY;
+                // Rotate around X
+                const cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+                const y2 = ry * cosX - z1 * sinX;
+                const z2 = ry * sinX + z1 * cosX;
+                a.x = x1 + cx;
+                a.y = y2 + cy;
+                a.z = z2 + cz;
               }
             }
           });
+        } else {
+          // Translation in camera plane
+          const delta = screenDeltaToWorld(dxPix, dyPix, dragState.refPos, bState.viewer, e);
+
+          if (dragState.dragType === "atom") {
+            const a = bState.atoms.find(at => at.id === dragState.atomId);
+            const s0 = dragState.startPositions.get(dragState.atomId);
+            if (a && s0) {
+              a.x = s0.x + delta.dx;
+              a.y = s0.y + delta.dy;
+              a.z = s0.z + delta.dz;
+            }
+          } else if (dragState.dragType === "fragment") {
+            bState.atoms.forEach(a => {
+              if (a.molId === dragState.fragId) {
+                const s0 = dragState.startPositions.get(a.id);
+                if (s0) {
+                  a.x = s0.x + delta.dx;
+                  a.y = s0.y + delta.dy;
+                  a.z = s0.z + delta.dz;
+                }
+              }
+            });
+          }
         }
 
         // Live smooth 60 FPS update
@@ -2709,8 +3042,9 @@
       }
 
       // Hover feedback when mouse is moving over viewport without dragging
-      if (screenX >= 0 && screenX <= rect.width && screenY >= 0 && screenY <= rect.height) {
-        const hoverAtom = findAtomUnderCursor(screenX, screenY, 20);
+      const rect = canvasEl.getBoundingClientRect();
+      if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        const hoverAtom = findAtomUnderCursor(e.clientX, e.clientY, 20);
         if (hoverAtom) {
           if (bState.activeTool === "bond" || bState.activeTool === "measure") {
             canvasEl.style.cursor = "crosshair";
@@ -2727,6 +3061,9 @@
 
     window.addEventListener("mouseup", (e) => {
       if (dragState && dragState.isDragging) {
+        if (bState.viewer) {
+          bState.viewer.nomouse = false; // Re-enable 3Dmol camera controls
+        }
         if (dragState.hasMoved && preDragSnapshot) {
           // Validate numerical coordinates
           const hasInvalid = bState.atoms.some(a => isNaN(a.x) || isNaN(a.y) || isNaN(a.z) || !isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z));
@@ -2743,6 +3080,13 @@
         canvasEl.style.cursor = "default";
         updateSidebar();
         renderScene(false);
+      }
+    });
+
+    window.addEventListener("blur", () => {
+      if (dragState) {
+        if (bState.viewer) bState.viewer.nomouse = false;
+        dragState = null;
       }
     });
 
@@ -2916,11 +3260,19 @@
           let cleanCoords = "";
           if (job.xyz) {
             const rawLines = job.xyz.trim().split("\n");
-            cleanCoords = (rawLines.length > 2 && /^\d+$/.test(rawLines[0].trim())) ? rawLines.slice(2).join("\n") : rawLines.join("\n");
+            const coordLines = (rawLines.length > 2 && /^\d+$/.test(rawLines[0].trim())) ? rawLines.slice(2) : rawLines;
+            cleanCoords = coordLines.map(l => {
+              const parts = l.trim().split(/\s+/);
+              return parts.length >= 4 ? `${parts[0].padEnd(3)} ${parts[1]} ${parts[2]} ${parts[3]}` : l.trim();
+            }).filter(Boolean).join("\n");
           } else if (job.elements && job.coords && job.elements.length === job.coords.length) {
             cleanCoords = job.elements.map((elem, idx) => {
-              const [x, y, z] = job.coords[idx];
-              return `${elem.padEnd(3)} ${x.toFixed(6).padStart(12)} ${y.toFixed(6).padStart(12)} ${z.toFixed(6).padStart(12)}`;
+              const c = job.coords[idx];
+              const rc = job.coords_raw ? job.coords_raw[idx] : null;
+              const sx = rc ? rc[0] : String(c[0]);
+              const sy = rc ? rc[1] : String(c[1]);
+              const sz = rc ? rc[2] : String(c[2]);
+              return `${elem.padEnd(3)} ${sx} ${sy} ${sz}`;
             }).join("\n");
           }
           if (cleanCoords) {
@@ -3072,11 +3424,19 @@
             if (job) {
               if (job.xyz) {
                 const rawLines = job.xyz.trim().split("\n");
-                cleanCoords = (rawLines.length > 2 && /^\d+$/.test(rawLines[0].trim())) ? rawLines.slice(2).join("\n") : rawLines.join("\n");
+                const coordLines = (rawLines.length > 2 && /^\d+$/.test(rawLines[0].trim())) ? rawLines.slice(2) : rawLines;
+                cleanCoords = coordLines.map(l => {
+                  const parts = l.trim().split(/\s+/);
+                  return parts.length >= 4 ? `${parts[0].padEnd(3)} ${parts[1]} ${parts[2]} ${parts[3]}` : l.trim();
+                }).filter(Boolean).join("\n");
               } else if (job.elements && job.coords) {
                 cleanCoords = job.elements.map((elem, idx) => {
-                  const [x, y, z] = job.coords[idx];
-                  return `${elem.padEnd(3)} ${x.toFixed(6).padStart(12)} ${y.toFixed(6).padStart(12)} ${z.toFixed(6).padStart(12)}`;
+                  const c = job.coords[idx];
+                  const rc = job.coords_raw ? job.coords_raw[idx] : null;
+                  const sx = rc ? rc[0] : String(c[0]);
+                  const sy = rc ? rc[1] : String(c[1]);
+                  const sz = rc ? rc[2] : String(c[2]);
+                  return `${elem.padEnd(3)} ${sx} ${sy} ${sz}`;
                 }).join("\n");
               }
             } else if (res.coords) {
@@ -3340,15 +3700,23 @@
       renderStep("calc");
     });
 
-    // Initial render
+    // Initial render & resize trigger
     setTimeout(() => {
       updateSidebar();
       renderScene(true);
-    }, 50);
+    }, 60);
+    setTimeout(() => {
+      if (bState.viewer && typeof bState.viewer.resize === "function") {
+        try {
+          bState.viewer.resize();
+          bState.viewer.render();
+        } catch (_) {}
+      }
+    }, 280);
   }
 
   function setCoordsStatus(text) {
-    coordsStatus.textContent = `✔ Selected structure: ${text}`;
+    coordsStatus.textContent = `✓ Selected structure: ${text}`;
     coordsStatus.classList.add("is-set");
   }
 
@@ -3444,7 +3812,7 @@
     actions.append(backButton(goBack));
     const nextBtn = document.createElement("button");
     nextBtn.type = "button"; nextBtn.className = "btn btn-primary";
-    nextBtn.textContent = "Next ►";
+    nextBtn.textContent = "Next ▶";
     nextBtn.addEventListener("click", () => {
       const text = textarea.value.trim();
       if (!text.startsWith("!")) { textarea.focus(); return; }
@@ -3606,7 +3974,7 @@
     actions.className = "modal-actions";
     actions.append(backButton(goBack));
     const nextBtn = document.createElement("button");
-    nextBtn.type = "button"; nextBtn.className = "btn btn-primary"; nextBtn.textContent = "Next ►";
+    nextBtn.type = "button"; nextBtn.className = "btn btn-primary"; nextBtn.textContent = "Next ▶";
     nextBtn.addEventListener("click", () => {
       const n = Number(input.value);
       if (!Number.isFinite(n) || n < min || n > max) {
@@ -3747,8 +4115,24 @@
       { num: 2, type: wfData.wizardSnapshot?.stage2?.calc_type || "sp", name: `${wfData.workflowName}_Stage2_${(wfData.wizardSnapshot?.stage2?.calc_type || 'SP').toUpperCase()}`, config: wfData.wizardSnapshot?.stage2 || {}, data: wfData.stage2 }
     ];
 
-    if (jobs.length + stages.length > 20) {
-      showToast(`Adding ${stages.length} workflow jobs would exceed the maximum limit of 20 jobs in your workspace. Please remove completed jobs first.`, "warning");
+    while (jobs.length + stages.length > MAX_TOTAL_JOBS) {
+      let terminalIdx = -1;
+      for (let i = jobs.length - 1; i >= 0; i--) {
+        if (TERMINAL_STATUSES.includes(jobs[i].status)) {
+          terminalIdx = i;
+          break;
+        }
+      }
+      if (terminalIdx !== -1) {
+        jobs.splice(terminalIdx, 1);
+      } else {
+        break;
+      }
+    }
+    saveJobs(jobs);
+
+    if (jobs.length + stages.length > MAX_TOTAL_JOBS) {
+      showToast(`Adding ${stages.length} workflow jobs would exceed the maximum limit of ${MAX_TOTAL_JOBS} active jobs in your workspace. Please delete old completed jobs before queueing new ones.`, "warning");
       return;
     }
     const workflowId = "chain_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
@@ -3763,6 +4147,7 @@
         name: st.name || `${wfData.workflowName}_Stage${st.num}_${(st.type || 'calc').toUpperCase()}`,
         jobId: `job_${Date.now() + idx}_${st.num}`,
         workflowId: workflowId,
+        workflowStageCount: stages.length,
         stage: st.num,
         stageType: st.type || "opt",
         stageConfig: st.config,
@@ -3794,23 +4179,23 @@
   function stepRam() {
     setModalChrome(17, wizard.isDualWorkflow ? "Stage 1: Memory, Disk & Execution Options" : "Memory, Disk & Execution Options");
     const { field: ramField, input: ramInput } = numberField("RAM per core (%maxcore in MB)", "6000", wizard.ram ?? 6000);
-    const { field: diskField, input: diskInput } = numberField("Max Scratch Disk (%maxdisk in MB, Kaggle max 20 GB)", "20000", wizard.maxdisk ?? DEFAULT_MAX_DISK_MB);
+    const { field: diskField, input: diskInput } = numberField("Max Scratch Disk (%scf MaxDisk in MB, Kaggle max 20 GB)", "20000", wizard.maxdisk ?? DEFAULT_MAX_DISK_MB);
 
     const diskHint = document.createElement("p");
     diskHint.className = "modal-hint";
     const updateDiskHint = () => {
       const diskVal = Number(diskInput.value);
       if (!Number.isFinite(diskVal) || diskVal <= 0) {
-        diskHint.textContent = "ℹ Kaggle provides ~20 GB scratch disk. Default is 20,000 MB.";
+        diskHint.textContent = "ℹ️ Kaggle provides ~20 GB scratch disk. Default is 20,000 MB.";
         diskHint.style.color = "var(--text-muted)";
         return;
       }
       const diskGb = (diskVal / 1024).toFixed(1);
       if (diskVal <= KAGGLE_MAX_DISK_MB) {
-        diskHint.textContent = `✔ ${diskVal} MB (~${diskGb} GB): Safe scratch disk allocation within Kaggle's 20 GB limit.`;
+        diskHint.textContent = `✓ ${diskVal} MB (~${diskGb} GB): Safe scratch disk allocation within Kaggle's 20 GB limit.`;
         diskHint.style.color = "var(--teal)";
       } else {
-        diskHint.textContent = `⚠ ${diskVal} MB (~${diskGb} GB) exceeds Kaggle's 20 GB scratch disk limit! ORCA may crash if temporary files exceed 20 GB.`;
+        diskHint.textContent = `⚠️ ${diskVal} MB (~${diskGb} GB) exceeds Kaggle's 20 GB scratch disk limit! ORCA may crash if temporary files exceed 20 GB.`;
         diskHint.style.color = "var(--amber)";
       }
     };
@@ -3857,11 +4242,11 @@
         budget.textContent = `${perCore} MB × ${cores} core(s) = ${total} MB (~${totalGb} GB). Safe allocation within 70% of Kaggle's 31 GB RAM.`;
         budget.style.color = "var(--teal)";
       } else if (total <= HARD_LIMIT_RAM_MB) {
-        budget.textContent = `⚠ High memory usage: ${perCore} MB × ${cores} core(s) = ${total} MB (~${totalGb} GB), exceeding 70% of Kaggle's 31 GB RAM. It will run as requested without reduction.`;
+        budget.textContent = `⚠️ High memory usage: ${perCore} MB × ${cores} core(s) = ${total} MB (~${totalGb} GB), exceeding 70% of Kaggle's 31 GB RAM. It will run as requested without reduction.`;
         budget.style.color = "var(--amber)";
       } else {
         const perCoreFits = Math.floor(HARD_LIMIT_RAM_MB / cores);
-        budget.textContent = `⚠ ${perCore} MB × ${cores} core(s) = ${total} MB (~${totalGb} GB) exceeds the 30 GB maximum Kaggle limit. It will be capped at ${perCoreFits} MB per core at runtime.`;
+        budget.textContent = `⚠️ ${perCore} MB × ${cores} core(s) = ${total} MB (~${totalGb} GB) exceeds the 30 GB maximum Kaggle limit. It will be capped at ${perCoreFits} MB per core at runtime.`;
         budget.style.color = "#FF8B8B";
       }
     };
@@ -3875,7 +4260,7 @@
     const genBtn = document.createElement("button");
     genBtn.type = "button"; genBtn.className = "btn btn-primary";
     const totalStages = wizard.workflowStageCount || 2;
-    genBtn.textContent = wizard.isDualWorkflow ? `➡️ Next: Configure Stage 2 (of ${totalStages}) ►` : "🧪 Generate file";
+    genBtn.textContent = wizard.isDualWorkflow ? `➡️ Next: Configure Stage 2 (of ${totalStages}) ▶` : "🧪 Generate file";
 
     genBtn.addEventListener("click", async () => {
       const n = Number(ramInput.value);
@@ -3994,7 +4379,7 @@
     modalBody.append(ramField, budget, diskField, diskHint, extrasBox, err, actions);
   }
 
-  // ─── Multi-Stage Workflow Steps (Stages 2 to 5) ───
+  // ────────────────────────────────────────── Multi-Stage Workflow Steps (Stages 2 to 5) ──────────────────────────────────────────
   const STAGE2_CALC_TYPES = {
     sp: "Single Point Energy (High-Accuracy Evaluation)",
     opt: "Geometry Optimization (High-Level / Refinement)",
@@ -4048,7 +4433,7 @@
     actions.className = "modal-actions";
     actions.append(backButton(goBack));
     const nextBtn = document.createElement("button");
-    nextBtn.type = "button"; nextBtn.className = "btn btn-primary"; nextBtn.textContent = "Next ►";
+    nextBtn.type = "button"; nextBtn.className = "btn btn-primary"; nextBtn.textContent = "Next ▶";
     nextBtn.addEventListener("click", () => {
       const text = textarea.value.trim();
       if (!text.startsWith("!")) { textarea.focus(); return; }
@@ -4195,7 +4580,7 @@
 
     setModalChrome(29, isLastStage ? `Stage ${stageNum}: Memory & Generate Workflow` : `Stage ${stageNum}: Memory & Next Stage`);
     const { field: ramField, input: ramInput } = numberField(`RAM per core for Stage ${stageNum} (MB)`, "6000", wizard.stage2_ram ?? 6000);
-    const { field: diskField, input: diskInput } = numberField("Max Scratch Disk (%maxdisk in MB)", "20000", wizard.stage2_maxdisk ?? DEFAULT_MAX_DISK_MB);
+    const { field: diskField, input: diskInput } = numberField("Max Scratch Disk (%scf MaxDisk in MB)", "20000", wizard.stage2_maxdisk ?? DEFAULT_MAX_DISK_MB);
 
     const err = document.createElement("p");
     err.className = "modal-hint";
@@ -4204,7 +4589,7 @@
     actions.append(backButton(goBack));
     const genBtn = document.createElement("button");
     genBtn.type = "button"; genBtn.className = "btn btn-primary";
-    genBtn.textContent = isLastStage ? `⚡ Generate All ${totalStages} Workflow Input Files` : `➡️ Next: Configure Stage ${stageNum + 1} (of ${totalStages}) ►`;
+    genBtn.textContent = isLastStage ? `⚡ Generate All ${totalStages} Workflow Input Files` : `➡️ Next: Configure Stage ${stageNum + 1} (of ${totalStages}) ▶`;
 
     genBtn.addEventListener("click", async () => {
       const n = Number(ramInput.value);
@@ -4354,9 +4739,9 @@
   };
 
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Kaggle Launcher
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   let lastOrcaFile = null;
 
   document.getElementById("orca-send-to-kaggle").addEventListener("click", () => {
@@ -4463,14 +4848,16 @@
                          ...(known.has(rj.job_id)
                              ? [] : [{ id: rj.job_id, url: rj.kaggle_url }])];
           local.restarts = rj.restarts || local.restarts || 0;
-          local.status = "unknown";     // the new window's state, until the next poll
+          if (!["running", "restarting", "submitting", "queued"].includes(local.status)) {
+            local.status = "unknown";     // the new window's state, until the next poll
+          }
           local.finishedAt = null;
           added++;
         }
         return;
       }
       const submittedAt = rj.last_run ? Date.parse(rj.last_run) || Date.now() : Date.now();
-      jobs.push({
+      jobs.unshift({
         name: rj.title || rj.job_id,
         jobId: rj.job_id,
         // The server groups an auto-restarted job's kernels back into one
@@ -4486,7 +4873,10 @@
       });
       added++;
     });
-    if (added > 0) saveJobs(jobs);
+    if (added > 0) {
+      jobs.sort((a, b) => Number(b.submittedAt || b.startedAt || 0) - Number(a.submittedAt || a.startedAt || 0));
+      saveJobs(jobs);
+    }
     renderJobs();
   }
 
@@ -4714,6 +5104,11 @@
   // final authority; this only prevents the obvious double click.
   let kaggleSubmitInFlight = false;
   const kaggleSubmitBtn = kaggleForm.querySelector('button[type="submit"]');
+  function resetKaggleSubmitGuard() {
+    kaggleSubmitInFlight = false;
+    if (kaggleSubmitBtn) kaggleSubmitBtn.disabled = false;
+    hide(kaggleLoading);
+  }
   kaggleForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (kaggleSubmitInFlight) return;
@@ -4721,13 +5116,20 @@
     if (kaggleSubmitBtn) kaggleSubmitBtn.disabled = true;
     hide(kaggleError); hide(kaggleResult); show(kaggleLoading);
 
-    if (!currentKaggle) {
+    let username = (currentKaggle && currentKaggle.username) || (kaggleUsernameInput ? kaggleUsernameInput.value.trim() : "") || (localStorage.getItem(LS_KEYS.kaggleUsername) || "").trim();
+    let key = (currentKaggle && currentKaggle.key) || sessionKaggleKey || (kaggleKeyInput ? kaggleKeyInput.value.trim() : "") || (localStorage.getItem("chemlab_kaggle_key") || "").trim();
+
+    if (!username) {
       showError(kaggleError, "Please sign in with your Kaggle account first.");
-      hide(kaggleLoading);
+      resetKaggleSubmitGuard();
       return;
     }
-    const username = currentKaggle.username;
-    const key = currentKaggle.key;
+
+    if (!currentKaggle) {
+      setSignedIn(username, key);
+    } else if (!currentKaggle.key && key) {
+      currentKaggle.key = key;
+    }
     // The "Job name" field wins when filled in; otherwise the input file's
     // own name (without extension) is used as the job's label, both here
     // and as the title on Kaggle. addJob() below reconciles this with the
@@ -4743,21 +5145,21 @@
 
     if (useOrcaLink) {
       const link = document.getElementById("kaggle-orca-link").value.trim();
-      if (!link) { showError(kaggleError, "Please provide the ORCA archive link, or switch back to Kaggle Dataset."); hide(kaggleLoading); return; }
+      if (!link) { showError(kaggleError, "Please provide the ORCA archive link, or switch back to Kaggle Dataset."); resetKaggleSubmitGuard(); return; }
     } else {
       const ds = document.getElementById("kaggle-dataset").value.trim();
-      if (!ds) { showError(kaggleError, "Please provide your ORCA Dataset id, or switch to a Drive/direct link."); hide(kaggleLoading); return; }
+      if (!ds) { showError(kaggleError, "Please provide your ORCA Dataset id, or switch to a Drive/direct link."); resetKaggleSubmitGuard(); return; }
     }
 
     const uploadedInpFiles = document.getElementById("kaggle-inp-file").files;
     if (useInpUpload && uploadedInpFiles.length === 0) {
       showError(kaggleError, "Please choose a .inp file to upload, or switch back to pasted content.");
-      hide(kaggleLoading);
+      resetKaggleSubmitGuard();
       return;
     }
     if (!useInpUpload && !document.getElementById("kaggle-inp-content").value.trim()) {
       showError(kaggleError, "Please paste or generate .inp content, or switch to uploading a ready file.");
-      hide(kaggleLoading);
+      resetKaggleSubmitGuard();
       return;
     }
 
@@ -4818,7 +5220,7 @@
       } catch (readErr) {
         showError(kaggleError, `Could not read input file: ${readErr.message}`);
       } finally {
-        hide(kaggleLoading);
+        resetKaggleSubmitGuard();
       }
       return;
     }
@@ -4831,7 +5233,7 @@
       orcaLinkVal = document.getElementById("kaggle-orca-link") ? document.getElementById("kaggle-orca-link").value.trim() : "";
       if (!orcaLinkVal) {
         showError(kaggleError, "Please provide a valid Google Drive or direct download URL for the ORCA package.");
-        hide(kaggleLoading);
+        resetKaggleSubmitGuard();
         return;
       }
     } else {
@@ -4839,7 +5241,7 @@
       datasetSourcesVal = normalizeKaggleDatasetInput(rawDs) || rawDs;
       if (!datasetSourcesVal) {
         showError(kaggleError, "Please enter your Kaggle ORCA Dataset identifier (e.g. username/dataset or jon534/orca6).");
-        hide(kaggleLoading);
+        resetKaggleSubmitGuard();
         return;
       }
     }
@@ -4869,11 +5271,40 @@
       form.append("kaggle_passcode", passcodeVal);
     }
 
+    let fingerprint = "";
+    try {
+      const payloadKeyParts = [
+        username || "",
+        customJobName || "",
+        (useInpUpload ? uploadedInpFiles[0]?.name : (document.getElementById("kaggle-inp-name")?.value || "")).trim(),
+        (useInpUpload ? "" : (document.getElementById("kaggle-inp-content")?.value || "")),
+        datasetSourcesVal || "",
+        orcaLinkVal || ""
+      ].join("::");
+      if (window.crypto?.subtle) {
+        const enc = new TextEncoder().encode(payloadKeyParts);
+        const digestBuf = await window.crypto.subtle.digest("SHA-256", enc);
+        fingerprint = Array.from(new Uint8Array(digestBuf)).map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+      } else {
+        let hash = 0;
+        for (let i = 0; i < payloadKeyParts.length; i++) {
+          hash = ((hash << 5) - hash) + payloadKeyParts.charCodeAt(i);
+          hash |= 0;
+        }
+        fingerprint = Math.abs(hash).toString(36);
+      }
+    } catch (_) {
+      fingerprint = (window.crypto?.randomUUID ? window.crypto.randomUUID() : Date.now().toString(36));
+    }
+    const idempotencyKey = "sub_" + fingerprint;
     try {
       const resp = await fetch("/api/kaggle/submit", {
         method: "POST",
         headers: {
-          "Idempotency-Key": "sub_" + Date.now() + "_" + Math.random().toString(36).substr(2, 8)
+          // Stable for this logical submit attempt. A transport retry of the
+          // same request must replay the server-side idempotency record rather
+          // than receive a fresh random key and launch a second kernel.
+          "Idempotency-Key": idempotencyKey
         },
         body: form
       });
@@ -4932,6 +5363,8 @@
         submittedAt: Date.now(),
         startedAt: Date.now(),
       });
+      if (key && !sessionKaggleKey) sessionKaggleKey = key;
+      if (currentKaggle && !currentKaggle.key && key) currentKaggle.key = key;
       switchToTab("jobs");
       window.dispatchEvent(new CustomEvent("chemlab-jobs-rendered"));
     } catch (err) {
@@ -4943,9 +5376,9 @@
     }
   });
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Jobs tracker (localStorage + polling)
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   const jobsListEl = document.getElementById("jobs-list");
   const jobsEmptyEl = document.getElementById("jobs-empty");
 
@@ -4960,9 +5393,6 @@
   }
 
 
-  const MAX_ACTIVE_KAGGLE_JOBS = 5;
-  const MAX_TOTAL_JOBS = 20;
-
   function loadJobs() {
     try {
       const jobs = JSON.parse(localStorage.getItem(LS_KEYS.jobs) || "[]");
@@ -4975,22 +5405,88 @@
   }
   function saveJobs(jobs) { localStorage.setItem(LS_KEYS.jobs, JSON.stringify(jobs)); }
 
-  function addJob(job) {
-    const jobs = loadJobs();
-    if (jobs.length >= MAX_TOTAL_JOBS) {
-      showToast(`Maximum limit of ${MAX_TOTAL_JOBS} jobs in workspace reached. Please delete old or completed jobs before submitting new ones.`, "warning");
-      return;
+  let persistentServerJobsInFlight = false;
+  async function syncPersistentServerJobs() {
+    if (persistentServerJobsInFlight) return false;
+    persistentServerJobsInFlight = true;
+    try {
+      const resp = await fetch("/api/v1/jobs", {
+        method: "GET", credentials: "same-origin", cache: "no-store",
+        headers: { "Accept": "application/json" }
+      });
+      if (!resp.ok) return false;
+      const data = await resp.json();
+      const incoming = Array.isArray(data.jobs) ? data.jobs : [];
+      if (!incoming.length) return true;
+      const jobs = loadJobs();
+      incoming.forEach(remote => {
+        const idx = jobs.findIndex(local =>
+          local.jobId === remote.jobId || local.localJobId === remote.localJobId
+        );
+        if (idx === -1) jobs.unshift(remote);
+        else {
+          const localRevision = Number(jobs[idx].revision || 0);
+          const remoteRevision = Number(remote.revision || 0);
+          // A response snapshot older than a status/cancel/completion already
+          // applied in this tab must not roll the UI backward.
+          if (remoteRevision && localRevision > remoteRevision) return;
+          if (TERMINAL_STATUSES.includes(jobs[idx].status) &&
+              !TERMINAL_STATUSES.includes(remote.status) &&
+              remoteRevision <= localRevision) return;
+          jobs[idx] = { ...jobs[idx], ...remote };
+        }
+      });
+      saveJobs(jobs);
+      renderJobs();
+      return true;
+    } catch (err) {
+      console.warn("Persistent server-local job sync failed:", err.message);
+      return false;
+    } finally {
+      persistentServerJobsInFlight = false;
     }
-    jobs.unshift(job);
+  }
+
+  function addJob(job) {
+    if (!job) return;
+    const jobs = loadJobs();
+    while (jobs.length >= MAX_TOTAL_JOBS) {
+      let terminalIdx = -1;
+      for (let i = jobs.length - 1; i >= 0; i--) {
+        if (TERMINAL_STATUSES.includes(jobs[i].status)) {
+          terminalIdx = i;
+          break;
+        }
+      }
+      if (terminalIdx !== -1) {
+        jobs.splice(terminalIdx, 1);
+      } else {
+        jobs.pop();
+      }
+    }
+    const existingIdx = jobs.findIndex(j => j.jobId === job.jobId || (job.rootId && j.rootId === job.rootId));
+    if (existingIdx !== -1) {
+      jobs[existingIdx] = { ...jobs[existingIdx], ...job };
+    } else {
+      jobs.unshift(job);
+    }
     saveJobs(jobs);
     renderJobs();
     processKaggleQueue();
   }
 
   function updateJob(jobId, patch) {
+    if (!jobId) return;
     const jobs = loadJobs();
-    const idx = jobs.findIndex(j => j.jobId === jobId);
-    if (idx === -1) return;
+    const idx = jobs.findIndex(j => j.jobId === jobId || (j.chainIds && j.chainIds.includes(jobId)));
+    if (idx === -1) {
+      if (patch && patch.status && !TERMINAL_STATUSES.includes(patch.status)) {
+        jobs.unshift({ jobId, ...patch });
+        saveJobs(jobs);
+        renderJobs();
+      }
+      return;
+    }
     jobs[idx] = { ...jobs[idx], ...patch };
     saveJobs(jobs);
     renderJobs();
@@ -5040,13 +5536,14 @@
     waiting_dependency: "Waiting for Stage 1",
     submitting: "Submitting…",
     running: "Running",
+    downloading: "Downloading results",
+    verifying: "Verifying results",
     restarting: "Restarting",
     complete: "Complete",
     error: "Error",
     cancelled: "Cancelled",
     unknown: "Unknown",
   };
-  const TERMINAL_STATUSES = ["complete", "error", "cancelled"];
 
   function formatElapsed(ms) {
     const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -5058,11 +5555,22 @@
 
   function renderJobs() {
     const jobs = loadJobs();
-    jobsListEl.innerHTML = "";
-    jobsEmptyEl.classList.toggle("hidden", jobs.length > 0);
+    if (jobsListEl) jobsListEl.innerHTML = "";
+    if (jobsEmptyEl) jobsEmptyEl.classList.toggle("hidden", jobs.length > 0);
+
+    // If there are jobs in workspace or user is signed in, reveal the jobs area
+    if (jobsSigninRequired && jobsSignedInArea) {
+      if (jobs.length > 0 || currentKaggle) {
+        jobsSigninRequired.classList.add("hidden");
+        jobsSignedInArea.classList.remove("hidden");
+      } else {
+        jobsSigninRequired.classList.remove("hidden");
+        jobsSignedInArea.classList.add("hidden");
+      }
+    }
 
     // Update queue governor statistics banner
-    const activeJobs = jobs.filter(j => ["running", "restarting", "submitting"].includes(j.status));
+    const activeJobs = jobs.filter(j => ["running", "restarting", "submitting", "downloading", "verifying"].includes(j.status));
     const queuedJobs = jobs.filter(j => j.status === "queued");
     const waitingDepJobs = jobs.filter(j => j.status === "waiting_dependency");
     const completedJobs = jobs.filter(j => j.status === "complete");
@@ -5079,6 +5587,7 @@
     jobs.forEach(job => {
       const li = document.createElement("li");
       li.className = "job-card";
+      li.dataset.jobId = job.jobId;
 
       const info = document.createElement("div");
       info.className = "job-info";
@@ -5196,7 +5705,7 @@
       if (job.warning) {
         const warn = document.createElement("div");
         warn.className = "job-warning";
-        warn.textContent = `⚠ ${job.warning}`;
+        warn.textContent = `⚠️ ${job.warning}`;
         info.appendChild(warn);
       }
 
@@ -5211,6 +5720,91 @@
         kaggleLink.textContent = "View on Kaggle";
         actions.append(kaggleLink);
       }
+      if (job.waitingReason) {
+        const waitingRow = document.createElement("div");
+        waitingRow.className = "job-waiting-reason";
+        waitingRow.textContent = `⏳ ${job.waitingReason}`;
+        info.appendChild(waitingRow);
+      }
+
+      const CANCELLABLE_JOB_STATUSES = ["queued", "running", "restarting", "submitting", "waiting_dependency", "downloading", "verifying"];
+      const isClientOnlyWaitingJob = (j) => !j.backend || j.backend === "kaggle_client_queue";
+
+      if (CANCELLABLE_JOB_STATUSES.includes(job.status)) {
+        const cancelBtn = document.createElement("button");
+        cancelBtn.type = "button";
+        cancelBtn.className = "job-cancel-btn btn btn-ghost btn-small";
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.addEventListener("click", async () => {
+          if (isClientOnlyWaitingJob(job)) {
+            job.status = "cancelled";
+            job.warning = "Cancelled before submission.";
+            job.finishedAt = Date.now();
+            saveJobs(jobs);
+            renderJobs();
+            return;
+          }
+          cancelBtn.disabled = true;
+          cancelBtn.textContent = "Cancelling…";
+          try {
+            const res = await fetch(`/api/v1/jobs/${encodeURIComponent(job.jobId)}/cancel`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({})
+            });
+            const data = await res.json().catch(() => ({}));
+            const state = (data.state || data.status || "").toUpperCase();
+
+            // If the server confirmed cancellation OR if the job is terminal/cancelled
+            const isConfirmedCancel = res.ok && (data.ok || ["CANCELLED", "CANCEL_REQUESTED", "CANCELLING"].includes(state));
+            const isNotFound = res.status === 404 || (data.error && data.error.code === "JOB_NOT_FOUND");
+            const isAlreadyFinished = ["FINISHED", "COMPLETED", "COMPLETED_WITH_WARNINGS"].includes(state);
+
+            if (isConfirmedCancel) {
+              job.status = "cancelled";
+              job.warning = "Cancelled.";
+              job.finishedAt = Date.now();
+              saveJobs(jobs);
+              renderJobs();
+              if (window.showToast) showToast(`Job "${job.name || job.jobId}" cancelled.`);
+            } else if (isNotFound) {
+              job.status = "cancelled";
+              job.warning = "Cancelled locally (job not found on server).";
+              job.finishedAt = Date.now();
+              saveJobs(jobs);
+              renderJobs();
+              if (window.showToast) showToast(`Job "${job.name || job.jobId}" removed from queue.`);
+            } else if (isAlreadyFinished) {
+              job.status = "complete";
+              job.warning = "Calculation had already completed on server.";
+              saveJobs(jobs);
+              renderJobs();
+              if (window.showToast) showToast(`Job "${job.name || job.jobId}" had already finished.`);
+            } else {
+              const errMsg = (data.error && data.error.message) || data.message || `Cancel failed (${res.status})`;
+              if (confirm(`Cancellation notice: ${errMsg}\n\nDo you want to cancel and remove this calculation from your local list anyway?`)) {
+                job.status = "cancelled";
+                job.warning = `Cancelled locally: ${errMsg}`;
+                job.finishedAt = Date.now();
+                saveJobs(jobs);
+                renderJobs();
+              } else {
+                cancelBtn.disabled = false;
+                cancelBtn.textContent = "Cancel";
+              }
+            }
+          } catch (e) {
+            console.error("Cancel failed", e);
+            job.status = "cancelled";
+            job.warning = "Cancelled locally (network/offline).";
+            job.finishedAt = Date.now();
+            saveJobs(jobs);
+            renderJobs();
+          }
+        });
+        actions.append(cancelBtn);
+      }
+
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "job-remove-btn";
@@ -5285,6 +5879,12 @@
       }
     }
 
+    // An optimization predecessor is a hard scientific prerequisite. Never
+    // fall back to its original .inp/config coordinates when final optimized
+    // coordinates could not be extracted: that would silently run the next
+    // stage on pre-optimization geometry.
+    if (optPredecessors.length > 0) return null;
+
     // 2. Secondary fallback (when NO OPT is available): Take coordinates from the .inp of the immediately preceding step
     const immediatePredecessor = predecessors.find(x => x.stage === currentStageNum - 1) || predecessors[0];
     if (immediatePredecessor) {
@@ -5357,6 +5957,7 @@
                   j.input_content = genResp.input_text;
                   j.stageConfig = stageCfg;
                   j.stage2Config = stageCfg;
+                  j.parentJobId = parentJob.jobId;
                   j.warning = null;
                   updateJob(j.jobId, {
                     status: "queued",
@@ -5364,6 +5965,7 @@
                     input_content: genResp.input_text,
                     stageConfig: stageCfg,
                     stage2Config: stageCfg,
+                    parentJobId: parentJob.jobId,
                     warning: null,
                   });
                   updated = true;
@@ -5431,13 +6033,46 @@
           if (currentActive >= MAX_ACTIVE_KAGGLE_JOBS) break;
 
           const creds = credsFor(nextJob);
-          if (!creds.kaggle_username || !creds.kaggle_key) break;
+          // The API key is intentionally not restored to browser memory after
+          // a Vault-backed sign-in. The server resolves it owner-scoped from
+          // the encrypted vault, so requiring a client-side key here strands
+          // every queued job after refresh.
+          if (!creds.kaggle_username) {
+            const warning = "Waiting for Kaggle sign-in or a saved Kaggle credential before submission.";
+            if (nextJob.warning !== warning || nextJob.queueReason !== "CREDENTIALS_REQUIRED") {
+              nextJob.warning = warning;
+              nextJob.queueReason = "CREDENTIALS_REQUIRED";
+              updated = true;
+              updateJob(nextJob.jobId, { warning, queueReason: "CREDENTIALS_REQUIRED" });
+            }
+            // One blocked entry must not starve unrelated queued jobs.
+            continue;
+          }
           const orcaSourceKind = nextJob.orcaSourceKind || localStorage.getItem(LS_KEYS.orcaSourceKind) || getSelectedOrcaSourceKind();
           const orcaDataset = nextJob.orcaDataset || localStorage.getItem(LS_KEYS.orcaDataset) || (document.getElementById("kaggle-dataset") ? document.getElementById("kaggle-dataset").value.trim() : "") || "";
           const orcaLink = nextJob.orcaLink || localStorage.getItem(LS_KEYS.orcaLink) || (document.getElementById("kaggle-orca-link") ? document.getElementById("kaggle-orca-link").value.trim() : "") || "";
 
-          if (orcaSourceKind === "google_drive" && !orcaLink) break;
-          if (orcaSourceKind === "kaggle_dataset" && !orcaDataset && !orcaLink) break;
+          const isLinkSource = orcaSourceKind === "google_drive" || orcaSourceKind === "link";
+          if (isLinkSource && !orcaLink) {
+            const warning = "Waiting for an ORCA archive link before submission.";
+            if (nextJob.warning !== warning || nextJob.queueReason !== "ORCA_SOURCE_REQUIRED") {
+              nextJob.warning = warning;
+              nextJob.queueReason = "ORCA_SOURCE_REQUIRED";
+              updated = true;
+              updateJob(nextJob.jobId, { warning, queueReason: "ORCA_SOURCE_REQUIRED" });
+            }
+            continue;
+          }
+          if (!isLinkSource && !orcaDataset && !orcaLink) {
+            const warning = "Waiting for the Kaggle ORCA dataset identifier or archive link.";
+            if (nextJob.warning !== warning || nextJob.queueReason !== "ORCA_SOURCE_REQUIRED") {
+              nextJob.warning = warning;
+              nextJob.queueReason = "ORCA_SOURCE_REQUIRED";
+              updated = true;
+              updateJob(nextJob.jobId, { warning, queueReason: "ORCA_SOURCE_REQUIRED" });
+            }
+            continue;
+          }
 
           nextJob.status = "submitting";
           updated = true;
@@ -5456,6 +6091,15 @@
             form.append("job_name", nextJob.name);
             form.append("input_filename", nextJob.input_filename || `${nextJob.name}.inp`);
             form.append("input_content", nextJob.input_content || "");
+            if (nextJob.workflowId) form.append("workflow_id", nextJob.workflowId);
+            if (nextJob.parentJobId) form.append("parent_job_id", nextJob.parentJobId);
+            form.append("step_index", String(Math.max(0, Number(nextJob.stage || 1) - 1)));
+            // Older localStorage queue records have no stage-count field;
+            // using the current stage keeps those records compatible and
+            // prevents a stage-2 submission from being rejected as index 1 of
+            // a one-step workflow.
+            form.append("step_count", String(Math.max(1, Number(nextJob.workflowStageCount || nextJob.stage || 1))));
+            form.append("step_name", String(nextJob.stageType || "CALC"));
 
             const qPasscodeEl = document.getElementById("kaggle-passcode");
             const qSessionPasscode = (typeof sessionStorage !== "undefined") ? (sessionStorage.getItem("orca_kaggle_passcode") || "") : "";
@@ -5467,7 +6111,9 @@
             const resp = await fetch("/api/kaggle/submit", {
               method: "POST",
               headers: {
-                "Idempotency-Key": "q_" + (nextJob.jobId || "job") + "_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6)
+                // The temporary queue id is stable across retries and is the
+                // idempotency identity for this logical queued calculation.
+                "Idempotency-Key": "q_" + (nextJob.jobId || "job")
               },
               body: form
             });
@@ -5486,6 +6132,8 @@
             if (nextJob.jobId && nextJob.jobId.startsWith("chem-tools-")) {
               nextJob.status = "running";
               nextJob.startedAt = nextJob.startedAt || Date.now();
+              nextJob.warning = null;
+              nextJob.queueReason = null;
               currentActive++;
               updateJob(nextJob.jobId, { status: "running", startedAt: nextJob.startedAt });
               continue;
@@ -5502,16 +6150,19 @@
             nextJob.startedAt = Date.now();
             nextJob.submittedAt = Date.now();
             nextJob.finishedAt = null;
+            nextJob.warning = null;
+            nextJob.queueReason = null;
             currentActive++;
             
             const currentStoredJobs = loadJobs();
-            const storedIdx = currentStoredJobs.findIndex(x => x.jobId === oldJobId);
+            const storedIdx = currentStoredJobs.findIndex(x => x.jobId === oldJobId || x.jobId === data.job_id);
             if (storedIdx !== -1) {
               currentStoredJobs[storedIdx] = { ...currentStoredJobs[storedIdx], ...nextJob };
-              saveJobs(currentStoredJobs);
             } else {
-              updateJob(data.job_id, nextJob);
+              currentStoredJobs.unshift(nextJob);
             }
+            saveJobs(currentStoredJobs);
+            renderJobs();
             showToast(`🚀 Launched job <strong>${nextJob.name}</strong> on Kaggle (${currentActive}/5 active slots).`);
           } catch (err) {
             nextJob.status = "error";
@@ -5640,6 +6291,8 @@
     }
   }
 
+  const pollGuards = new Map();
+
   async function pollJob(job) {
     // Temp-id jobs the dispatcher has not submitted yet have nothing to poll
     // on Kaggle. Jobs that already hold a real chem-tools- kernel id are
@@ -5651,10 +6304,54 @@
     if (!job.jobId) return;
     const hasRealKaggleId = job.jobId.startsWith("chem-tools-");
     if (!hasRealKaggleId && ["queued", "waiting_dependency", "submitting"].includes(job.status)) return;
+    const guardKey = job.rootId || job.jobId;
+    const guard = pollGuards.get(guardKey) || { inFlight: false, generation: 0 };
+    if (guard.inFlight) return;
+    guard.inFlight = true;
+    const generation = ++guard.generation;
+    pollGuards.set(guardKey, guard);
+    const stillCurrent = () => {
+      const latest = pollGuards.get(guardKey);
+      if (!latest || latest.generation !== generation) return false;
+      return loadJobs().some(candidate =>
+        (candidate.rootId || candidate.jobId) === guardKey && candidate.jobId === job.jobId
+      );
+    };
     try {
+      if (job.backend === "server_local" || job.localJobId) {
+        const localId = encodeURIComponent(job.localJobId || job.jobId);
+        const resp = await fetch(`/api/v1/local-orca/jobs/${localId}`, {
+          method: "GET", credentials: "same-origin", cache: "no-store",
+          headers: { "Accept": "application/json" }
+        });
+        if (!resp.ok) return;
+        const localData = await resp.json();
+        if (!stillCurrent() || !localData.job) return;
+        const localJob = localData.job;
+        const statusMap = {
+          QUEUED: "queued", QUEUED_WAITING_RESOURCES: "queued",
+          STARTING: "running", RUNNING: "running", VERIFYING: "running",
+          CANCEL_REQUESTED: "cancelling", COMPLETED: "complete",
+          COMPLETED_WITH_WARNINGS: "complete", FAILED: "error",
+          CANCELLED: "cancelled", RECOVERY_REQUIRED: "unknown"
+        };
+        updateJob(job.jobId, {
+          status: statusMap[localJob.status] || "unknown",
+          workerStatus: localJob.status,
+          revision: localJob.revision,
+          updatedAt: localJob.updated_at,
+          startedAt: localJob.started_at,
+          finishedAt: localJob.finished_at,
+          lastHeartbeat: localJob.heartbeat_at,
+          error: localJob.error_message || null,
+          warning: localJob.status === "COMPLETED_WITH_WARNINGS" ? "Completed with an unknown process return code." : null
+        });
+        return;
+      }
       const data = await postJSON("/api/kaggle/status", {
         ...credsFor(job), job_id: job.jobId,
       });
+      if (!stillCurrent()) return;
 
       if (data.status === "restarting" && data.next_job_id) {
         const chainIds = (job.chainIds && job.chainIds.length) ? job.chainIds : [job.jobId];
@@ -5706,6 +6403,9 @@
       // Transient network/API failure must not demote a running job back to
       // "queued" (which would re-submit it); it stays as-is and the next
       // poll retry is the only effect.
+    } finally {
+      const latest = pollGuards.get(guardKey);
+      if (latest && latest.generation === generation) latest.inFlight = false;
     }
   }
 
@@ -5715,25 +6415,27 @@
     buttonEl.textContent = "Fetching…";
     try {
       const creds = credsFor(job);
-      if (!creds.kaggle_username || !creds.kaggle_key) {
-        throw new Error("Kaggle credentials missing. Please make sure you are signed in.");
+      if (!creds.kaggle_username) {
+        throw new Error("Kaggle sign-in is required. Please sign in before downloading results.");
       }
 
       const fileName = `${job.jobId}_results.zip`;
 
-      const downloadUrl = `/api/kaggle/download?job_id=${encodeURIComponent(job.jobId)}&kaggle_username=${encodeURIComponent(creds.kaggle_username)}&kaggle_key=${encodeURIComponent(creds.kaggle_key)}&mode=${encodeURIComponent(mode)}&t=${Date.now()}`;
-
-      // Native Direct HTTP Download:
-      // Uses a standard HTTP attachment endpoint with real Content-Disposition and Content-Length.
-      // Fully compatible with Internet Download Manager (IDM), Free Download Manager,
-      // browser built-in downloaders, and all download accelerators without RAM or blob limits.
-      const a = document.createElement("a");
-      a.style.display = "none";
-      a.href = downloadUrl;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => a.remove(), 2000);
+      // POST the credentials in the request body. Putting kaggle_key in a GET
+      // URL leaks it to browser history, reverse-proxy logs and referrers.
+      const downloadForm = document.createElement("form");
+      downloadForm.method = "POST";
+      downloadForm.action = "/api/kaggle/download";
+      downloadForm.target = "_blank";
+      [["job_id", job.jobId], ["kaggle_username", creds.kaggle_username],
+       ["kaggle_key", creds.kaggle_key], ["mode", mode]].forEach(([name, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden"; input.name = name; input.value = value || "";
+        downloadForm.appendChild(input);
+      });
+      document.body.appendChild(downloadForm);
+      downloadForm.submit();
+      setTimeout(() => downloadForm.remove(), 2000);
 
       showToast(`💾 Starting download for <strong>${fileName}</strong>…`);
     } catch (err) {
@@ -5751,7 +6453,12 @@
     processKaggleQueue();
   }
 
-  document.getElementById("jobs-refresh-btn").addEventListener("click", pollAllActiveJobs);
+  async function refreshAllJobs() {
+    await syncPersistentServerJobs();
+    pollAllActiveJobs();
+  }
+
+  document.getElementById("jobs-refresh-btn").addEventListener("click", refreshAllJobs);
 
   // Browsers heavily throttle (or fully suspend) setInterval timers in
   // backgrounded/minimized tabs - exactly the situation for most of an
@@ -5761,13 +6468,13 @@
   // happens to fire. Re-checking the moment the tab is looked at again
   // fixes that immediately instead of waiting on the timer.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") pollAllActiveJobs();
+    if (document.visibilityState === "visible") refreshAllJobs();
   });
-  window.addEventListener("focus", pollAllActiveJobs);
+  window.addEventListener("focus", refreshAllJobs);
 
   renderJobs();
-  pollAllActiveJobs();
-  setInterval(pollAllActiveJobs, 45000);
+  refreshAllJobs();
+  setInterval(refreshAllJobs, 45000);
 
   /* CHEMLAB KAGGLE BROWSER UPGRADE 2026-08-10 */
   (function installKaggleBrowserTools() {
@@ -5786,7 +6493,7 @@
     fileInput.type = 'file'; fileInput.accept = '.json,application/json'; fileInput.style.display = 'none';
     fileLabel.appendChild(fileInput);
     const downloadBtn = document.createElement('button');
-    downloadBtn.type = 'button'; downloadBtn.className = 'btn btn-ghost btn-small'; downloadBtn.textContent = '⬇ Save Kaggle credentials';
+    downloadBtn.type = 'button'; downloadBtn.className = 'btn btn-ghost btn-small'; downloadBtn.textContent = '⬇️ Save Kaggle credentials';
     const settingsLink = document.createElement('a');
     settingsLink.className = 'btn btn-ghost btn-small'; settingsLink.href = 'https://www.kaggle.com/settings/api';
     settingsLink.target = '_blank'; settingsLink.rel = 'noopener noreferrer'; settingsLink.textContent = 'Kaggle API settings';
@@ -5820,9 +6527,17 @@
     });
 
     function isolateLocalJobsTo(username) {
-      if (!username || username.toLowerCase() === (lastIsolatedUser || "").toLowerCase()) return;
-      lastIsolatedUser = username;
-      try { saveJobs(loadJobs().filter(j => !j.kaggleUsername || j.kaggleUsername.toLowerCase() === username.toLowerCase())); renderJobs(); } catch (_) {}
+      if (!username || username.trim().toLowerCase() === (lastIsolatedUser || "").trim().toLowerCase()) return;
+      lastIsolatedUser = username.trim();
+      try {
+        const u = username.trim().toLowerCase();
+        saveJobs(loadJobs().filter(j => {
+          if (["running", "restarting", "submitting", "queued", "waiting_dependency"].includes(j.status)) return true;
+          if (!j.kaggleUsername) return true;
+          return j.kaggleUsername.trim().toLowerCase() === u;
+        }));
+        renderJobs();
+      } catch (_) {}
     }
     // Guarded for non-DOM environments (static analysis, server-side imports):
     // MutationObserver only exists in browsers, and the static test loads this
@@ -5834,7 +6549,7 @@
 
     const jobsToolbar = document.querySelector('.jobs-toolbar');
     if (jobsToolbar && !document.getElementById('jobs-account-refresh-btn')) {
-      const b = document.createElement('button'); b.type = 'button'; b.id = 'jobs-account-refresh-btn'; b.className = 'btn btn-ghost btn-small'; b.textContent = '↻ Sync account jobs';
+      const b = document.createElement('button'); b.type = 'button'; b.id = 'jobs-account-refresh-btn'; b.className = 'btn btn-ghost btn-small'; b.textContent = '🔄 Sync account jobs';
       b.addEventListener('click', async () => {
         if (!currentKaggle) { showToast('Sign in to Kaggle first.'); return; }
         b.disabled = true; const old = b.textContent; b.textContent = 'Syncing…';
@@ -5856,8 +6571,8 @@
     const linkInput = document.getElementById('kaggle-orca-link');
     if (linkInput) {
       const wrap = linkInput.parentElement, tools2 = document.createElement('div'); tools2.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;';
-      const open = document.createElement('a'); open.className = 'btn btn-ghost btn-small'; open.target = '_blank'; open.rel = 'noopener noreferrer'; open.textContent = '↗ Open link in browser';
-      const download = document.createElement('a'); download.className = 'btn btn-outline btn-small'; download.target = '_blank'; download.rel = 'noopener noreferrer'; download.textContent = '⬇ Download ORCA in browser';
+      const open = document.createElement('a'); open.className = 'btn btn-ghost btn-small'; open.target = '_blank'; open.rel = 'noopener noreferrer'; open.textContent = '↗️ Open link in browser';
+      const download = document.createElement('a'); download.className = 'btn btn-outline btn-small'; download.target = '_blank'; download.rel = 'noopener noreferrer'; download.textContent = '⬇️ Download ORCA in browser';
       const status = document.createElement('span'); status.className = 'field-hint';
       function direct(raw) {
         const value = (raw || '').trim(); if (!value) return '';
@@ -5869,9 +6584,9 @@
     }
   })();
 
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   // Quantum Chemistry Engine & 3D Viewer Frontend
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   let currentEngineData = null;
   let viewer3D = null;
   let isSpinning = false;
@@ -5919,8 +6634,8 @@
       const jobId = jobObj.jobId || jobObj.id || (typeof job === "string" ? job : "");
       const creds = credsFor(jobObj);
 
-      if (!creds.kaggle_username || !creds.kaggle_key) {
-        throw new Error("Please sign in with your Kaggle username and API key on the Jobs tab first.");
+      if (!creds.kaggle_username) {
+        throw new Error("Please sign in with your Kaggle account on the Jobs tab first.");
       }
 
       const data = await postJSON("/api/orca/engine/analyze-job", {
@@ -5986,7 +6701,7 @@
 
       const opt2 = document.createElement("option");
       opt2.value = "both_hirshfeld";
-      opt2.textContent = "🏷+⚡ Atom & Hirshfeld (.chg)";
+      opt2.textContent = "🏷️+⚡ Atom & Hirshfeld (.chg)";
       select.appendChild(opt2);
     }
 
@@ -5999,6 +6714,10 @@
 
   function applyViewer3DStyle() {
     if (!viewer3D || !currentEngineData) return;
+    const model = viewer3D.getModel();
+    if (model) {
+      reconcileBondsAvogadro(model);
+    }
     const styleSelect = document.getElementById("engine-3d-style");
     const styleVal = styleSelect ? styleSelect.value : "ballAndStick";
     viewer3D.removeAllLabels();
@@ -6349,11 +7068,15 @@
 
     if (!xyz && elements.length > 0 && coords.length === elements.length) {
       const lines = [`${elements.length}`, `${name} 3D Geometry`];
+      const rawCoords = job.coords_raw || [];
       for (let i = 0; i < elements.length; i++) {
         const el = elements[i];
         const c = coords[i];
-        if (Array.isArray(c) && c.length >= 3) {
-          lines.push(`${el.padEnd(3)} ${Number(c[0]).toFixed(6).padStart(12)} ${Number(c[1]).toFixed(6).padStart(12)} ${Number(c[2]).toFixed(6).padStart(12)}`);
+        const rc = rawCoords[i];
+        if (rc && rc.length >= 3) {
+          lines.push(`${el.padEnd(3)} ${rc[0]} ${rc[1]} ${rc[2]}`);
+        } else if (Array.isArray(c) && c.length >= 3) {
+          lines.push(`${el.padEnd(3)} ${String(c[0])} ${String(c[1])} ${String(c[2])}`);
         }
       }
       if (lines.length > 2) {
@@ -6371,30 +7094,46 @@
     if (atomCountEl) atomCountEl.textContent = `${atomCount} atoms`;
     init3DViewer(xyz, atomCount);
 
-    // Helper to extract clean Cartesian lines (Element X Y Z)
-    function extractCleanCartesian(xyzStr, elemList, coordList) {
+    // Helper to extract clean Cartesian lines (Element X Y Z) taking coordinates to the last decimal place without padding zeroes
+    function extractCleanCartesian(xyzStr, elemList, coordList, rawCoordList) {
+      if (xyzStr && xyzStr.trim()) {
+        const rawLines = xyzStr.trim().split("\n");
+        const coordLines = (rawLines.length > 2 && /^\s*\d+\s*$/.test(rawLines[0].trim())) ? rawLines.slice(2) : rawLines;
+        const cleaned = coordLines.map(l => {
+          const parts = l.trim().split(/\s+/);
+          if (parts.length >= 4) {
+            return `${parts[0].padEnd(2)}   ${parts[1]}   ${parts[2]}   ${parts[3]}`;
+          }
+          return l.trim();
+        }).filter(Boolean);
+        if (cleaned.length > 0) return cleaned.join("\n");
+      }
+      if (rawCoordList && rawCoordList.length > 0 && elemList && elemList.length === rawCoordList.length) {
+        const lines = [];
+        for (let i = 0; i < elemList.length; i++) {
+          const el = elemList[i];
+          const rc = rawCoordList[i];
+          if (Array.isArray(rc) && rc.length >= 3) {
+            lines.push(`${el.padEnd(2)}   ${rc[0]}   ${rc[1]}   ${rc[2]}`);
+          }
+        }
+        if (lines.length > 0) return lines.join("\n");
+      }
       if (elemList && elemList.length > 0 && coordList && coordList.length === elemList.length) {
         const lines = [];
         for (let i = 0; i < elemList.length; i++) {
           const el = elemList[i];
           const c = coordList[i];
           if (Array.isArray(c) && c.length >= 3) {
-            lines.push(`${el.padEnd(2)}   ${Number(c[0]).toFixed(6).padStart(12)}   ${Number(c[1]).toFixed(6).padStart(12)}   ${Number(c[2]).toFixed(6).padStart(12)}`);
+            lines.push(`${el.padEnd(2)}   ${String(c[0])}   ${String(c[1])}   ${String(c[2])}`);
           }
         }
         if (lines.length > 0) return lines.join("\n");
       }
-      if (xyzStr && xyzStr.trim()) {
-        const rawLines = xyzStr.trim().split("\n");
-        if (rawLines.length > 2 && /^\s*\d+\s*$/.test(rawLines[0].trim())) {
-          return rawLines.slice(2).map(l => l.trim()).filter(Boolean).join("\n");
-        }
-        return rawLines.map(l => l.trim()).filter(Boolean).join("\n");
-      }
       return "";
     }
 
-    const cleanCartesian = extractCleanCartesian(xyz, elements, coords);
+    const cleanCartesian = extractCleanCartesian(xyz, elements, coords, job.coords_raw);
     const rawText = (data.raw_text || data.content || "").toLowerCase();
     const calcTypeStr = String(job.calculation_type || job.job_type || job.task || job.calc_type || "").toLowerCase();
     const isOpt = (
@@ -6531,7 +7270,7 @@
 
     if (homoEl) homoEl.textContent = homo !== null ? `${homo.toFixed(3)} eV` : " - eV";
     if (lumoEl) lumoEl.textContent = lumo !== null ? `${lumo.toFixed(3)} eV` : " - eV";
-    if (gapEl) gapEl.textContent = gap !== null ? `ΔEgap: ${gap.toFixed(3)} eV` : "ΔEgap: - eV";
+    if (gapEl) gapEl.textContent = gap !== null ? `ΔE_gap: ${gap.toFixed(3)} eV` : "ΔE_gap: - eV";
 
     // Conceptual DFT (CDFT) Reactivity Descriptors
     const ip = job.ionization_potential_ev !== undefined ? job.ionization_potential_ev : (homo !== null ? -homo : null);
@@ -7074,6 +7813,16 @@
     return { top: showIRLegend ? 58 : 35, right: 65, bottom: 48, left: 65 };
   }
 
+  function formatAxisTick(val, step) {
+    if (Math.abs(val) < 1e-9) return "0";
+    if (step >= 100) return Math.round(val).toString();
+    if (step >= 10) return val.toFixed(1).replace(/\.0$/, "");
+    if (step >= 1) return val.toFixed(1);
+    if (step >= 0.1) return val.toFixed(2);
+    if (step >= 0.01) return val.toFixed(3);
+    return val.toExponential(2);
+  }
+
   function renderSpectrumToCanvas(canvas, scale = 1, isExport = false) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -7229,9 +7978,11 @@
     // Left Y-Axis Numbers (Theoretical / Intensity)
     ctx.textAlign = "right";
     ctx.fillStyle = isLight ? "#4338ca" : "#818cf8";
+    const theoStep = (maxTheoY - minY) / 4;
     for (let yStep = 0; yStep <= 4; yStep++) {
-      const yVal = minY + ((maxTheoY - minY) / 4) * yStep;
-      const displayVal = spectrumNormalizeMode in { "all": 1, "theoretical_only": 1 } ? (yVal / maxTheoY * 1.15).toFixed(2) : yVal.toFixed(1);
+      const yVal = minY + theoStep * yStep;
+      const isNorm = spectrumNormalizeMode in { "all": 1, "theoretical_only": 1 };
+      const displayVal = isNorm ? (yVal / maxTheoY * 1.15).toFixed(2) : formatAxisTick(yVal, theoStep);
       ctx.fillText(displayVal, padding.left - 8, mapYTheo(yVal) + 4);
     }
 
@@ -7239,32 +7990,44 @@
     if (activeExps.length > 0) {
       ctx.textAlign = "left";
       ctx.fillStyle = isLight ? "#059669" : "#2BD9A8";
+      const expStep = (maxExpY - minY) / 4;
       for (let yStep = 0; yStep <= 4; yStep++) {
-        const yVal = minY + ((maxExpY - minY) / 4) * yStep;
-        const displayVal = spectrumNormalizeMode in { "all": 1, "experimental_only": 1 } ? (yVal / maxExpY * 1.15).toFixed(2) : yVal.toFixed(2);
+        const yVal = minY + expStep * yStep;
+        const isNorm = spectrumNormalizeMode in { "all": 1, "experimental_only": 1 };
+        const displayVal = isNorm ? (yVal / maxExpY * 1.15).toFixed(2) : formatAxisTick(yVal, expStep);
         ctx.fillText(displayVal, width - padding.right + 8, mapYExp(yVal) + 4);
       }
     }
 
-    // Axis Titles
+    // Axis Titles (Q1 Publication Quality)
     ctx.fillStyle = axisColor;
     ctx.font = "bold 12px Inter, -apple-system, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(uvCustomTitles.x || "Wavelength λ (nm)", padding.left + plotW / 2, padding.top + plotH + 36);
+    ctx.fillText(uvCustomTitles.x || "Wavelength, λ (nm)", padding.left + plotW / 2, padding.top + plotH + 36);
 
     ctx.save();
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = "center";
     ctx.fillStyle = isLight ? "#4338ca" : "#818cf8";
-    ctx.fillText(uvCustomTitles.y || (spectrumNormalizeMode in { "all": 1, "theoretical_only": 1 } ? "Theoretical Intensity (Norm)" : "Molar Extinction ε (L·mol⁻¹·cm⁻¹)"), -(padding.top + plotH / 2), 16);
+    const uvLeftYTitle = uvCustomTitles.y || (
+      spectrumNormalizeMode in { "all": 1, "theoretical_only": 1 }
+        ? "Normalized Intensity (a.u.)"
+        : "Molar Absorption Coefficient, ε (M⁻¹ cm⁻¹)"
+    );
+    ctx.fillText(uvLeftYTitle, -(padding.top + plotH / 2), 16);
     if (activeExps.length > 0) {
       ctx.fillStyle = isLight ? "#059669" : "#2BD9A8";
-      ctx.fillText(spectrumNormalizeMode in { "all": 1, "experimental_only": 1 } ? "Exp Absorbance (Norm)" : "Experimental Absorbance (AU)", -(padding.top + plotH / 2), width - 12);
+      const uvRightYTitle = (
+        spectrumNormalizeMode in { "all": 1, "experimental_only": 1 }
+          ? "Normalized Absorbance (a.u.)"
+          : "Absorbance (a.u.)"
+      );
+      ctx.fillText(uvRightYTitle, -(padding.top + plotH / 2), width - 12);
     }
     ctx.restore();
     ctx.font = "bold 13px Inter, sans-serif";
     ctx.fillStyle = isLight ? "#0f172a" : "#e2e8f0";
-    ctx.fillText(uvCustomTitles.title || "UV-Vis Spectrum", width / 2, 14);
+    ctx.fillText(uvCustomTitles.title || "UV-Vis Electronic Absorption Spectrum", width / 2, 14);
 
     // =========================================================================
     // STRICT VIEWPORT CLIPPING: Ensure all data curves remain inside the plot box
@@ -7424,7 +8187,7 @@
       ];
 
       legendItems.forEach(item => {
-        const labelText = item.name.length > 28 ? item.name.slice(0, 26) + "…" : item.name;
+        const labelText = item.name.length > 28 ? item.name.slice(0, 30) + "…" : item.name;
         const textWidth = ctx.measureText(labelText).width;
         if (curX + textWidth + 28 > width - padding.right && curY === 20) {
           curX = padding.left + 5;
@@ -7991,7 +8754,7 @@
       return { yHeader: "Relative_Intensity", yUnit: "km/mol" };
     }
     if (irYAxisMode === "absorbance") {
-      return { yHeader: "Absorbance", yUnit: "AU" };
+      return { yHeader: "Absorbance", yUnit: "a.u." };
     }
     return { yHeader: "Relative_Transmittance_pct", yUnit: "%" };
   }
@@ -8144,7 +8907,7 @@
     }
 
     const irXTitle = irCustomTitles.x || "Wavenumber (cm⁻¹)";
-    const irGraphTitle = irCustomTitles.title || "Simulated IR Spectrum";
+    const irGraphTitle = irCustomTitles.title || "Vibrational IR Spectrum";
 
     ctx.font = "bold 12px Inter, sans-serif";
     ctx.fillText(irXTitle, padding.left + plotW / 2, padding.top + plotH + 36);
@@ -8155,27 +8918,28 @@
 
     ctx.font = "10px Inter, sans-serif";
     ctx.textAlign = "right";
+    const irStep = (maxY - minY) / 4;
     for (let yStep = 0; yStep <= 4; yStep++) {
-      const yVal = minY + ((maxY - minY) / 4) * yStep;
+      const yVal = minY + irStep * yStep;
       let label = "";
       if (isIntensity) {
-        label = yVal >= 10 ? Math.round(yVal).toString() : yVal.toFixed(1);
+        label = formatAxisTick(yVal, irStep);
       } else if (isTrans) {
         label = `${Math.round(yVal)}%`;
       } else {
-        label = yVal.toFixed(2);
+        label = formatAxisTick(yVal, irStep);
       }
       const yPos = mapY(yVal);
       ctx.fillText(label, padding.left - 8, yPos + 4);
     }
 
-    let yAxisTitle = "Transmittance (%T)";
+    let yAxisTitle = "Transmittance (%)";
     if (isIntensity) {
-      yAxisTitle = "Theoretical IR Intensity (km/mol)";
+      yAxisTitle = "Integrated IR Intensity (km·mol⁻¹)";
     } else if (isTrans) {
-      yAxisTitle = isTheoOnly ? "Theoretical IR Transmittance (Pseudo-%T)" : "Transmittance (%T)";
+      yAxisTitle = "Transmittance (%)";
     } else if (isAbs) {
-      yAxisTitle = isTheoOnly ? "Theoretical IR Absorbance (AU)" : "Absorbance (AU)";
+      yAxisTitle = "Absorbance (a.u.)";
     }
     if (irCustomTitles.y) yAxisTitle = irCustomTitles.y;
 
@@ -8306,7 +9070,7 @@
       ];
 
       legendItems.forEach(item => {
-        const labelText = item.name.length > 28 ? item.name.slice(0, 26) + "…" : item.name;
+        const labelText = item.name.length > 28 ? item.name.slice(0, 30) + "…" : item.name;
         const textWidth = ctx.measureText(labelText).width;
         if (curX + textWidth + 28 > width - padding.right && curY === 20) {
           curX = padding.left + 5;
@@ -8415,9 +9179,9 @@
 
 
 
-    // ─────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────
     // Client-Side Web Worker Archive & File Processing Pipeline
-    // ─────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────
     let extractedPipelineFiles = [];
     let activePipelineFilter = "ALL";
     let pipelineSearchQuery = "";
@@ -9336,9 +10100,9 @@
               const maxI = Math.max(...curve.map(p => p.intensity), 1.0);
               valStr = `Norm = ${(intensity / maxI).toFixed(3)}`;
             } else {
-              valStr = `ε = ${intensity.toFixed(2)} L·mol⁻¹·cm⁻¹`;
+              valStr = `ε = ${intensity.toFixed(2)} M⁻¹ cm⁻¹`;
             }
-            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${theo.color}; font-size:1.1em;">●</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${theo.color}; font-size:1.1em;">â-</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
@@ -9352,9 +10116,9 @@
               const maxA = Math.max(...exp.raw_data.map(p => p.absorbance), 1.0);
               valStr = `Norm = ${(abs / maxA).toFixed(3)}`;
             } else {
-              valStr = `Abs = ${abs.toFixed(4)} AU`;
+              valStr = `Abs = ${abs.toFixed(4)} a.u.`;
             }
-            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${exp.color}; font-size:1.1em;">■</span> <span>${escapeHtml(exp.label || exp.file_name)}:</span> <strong>${valStr}</strong></div>`;
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${exp.color}; font-size:1.1em;">â- </span> <span>${escapeHtml(exp.label || exp.file_name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
@@ -10198,7 +10962,7 @@
         const { minWn, maxWn } = getIRBounds(activeTheos, activeExps);
         const wnHover = maxWn - ((canvasX - padding.left) / plotW) * (maxWn - minWn);
 
-        let tooltipHtml = `<div style="font-weight:700; border-bottom:1px solid rgba(255,255,255,0.2); margin-bottom:4px; padding-bottom:2px;">Wavenumber (ν̃): ${wnHover.toFixed(2)} cm⁻¹</div>`;
+        let tooltipHtml = `<div style="font-weight:700; border-bottom:1px solid rgba(255,255,255,0.2); margin-bottom:4px; padding-bottom:2px;">Wavenumber: ${wnHover.toFixed(1)} cm⁻¹</div>`;
         let hasReadings = false;
 
         const scaleFactor = parseFloat(irScaleSlider?.value || "1.0");
@@ -10218,13 +10982,13 @@
             let valStr = "";
             if (irYAxisMode === "theory_intensity") {
               const maxModeInt = theo.modes.length ? Math.max(...theo.modes.map(m => m.intensity_km_mol || 0), 10) : 100;
-              valStr = `${((ptNorm !== null ? ptNorm : ptAbs) * maxModeInt).toFixed(2)} km/mol`;
+              valStr = `${((ptNorm !== null ? ptNorm : ptAbs) * maxModeInt).toFixed(2)} km·mol⁻¹`;
             } else if (irYAxisMode === "transmittance") {
-              valStr = `${(ptTrans !== null ? ptTrans : (100 * Math.pow(10, -ptAbs))).toFixed(2)} %T`;
+              valStr = `${(ptTrans !== null ? ptTrans : (100 * Math.pow(10, -ptAbs))).toFixed(1)}%`;
             } else {
-              valStr = `Abs = ${ptAbs.toFixed(4)} AU`;
+              valStr = `Abs = ${ptAbs.toFixed(4)} a.u.`;
             }
-            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${theo.color}; font-size:1.1em;">●</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${theo.color}; font-size:1.1em;">â-</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
@@ -10238,11 +11002,11 @@
             let valStr = "";
             if (irYAxisMode === "transmittance") {
               const transVal = (ptTrans !== null && !isNaN(ptTrans)) ? ptTrans : (100 * Math.pow(10, -ptAbs));
-              valStr = `${transVal.toFixed(2)} %T`;
+              valStr = `${transVal.toFixed(1)}%`;
             } else {
-              valStr = `Abs = ${ptAbs.toFixed(4)} AU`;
+              valStr = `Abs = ${ptAbs.toFixed(4)} a.u.`;
             }
-            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${exp.color}; font-size:1.1em;">■</span> <span>${escapeHtml(exp.label || exp.file_name)}:</span> <strong>${valStr}</strong></div>`;
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${exp.color}; font-size:1.1em;">â- </span> <span>${escapeHtml(exp.label || exp.file_name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
@@ -10475,9 +11239,9 @@
           chipX += tw + 40;
         });
 
-        // ─────────────────────────────────────────────────────────────
+        // ──────────────────────────────────────────
         // LEFT PANEL: Frontier Orbitals Energy Ladder
-        // ─────────────────────────────────────────────────────────────
+        // ──────────────────────────────────────────
         const leftPanelX = 80;
         const leftPanelY = 190;
         const leftPanelW = 1070;
@@ -10593,14 +11357,14 @@
         ctx.textAlign = "center";
         ctx.fillStyle = "#dc2626";
         ctx.font = "bold 24px 'Inter', sans-serif";
-        ctx.fillText(`ΔEgap = ${gapVal !== null ? gapVal.toFixed(3) : "-"} eV`, gapCenterX, gapMidY - 10);
+        ctx.fillText(`ΔE_gap = ${gapVal !== null ? gapVal.toFixed(3) : "-"} eV`, gapCenterX, gapMidY - 10);
 
         if (gapVal !== null && gapVal > 0) {
           const kcalGap = (gapVal * 23.0605).toFixed(2);
           const nmEdge = (1239.84193 / gapVal).toFixed(1);
           ctx.fillStyle = "#991b1b";
           ctx.font = "500 15px 'Inter', sans-serif";
-          ctx.fillText(`${kcalGap} kcal/mol  •  λedge = ${nmEdge} nm`, gapCenterX, gapMidY + 22);
+          ctx.fillText(`${kcalGap} kcal/mol  •  λ_edge = ${nmEdge} nm`, gapCenterX, gapMidY + 22);
         }
         ctx.textAlign = "left";
 
@@ -10636,9 +11400,9 @@
         const kjGap = gapVal !== null ? (gapVal * 96.485).toFixed(1) : "-";
         ctx.fillText(`HOMO-LUMO Energy Difference: ${gapVal !== null ? gapVal.toFixed(4) : "-"} eV (${kjGap} kJ/mol)`, leftPanelX + 50, orbCardY + 66);
 
-        // ─────────────────────────────────────────────────────────────
+        // ──────────────────────────────────────────
         // RIGHT PANEL: Conceptual DFT Reactivity Descriptors
-        // ─────────────────────────────────────────────────────────────
+        // ──────────────────────────────────────────
         const rightPanelX = 1190;
         const rightPanelY = 190;
         const rightPanelW = 1130;
@@ -10757,9 +11521,9 @@
   }
   initQuantumEngine();
 
-    // ───────────────────────────────────────────────
+    // ──────────────────────────────────────────
   // Reaction Thermochemistry Controller (Two-Slot Multi-Level & Conditions)
-  // ───────────────────────────────────────────────
+  // ──────────────────────────────────────────
   function initReactionThermochemistry() {
     const form = document.getElementById("thermo-form");
     const eqDisplay = document.getElementById("thermo-live-equation");
@@ -10888,7 +11652,7 @@
               <div class="species-source-tabs">
                 <button type="button" class="btn-source-tab ${item.primaryMode === 'upload' ? 'active' : ''}" data-slot="primary" data-mode="upload">📁 File Upload</button>
                 <button type="button" class="btn-source-tab ${item.primaryMode === 'job' ? 'active' : ''}" data-slot="primary" data-mode="job">⚡ Kaggle Job</button>
-                <button type="button" class="btn-source-tab ${item.primaryMode === 'paste' ? 'active' : ''}" data-slot="primary" data-mode="paste">📝 Paste Text</button>
+                <button type="button" class="btn-source-tab ${item.primaryMode === 'paste' ? 'active' : ''}" data-slot="primary" data-mode="paste">📋 Paste Text</button>
               </div>
               <div class="slot-content-panel">
                 ${item.primaryMode === 'job' ? `
@@ -10922,7 +11686,7 @@
               <div class="species-source-tabs">
                 <button type="button" class="btn-source-tab ${item.spMode === 'upload' ? 'active' : ''}" data-slot="sp" data-mode="upload">📁 Attach SP</button>
                 <button type="button" class="btn-source-tab ${item.spMode === 'job' ? 'active' : ''}" data-slot="sp" data-mode="job">⚡ Kaggle Job</button>
-                <button type="button" class="btn-source-tab ${item.spMode === 'paste' ? 'active' : ''}" data-slot="sp" data-mode="paste">📝 Paste SP</button>
+                <button type="button" class="btn-source-tab ${item.spMode === 'paste' ? 'active' : ''}" data-slot="sp" data-mode="paste">📋 Paste SP</button>
                 <button type="button" class="btn-source-tab ${item.spMode === 'none' ? 'active' : ''}" data-slot="sp" data-mode="none" title="Clear SP and use single-level Opt/Freq only">✕ Single-Level</button>
               </div>
               <div class="slot-content-panel">
@@ -11651,12 +12415,12 @@
               }
               if (info.is_composite && field === 'enthalpy_eh') {
                 const corr = info.h_thermal_corr_eh;
-                const corrStr = corr != null ? `ΔH<sub>therm</sub>: ${corr >= 0 ? '+' : ''}${corr.toFixed(5)} Eh` : '';
+                const corrStr = corr != null ? `Î”H<sub>therm</sub>: ${corr >= 0 ? '+' : ''}${corr.toFixed(5)} Eh` : '';
                 return `<span class="mono">${val.toFixed(6)} Eh</span><br><span style="color:var(--text-muted); font-size:0.75rem;">${corrStr}</span>`;
               }
               if (info.is_composite && field === 'gibbs_eh') {
                 const corr = info.g_thermal_corr_eh;
-                const corrStr = corr != null ? `ΔG<sub>therm</sub>: ${corr >= 0 ? '+' : ''}${corr.toFixed(5)} Eh` : '';
+                const corrStr = corr != null ? `Î”G<sub>therm</sub>: ${corr >= 0 ? '+' : ''}${corr.toFixed(5)} Eh` : '';
                 return `<span class="mono">${val.toFixed(6)} Eh</span><br><span style="color:var(--text-muted); font-size:0.75rem;">${corrStr}</span>`;
               }
               return `<span class="mono">${val.toFixed(6)} Eh</span>`;
@@ -12051,22 +12815,22 @@
     ctx.textAlign = "center";
 
     const xLabel = isRefApplied
-      ? `Chemical Shift δ (ppm)  [High ppm ➔ Low ppm (Reversed Axis)]`
-      : `Absolute Isotropic Shielding σ (ppm)  [Uncalibrated Shielding]`;
+      ? `${currentNMRNucleus} Chemical Shift, δ (ppm)`
+      : `${currentNMRNucleus} Isotropic Shielding, σ (ppm)`;
     ctx.fillText(xLabel, padding.left + plotW / 2, height - 12);
 
     // Y Label (Rotated)
     ctx.save();
     ctx.translate(18, padding.top + plotH / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText("Relative Intensity / Atom Multiplicity", 0, 0);
+    ctx.fillText("Relative Intensity (a.u.)", 0, 0);
     ctx.restore();
 
     // Spectrum Header Title
     ctx.fillStyle = isLight ? "#0f172a" : "#f8fafc";
     ctx.font = "bold 13px Inter, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(spectrum.title || `${currentNMRNucleus} NMR Calculated Spectrum`, padding.left, 24);
+    ctx.fillText(spectrum.title || `${currentNMRNucleus} NMR Spectrum (Calculated)`, padding.left, 24);
 
     // Draw NMR Stick Signals
     const stickColor = currentNMRNucleus === "1H" ? "#38bdf8" : "#34d399";
@@ -12403,7 +13167,7 @@
 
 
 
-/* ─── Theme toggle (light/dark) - Chemistry Lab UI refresh ────────────────
+/* ────────────────────────────────────────── Theme toggle (light/dark) - Chemistry Lab UI refresh ──────────────────────────────────────────
    style.css defines the dark palette on :root via design tokens; theme.css
    redefines those tokens for html[data-theme="light"]. The choice persists
    in localStorage; first visit follows the OS preference. */
@@ -12429,4 +13193,87 @@
       try { localStorage.setItem('chemlab_theme', next); } catch (_) {}
     });
   }
+})();
+
+
+/* ─── Accessible Modal Keyboard & Focus Management ────────────────────────
+   Provides Escape-to-close, focus entry, focus trapping, and focus restoration
+   for all modals in Chemistry Lab. */
+(function () {
+  let lastFocusedElement = null;
+
+  function getOpenModal() {
+    const modals = document.querySelectorAll('.modal, .modal-backdrop, [id$="-modal"]');
+    for (let i = 0; i < modals.length; i++) {
+      const m = modals[i];
+      if (!m.classList.contains('hidden') && window.getComputedStyle(m).display !== 'none') {
+        return m;
+      }
+    }
+    return null;
+  }
+
+  function closeModal(modal) {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    const closeBtn = modal.querySelector('.modal-close, [id*="close"], [id$="-ok"]');
+    if (closeBtn && typeof closeBtn.click === 'function') {
+      try { closeBtn.click(); } catch (_) {}
+    }
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+      try { lastFocusedElement.focus(); } catch (_) {}
+    }
+  }
+
+  window.addEventListener('keydown', function (e) {
+    const activeModal = getOpenModal();
+    if (!activeModal) return;
+
+    if (e.key === 'Escape' || e.keyCode === 27) {
+      e.preventDefault();
+      closeModal(activeModal);
+      return;
+    }
+
+    if (e.key === 'Tab' || e.keyCode === 9) {
+      const focusables = activeModal.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      const visibleFocusables = Array.prototype.filter.call(focusables, function (el) {
+        return window.getComputedStyle(el).display !== 'none' && !el.disabled;
+      });
+      if (!visibleFocusables.length) return;
+
+      const firstEl = visibleFocusables[0];
+      const lastEl = visibleFocusables[visibleFocusables.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === firstEl || !activeModal.contains(document.activeElement)) {
+          e.preventDefault();
+          lastEl.focus();
+        }
+      } else {
+        if (document.activeElement === lastEl || !activeModal.contains(document.activeElement)) {
+          e.preventDefault();
+          firstEl.focus();
+        }
+      }
+    }
+  });
+
+  document.addEventListener('click', function (e) {
+    const trigger = e.target.closest('button, a, [role="button"]');
+    if (trigger) {
+      lastFocusedElement = trigger;
+    }
+    setTimeout(function () {
+      const activeModal = getOpenModal();
+      if (activeModal && !activeModal.contains(document.activeElement)) {
+        const focusable = activeModal.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (focusable && typeof focusable.focus === 'function') {
+          try { focusable.focus(); } catch (_) {}
+        }
+      }
+    }, 50);
+  }, true);
 })();

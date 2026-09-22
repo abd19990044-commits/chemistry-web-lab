@@ -39,6 +39,7 @@ import tempfile
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+NODE_BIN = os.environ.get("FRONTEND_TEST_NODE") or shutil.which("node")
 
 
 def served(flat, nested):
@@ -56,7 +57,7 @@ def _check(label, condition, detail=""):
 
 
 def _node_available():
-    return shutil.which("node") is not None
+    return NODE_BIN is not None
 
 
 NODE_HARNESS = r"""
@@ -200,7 +201,7 @@ def test_ir_spectrum_orientation():
     with open(harness, "w", encoding="utf-8") as f:
         f.write(NODE_HARNESS)
     try:
-        proc = subprocess.run(["node", harness, APP_JS], capture_output=True, text=True, timeout=120)
+        proc = subprocess.run([NODE_BIN, harness, APP_JS], capture_output=True, text=True, timeout=120)
     finally:
         os.remove(harness)
         os.rmdir(tmp)

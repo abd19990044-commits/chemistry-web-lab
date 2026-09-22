@@ -61,6 +61,7 @@ import random
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tarfile
@@ -77,11 +78,14 @@ except ImportError:                     # running from the package, e.g. in test
 
 START_TIME = time.time()
 RUN_TOKEN = uuid.uuid4().hex
+LAST_ORCA_RETURN_CODE = None
 
 # Test hook: a test process can point the runner at throwaway directories by
 # exporting ORCA_RUNNER_OUTPUT_DIR / ORCA_RUNNER_SCRATCH_ROOT before import.
 # Kaggle never sets either variable, so production behaviour is unchanged.
-OUTPUT_DIR = os.environ.get("ORCA_RUNNER_OUTPUT_DIR") or "/kaggle/working"
+_DEFAULT_OUTPUT_DIR = ("/kaggle/working" if os.name != "nt" and os.path.isdir("/kaggle")
+                       else os.path.join(os.getcwd(), ".kaggle-working"))
+OUTPUT_DIR = os.environ.get("ORCA_RUNNER_OUTPUT_DIR") or _DEFAULT_OUTPUT_DIR
 STATE_FILE = os.path.join(OUTPUT_DIR, "STATE.json")
 CHECKPOINT_FILE = os.path.join(OUTPUT_DIR, "CHECKPOINT.json")
 CHECKPOINT_BUNDLE = os.path.join(OUTPUT_DIR, "CHECKPOINT_BUNDLE.zip")
@@ -163,6 +167,12 @@ MAX_CKPT_BUNDLE = int(B.get("max_checkpoint_bundle_bytes", 512 << 20))
 JOB_ID = H["job_id"]
 EPOCH = int(H["epoch"])
 BASENAME = os.path.splitext(os.path.basename(H["input_filename"]))[0]
+
+# A credential is needed for Kaggle API operations such as pushing a successor,
+# not for starting ORCA in the current window.  Missing optional credentials
+# must therefore be observable state, never a fatal boot error.
+CONTINUATION_CREDENTIALS_AVAILABLE = False
+CONTINUATION_CREDENTIALS_ERROR = None
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +292,18 @@ def claim_run():
 
     if isinstance(beat, dict) and beat.get("run_token") and beat.get("run_token") != RUN_TOKEN:
         age = time.time() - float(beat.get("at") or 0)
-        if age < HEARTBEAT_SECONDS * 6:
+        previous_state = str(beat.get("state") or "").upper()
+        # main() writes EXITED only after its heartbeat thread has been told to
+        # stop and all result/checkpoint finalization has returned.  Treating a
+        # fresh EXITED record as a live process prevented an intentional quick
+        # rerun (and made independent test/process lifetimes interfere for up
+        # to 4.5 minutes).  RUNNING/CLAIMED records still require expiry.
+        if previous_state == "EXITED":
+            emit("completed_heartbeat_reclaimed",
+                 "the previous run recorded a clean exit; this run may claim the notebook",
+                 other_run_token=str(beat.get("run_token"))[:8],
+                 heartbeat_age_seconds=round(age, 1))
+        elif age < HEARTBEAT_SECONDS * 6:
             emit("duplicate_run_aborted",
                  "another run of this kernel is alive and heartbeating; exiting without "
                  "touching the working directory to avoid two ORCA processes racing",
@@ -300,6 +321,7 @@ def claim_run():
 
 _heartbeat_state = {"state": "CLAIMED", "detail": {}}
 _heartbeat_stop = threading.Event()
+_run_claimed_by_this_invocation = False
 
 
 def write_heartbeat(state=None, **detail):
@@ -332,7 +354,8 @@ def pick_scratch_root():
     there both fills the quota and drags every scratch byte into the saved
     output. Kaggle's scratch space is several times larger and is not saved."""
     candidates = []
-    for path in ("/kaggle/temp", "/kaggle/tmp", "/tmp", "/var/tmp"):
+    # Kaggle-controlled scratch roots, not private predictable temp files.
+    for path in ("/kaggle/temp", "/kaggle/tmp", "/tmp", "/var/tmp"):  # nosec B108
         try:
             os.makedirs(path, exist_ok=True)
         except OSError:
@@ -380,33 +403,101 @@ def wp(name):
 # ---------------------------------------------------------------------------
 # Kaggle credentials + CLI
 # ---------------------------------------------------------------------------
-def install_credentials():
-    cfg_dir = os.path.expanduser("~/.kaggle")
-    os.makedirs(cfg_dir, exist_ok=True)
-    os.environ["KAGGLE_USERNAME"] = H["kaggle_username"]
+def install_credentials(cfg_dir=None):
+    """Install Kaggle credentials when available, without killing ORCA.
+
+    Kaggle's ``get_secret`` endpoint returns HTTP 400 for a missing label.  The
+    old code let that exception escape while probing the first label, so the
+    notebook died before the ORCA subprocess was launched.  Each supported
+    label is now probed independently and a missing secret is recorded as a
+    continuation limitation.  The current window can still run and produce a
+    durable result; only a successor push requires the credential.
+
+    ``cfg_dir`` is injectable for tests. Secret values are never logged or
+    written to STATE.json.
+    """
+    global CONTINUATION_CREDENTIALS_AVAILABLE, CONTINUATION_CREDENTIALS_ERROR
+
+    cfg_dir = cfg_dir or os.path.expanduser("~/.kaggle")
+    username = H.get("kaggle_username") or ""
+    api_token = H.get("kaggle_api_token")
+    legacy_key = H.get("kaggle_key")
+    lookup_errors = []
+
+    # Secure-by-default continuation: credentials are resolved from Kaggle's
+    # User Secrets inside the runtime, never from generated source. Explicit
+    # header values remain for the legacy opt-in builder path.
+    if not (api_token or legacy_key):
+        try:
+            from kaggle_secrets import UserSecretsClient
+            secrets = UserSecretsClient()
+        except Exception as exc:  # noqa: BLE001
+            secrets = None
+            lookup_errors.append(type(exc).__name__)
+
+        def read_secret(label):
+            if secrets is None:
+                return None
+            try:
+                return secrets.get_secret(label) or None
+            except Exception as exc:  # noqa: BLE001
+                # A missing label is commonly returned as HTTP 400. Continue
+                # with the other supported labels instead of failing startup.
+                lookup_errors.append("%s:%s" % (label, type(exc).__name__))
+                return None
+
+        api_token = read_secret("KAGGLE_API_TOKEN") or read_secret("KAGGLE_TOKEN")
+        legacy_key = read_secret("KAGGLE_KEY")
+        username = username or read_secret("KAGGLE_USERNAME") or ""
+
+    os.environ["KAGGLE_USERNAME"] = username
     os.environ["KAGGLE_CONFIG_DIR"] = cfg_dir
-    if H.get("kaggle_api_token"):
-        os.environ["KAGGLE_API_TOKEN"] = H["kaggle_api_token"]
-        path = os.path.join(cfg_dir, "access_token")
-        with open(path, "w") as fh:
-            fh.write(H["kaggle_api_token"])
-        os.chmod(path, 0o600)
-    elif H.get("kaggle_key"):
-        os.environ["KAGGLE_KEY"] = H["kaggle_key"]
-        path = os.path.join(cfg_dir, "kaggle.json")
-        with open(path, "w") as fh:
-            json.dump({"username": H["kaggle_username"], "key": H["kaggle_key"]}, fh)
-        os.chmod(path, 0o600)
+    if not (api_token or legacy_key):
+        CONTINUATION_CREDENTIALS_AVAILABLE = False
+        CONTINUATION_CREDENTIALS_ERROR = (
+            "Kaggle User Secrets are unavailable; this ORCA window can run, "
+            "but automatic continuation requires KAGGLE_API_TOKEN, KAGGLE_TOKEN, "
+            "or KAGGLE_KEY."
+        )
+        emit("continuation_credentials_unavailable",
+             CONTINUATION_CREDENTIALS_ERROR, lookup_errors=lookup_errors)
+        return False
+
+    try:
+        os.makedirs(cfg_dir, exist_ok=True)
+        if api_token:
+            os.environ["KAGGLE_API_TOKEN"] = api_token
+            path = os.path.join(cfg_dir, "access_token")
+            with open(path, "w") as fh:
+                fh.write(api_token)
+            os.chmod(path, 0o600)
+        else:
+            os.environ["KAGGLE_KEY"] = legacy_key
+            path = os.path.join(cfg_dir, "kaggle.json")
+            with open(path, "w") as fh:
+                json.dump({"username": username, "key": legacy_key}, fh)
+            os.chmod(path, 0o600)
+    except OSError as exc:
+        CONTINUATION_CREDENTIALS_AVAILABLE = False
+        CONTINUATION_CREDENTIALS_ERROR = (
+            "cannot install Kaggle credentials: %s" % type(exc).__name__
+        )
+        emit("continuation_credentials_unavailable", CONTINUATION_CREDENTIALS_ERROR)
+        return False
+
+    CONTINUATION_CREDENTIALS_AVAILABLE = True
+    CONTINUATION_CREDENTIALS_ERROR = None
+    emit("continuation_credentials_ready",
+         "Kaggle credentials are available for continuation")
+    return True
 
 
 def remove_credentials():
     """Deletes the credential files as soon as the successor push is done.
 
-    The token is still present in this kernel's *source*, which cannot be
-    avoided -- a self-continuing kernel has to authenticate. Removing the
-    on-disk copies shortens the window in which an ORCA subprocess, a stray
-    `!ls ~`, or a packaging step could pick them up and carry them into the
-    saved output."""
+    The secure default obtains the token from Kaggle User Secrets rather than
+    source. Removing on-disk copies shortens the window in which an ORCA
+    subprocess, a stray `!ls ~`, or packaging could carry them into output."""
     shutil.rmtree(os.path.expanduser("~/.kaggle"), ignore_errors=True)
     for key in ("KAGGLE_KEY", "KAGGLE_API_TOKEN"):
         os.environ.pop(key, None)
@@ -632,6 +723,10 @@ def restore_checkpoint(deadline):
 # 2. Locate ORCA
 # ---------------------------------------------------------------------------
 ARCHIVE_EXTS = (".tar.xz", ".txz", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar", ".zip")
+MAX_ARCHIVE_MEMBERS = int(os.environ.get("ORCA_ARCHIVE_MAX_MEMBERS", "20000"))
+MAX_ARCHIVE_EXTRACTED_BYTES = int(os.environ.get("ORCA_ARCHIVE_MAX_EXTRACTED_BYTES", str(30 * 1024**3)))
+MAX_ARCHIVE_MEMBER_BYTES = int(os.environ.get("ORCA_ARCHIVE_MAX_MEMBER_BYTES", str(5 * 1024**3)))
+MAX_ARCHIVE_COMPRESSION_RATIO = float(os.environ.get("ORCA_ARCHIVE_MAX_RATIO", "500"))
 
 
 def find_orca_under(root):
@@ -646,22 +741,137 @@ def find_orca_under(root):
     return None
 
 
+def _archive_target(dest, member_name):
+    """Return a contained destination path or raise for an unsafe member."""
+    raw = str(member_name or "")
+    portable = raw.replace("\\", "/")
+    if (not portable or "\x00" in portable or portable.startswith("/")
+            or re.match(r"^[A-Za-z]:", portable)):
+        raise ValueError("unsafe absolute archive member: %r" % raw)
+    normal = os.path.normpath(portable)
+    if normal in ("", ".", "..") or normal.startswith(".." + os.sep):
+        raise ValueError("archive member escapes destination: %r" % raw)
+    root = os.path.realpath(dest)
+    target = os.path.realpath(os.path.join(root, normal))
+    if target == root or not target.startswith(root + os.sep):
+        raise ValueError("archive member escapes destination: %r" % raw)
+    return target
+
+
+def _validate_archive_budget(members):
+    if len(members) > MAX_ARCHIVE_MEMBERS:
+        raise ValueError("archive contains too many members")
+    total = 0
+    for name, size, compressed_size in members:
+        size = int(size or 0)
+        compressed_size = int(compressed_size or 0)
+        if size < 0 or size > MAX_ARCHIVE_MEMBER_BYTES:
+            raise ValueError("archive member exceeds size limit: %s" % name)
+        total += size
+        if total > MAX_ARCHIVE_EXTRACTED_BYTES:
+            raise ValueError("archive exceeds extracted-size limit")
+        if size > 64 * 1024**2 and size / max(1, compressed_size) > MAX_ARCHIVE_COMPRESSION_RATIO:
+            raise ValueError("suspicious archive compression ratio: %s" % name)
+
+
+def _write_archive_member(source, target, mode=0o644):
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    # Exclusive creation also rejects duplicate aliases that normalize to the
+    # same target.  A package must never overwrite a file extracted earlier.
+    with open(target, "xb") as output:
+        shutil.copyfileobj(source, output, length=1024 * 1024)
+    try:
+        os.chmod(target, int(mode) & 0o777)
+    except OSError:
+        pass
+
+
+def _validate_archive_link_target(dest, link_path, link_target):
+    raw = str(link_target or "")
+    portable = raw.replace("\\", "/")
+    if (not portable or "\x00" in portable or portable.startswith("/")
+            or re.match(r"^[A-Za-z]:", portable) or portable.startswith("\\\\")):
+        raise ValueError("unsafe absolute archive link: %r" % raw)
+    root = os.path.realpath(dest)
+    parent = os.path.dirname(link_path)
+    normal = os.path.normpath(os.path.join(parent, portable))
+    if normal == root or not normal.startswith(root + os.sep):
+        raise ValueError("archive link escapes destination: %r -> %r" % (raw, link_path))
+    return portable
+
+
 def extract_archive(path, dest):
     os.makedirs(dest, exist_ok=True)
     try:
         if zipfile.is_zipfile(path):
             with zipfile.ZipFile(path) as zf:
-                zf.extractall(dest)
+                infos = zf.infolist()
+                _validate_archive_budget([
+                    (i.filename, i.file_size, i.compress_size) for i in infos if not i.is_dir()
+                ])
+                targets = set()
+                for info in infos:
+                    target = _archive_target(dest, info.filename)
+                    if target in targets:
+                        raise ValueError("duplicate archive member target: %s" % info.filename)
+                    targets.add(target)
+                    unix_mode = (info.external_attr >> 16) & 0xFFFF
+                    if stat.S_IFMT(unix_mode) == stat.S_IFLNK:
+                        raw_target = zf.read(info).decode("utf-8", "surrogateescape")
+                        link_target = _validate_archive_link_target(dest, target, raw_target)
+                        os.makedirs(os.path.dirname(target), exist_ok=True)
+                        try:
+                            os.symlink(link_target, target)
+                        except OSError:
+                            pass
+                        continue
+                    if info.is_dir():
+                        os.makedirs(target, exist_ok=True)
+                        continue
+                    with zf.open(info, "r") as source:
+                        _write_archive_member(source, target, unix_mode or 0o644)
             return True
         if tarfile.is_tarfile(path):
             with tarfile.open(path, "r:*") as tf:
-                # Guard against path traversal in a user-supplied archive.
-                safe = []
-                for member in tf.getmembers():
-                    target = os.path.realpath(os.path.join(dest, member.name))
-                    if target.startswith(os.path.realpath(dest) + os.sep):
-                        safe.append(member)
-                tf.extractall(dest, members=safe)
+                members = tf.getmembers()
+                _validate_archive_budget([
+                    (m.name, m.size, m.size) for m in members if m.isfile()
+                ])
+                targets = set()
+                for member in members:
+                    target = _archive_target(dest, member.name)
+                    if target in targets:
+                        raise ValueError("duplicate archive member target: %s" % member.name)
+                    targets.add(target)
+                    if member.issym():
+                        link_target = _validate_archive_link_target(dest, target, member.linkname)
+                        os.makedirs(os.path.dirname(target), exist_ok=True)
+                        try:
+                            os.symlink(link_target, target)
+                        except OSError:
+                            pass
+                        continue
+                    if member.islnk():
+                        link_source = _archive_target(dest, member.linkname)
+                        os.makedirs(os.path.dirname(target), exist_ok=True)
+                        try:
+                            os.link(link_source, target)
+                        except OSError:
+                            try:
+                                shutil.copyfile(link_source, target)
+                            except OSError:
+                                pass
+                        continue
+                    if member.isdir():
+                        os.makedirs(target, exist_ok=True)
+                        continue
+                    if not member.isfile():
+                        raise ValueError("special archive member is not allowed: %s" % member.name)
+                    source = tf.extractfile(member)
+                    if source is None:
+                        raise ValueError("could not read archive member: %s" % member.name)
+                    with source:
+                        _write_archive_member(source, target, member.mode)
             return True
     except OSError as exc:
         if getattr(exc, "errno", None) == 28 or "space" in str(exc).lower():
@@ -673,6 +883,9 @@ def extract_archive(path, dest):
         else:
             emit("orca_extract_failed", str(exc))
     except Exception as exc:  # noqa: BLE001
+        # Never leave a partially trusted executable tree behind after any
+        # validation, CRC, or disk failure.
+        shutil.rmtree(dest, ignore_errors=True)
         emit("orca_extract_failed", str(exc))
     return False
 
@@ -747,7 +960,8 @@ def find_mpirun(orca_dir):
             if os.path.isfile(candidate):
                 os.environ["PATH"] = os.path.dirname(candidate) + os.pathsep + os.environ["PATH"]
                 try:
-                    os.chmod(candidate, 0o755)
+                    # The discovered ORCA binary must be executable.
+                    os.chmod(candidate, 0o755)  # nosec B103
                 except OSError:
                     pass
                 return candidate
@@ -1403,6 +1617,17 @@ def push_successor(manifest, next_epoch, job_kind, cumulative_cycles, disk_epoch
     it took the whole restart chain with it. Here the continuation is secured
     first and packaging becomes best-effort.
     """
+    # ``None`` means this helper was called directly by a legacy/in-process
+    # caller that did not run credential installation.  Only block after the
+    # current window explicitly attempted installation and recorded that the
+    # credentials are unavailable; this keeps the helper backward compatible
+    # while protecting the real notebook path.
+    if (not CONTINUATION_CREDENTIALS_AVAILABLE
+            and CONTINUATION_CREDENTIALS_ERROR is not None):
+        raise RuntimeError(
+            CONTINUATION_CREDENTIALS_ERROR
+            or "Kaggle continuation credentials are unavailable"
+        )
     write_heartbeat("RESTARTING")
     slug = "%s-r%d" % (JOB_ID, next_epoch)
     deadline = START_TIME + HARD_SESSION_LIMIT - 240
@@ -1607,7 +1832,32 @@ def package_results(note=""):
     if molden["status"] != "MOLDEN_GENERATED":
         molden_note = "Molden artifact: %s (%s)." % (molden["status"], molden["detail"])
         note = (note + "\n\n" + molden_note) if note else molden_note
-    keep = (BASENAME + ".out", "*.inp", BASENAME + ".property.txt", BASENAME + ".xyz",
+    # Publish a small machine-readable terminal record alongside the human
+    # output.  Consumers must not infer success from the presence of results.zip
+    # or from a Kaggle HTTP status alone.
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as state_fh:
+            state_doc = json.load(state_fh)
+    except (OSError, ValueError):
+        state_doc = {}
+    state_job = state_doc.get("job") or {}
+    state_extra = state_doc.get("extra") or {}
+    output_text_for_result = read_output(wp(BASENAME + ".out"))
+    result_record = {
+        "schema_version": 1,
+        "job_id": JOB_ID,
+        "status": state_job.get("state", "UNKNOWN"),
+        "return_code": LAST_ORCA_RETURN_CODE,
+        "orca_terminated_normally": "ORCA TERMINATED NORMALLY" in output_text_for_result.upper(),
+        "started_at": START_TIME,
+        "finished_at": time.time(),
+        "job_kind": state_job.get("job_kind"),
+        "outcome": state_extra.get("outcome"),
+        "error": state_job.get("last_error"),
+    }
+    atomic_write_json(os.path.join(OUTPUT_DIR, "job_result.json"), result_record)
+
+    keep = ("job_result.json", BASENAME + ".out", "*.inp", BASENAME + ".property.txt", BASENAME + ".xyz",
             BASENAME + "_trj.xyz", "*.allxyz", "*.hess", "*.engrad",
             BASENAME + ".[0-9][0-9][0-9].xyz", BASENAME + ".res.*",
             BASENAME + ".mdrestart", BASENAME + ".opt", "*.gbw", "*.nbo",
@@ -1716,6 +1966,8 @@ def write_state(state, *, checkpoint=None, note="", error=None, extra=None,
         "max_total_opt_cycles": MAX_TOTAL_OPT_CYCLES,
         "total_runtime_seconds": time.time() - START_TIME,
         "last_note": note, "last_error": error,
+        "continuation_credentials_available": CONTINUATION_CREDENTIALS_AVAILABLE,
+        "continuation_credentials_error": CONTINUATION_CREDENTIALS_ERROR,
         "disk_report": disk_snapshot(),
     }
     document = {
@@ -1723,6 +1975,7 @@ def write_state(state, *, checkpoint=None, note="", error=None, extra=None,
         "job": job, "checkpoint": checkpoint, "disk_report": job["disk_report"],
         "extra": dict(extra or {}, next_slug=next_slug, next_url=next_url,
                       outcome=outcome.to_dict() if outcome is not None else None),
+        "return_code": LAST_ORCA_RETURN_CODE,
     }
     import hashlib
     document["_digest"] = hashlib.sha256(
@@ -1743,7 +1996,8 @@ def write_state(state, *, checkpoint=None, note="", error=None, extra=None,
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
-def main():
+def _main_impl():
+    global LAST_ORCA_RETURN_CODE, _run_claimed_by_this_invocation
     emit("window_start", "window starting",
          job_id=JOB_ID, epoch=EPOCH, time_limit=TIME_LIMIT,
          handoff_reserve=HANDOFF_RESERVE, workdir=WORKDIR)
@@ -1751,6 +2005,7 @@ def main():
     if not claim_run():
         return 0
 
+    _run_claimed_by_this_invocation = True
     threading.Thread(target=_heartbeat_loop, daemon=True).start()
 
     report = disk_snapshot(probe=True)
@@ -1815,7 +2070,8 @@ def main():
         package_results(note=note)
         return 1
 
-    os.chmod(orca_exe, 0o755)
+    # The extracted ORCA binary must be executable.
+    os.chmod(orca_exe, 0o755)  # nosec B103
     orca_dir = os.path.dirname(orca_exe)
     os.environ["PATH"] = orca_dir + os.pathsep + os.environ.get("PATH", "")
     os.environ["LD_LIBRARY_PATH"] = orca_dir + os.pathsep + os.environ.get("LD_LIBRARY_PATH", "")
@@ -1899,7 +2155,7 @@ def main():
                     disk_epochs=disk_epochs, note="ORCA pass %d" % passes)
 
         execution = Execution(orca_exe, inp_path, out_path)
-        execution.run()
+        LAST_ORCA_RETURN_CODE = execution.run()
         out_text = read_output(out_path)
         outcome = art.classify_outcome(out_text, job_kind=job_kind,
                                        killed_by=execution.stop_reason)
@@ -2174,10 +2430,25 @@ def main():
     return 0
 
 
-if __name__ == "__main__" or globals().get("ORCA_JOB_HEADER") is not None:
+def main():
+    """Run one window and always retire its heartbeat when it owned the claim.
+
+    Keeping lifecycle cleanup inside the callable (rather than only under the
+    module's ``__main__`` guard) makes embedded/notebook and test invocations
+    equivalent and prevents a completed invocation's daemon heartbeat from
+    blocking a later run in the same interpreter.
+    """
+    global _run_claimed_by_this_invocation
+    _run_claimed_by_this_invocation = False
     _heartbeat_stop.clear()
     try:
-        _exit_code = main()
+        return _main_impl()
     finally:
         _heartbeat_stop.set()
-        write_heartbeat("EXITED")
+        if _run_claimed_by_this_invocation:
+            write_heartbeat("EXITED")
+        _run_claimed_by_this_invocation = False
+
+
+if __name__ == "__main__" or globals().get("ORCA_JOB_HEADER") is not None:
+    _exit_code = main()

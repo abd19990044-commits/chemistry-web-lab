@@ -19,9 +19,11 @@ def test_fastapi_packages_list():
 def test_fastapi_runtime_init_claim_and_finalize():
     sess_id, api = generate_process_session()
     v = hash_token_verifier(api)
+    installation_id = "inst_" + sess_id
 
     init_resp = client.post("/api/v1/local-agent/runtime/init", json={
-        "installation_id": "inst_test_001",
+        "installation_id": installation_id,
+        "installation_secret": "test-installation-proof-" + sess_id,
         "agent_session_id": sess_id,
         "device_name": "Test PC",
         "token_verifiers": [v],
@@ -77,3 +79,50 @@ TOTAL RUN TIME: 0 days 0 hours 0 minutes 1 seconds 100 msec
     data = resp.json()
     assert data["ok"] is True
     assert data["job_count"] == 1
+
+
+def test_websocket_job_result_uses_durable_completion_service(monkeypatch):
+    """A WebSocket result must be persisted, not crash on a missing adapter."""
+    from api.routes import local_agent as local_agent_routes
+
+    captured = {}
+    monkeypatch.setattr(
+        local_agent_routes.local_agent_service,
+        "authenticate_runtime_session",
+        lambda **kwargs: {"owner_id": "alice", "display_name": "Lab PC"},
+    )
+
+    def fake_complete(**kwargs):
+        captured.update(kwargs)
+        return {"ok": True, "status": "COMPLETED"}
+
+    monkeypatch.setattr(
+        local_agent_routes.local_agent_service,
+        "complete_agent_job",
+        fake_complete,
+    )
+
+    with client.websocket_connect(
+        "/api/v1/local-agent/ws?agent_session_id=session-1",
+        headers={"Authorization": "Bearer CRS_runtime-secret"},
+    ) as websocket:
+        assert websocket.receive_json()["type"] == "AUTH_OK"
+        websocket.send_json({
+            "type": "JOB_RESULT",
+            "job_id": "job-1",
+            "result": {
+                "exit_code": 0,
+                "output_text": "ORCA TERMINATED NORMALLY",
+                "parsed_results": {"energy": -76.0},
+            },
+        })
+        acknowledgement = websocket.receive_json()
+
+    assert acknowledgement == {
+        "type": "JOB_RESULT_ACK",
+        "job_id": "job-1",
+        "status": "COMPLETED",
+    }
+    assert captured["job_id"] == "job-1"
+    assert captured["runtime_session_secret"] == "CRS_runtime-secret"
+    assert captured["parsed_results"]["energy"] == -76.0

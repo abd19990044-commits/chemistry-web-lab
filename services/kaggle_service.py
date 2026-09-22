@@ -8,6 +8,7 @@ Functions here return plain ``(payload, status_code)`` tuples instead of
 framework responses; the transport layers wrap them.
 """
 import base64
+import binascii
 import io
 import os
 import re
@@ -19,18 +20,60 @@ from orca_orchestrator.logging_ext import configure  # noqa: F401  (keeps parity
 import kaggle_runner
 from orca_orchestrator.errors import ValidationError as _OrchValidationError
 from kaggle_runner import cli_health
+from services import artifact_service
+
+
+MAX_SCIENTIFIC_TEXT_BYTES = int(
+    os.environ.get("ORCA_MAX_SCIENTIFIC_TEXT_BYTES", str(256 * 1024 * 1024))
+)
 
 
 class _OwnerDenied(Exception):
     """Raised when the orchestrator refuses a fetch for another user's job."""
 
 
-log = kaggle_runner.log if hasattr(kaggle_runner, "log") else None
+def _fetch_results_authoritatively(kaggle_username, kaggle_key, job_id):
+    """Use the orchestrator for tracked jobs and legacy only for old jobs.
+
+    A transient failure while fetching a tracked job must not silently switch
+    implementations.  Besides producing inconsistent retry/integrity
+    behaviour, that fallback could bypass the orchestrator's owner check.
+    """
+    try:
+        from orca_orchestrator.credentials import parse as parse_credentials
+        from orca_orchestrator.service import get_service
+        service = get_service()
+    except Exception:
+        # Compatibility for installations that genuinely pre-date the
+        # orchestrator.  In the current application this branch is exceptional.
+        return kaggle_runner.fetch_job_results(kaggle_username, kaggle_key, job_id)
+
+    get_job = getattr(getattr(service, "store", None), "get_job", None)
+    tracked = bool(get_job(job_id)) if callable(get_job) else False
+    creds = parse_credentials(kaggle_username, kaggle_key)
+    try:
+        return service.fetch_results(creds, job_id)
+    except _OrchValidationError as exc:
+        if "does not belong" in str(exc).lower() or "access denied" in str(exc).lower():
+            raise _OwnerDenied(str(exc)) from exc
+        raise
+    except Exception:
+        if tracked:
+            # Never bypass ownership/integrity/retry semantics for a job known
+            # to the durable orchestrator.
+            raise
+        # Pre-migration jobs have no manifest.  Keep the old adapter only for
+        # those untracked jobs (and for lightweight compatibility stubs).
+        return kaggle_runner.fetch_job_results(kaggle_username, kaggle_key, job_id)
+
+
+import logging
+log = logging.getLogger("orca.kaggle_service")
 
 # ---------------------------------------------------------------------------
 # Submit idempotency (moved verbatim from app.py - single implementation).
 # ---------------------------------------------------------------------------
-SUBMIT_DEDUP = {}
+SUBMIT_DEDUP: dict[str, tuple[float, object]] = {}
 SUBMIT_DEDUP_TTL = 1800  # 30 minutes
 
 
@@ -91,8 +134,8 @@ def save_credentials(kaggle_username, kaggle_key, owner=None):
         target_owner = (owner or creds.username or "").strip()
         if target_owner:
             get_vault_manager().save_credentials(target_owner, creds)
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not persist Kaggle credentials in the owner vault: %s", type(exc).__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +150,31 @@ def check_status(kaggle_username, kaggle_key, job_id, owner=None):
     if not kaggle_runner.is_valid_job_id(job_id):
         return {"ok": False, "error": "That job id doesn't look like one of this site's jobs."}, 400
     try:
+        # Tracked jobs use the modern orchestrator as their source of truth.
+        # The legacy CLI path remains only as an adapter for pre-migration jobs
+        # that are not present in the durable manifest store.
+        try:
+            from orca_orchestrator.credentials import parse as parse_credentials
+            from orca_orchestrator.service import get_service
+            modern_service = get_service()
+            modern_creds = parse_credentials(kaggle_username, kaggle_key)
+            if modern_service.store.get_job(job_id) is not None:
+                described = modern_service.status(modern_creds, job_id)
+                remote_status = str(described.get("remote_state") or "unknown").lower()
+                if remote_status == "unknown":
+                    remote_status = str(described.get("state") or "unknown").lower()
+                return {"ok": True, **described, "status": remote_status}, 200
+        except Exception as modern_exc:
+            # A tracked job is not allowed to silently become a legacy job if
+            # the modern status observation is temporarily unavailable.  The
+            # UI receives an explicit remote-status-unknown response.
+            try:
+                from orca_orchestrator.service import get_service
+                if get_service().store.get_job(job_id) is not None:
+                    return {"ok": True, "status": "unknown", "remote_status_unknown": True,
+                            "error": type(modern_exc).__name__}, 200
+            except Exception:
+                pass
         result = kaggle_runner.check_job_status(kaggle_username, kaggle_key, job_id)
         if result.get("next_job_id"):
             pass
@@ -190,6 +258,71 @@ def submit_job(*, kaggle_username, kaggle_key, dataset_sources_raw, orca_link,
     for _aux_name, _aux_b64 in (extra_files or {}).items():
         files_payload[_aux_name] = _aux_b64
 
+    # Production traffic has one Kaggle source of truth: the modern durable
+    # orchestrator.  ``store`` remains an explicit compatibility seam for old
+    # migration tests/tools; web routes never pass it.  Keeping the adapter at
+    # this boundary avoids a second implementation of submit/status/recovery.
+    if store is None:
+        try:
+            from orca_orchestrator.credentials import parse as parse_credentials
+            from orca_orchestrator.errors import (
+                AuthenticationError,
+                ConcurrencyError,
+                PermanentError,
+                SubmissionUnknownError,
+                TransientError,
+            )
+            from orca_orchestrator.service import get_service
+
+            aux_files = {}
+            for aux_name, encoded in (extra_files or {}).items():
+                safe_name = core.safe_filename(os.path.basename(str(aux_name)))
+                if safe_name != os.path.basename(str(aux_name)):
+                    return {"ok": False, "error": "Invalid auxiliary filename."}, 400
+                if safe_name == input_filename:
+                    continue
+                try:
+                    aux_files[safe_name] = base64.b64decode(encoded, validate=True)
+                except (ValueError, TypeError, binascii.Error):
+                    return {"ok": False, "error": "Invalid base64 auxiliary file payload."}, 400
+
+            result = get_service().submit(
+                parse_credentials(kaggle_username, kaggle_key),
+                input_filename=input_filename,
+                input_content=input_content,
+                job_name=job_name or "",
+                aux_files=aux_files,
+                dataset_sources=dataset_sources,
+                orca_link=orca_link or None,
+                idempotency_key=idem_key,
+                application_owner=owner,
+            )
+            response_data = {
+                "ok": True,
+                "kaggle_url": result.url,
+                "job_id": result.job_id,
+                "kaggle_owner": kaggle_username,
+                "job_title": result.title,
+                "replayed": result.replayed,
+                "message": "Job submitted to Kaggle successfully. Track progress and results below.",
+            }
+            save_credentials(kaggle_username, kaggle_key, owner=owner)
+            return response_data, 200
+        except AuthenticationError as exc:
+            return {"ok": False, "error": str(exc), "code": exc.code}, 401
+        except ConcurrencyError as exc:
+            return {"ok": False, "error": str(exc), "code": exc.code}, 409
+        except SubmissionUnknownError as exc:
+            return {"ok": False, "error": str(exc), "code": exc.code.upper()}, 503
+        except PermanentError as exc:
+            return {"ok": False, "error": str(exc), "code": exc.code}, 400
+        except TransientError as exc:
+            return {"ok": False, "error": str(exc), "code": exc.code}, 503
+        except Exception as exc:  # noqa: BLE001
+            log.exception("Modern Kaggle submission adapter failed")
+            return {"ok": False, "error": "Failed to submit the job to Kaggle: %s" % exc,
+                    "code": "SUBMIT_FAILED"}, 502
+
     title_source = job_name or os.path.splitext(os.path.basename(input_filename))[0]
     job_base_id = kaggle_runner.make_job_base_id(title_source, input_filename)
     job_title = kaggle_runner.kaggle_safe_title(title_source, fallback=job_base_id)
@@ -220,6 +353,27 @@ def submit_job(*, kaggle_username, kaggle_key, dataset_sources_raw, orca_link,
     job_dir = None
     job_id = job_base_id
     try:
+        # F-007: Persist manifest in CREATED state BEFORE remote side-effect push
+        if store is not None:
+            try:
+                from orca_orchestrator.models import JobManifest
+                from orca_orchestrator.states import JobState
+                initial_manifest = JobManifest.create(
+                    job_id=job_id,
+                    owner=kaggle_username,
+                    title=job_title,
+                    input_filename=input_filename,
+                    original_input_sha256=hashlib.sha256(input_content.encode("utf-8")).hexdigest(),
+                    dataset_sources=dataset_sources or [],
+                    orca_link_present=bool(orca_link),
+                    state=JobState.CREATED,
+                    current_url="",
+                )
+                store.put_job(initial_manifest)
+            except Exception as store_err:
+                if log is not None:
+                    log.warning("Store put_job before push skipped: %s", store_err)
+
         job_dir = kaggle_runner.build_job_dir(
             kaggle_username=kaggle_username,
             kaggle_key=kaggle_key,
@@ -240,24 +394,43 @@ def submit_job(*, kaggle_username, kaggle_key, dataset_sources_raw, orca_link,
             "message": "Job submitted to Kaggle successfully. Track progress and results below.",
         }
         store.complete_idempotent(key, response_data)
+        if store is not None:
+            try:
+                from orca_orchestrator.models import JobManifest
+                from orca_orchestrator.states import JobState
+                manifest = JobManifest.create(
+                    job_id=pushed["job_id"],
+                    owner=pushed["owner"],
+                    title=job_title,
+                    input_filename=input_filename,
+                    original_input_sha256=hashlib.sha256(input_content.encode("utf-8")).hexdigest(),
+                    dataset_sources=dataset_sources or [],
+                    orca_link_present=bool(orca_link),
+                    state=JobState.RUNNING,
+                    current_url=pushed.get("url", ""),
+                )
+                store.put_job(manifest)
+            except Exception as store_err:
+                if log is not None:
+                    log.warning("Store put_job after submit skipped: %s", store_err)
         save_credentials(kaggle_username, kaggle_key, owner=owner)
         return response_data, 200
-    except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
-        store.abandon_idempotent(key)
-        return {"ok": False, "error": str(exc)}, 503
     except Exception as exc:  # noqa: BLE001
         # The push may have LANDED even though the call raised. Probe Kaggle
         # before releasing the store-backed claim: a landed push is persisted
         # so a retry REPLAYS it instead of pushing a second kernel; an
         # unanswerable probe KEEPS the claim (the store TTL bounds the wait).
         landed = None
+        probe_answered = False
         try:
             from orca_orchestrator.credentials import parse as parse_credentials
             from orca_orchestrator.kaggle_api import KaggleClient
             status = KaggleClient(parse_credentials(kaggle_username, kaggle_key)).kernel_exists(job_id)
             landed = status is not None
+            probe_answered = True
         except Exception:  # noqa: BLE001
             landed = None
+            probe_answered = False
         if landed:
             response_data = {"ok": True, "kaggle_url": "https://www.kaggle.com/code/%s/%s"
                              % (kaggle_username, job_id),
@@ -265,9 +438,45 @@ def submit_job(*, kaggle_username, kaggle_key, dataset_sources_raw, orca_link,
                              "job_title": job_title,
                              "message": "the push landed despite the transport error"}
             store.complete_idempotent(key, response_data)
+            if store is not None:
+                try:
+                    from orca_orchestrator.models import JobManifest
+                    from orca_orchestrator.states import JobState
+                    manifest = JobManifest.create(
+                        job_id=job_id,
+                        owner=kaggle_username,
+                        title=job_title,
+                        input_filename=input_filename,
+                        original_input_sha256=hashlib.sha256(input_content.encode("utf-8")).hexdigest(),
+                        dataset_sources=dataset_sources or [],
+                        orca_link_present=bool(orca_link),
+                        state=JobState.RUNNING,
+                        current_url=response_data["kaggle_url"],
+                    )
+                    store.put_job(manifest)
+                except Exception as store_err:
+                    if log is not None:
+                        log.warning("Store put_job after landed push skipped: %s", store_err)
             return response_data, 200
-        store.abandon_idempotent(key)
-        return {"ok": False, "error": "Failed to submit the job to Kaggle: %s" % exc}, 502
+        # F-004: An unanswered probe means the remote side is unknown.  Keep the
+        # claim so a retry cannot submit a duplicate kernel.  Release it only
+        # after Kaggle definitively answered NotFound (probe_answered and not landed).
+        if probe_answered and not landed:
+            store.abandon_idempotent(key)
+            if store is not None:
+                try:
+                    store.delete_job(job_id)
+                except Exception:
+                    pass
+        status_code = 503 if isinstance(exc, (kaggle_runner.KaggleCliUnavailable,
+                                               kaggle_runner.KaggleUnreachable)) else 502
+        if not probe_answered:
+            err_msg = (
+                "SUBMISSION_UNKNOWN: Remote status could not be verified after transport failure (%s). "
+                "Idempotency claim is held to prevent duplicate kernel execution." % exc
+            )
+            return {"ok": False, "error": err_msg, "code": "SUBMISSION_UNKNOWN", "job_id": job_id}, status_code
+        return {"ok": False, "error": "Failed to submit the job to Kaggle: %s" % exc, "code": "SUBMIT_FAILED"}, status_code
 
 
 # ---------------------------------------------------------------------------
@@ -284,19 +493,9 @@ def fetch_archive(kaggle_username, kaggle_key, job_id, owner=None):
     if not kaggle_runner.is_valid_job_id(job_id):
         return None, None, {"ok": False, "error": "That job id doesn't look like one of this site's jobs."}, 400
     try:
-        try:
-            from orca_orchestrator.credentials import parse as parse_credentials
-            from orca_orchestrator.service import get_service
-            creds = parse_credentials(kaggle_username, kaggle_key)
-            zip_path, cleanup_dir = get_service().fetch_results(creds, job_id)
-        except _OrchValidationError as exc:
-            # Owner denial (and any other deterministic validation) must NOT
-            # fall into the legacy fetch fallback: it would be misreported.
-            if 'does not belong' in str(exc):
-                raise _OwnerDenied(str(exc))
-            raise
-        except Exception:
-            zip_path, cleanup_dir = kaggle_runner.fetch_job_results(kaggle_username, kaggle_key, job_id)
+        zip_path, cleanup_dir = _fetch_results_authoritatively(
+            kaggle_username, kaggle_key, job_id
+        )
         if not zip_path or not os.path.exists(zip_path):
             return None, None, {"ok": False, "error": "Could not find output results archive on Kaggle."}, 404
         return zip_path, cleanup_dir, {"ok": True}, 200
@@ -319,19 +518,9 @@ def extract_opt_coords(kaggle_username, kaggle_key, job_id, owner=None):
 
     cleanup_dir = None
     try:
-        try:
-            from orca_orchestrator.credentials import parse as parse_credentials
-            from orca_orchestrator.service import get_service
-            creds = parse_credentials(kaggle_username, kaggle_key)
-            zip_path, cleanup_dir = get_service().fetch_results(creds, job_id)
-        except _OrchValidationError as exc:
-            # Owner denial (and any other deterministic validation) must NOT
-            # fall into the legacy fetch fallback: it would be misreported.
-            if 'does not belong' in str(exc):
-                raise _OwnerDenied(str(exc))
-            raise
-        except Exception:
-            zip_path, cleanup_dir = kaggle_runner.fetch_job_results(kaggle_username, kaggle_key, job_id)
+        zip_path, cleanup_dir = _fetch_results_authoritatively(
+            kaggle_username, kaggle_key, job_id
+        )
 
         if not zip_path or not os.path.exists(zip_path):
             return {"ok": False, "error": "Could not find output results archive on Kaggle."}, 404
@@ -341,17 +530,25 @@ def extract_opt_coords(kaggle_username, kaggle_key, job_id, owner=None):
         xyz_content = None
         inp_content = None
         with zipfile.ZipFile(zip_path, "r") as zf:
-            for item in zf.infolist():
-                fname_lower = item.filename.lower()
-                if not out_content and fname_lower.endswith((".out", ".log", ".property.txt")):
-                    out_name = item.filename
-                    out_content = zf.read(item).decode("utf-8", errors="replace")
-                elif fname_lower.endswith(".xyz") and not fname_lower.endswith(("_trj.xyz", "trajectory.xyz")):
-                    if not any(fname_lower.startswith(p) for p in ("original", "input", "initial", "start")) and not any(fname_lower.endswith(s) for s in ("_input.xyz", "_initial.xyz", "_start.xyz")):
-                        if not xyz_content or fname_lower.endswith((".opt.xyz", "opt.xyz", "final.xyz")):
-                            xyz_content = zf.read(item).decode("utf-8", errors="replace")
-                elif fname_lower.endswith(".inp") and not inp_content:
-                    inp_content = zf.read(item).decode("utf-8", errors="replace")
+            artifact_service.validate_archive(zf)
+            # Determine the input first, then re-select the output using its
+            # basename.  This prevents notebook logs and files from another
+            # continuation window from becoming the scientific source.
+            preliminary_output = artifact_service.select_orca_output_info(zf)
+            input_info = artifact_service.select_matching_input_info(zf, preliminary_output)
+            input_name = input_info.filename if input_info is not None else ""
+            output_info = artifact_service.select_orca_output_info(zf, input_name)
+            xyz_info = artifact_service.select_orca_xyz_info(zf, input_name)
+            out_name = output_info.filename if output_info is not None else None
+            out_content = artifact_service.read_text_member(
+                zf, output_info, max_bytes=MAX_SCIENTIFIC_TEXT_BYTES
+            )
+            inp_content = artifact_service.read_text_member(
+                zf, input_info, max_bytes=min(MAX_SCIENTIFIC_TEXT_BYTES, 8 * 1024 * 1024)
+            )
+            xyz_content = artifact_service.read_text_member(
+                zf, xyz_info, max_bytes=min(MAX_SCIENTIFIC_TEXT_BYTES, 64 * 1024 * 1024)
+            )
 
         # ── Scientific eligibility gate ────────────────────────────────────
         try:
@@ -378,27 +575,11 @@ def extract_opt_coords(kaggle_username, kaggle_key, job_id, owner=None):
         total_energy = None
         formula = ""
 
-        if xyz_content:
-            raw_blocks = re.split(r"\n(?=\s*\d+\s*\n)", xyz_content.strip())
-            target_block = raw_blocks[-1].strip() if raw_blocks else xyz_content.strip()
-            raw_lines = target_block.splitlines()
-            if len(raw_lines) > 2 and raw_lines[0].strip().isdigit():
-                atom_lines = raw_lines[2:]
-            else:
-                atom_lines = raw_lines
-            extracted_lines = []
-            for line in atom_lines:
-                parts = line.strip().split()
-                if len(parts) >= 4 and re.match(r"^[A-Za-z]{1,2}:?$", parts[0]):
-                    try:
-                        float(parts[1]), float(parts[2]), float(parts[3])
-                        extracted_lines.append(f"{parts[0]:<3} {parts[1]} {parts[2]} {parts[3]}")
-                    except ValueError:
-                        pass
-            if extracted_lines:
-                clean_xyz = "\n".join(extracted_lines)
-
-        if not clean_xyz and out_content:
+        # The converged ORCA output is authoritative.  A standalone XYZ is a
+        # fallback only when the selected output genuinely carries no final
+        # coordinates; otherwise a stale XYZ could silently feed the next
+        # workflow stage the wrong geometry.
+        if out_content:
             blocks = re.findall(r"CARTESIAN COORDINATES \(ANGSTROEM\)\s*\n[-=\s]+\n(.*?)(?:\n\s*\n|\n-+\n|\n\*\*\*|\Z)",
                                 out_content, re.DOTALL | re.IGNORECASE)
             if blocks:
@@ -450,6 +631,26 @@ def extract_opt_coords(kaggle_username, kaggle_key, job_id, owner=None):
                 except Exception:  # noqa: BLE001
                     pass
 
+        if not clean_xyz and xyz_content:
+            raw_blocks = re.split(r"\n(?=\s*\d+\s*\n)", xyz_content.strip())
+            target_block = raw_blocks[-1].strip() if raw_blocks else xyz_content.strip()
+            raw_lines = target_block.splitlines()
+            if len(raw_lines) > 2 and raw_lines[0].strip().isdigit():
+                atom_lines = raw_lines[2:]
+            else:
+                atom_lines = raw_lines
+            extracted_lines = []
+            for line in atom_lines:
+                parts = line.strip().split()
+                if len(parts) >= 4 and re.match(r"^[A-Za-z]{1,2}:?$", parts[0]):
+                    try:
+                        float(parts[1]), float(parts[2]), float(parts[3])
+                        extracted_lines.append(f"{parts[0]:<3} {parts[1]} {parts[2]} {parts[3]}")
+                    except ValueError:
+                        pass
+            if extracted_lines:
+                clean_xyz = "\n".join(extracted_lines)
+
         if not clean_xyz:
             return {"ok": False, "error": "No 3D coordinates found in calculation results or input file."}, 404
 
@@ -472,6 +673,14 @@ def extract_opt_coords(kaggle_username, kaggle_key, job_id, owner=None):
     except _OwnerDenied as exc:
         return {"ok": False,
                 "error": {"code": "FORBIDDEN", "message": str(exc)}}, 403
+    except (OSError, ValueError, zipfile.BadZipFile) as exc:
+        return {"ok": False,
+                "error": {"code": "ARCHIVE_UNREADABLE", "message": str(exc)}}, 502
+    except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
+        return {"ok": False, "error": str(exc)}, 503
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Failed to extract optimized coordinates for %s", job_id)
+        return {"ok": False, "error": "Failed to extract optimized coordinates: %s" % exc}, 502
     finally:
         if cleanup_dir:
             import shutil

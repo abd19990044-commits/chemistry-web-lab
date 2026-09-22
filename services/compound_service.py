@@ -27,7 +27,8 @@ def resolve_pubchem_compound(query: str) -> Dict[str, Any]:
     url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded}/JSON"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "ChemistryLab/1.0.3"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        # Fixed HTTPS PubChem authority; only a percent-encoded path varies.
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310
             data = json.loads(resp.read().decode("utf-8"))
             compounds = data.get("PC_Compounds", [])
             if not compounds:

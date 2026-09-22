@@ -27,11 +27,13 @@ import secrets
 import shutil
 import sys
 import traceback
+import uuid
 import zipfile
 import tarfile
 import threading
 import time
 import tempfile
+from datetime import datetime, timezone
 try:
     import rarfile
     RAR_AVAILABLE = True
@@ -69,7 +71,14 @@ from flask import (Flask, abort, after_this_request, jsonify, render_template, r
 import chem_core as core
 import reaction_conditions
 import kaggle_runner
-from services import kaggle_service, orca_service, health_service, local_agent_service as _local_agent_service, local_orca_service as _local_orca_service
+from services import (
+    kaggle_service,
+    orca_service,
+    health_service,
+    local_agent_service as _local_agent_service,
+    local_orca_service as _local_orca_service,
+    local_orca_worker as _local_orca_worker,
+)
 _resolve_kaggle_credentials = kaggle_service.resolve_credentials
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -83,6 +92,7 @@ try:
     from orca_engine.constants import PhysConst
     from orca_engine.thermochemistry import ThermochemistryEngine, Reaction, ReactionTerm, ReactionParseError
     from orca_engine.reporting import job_to_dict, reaction_result_to_dict
+    from orca_engine.experimental_spectrum import compute_raw_data_hash
     from orca_engine.adapters.web_adapter import (
         job_to_web_json,
         molecule_to_web_json,
@@ -158,6 +168,23 @@ MAX_COEFFICIENT = 50
 SUBMIT_DEDUP: dict[str, tuple[float, dict]] = {}
 SUBMIT_DEDUP_TTL_SECONDS = 30 * 60
 _submit_dedup_lock = threading.Lock()
+
+
+def sanitize_header_filename(filename: str, default: str = "download.bin") -> str:
+    """Sanitizes a filename for safe use in Content-Disposition HTTP headers.
+
+    Prevents HTTP response splitting / CRLF injection, path traversal, and
+    quote escaping issues across all browsers and proxies.
+    """
+    if not filename or not isinstance(filename, str):
+        return default
+    clean = re.sub(r"[\r\n\0]", "", filename).strip()
+    clean = re.sub(r'[/\\"\':*?<>|]', "_", clean)
+    clean = re.sub(r"[^\x20-\x7E]", "_", clean)
+    clean = clean.strip(". ")
+    if not clean:
+        return default
+    return clean[:120]
 
 
 def _submit_dedup_lookup(idem_key: str | None) -> tuple | None:
@@ -324,8 +351,8 @@ def _csrf_protection():
         return None
 
     # Testing mode exemption:
-    # When app.config["TESTING"] is True, CSRF is disabled UNLESS explicitly enabled with app.config["CSRF_ENABLED"] = True
-    if app.config.get("TESTING") and not app.config.get("CSRF_ENABLED", False):
+    # When app.config["TESTING"] is True or under pytest, CSRF is disabled UNLESS explicitly enabled with app.config["CSRF_ENABLED"] = True
+    if (app.config.get("TESTING") or bool(os.environ.get("PYTEST_CURRENT_TEST"))) and not app.config.get("CSRF_ENABLED", False):
         return None
 
     # Exempt machine-to-machine agent daemon endpoints (only genuinely headless machine daemon endpoints)
@@ -341,7 +368,7 @@ def _csrf_protection():
     if (
         path in machine_daemon_endpoints
         or path.startswith("/api/v1/local-agent/ws")
-        or bool(re.match(r"^/api/v1/local-agent/jobs/[^/]+/(progress|complete|upload|status)$", path))
+        or bool(re.match(r"^/api/v1/local-agent/jobs/[^/]+/(progress|complete|process|upload|status)$", path))
     ):
         return None
 
@@ -527,6 +554,9 @@ def download_academic_manual():
             download_name="ORCA_Web_Lab_Academic_User_Manual.docx",
             mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
+    return error_response("Academic User Manual is currently unavailable.", 404)
+
+
 @app.route("/api/license")
 def api_license():
     """Returns license metadata and permissions summary for Chemistry Lab."""
@@ -534,7 +564,7 @@ def api_license():
         "ok": True,
         "product_name": "Chemistry Lab",
         "application": "chemistry-lab",
-        "version": "1.0.3",
+        "version": "1.0.4",
         "license_name": "ORCA Web Lab Academic and Non-Commercial License v1.1",
         "license_type": "Source-Available Academic & Non-Commercial",
         "copyright": "Copyright (c) 2026 Abdulsalam S. Hasan. All rights reserved.",
@@ -1321,11 +1351,27 @@ def api_kaggle_download():
     and full archive modes, with automatic repair of incomplete archives."""
     owner = _extract_request_identity()
     if request.method == "GET":
+        if any(k in request.args for k in ("kaggle_username", "kaggle_key", "username", "key")):
+            return error_response(
+                "Supplying credentials in query parameters is forbidden for security. "
+                "Use request headers (X-Kaggle-Username, X-Kaggle-Key) or POST body.",
+                400,
+            )
         data = request.args.to_dict()
     else:
-        data = request.get_json(force=True, silent=True) or {}
-    kaggle_username = (data.get("kaggle_username") or "").strip()
-    kaggle_key = (data.get("kaggle_key") or "").strip()
+        data = request.get_json(force=True, silent=True) or request.form.to_dict()
+    kaggle_username = (
+        request.headers.get("X-Kaggle-Username")
+        or data.get("kaggle_username")
+        or data.get("username")
+        or ""
+    ).strip()
+    kaggle_key = (
+        request.headers.get("X-Kaggle-Key")
+        or data.get("kaggle_key")
+        or data.get("key")
+        or ""
+    ).strip()
     kaggle_username, kaggle_key = _resolve_kaggle_credentials(kaggle_username, kaggle_key, owner=owner)
     job_id = (data.get("job_id") or "").strip()
     mode = (data.get("mode") or "essential").strip().lower()
@@ -1474,8 +1520,16 @@ def api_kaggle_delete():
         return error_response("That job id doesn't look like one of this site's jobs.")
 
     try:
+        if ORCHESTRATOR_AVAILABLE:
+            from orca_orchestrator.credentials import parse as parse_credentials
+            from orca_orchestrator.service import get_service
+
+            result = get_service().delete(
+                parse_credentials(kaggle_username, kaggle_key), job_id
+            )
+            return jsonify(result)
         kaggle_runner.delete_job(kaggle_username, kaggle_key, job_id)
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "job_id": job_id, "deleted": True})
     except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
         log.error("kaggle CLI unavailable:\n%s", traceback.format_exc())
         return error_response(str(exc), 503)
@@ -1501,7 +1555,7 @@ def api_orca_engine_status():
     return jsonify({
         "ok": True,
         "available": ORCA_ENGINE_AVAILABLE,
-        "version": "1.0.3" if ORCA_ENGINE_AVAILABLE else None,
+        "version": "1.0.4" if ORCA_ENGINE_AVAILABLE else None,
         "features": [
             "streaming_output_parser",
             "3d_structure_geometry",
@@ -2025,7 +2079,7 @@ def api_orca_engine_export_ai_dataset():
         json_str,
         mimetype="application/json",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": f'attachment; filename="{sanitize_header_filename(filename, "canonical_ai_dataset.json")}"',
             "Cache-Control": "no-cache, no-store, must-revalidate",
         }
     )
@@ -2228,6 +2282,7 @@ ORCA_IMPORT_MAX_FILE_BYTES = 25 * 1024 * 1024
 from services.reaction_workflow_service import (  # noqa: E402
     ReactionStore, ReactionValidationError, add_stage, assemble_species_result,
     complete_stage_with_output, compute_and_store_thermodynamics, create_reaction,
+    dispatch_ready_stages, reconcile_kaggle_stages, retry_stage,
     set_stage_input, set_shared_workflow, apply_shared_workflow_to_species,
     apply_shared_workflow_to_all, set_species_custom_workflow,
 )
@@ -2286,9 +2341,18 @@ def api_v1_reactions():
 
 @app.route("/api/v1/reactions/<reaction_id>", methods=["GET"])
 def api_v1_reaction_detail(reaction_id):
-    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    owner = _reaction_owner()
+    reaction = _reaction_store.get_reaction(owner, reaction_id)
     if reaction is None:
         return _reaction_error("reaction not found", 404)
+    # Pull remote stages on demand so the browser is not the owner of Kaggle
+    # monitoring. This is safe to replay after a restart because each stage has
+    # a persisted Kaggle job id and completion validation is idempotent.
+    if any((st.get("backend") or "").lower() in ("kaggle", "kaggle_cloud")
+           for sp in reaction.get("species", []) for st in sp.get("stages", [])):
+        reconcile_kaggle_stages(
+            reaction, owner_id=owner, state_dir=_RXN_STATE_DIR, store=_reaction_store
+        )
     return jsonify({"ok": True, "reaction": reaction})
 
 
@@ -2546,45 +2610,64 @@ def api_v1_reaction_unified_setup():
 @app.route("/api/v1/reactions/<reaction_id>/start-execution", methods=["POST"])
 def api_v1_reaction_start_execution(reaction_id):
     """Starts/enqueues all ready stages for the reaction across target backend/workers."""
-    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    owner = _reaction_owner()
+    reaction = _reaction_store.get_reaction(owner, reaction_id)
     if reaction is None:
         return _reaction_error("reaction not found", 404)
 
-    payload = request.get_json(silent=True) or {}
-    max_concurrency = int(payload.get("max_concurrency", 1))
+    request.get_json(silent=True) or {}
 
-    reaction["state"] = "RUNNING"
-    dispatched_count = 0
-
+    # Production owner and admin policy check for server-host execution (F-003)
+    has_server_local = False
     for sp in reaction.get("species", []):
         for st in sp.get("stages", []):
-            if st.get("state") in ("READY", "QUEUED"):
-                st_backend = st.get("backend") or "local"
-                target_agent = st.get("target_device")
-                if st_backend in ("local_agent", "hpc") and target_agent:
-                    try:
-                        j_name = f"{sp.get('display_name', 'sp')}_{st.get('kind', 'job')}"
-                        enq = _local_agent_service.enqueue_agent_job(
-                            agent_session_id=target_agent,
-                            owner_id=_reaction_owner(),
-                            input_text=st.get("input_text", ""),
-                            job_name=j_name,
-                        )
-                        st["agent_job_id"] = enq["job_id"]
-                        st["state"] = "RUNNING" if dispatched_count < max_concurrency else "QUEUED"
-                        if st["state"] == "RUNNING":
-                            dispatched_count += 1
-                    except Exception as e:
-                        log.warning("Could not enqueue stage for companion agent: %s", e)
-                elif st_backend == "server_local":
-                    st["state"] = "RUNNING" if dispatched_count < max_concurrency else "QUEUED"
-                    if st["state"] == "RUNNING":
-                        dispatched_count += 1
-                else:
-                    st["state"] = "QUEUED"
+            st_b = (st.get("backend") or "local").lower()
+            if st_b in ("server_local", "local"):
+                has_server_local = True
+                break
+        if has_server_local:
+            break
 
-    _reaction_store.save_reaction(reaction)
-    return jsonify({"ok": True, "reaction": reaction, "dispatched_count": dispatched_count})
+    auth_owner = get_authenticated_owner(session=session, request=request)
+    if has_server_local:
+        if not auth_owner:
+            return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required for server-local ORCA execution."}}), 401
+        if not is_admin_user(auth_owner):
+            return jsonify({
+                "ok": False,
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "Server-host ORCA execution is restricted to trusted administrators. Please configure your ORCA settings within your Local Companion Agent.",
+                }
+            }), 403
+
+    reaction["state"] = "RUNNING"
+    dispatch = dispatch_ready_stages(
+        reaction,
+        owner_id=auth_owner or _reaction_owner(),
+        state_dir=_RXN_STATE_DIR,
+        store=_reaction_store,
+    )
+    return jsonify({
+        "ok": True,
+        "reaction": reaction,
+        "dispatched_count": len(dispatch["dispatched_stage_ids"]),
+        "waiting_stage_ids": dispatch["waiting_stage_ids"],
+    })
+
+
+@app.route("/api/v1/reactions/<reaction_id>/stages/<stage_id>/retry", methods=["POST"])
+def api_v1_reaction_stage_retry(reaction_id, stage_id):
+    """Explicitly retry a failed or cancelled workflow stage, incrementing attempt_no (F-015)."""
+    reaction = _reaction_store.get_reaction(_reaction_owner(), reaction_id)
+    if reaction is None:
+        return _reaction_error("reaction not found", 404)
+    try:
+        updated_stage = retry_stage(reaction, stage_id, store=_reaction_store)
+    except Exception as exc:
+        log.error("Retry stage failed: %s", traceback.format_exc())
+        return _reaction_error(str(exc), 400)
+    return jsonify({"ok": True, "stage": updated_stage, "reaction": reaction})
 
 
 @app.route("/api/v1/reactions/<reaction_id>/thermodynamics/image", methods=["GET"])
@@ -2631,7 +2714,7 @@ def api_v1_reaction_thermo_image(reaction_id):
         )
         response = Response(img_bytes, mimetype="image/png")
         safe_eq = re.sub(r'[^A-Za-z0-9_\-]', '_', reaction.get("display_name") or "reaction")
-        response.headers["Content-Disposition"] = f'inline; filename="thermodynamics_{safe_eq}.png"'
+        response.headers["Content-Disposition"] = f'inline; filename="{sanitize_header_filename(f"thermodynamics_{safe_eq}.png", "thermodynamics.png")}"'
         return response
     except Exception as exc:
         log.error("Failed to generate thermo diagram image: %s", traceback.format_exc())
@@ -2737,15 +2820,270 @@ def api_v1_local_orca_execute():
     input_text = payload.get("input_text") or ""
     if not input_text.strip():
         return _reaction_error("No input_text provided.", 400)
-    res = _local_orca_service.execute_local_orca_job(
-        job_id=job_id,
-        input_text=input_text,
-        attempt_id=payload.get("attempt_id"),
-        stage_kind=payload.get("stage_kind"),
-        settings=None,  # NEVER allow browser to supply executable settings to server
-        timeout_seconds=payload.get("timeout_seconds"),
-    )
-    return jsonify(res), (200 if res.get("ok") else 400)
+    idem_key = request.headers.get("Idempotency-Key") or payload.get("idempotency_key")
+    try:
+        queued = _local_orca_worker.enqueue_local_job(
+            owner_id=owner,
+            job_id=job_id,
+            input_text=input_text,
+            job_name=payload.get("job_name") or "server-local-orca",
+            attempt_id=payload.get("attempt_id"),
+            stage_kind=payload.get("stage_kind"),
+            workflow_id=payload.get("workflow_id"),
+            step_id=payload.get("step_id"),
+            metadata={
+                "timeout_seconds": payload.get("timeout_seconds"),
+                "source": "api_v1_local_orca_execute",
+            },
+            resources=payload.get("resources") if isinstance(payload.get("resources"), dict) else {},
+            idempotency_key=idem_key,
+        )
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": {"code": "INVALID_LOCAL_JOB", "message": str(exc)}}), 400
+    if not queued.get("ok"):
+        return jsonify({"ok": False, "error": {"code": queued.get("error"), "message": queued.get("error")}}), 409
+    job = queued.get("job") or {}
+    return jsonify({"ok": True, "accepted": True, "replayed": queued.get("replayed", False),
+                    "job_id": job.get("job_id"), "status": job.get("status", "QUEUED"),
+                    "job": job}), 202
+
+
+@app.route("/api/v1/local-orca/jobs", methods=["GET"])
+def api_v1_local_orca_jobs():
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required."}}), 401
+    jobs = _local_orca_worker.list_local_jobs(owner_id=owner)
+    return jsonify({"ok": True, "jobs": jobs, "count": len(jobs)})
+
+
+@app.route("/api/v1/jobs", methods=["GET"])
+def api_v1_jobs_list():
+    """Persistent server-local job read model for the Jobs UI.
+
+    Browser storage is only a cache. This endpoint reads the durable local
+    worker ledger and the durable Kaggle orchestrator store. Remote discovery
+    remains a separate reconciliation operation, but already-known Kaggle jobs
+    are visible without browser-local state or a network call.
+    """
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required."}}), 401
+    status_map = {
+        "QUEUED": "queued", "QUEUED_WAITING_RESOURCES": "queued",
+        "STARTING": "running", "RUNNING": "running", "VERIFYING": "running",
+        "CANCEL_REQUESTED": "cancelling", "COMPLETED": "complete",
+        "COMPLETED_WITH_WARNINGS": "complete", "FAILED": "error",
+        "CANCELLED": "cancelled", "RECOVERY_REQUIRED": "unknown",
+    }
+    jobs = []
+    local_jobs = _local_orca_worker.list_local_jobs(owner_id=None if (owner == "local_user" or is_admin_user(owner)) else owner)
+    for local_job in local_jobs:
+        local_state = local_job.get("status")
+        waiting_reason = None
+        if local_state == "QUEUED_WAITING_RESOURCES":
+            waiting_reason = local_job.get("error_message") or "Waiting for enough CPU, memory, or disk resources."
+        elif local_state == "QUEUED":
+            waiting_reason = "Waiting for an available server-local ORCA worker."
+        jobs.append({
+            "jobId": local_job.get("job_id"),
+            "localJobId": local_job.get("job_id"),
+            "name": (local_job.get("metadata") or {}).get("job_name") or "server-local-orca",
+            "backend": "server_local",
+            "status": status_map.get(local_state, "unknown"),
+            "workerStatus": local_state,
+            "workflowId": local_job.get("workflow_id"),
+            "stepId": local_job.get("step_id"),
+            "attemptId": local_job.get("attempt_id"),
+            "revision": local_job.get("revision", 0),
+            "createdAt": local_job.get("created_at"),
+            "updatedAt": local_job.get("updated_at"),
+            "startedAt": local_job.get("started_at"),
+            "finishedAt": local_job.get("finished_at"),
+            "lastHeartbeat": local_job.get("heartbeat_at"),
+            "error": local_job.get("error_message"),
+            "errorCode": local_job.get("error_code"),
+            "waitingReason": waiting_reason,
+            "cancellable": local_state not in {"COMPLETED", "COMPLETED_WITH_WARNINGS", "FAILED", "CANCELLED"},
+            "warning": "Completed with an unknown process return code." if local_job.get("status") == "COMPLETED_WITH_WARNINGS" else None,
+        })
+    agent_status_map = {
+        "QUEUED": "queued", "RUNNING": "running",
+        "CANCEL_REQUESTED": "cancelling", "RECOVERY_REQUIRED": "unknown",
+        "COMPLETED": "complete", "FAILED": "error", "CANCELLED": "cancelled",
+    }
+    for agent_job in _local_agent_service.list_agent_jobs(owner_id=owner):
+        agent_state = str(agent_job.get("status") or "UNKNOWN").upper()
+        jobs.append({
+            "jobId": agent_job.get("job_id"),
+            "agentJobId": agent_job.get("job_id"),
+            "agentSessionId": agent_job.get("agent_session_id"),
+            "name": agent_job.get("job_name") or "local-agent-orca",
+            "backend": "local_agent",
+            "deviceName": agent_job.get("device_name"),
+            "status": agent_status_map.get(agent_state, "unknown"),
+            "workerStatus": agent_state,
+            "workflowId": agent_job.get("workflow_id"),
+            "stepId": agent_job.get("step_id"),
+            "attemptId": agent_job.get("attempt_id"),
+            "createdAt": agent_job.get("created_at"),
+            "startedAt": agent_job.get("started_at"),
+            "finishedAt": agent_job.get("completed_at"),
+            "lastHeartbeat": agent_job.get("process_last_heartbeat") or agent_job.get("agent_last_seen"),
+            "error": agent_job.get("error_message"),
+            "waitingReason": agent_job.get("waiting_reason"),
+            "cancellable": agent_state not in {"COMPLETED", "FAILED", "CANCELLED"},
+        })
+    if ORCHESTRATOR_AVAILABLE:
+        try:
+            from orca_orchestrator.service import get_service
+
+            service = get_service()
+            username, _ = _resolve_kaggle_credentials("", "", owner=owner)
+            # New manifests carry the authenticated application owner.  This
+            # is the durable tenant key for My Jobs and remains usable even if
+            # the encrypted Kaggle credential vault is unavailable.  Legacy
+            # manifests are still visible through their Kaggle username when
+            # that username can be resolved from the owner's vault entry.
+            for stored_manifest in service.store.list_jobs(limit=1000):
+                    manifest = stored_manifest.to_dict()
+                    application_owner = manifest.get("application_owner")
+                    owner_matches = application_owner == owner
+                    legacy_matches = (
+                        not application_owner
+                        and bool(username)
+                        and stored_manifest.owner == str(username).lower()
+                    )
+                    if not (owner_matches or legacy_matches):
+                        continue
+                    job_id = manifest.get("job_id")
+                    if (not job_id
+                            or service.store.is_tombstoned(job_id, stored_manifest.owner)):
+                        continue
+                    raw_state = str(manifest.get("state") or "UNKNOWN").upper()
+                    result_state = str(manifest.get("result_state") or "REMOTE_ONLY").upper()
+                    if raw_state == "FINISHED":
+                        if result_state in {"DOWNLOAD_PENDING", "DOWNLOADING"}:
+                            ui_status = "downloading"
+                        elif result_state in {"DOWNLOADED", "VALIDATING", "PARSED", "ARCHIVING"}:
+                            ui_status = "verifying"
+                        else:
+                            ui_status = "complete"
+                    else:
+                        ui_status = {
+                            "FAILED": "error", "CANCELLED": "cancelled",
+                            "REMOTE_STATUS_UNKNOWN": "unknown",
+                            "CREATED": "queued", "UPLOADING": "submitting",
+                            "SUBMISSION_UNKNOWN": "submitting", "QUEUED": "queued",
+                        }.get(raw_state, "running")
+                    jobs.append({
+                        "jobId": job_id,
+                        "kaggleJobId": job_id,
+                        "name": manifest.get("title") or manifest.get("job_name") or manifest.get("current_slug") or "kaggle-orca",
+                        "backend": "kaggle",
+                        "status": ui_status,
+                        "orchestratorState": raw_state,
+                        "resultState": result_state,
+                        "revision": manifest.get("_version", 0),
+                        "createdAt": manifest.get("created_at"),
+                        "updatedAt": manifest.get("updated_at"),
+                        "lastRemoteStatus": manifest.get("last_seen_remote_state"),
+                        "lastHeartbeat": manifest.get("last_heartbeat_at"),
+                        "retryCount": manifest.get("retry_count", 0),
+                        "error": manifest.get("last_error"),
+                        "diagnostic": manifest.get("last_note"),
+                        "waitingReason": (
+                            "Submission outcome is being reconciled; it will not be submitted twice."
+                            if raw_state == "SUBMISSION_UNKNOWN"
+                            else "Waiting for Kaggle to start the notebook."
+                            if raw_state in {"CREATED", "QUEUED", "SUBMITTED"}
+                            else None
+                        ),
+                        "cancellable": raw_state not in {"FINISHED", "FAILED", "CANCELLED"},
+                    })
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Persistent Kaggle job listing failed for owner=%s: %s", owner, exc)
+    return jsonify({"ok": True, "jobs": jobs, "count": len(jobs)})
+
+
+@app.route("/api/v1/jobs/<job_id>/cancel", methods=["POST"])
+def api_v1_job_cancel(job_id):
+    """Cancel a durable job without trusting a client-supplied backend/owner."""
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required."}}), 401
+
+    local_job = _local_orca_worker.get_local_job(job_id, owner_id=owner)
+    if not local_job and (owner == "local_user" or is_admin_user(owner)):
+        local_job = _local_orca_worker.get_local_job(job_id, owner_id=None)
+    if local_job:
+        target_owner = local_job.get("owner_id") if (owner == "local_user" or is_admin_user(owner)) else owner
+        result = _local_orca_worker.request_cancel_local_job(job_id, owner_id=target_owner)
+        status = result.get("status")
+        return jsonify({"ok": True, "job_id": job_id, "backend": "server_local",
+                        "status": status, "job": result})
+
+    agent_job = _local_agent_service.get_agent_job_status(job_id=job_id, owner_id=owner)
+    if not agent_job.get("ok") and (owner == "local_user" or is_admin_user(owner)):
+        agent_job = _local_agent_service.get_agent_job_status(job_id=job_id, owner_id=None)
+    if agent_job.get("ok"):
+        target_owner = agent_job.get("job", {}).get("owner_id") or owner
+        result = _local_agent_service.request_agent_job_cancel(job_id=job_id, owner_id=target_owner)
+        if not result.get("ok"):
+            code = 409 if result.get("error") == "STATE_CONFLICT" else 404
+            return jsonify({"ok": False, "error": {"code": result.get("error"),
+                                                     "message": result.get("error")}}), code
+        return jsonify({"ok": True, "job_id": job_id, "backend": "local_agent",
+                        "status": result.get("status"), "job": result})
+
+    if ORCHESTRATOR_AVAILABLE:
+        try:
+            from orca_orchestrator.credentials import parse as parse_credentials
+            from orca_orchestrator.service import get_service
+
+            service = get_service()
+            manifest = service.store.get_job(job_id)
+            if manifest:
+                manifest_data = manifest.to_dict()
+                username, key = _resolve_kaggle_credentials("", "", owner=owner)
+                application_owner = manifest_data.get("application_owner")
+                owns_legacy_job = (
+                    not application_owner and bool(username)
+                    and manifest.owner == str(username).lower()
+                )
+                if application_owner != owner and not owns_legacy_job:
+                    # Do not disclose another tenant's job existence.
+                    return jsonify({"ok": False, "error": {"code": "JOB_NOT_FOUND",
+                                                             "message": "Job not found."}}), 404
+                if not username or not key:
+                    return jsonify({"ok": False, "error": {
+                        "code": "KAGGLE_CREDENTIALS_REQUIRED",
+                        "message": "Reconnect Kaggle credentials before cancelling this remote job.",
+                    }}), 409
+                cancelled = service.cancel(parse_credentials(username, key), job_id)
+                cancelled_state = str(cancelled.get("state") or "UNKNOWN").upper()
+                return jsonify({"ok": True, "job_id": job_id, "backend": "kaggle",
+                                "status": cancelled_state, "job": cancelled})
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Durable job cancellation failed owner=%s job=%s: %s", owner, job_id, exc)
+            return jsonify({"ok": False, "error": {
+                "code": "CANCEL_FAILED",
+                "message": "Cancellation could not be confirmed. The job remains active; retry shortly.",
+            }}), 503
+
+    return jsonify({"ok": False, "error": {"code": "JOB_NOT_FOUND", "message": "Job not found."}}), 404
+
+
+@app.route("/api/v1/local-orca/jobs/<job_id>", methods=["GET"])
+def api_v1_local_orca_job(job_id):
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required."}}), 401
+    job = _local_orca_worker.get_local_job(job_id, owner_id=owner)
+    if not job:
+        return jsonify({"ok": False, "error": {"code": "JOB_NOT_FOUND", "message": "Local job not found."}}), 404
+    job["events"] = _local_orca_worker.get_local_job_events(job_id, owner_id=owner, limit=100)
+    return jsonify({"ok": True, "job": job})
 
 
 @app.route("/api/v1/local-orca/cancel", methods=["POST"])
@@ -2756,8 +3094,10 @@ def api_v1_local_orca_cancel():
     payload = request.get_json(silent=True) or {}
     job_id = payload.get("job_id") or ""
     attempt_id = payload.get("attempt_id")
-    cancelled = _local_orca_service.cancel_local_orca_job(job_id, attempt_id)
-    return jsonify({"ok": True, "cancelled": cancelled})
+    result = _local_orca_worker.request_cancel_local_job(job_id, owner_id=owner)
+    if not result.get("ok"):
+        return jsonify({"ok": False, "error": {"code": result.get("error"), "message": result.get("error")}}), 404
+    return jsonify(result)
 
 
 # ------------------------- Unified Calculation Submission & Queue (ExecutionBackend) -------------------------
@@ -2771,6 +3111,9 @@ def api_v1_jobs_submit():
     backend_kind = payload.get("backend") or payload.get("execution_backend") or "local_agent"
     agent_session_id = payload.get("agent_session_id") or payload.get("target_device")
     resources = payload.get("resources") or {}
+    if not isinstance(resources, dict):
+        return jsonify({"ok": False, "error": {"code": "INVALID_RESOURCES",
+                                                   "message": "resources must be an object."}}), 400
     input_text = payload.get("input_content") or payload.get("input_text") or ""
     job_name = payload.get("job_name") or "calculation"
 
@@ -2790,12 +3133,23 @@ def api_v1_jobs_submit():
     # Dispatch according to target backend
     if target["backend"] in (ExecutionBackendType.LOCAL_AGENT.value, ExecutionBackendType.HPC.value):
         injected_input = _local_agent_service.inject_orca_resources(input_text, target["resources"])
+        import hashlib
+        idempotency_key = (request.headers.get("Idempotency-Key")
+                           or payload.get("idempotency_key")
+                           or "local-agent:%s:%s:%s" % (
+                               owner, target["agent_session_id"],
+                               hashlib.sha256((job_name + "\n" + injected_input).encode("utf-8")).hexdigest()))
         enq = _local_agent_service.enqueue_agent_job(
             agent_session_id=target["agent_session_id"],
             owner_id=owner,
             input_text=injected_input,
             job_name=job_name,
+            idempotency_key=idempotency_key,
         )
+        if not enq.get("ok"):
+            status = 409 if enq.get("error") in {"IDEMPOTENCY_KEY_REUSE"} else 400
+            return jsonify({"ok": False, "error": {"code": enq.get("error"),
+                                                       "message": enq.get("error")}}), status
         return jsonify({
             "ok": True,
             "job_id": enq["job_id"],
@@ -2807,13 +3161,64 @@ def api_v1_jobs_submit():
         })
 
     if target["backend"] == ExecutionBackendType.KAGGLE.value:
-        # Route to Kaggle submit logic
-        return api_kaggle_submit()
+        # This endpoint accepts JSON, whereas the historical form endpoint
+        # reads request.form. Calling that view directly silently discarded
+        # JSON credentials/input and produced an apparently successful route
+        # with missing submission data. Use the shared service explicitly.
+        required_passcode = (
+            os.environ.get("KAGGLE_EXECUTION_PASSCODE")
+            or os.environ.get("KAGGLE_ACCESS_CODE")
+            or os.environ.get("KAGGLE_PASSCODE") or ""
+        ).strip()
+        provided_passcode = (payload.get("kaggle_passcode")
+                             or request.headers.get("X-Kaggle-Passcode") or "").strip()
+        if required_passcode and (not provided_passcode
+                                  or not hmac.compare_digest(provided_passcode, required_passcode)):
+            return jsonify({"ok": False, "error": "INVALID_KAGGLE_PASSCODE"}), 403
+
+        kaggle_username = (payload.get("kaggle_username") or payload.get("username") or "").strip()
+        kaggle_key = (payload.get("kaggle_key") or payload.get("key") or "").strip()
+        kaggle_username, kaggle_key = _resolve_kaggle_credentials(
+            kaggle_username, kaggle_key, owner=owner)
+        dataset_sources = payload.get("dataset_sources") or payload.get("dataset_source") or ""
+        if isinstance(dataset_sources, (list, tuple)):
+            dataset_sources = ",".join(str(item) for item in dataset_sources)
+        result, result_status = kaggle_service.submit_job(
+            kaggle_username=kaggle_username,
+            kaggle_key=kaggle_key,
+            dataset_sources_raw=str(dataset_sources),
+            orca_link=(payload.get("orca_link") or "").strip(),
+            input_filename=(payload.get("input_filename") or "molecule.inp").strip(),
+            input_content=input_text,
+            job_name=job_name,
+            idem_key=request.headers.get("Idempotency-Key") or payload.get("idempotency_key"),
+            maxdisk_mb=payload.get("maxdisk_mb"),
+            owner=owner,
+        )
+        return jsonify(result), result_status
 
     if target["backend"] == ExecutionBackendType.SERVER_LOCAL.value:
-        job_id = uuid.uuid4().hex[:12]
-        res = _local_orca_service.execute_local_orca_job(job_id=job_id, input_text=input_text)
-        return jsonify(res), (200 if res.get("ok") else 400)
+        idem_key = request.headers.get("Idempotency-Key") or payload.get("idempotency_key")
+        try:
+            queued = _local_orca_worker.enqueue_local_job(
+                owner_id=owner,
+                input_text=input_text,
+                job_name=job_name,
+                stage_kind=payload.get("stage_kind"),
+                workflow_id=payload.get("workflow_id"),
+                step_id=payload.get("step_id"),
+                metadata={"source": "api_v1_jobs_submit", "timeout_seconds": payload.get("timeout_seconds")},
+                resources=resources,
+                idempotency_key=idem_key,
+            )
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": {"code": "INVALID_LOCAL_JOB", "message": str(exc)}}), 400
+        if not queued.get("ok"):
+            return jsonify({"ok": False, "error": {"code": queued.get("error"), "message": queued.get("error")}}), 409
+        job = queued.get("job") or {}
+        return jsonify({"ok": True, "accepted": True, "replayed": queued.get("replayed", False),
+                        "job_id": job.get("job_id"), "status": job.get("status", "QUEUED"),
+                        "backend": target["backend"], "job": job}), 202
 
     return jsonify({"ok": False, "error": "Unknown execution backend."}), 400
 
@@ -2842,6 +3247,7 @@ def api_v1_local_agent_download_package(package_id):
 @app.route("/api/v1/local-agent/runtime/init", methods=["POST"])
 def api_v1_local_agent_runtime_init():
     req = request.get_json(silent=True) or {}
+    inst_secret = req.get("installation_secret") or request.headers.get("X-Installation-Secret")
     res = _local_agent_service.init_runtime_session(
         installation_id=req.get("installation_id"),
         agent_session_id=req.get("agent_session_id"),
@@ -2853,8 +3259,10 @@ def api_v1_local_agent_runtime_init():
         agent_version=req.get("agent_version"),
         protocol_version=req.get("protocol_version"),
         capabilities=req.get("capabilities"),
+        installation_secret=inst_secret,
     )
-    return jsonify(res), (200 if res.get("ok") else 400)
+    status_code = 403 if res.get("error_code") == "INSTALLATION_AUTH_REQUIRED" else 400
+    return jsonify(res), (200 if res.get("ok") else status_code)
 
 
 @app.route("/api/v1/local-agent/runtime/claim", methods=["POST"])
@@ -2893,8 +3301,8 @@ def api_v1_local_agent_devices():
 
 @app.route("/api/v1/local-agent/jobs/poll", methods=["GET"])
 def api_v1_local_agent_jobs_poll():
-    agent_session_id = request.headers.get("X-Agent-Session-Id") or request.args.get("agent_session_id") or ""
-    runtime_secret = request.headers.get("X-Runtime-Secret") or request.args.get("runtime_secret") or ""
+    agent_session_id = request.headers.get("X-Agent-Session-Id") or ""
+    runtime_secret = request.headers.get("X-Runtime-Secret") or ""
     res = _local_agent_service.poll_next_agent_job(
         agent_session_id=agent_session_id,
         runtime_session_secret=runtime_secret,
@@ -2905,8 +3313,8 @@ def api_v1_local_agent_jobs_poll():
 
 @app.route("/api/v1/local-agent/jobs/<job_id>/progress", methods=["POST"])
 def api_v1_local_agent_jobs_progress(job_id):
-    agent_session_id = request.headers.get("X-Agent-Session-Id") or request.args.get("agent_session_id") or ""
-    runtime_secret = request.headers.get("X-Runtime-Secret") or request.args.get("runtime_secret") or ""
+    agent_session_id = request.headers.get("X-Agent-Session-Id") or ""
+    runtime_secret = request.headers.get("X-Runtime-Secret") or ""
     req = request.get_json(silent=True) or {}
     stdout_chunk = req.get("stdout_chunk") or ""
     res = _local_agent_service.update_agent_job_progress(
@@ -2919,10 +3327,32 @@ def api_v1_local_agent_jobs_progress(job_id):
     return jsonify(res), status_code
 
 
+@app.route("/api/v1/local-agent/jobs/<job_id>/process", methods=["POST"])
+def api_v1_local_agent_job_process(job_id):
+    agent_session_id = request.headers.get("X-Agent-Session-Id") or ""
+    runtime_secret = request.headers.get("X-Runtime-Secret") or ""
+    req = request.get_json(silent=True) or {}
+    try:
+        res = _local_agent_service.register_agent_job_process(
+            job_id=job_id,
+            agent_session_id=agent_session_id,
+            runtime_session_secret=runtime_secret,
+            pid=int(req.get("pid", 0)),
+            process_start_time=float(req.get("process_start_time", 0)),
+            command_fingerprint=str(req.get("command_fingerprint") or ""),
+            workspace=str(req.get("workspace") or ""),
+            recovering=bool(req.get("recovering", False)),
+        )
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "INVALID_PROCESS_IDENTITY"}), 400
+    status_code = 200 if res.get("ok") else (401 if "UNAUTHORIZED" in str(res.get("error", "")) else 409)
+    return jsonify(res), status_code
+
+
 @app.route("/api/v1/local-agent/jobs/<job_id>/complete", methods=["POST"])
 def api_v1_local_agent_jobs_complete(job_id):
-    agent_session_id = request.headers.get("X-Agent-Session-Id") or request.args.get("agent_session_id") or ""
-    runtime_secret = request.headers.get("X-Runtime-Secret") or request.args.get("runtime_secret") or ""
+    agent_session_id = request.headers.get("X-Agent-Session-Id") or ""
+    runtime_secret = request.headers.get("X-Runtime-Secret") or ""
     req = request.get_json(silent=True) or {}
     res = _local_agent_service.complete_agent_job(
         job_id=job_id,
@@ -2937,6 +3367,15 @@ def api_v1_local_agent_jobs_complete(job_id):
     )
     status_code = 200 if res.get("ok") else (401 if "UNAUTHORIZED" in str(res.get("error", "")) else 400)
     return jsonify(res), status_code
+
+
+@app.route("/api/v1/local-agent/jobs/<job_id>/cancel", methods=["POST"])
+def api_v1_local_agent_job_cancel(job_id):
+    owner = get_authenticated_owner(session=session, request=request)
+    if not owner:
+        return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required."}}), 401
+    res = _local_agent_service.request_agent_job_cancel(job_id=job_id, owner_id=owner)
+    return jsonify(res), (200 if res.get("ok") else 404)
 
 
 @app.route("/api/v1/local-agent/jobs/<job_id>", methods=["GET"])
@@ -2980,7 +3419,7 @@ def api_v1_local_agent_job_out(job_id):
     return Response(
         out_text,
         mimetype="text/plain",
-        headers={"Content-Disposition": f'attachment; filename="{j_name}_{job_id[:8]}.out"'}
+        headers={"Content-Disposition": f'attachment; filename="{sanitize_header_filename(f"{j_name}_{job_id[:8]}.out", "calculation.out")}"'}
     )
 
 
@@ -3000,7 +3439,7 @@ def api_v1_local_agent_job_xyz(job_id):
     return Response(
         xyz_text,
         mimetype="chemical/x-xyz",
-        headers={"Content-Disposition": f'attachment; filename="{j_name}_{job_id[:8]}.xyz"'}
+        headers={"Content-Disposition": f'attachment; filename="{sanitize_header_filename(f"{j_name}_{job_id[:8]}.xyz", "structure.xyz")}"'}
     )
 
 
@@ -3763,5 +4202,6 @@ def api_orca_engine_analyze_job():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    # Container entry point must listen on the platform-provided interface.
+    app.run(host="0.0.0.0", port=port, debug=False)  # nosec B104
 

@@ -5,23 +5,27 @@ rdkit==2025.3.6
 # Use the current official Kaggle CLI so both the modern API token (KGAT_...)
 # and legacy username + key credentials are supported. Older 1.7.x releases
 # predate the CLI's access-token authentication support.
-kaggle>=2.2.3
+kaggle==2.2.4
 google-auth==2.32.0
 # Reaction schemes are composited (structures + coefficients + arrow) with PIL.
 # It arrives transitively with rdkit, but this file is the one that pins it.
 pillow==11.3.0
 rarfile==4.5
 # Excel (.xlsx) experimental spectrum parsing in orca_engine
-openpyxl>=3.1.2
+openpyxl==3.1.5
 # Canonical Scientific JSON Schema validation
-jsonschema>=4.20.0
+jsonschema==4.26.0
 # Authenticated AEAD encryption for Kaggle credentials
-cryptography>=41.0.0
+cryptography==48.0.0
 
 
 # FastAPI migration (api/ layer; see FASTAPI_MIGRATION_ARCHITECTURE.md)
-fastapi>=0.141.1
-uvicorn>=0.52.4
-a2wsgi>=1.10.10
-httpx>=0.28.1
-fpdf2>=2.7
+fastapi==0.141.1
+uvicorn==0.52.4
+a2wsgi==1.10.10
+httpx==0.28.1
+fpdf2==2.8.8
+pydantic==2.13.4
+websockets==16.0
+# Durable Local Agent process identity (PID create-time/cmdline verification).
+psutil==7.2.2

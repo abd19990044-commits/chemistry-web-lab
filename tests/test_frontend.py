@@ -169,7 +169,7 @@ def run_checks():
     # ===========================================================================
     section("4. The whole file evaluates without throwing (via Node or Selenium)")
     # ===========================================================================
-    node = shutil.which("node")
+    node = os.environ.get("FRONTEND_TEST_NODE") or shutil.which("node")
     if node:
         stub = r"""
 const seen = new Set(JSON.parse(process.argv[2]));
@@ -257,6 +257,12 @@ global.localStorage = {
   setItem: (k, v) => { store[k] = String(v); },
   removeItem: k => { delete store[k]; },
 };
+const sessionStore = {};
+global.sessionStorage = {
+  getItem: k => (k in sessionStore ? sessionStore[k] : null),
+  setItem: (k, v) => { sessionStore[k] = String(v); },
+  removeItem: k => { delete sessionStore[k]; },
+};
 
 const documentEvents = new EventTargetMock();
 global.document = Object.assign(documentEvents, {
@@ -330,7 +336,8 @@ console.log('EVALUATED-OK');
                   ok, (proc.stderr or proc.stdout).strip()[-800:])
             check("...with no ReferenceError, so every later handler is registered (%s)"
                   % label.split(" (")[0],
-                  ok and "ReferenceError" not in proc.stderr)
+                  ok and "ReferenceError" not in proc.stderr,
+                  (proc.stderr or proc.stdout).strip()[-800:])
     else:
         # Fallback to live Selenium Headless Chrome validation if available
         try:
@@ -405,4 +412,3 @@ def test_suite():
 if __name__ == "__main__":
     _p, _f = run_checks()
     sys.exit(1 if _f else 0)
-

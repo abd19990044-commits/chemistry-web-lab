@@ -16,6 +16,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import urllib.parse
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -286,7 +287,12 @@ class CloudflareHttpClient(CloudflareClientProtocol):
         if payload is not None:
             _assert_no_secrets(payload)
 
-        url = f"{self.config.controller_url.rstrip('/')}/{path.lstrip('/')}"
+        base_url = self.config.controller_url.rstrip("/")
+        parsed_base = urllib.parse.urlsplit(base_url)
+        if (parsed_base.scheme not in {"http", "https"} or not parsed_base.hostname
+                or parsed_base.username or parsed_base.password):
+            raise ValueError("CLOUDFLARE_CONTROLLER_URL must be an HTTP(S) URL without embedded credentials")
+        url = f"{base_url}/{path.lstrip('/')}"
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "orca-web-lab-controller/1.0",
@@ -301,7 +307,9 @@ class CloudflareHttpClient(CloudflareClientProtocol):
 
         for attempt in range(max(1, self.config.max_retries)):
             try:
-                with urllib.request.urlopen(req, timeout=self.config.timeout_seconds) as resp:
+                # URL scheme/authority were validated above; path is appended
+                # beneath that configured operator-controlled endpoint.
+                with urllib.request.urlopen(req, timeout=self.config.timeout_seconds) as resp:  # nosec B310
                     resp_data = resp.read()
                     if not resp_data:
                         return {"ok": True}

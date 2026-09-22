@@ -897,6 +897,11 @@ def set_geom_maxiter(text: str, maxiter: int) -> str:
 def set_maxdisk(text: str, default_mb: int = 20000, force: bool = False):
     """Ensures exactly one valid MaxDisk directive with the configured budget.
 
+    ORCA 6 places MaxDisk inside the `%scf ... end` block. An isolated
+    `%maxdisk` block is not recognized by ORCA and causes an immediate parser
+    abort (`ERROR: Unknown identifier % MAXDISK`). Any legacy or caller-provided
+    `%maxdisk` blocks are cleanly stripped and migrated to `%scf`.
+
     Caller-configured values are PRESERVED: the configured/default budget is
     applied only when no valid directive exists (or the existing one is
     invalid). Duplicate directives collapse to the first valid one - ORCA
@@ -912,71 +917,112 @@ def set_maxdisk(text: str, default_mb: int = 20000, force: bool = False):
     """
     text = text or ""
     default_mb = max(1, int(default_mb))
-    masked = _mask_comments(text)
 
-    # Locate every %maxdisk block (start, end-of-key, start-of-end-token).
-    spans = []
-    for m in re.finditer(r"(?im)^[ \t]*%\s*maxdisk\b", masked):
-        depth, end = 1, None
+    # Strip any legacy %maxdisk blocks while harvesting their directives.
+    legacy_values = []
+    has_invalid_legacy = False
+    while True:
+        masked = _mask_comments(text)
+        m = re.search(r"(?im)^[ \t]*%\s*maxdisk\b", masked)
+        if not m:
+            break
+        depth, end_token = 1, None
         for tm in _NEST_TOKEN_RE.finditer(masked, m.end()):
             if tm.group(1).lower() == "end":
                 depth -= 1
                 if depth == 0:
-                    end = tm.start()
+                    end_token = tm
                     break
             else:
                 depth += 1
-        if end is not None:
-            spans.append((m.start(), m.end(), end))
-
-    if not spans:
-        return (text.rstrip() + "\n%%maxdisk\n  MaxDisk %d\nend\n" % default_mb,
-                default_mb, "inserted")
-
-    # Collapse extra %maxdisk blocks (a duplicated block means a duplicated
-    # budget); keep the first.
-    for (s, _ke, e) in reversed(spans[1:]):
-        line_end = text.find("\n", e)
+        if end_token is None:
+            break
+        mbody = text[m.end():end_token.start()]
+        masked_mbody = _mask_comments(mbody)
+        for d in re.finditer(r"(?i)\bMaxDisk\s+(\S+)", masked_mbody):
+            try:
+                val = int(d.group(1))
+                if val > 0:
+                    legacy_values.append(val)
+                else:
+                    has_invalid_legacy = True
+            except ValueError:
+                has_invalid_legacy = True
+        line_end = text.find("\n", end_token.end())
         line_end = len(text) if line_end == -1 else line_end + 1
-        text = text[:s] + text[line_end:]
+        text = text[:m.start()] + text[line_end:]
 
-    start, key_end, end = spans[0]
-    body = text[key_end:end]
-    own_depth = _mask_nested_blocks(body)
+    # Locate %scf block (if any).
+    scf_span = find_block_span(text, "scf")
 
-    directives = list(re.finditer(r"(?i)\bMaxDisk\s+(\S+)", own_depth))
-    if not directives:
-        body = "\n  MaxDisk %d\n" % default_mb + body.lstrip("\n")
-        return text[:key_end] + body + text[end:], default_mb, "inserted"
+    if scf_span is not None:
+        start, body_start, body_end = scf_span
+        body = text[body_start:body_end]
+        own_depth = _mask_comments(_mask_nested_blocks(body))
+        directives = list(re.finditer(r"(?i)\bMaxDisk\s+(\S+)", own_depth))
 
-    parsed = []
-    for d in directives:
-        try:
-            value = int(d.group(1))
-        except ValueError:
-            value = None
-        if value is not None and value <= 0:
-            value = None
-        parsed.append((d, value))
+        if directives:
+            parsed = []
+            for d in directives:
+                try:
+                    value = int(d.group(1))
+                except ValueError:
+                    value = None
+                if value is not None and value <= 0:
+                    value = None
+                parsed.append((d, value))
 
-    first_d, first_v = parsed[0]
-    if first_v is None:
-        effective, action = default_mb, ("updated" if force else "rejected-invalid")
-    elif force:
-        effective, action = default_mb, "updated"
+            first_d, first_v = parsed[0]
+            if first_v is None:
+                effective, action = default_mb, ("updated" if force else "rejected-invalid")
+            elif force:
+                effective, action = default_mb, "updated"
+            else:
+                effective = first_v
+                action = "collapsed" if len(parsed) > 1 else "preserved"
+
+            pieces, last = [], 0
+            for idx, (d, _v) in enumerate(parsed):
+                pieces.append(body[last:d.start()])
+                pieces.append(("MaxDisk %d" % effective) if idx == 0 else "")
+                last = d.end()
+            pieces.append(body[last:])
+            body = "".join(pieces)
+            return text[:body_start] + body + text[body_end:], effective, action
+        else:
+            # %scf exists, but has no MaxDisk directive
+            if legacy_values:
+                first_legacy = legacy_values[0]
+                if force:
+                    effective, action = default_mb, "updated"
+                else:
+                    effective = first_legacy
+                    action = "collapsed" if len(legacy_values) > 1 else "preserved"
+            elif has_invalid_legacy:
+                effective, action = default_mb, ("updated" if force else "rejected-invalid")
+            else:
+                effective = default_mb
+                action = "inserted"
+
+            body = "\n  MaxDisk %d\n" % effective + body.lstrip("\n")
+            return text[:body_start] + body + text[body_end:], effective, action
     else:
-        effective = first_v
-        action = "collapsed" if len(parsed) > 1 else "preserved"
+        # No %scf block exists
+        if legacy_values:
+            first_legacy = legacy_values[0]
+            if force:
+                effective, action = default_mb, "updated"
+            else:
+                effective = first_legacy
+                action = "collapsed" if len(legacy_values) > 1 else "preserved"
+        elif has_invalid_legacy:
+            effective, action = default_mb, ("updated" if force else "rejected-invalid")
+        else:
+            effective = default_mb
+            action = "inserted"
 
-    pieces, last = [], 0
-    for idx, (d, _v) in enumerate(parsed):
-        pieces.append(body[last:d.start()])
-        pieces.append(("MaxDisk %d" % effective) if idx == 0 else "")
-        last = d.end()
-    pieces.append(body[last:])
-    body = "".join(pieces)
-
-    return text[:key_end] + body + text[end:], effective, action
+        return (text.rstrip() + "\n%%scf\n  MaxDisk %d\nend\n" % effective,
+                effective, action)
 
 
 def requested_nprocs(text: str) -> int:

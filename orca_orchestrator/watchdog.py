@@ -35,9 +35,11 @@ fleet the watchdog can currently reach.
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 from .config import CONFIG
 from .credentials import BROKER, CredentialBroker
@@ -163,17 +165,110 @@ class SweepResult:
 class Watchdog:
     def __init__(self, store: JobStore, reconciler: Reconciler | None = None,
                  broker: CredentialBroker | None = None, vault_manager: Any | None = None,
-                 *, config=CONFIG) -> None:
+                 result_callback: Any | None = None, *, config=CONFIG) -> None:
         self.store = store
         self.reconciler = reconciler or Reconciler(store, config=config)
         self.broker = broker or BROKER
         self.vault_manager = vault_manager
+        self.result_callback = result_callback
         self.config = config
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._last_result: SweepResult | None = None
         self._quiet_sweeps = 0
         self._quiet_since = now()
+
+    def collect_finished_results(self, *, limit: int = 200) -> dict:
+        """Archive finished remote results, retrying delayed availability."""
+        report = {"examined": 0, "archived": 0, "deferred": 0, "skipped_no_credentials": 0}
+        if self.result_callback is None:
+            return report
+        durable_states = {"ARCHIVED", "ARCHIVED_LOCAL", "ARCHIVED_PERSISTENT"}
+        candidates = [
+            job for job in self.store.list_jobs(limit=limit)
+            if job.state is JobState.FINISHED
+            and str(getattr(job, "result_state", "") or "") not in durable_states
+        ]
+        report["examined"] = len(candidates)
+        holder = f"result-collector:{os.getpid()}:{id(self):x}"
+        for job in candidates:
+            creds = self._credentials_for(job.owner)
+            if creds is None:
+                report["skipped_no_credentials"] += 1
+                continue
+            with self.store.lease(f"results:{job.job_id}", holder) as lease:
+                if lease is None:
+                    report["deferred"] += 1
+                    continue
+                try:
+                    archived = self.result_callback(creds, job.job_id)
+                    if archived is None:
+                        report["deferred"] += 1
+                    else:
+                        report["archived"] += 1
+                except Exception as exc:  # noqa: BLE001
+                    # COMPLETE commonly precedes output availability. Keep the
+                    # terminal chemistry result and retry collection later.
+                    report["deferred"] += 1
+                    log.warning("Result collection deferred for %s: %s", job.job_id, exc)
+        if report["examined"]:
+            log_event(log, "result_collection_sweep",
+                      "finished Kaggle result collection pass completed", **report)
+        return report
+
+    def _credentials_for(self, owner: str):
+        creds = self.broker.get(owner)
+        if creds is not None:
+            return creds
+        try:
+            manager = self.vault_manager
+            if manager is None:
+                from .credential_vault import get_vault_manager
+                manager = get_vault_manager()
+            creds = manager.load_credentials(owner)
+            if creds is not None:
+                self.broker.remember(creds)
+            return creds
+        except Exception as exc:  # noqa: BLE001
+            log.debug("Could not load credentials from vault for owner %s: %s", owner, exc)
+            return None
+
+    def reconcile_all_active(self, *, limit: int = 500) -> SweepResult:
+        """Observe every durable non-terminal Kaggle job once after startup.
+
+        This pass is intentionally independent of stall deadlines. A job may
+        have completed while the web service was offline; waiting hours for it
+        to become "stalled" would leave My Jobs stale and defer result
+        collection. Per-job leases make concurrent startup passes harmless.
+        """
+        result = SweepResult()
+        candidates = self.store.list_active_jobs(older_than_seconds=0.0, limit=limit)
+        result.examined = len(candidates)
+        for job in candidates:
+            creds = self._credentials_for(job.owner)
+            if creds is None:
+                result.skipped_no_credentials += 1
+                result.details.append({
+                    "job_id": job.job_id,
+                    "action": "skipped",
+                    "credential_status": "CREDENTIALS_REQUIRED",
+                })
+                continue
+            try:
+                self.reconciler.reconcile(job.job_id, creds, actor="startup")
+                result.recovered += 1
+                result.details.append({"job_id": job.job_id, "action": "reconciled"})
+            except OrchestratorError as exc:
+                result.failed += 1
+                result.details.append({
+                    "job_id": job.job_id,
+                    "action": "failed",
+                    "error": exc.code,
+                })
+                log.warning("Startup reconciliation failed for %s: %s", job.job_id, exc)
+        log_event(log, "startup_remote_reconciliation",
+                  "durable Kaggle jobs were reconciled after startup", **result.to_dict())
+        return result
 
     # -- one pass ----------------------------------------------------------
     def sweep(self, *, limit: int = 200, owner: str | None = None) -> SweepResult:
@@ -192,16 +287,7 @@ class Watchdog:
                     continue
                 result.stalled += 1
 
-                creds = self.broker.get(job.owner)
-                if creds is None:
-                    try:
-                        vm = self.vault_manager
-                        if vm is None:
-                            from .credential_vault import get_vault_manager
-                            vm = get_vault_manager()
-                        creds = vm.load_credentials(job.owner)
-                    except Exception as exc:
-                        log.debug("Could not load credentials from vault for owner %s: %s", job.owner, exc)
+                creds = self._credentials_for(job.owner)
 
                 if creds is None:
                     result.skipped_no_credentials += 1
@@ -341,6 +427,18 @@ class Watchdog:
 
     def _run(self) -> None:
         interval = self.config.watchdog.sweep_interval_seconds
+        try:
+            self.reconcile_all_active()
+            self.collect_finished_results()
+        except Exception as exc:  # noqa: BLE001
+            log_failure(
+                log,
+                what="startup Kaggle reconciliation",
+                why=f"unexpected error: {exc}",
+                recovery="no job was failed; the periodic watchdog will retry",
+                next_action=f"sweeping again in {interval}s",
+                exc=exc,
+            )
         # Stagger the first sweep. With two gunicorn workers both starting at
         # deploy time, an unstaggered sweep means both hit the same jobs in the
         # same second; the lease makes that correct but it is wasted work.
@@ -348,6 +446,7 @@ class Watchdog:
         while not self._stop.is_set():
             try:
                 self.sweep()
+                self.collect_finished_results()
             except Exception as exc:  # noqa: BLE001 - the sweeper must never die
                 log_failure(
                     log,
@@ -397,7 +496,7 @@ def recover_after_restart(store: JobStore) -> dict:
             "DELETE FROM leases WHERE expires_at <= ?", (ts,)
         ).rowcount
         stale_claims = conn.execute(
-            "DELETE FROM idempotency WHERE status = 'in_progress' AND created_at < ?",
+            "DELETE FROM idempotency WHERE status IN ('done', 'failed') AND created_at < ?",
             (ts - 900,),
         ).rowcount
 

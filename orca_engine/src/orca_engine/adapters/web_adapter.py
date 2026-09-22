@@ -55,8 +55,16 @@ def generate_xyz_string(job: JobData, comment: str = "") -> str:
         return ""
 
     lines = [str(len(job.elements)), comment or f"ORCA calculation - {len(job.elements)} atoms"]
-    for element, (x, y, z) in zip(job.elements, job.coords, strict=False):
-        lines.append(f"{element:<3} {x:18.12f} {y:18.12f} {z:18.12f}")
+    raw_coords = getattr(job, "coords_raw", None)
+    if raw_coords and len(raw_coords) == len(job.elements):
+        for element, (rx, ry, rz) in zip(job.elements, raw_coords, strict=False):
+            lines.append(f"{element:<3} {rx} {ry} {rz}")
+    else:
+        for element, (x, y, z) in zip(job.elements, job.coords, strict=False):
+            sx = f"{x:.14f}".rstrip("0").rstrip(".") or "0.0"
+            sy = f"{y:.14f}".rstrip("0").rstrip(".") or "0.0"
+            sz = f"{z:.14f}".rstrip("0").rstrip(".") or "0.0"
+            lines.append(f"{element:<3} {sx} {sy} {sz}")
     return "\n".join(lines)
 
 
@@ -237,6 +245,7 @@ def job_to_web_json(
         "xyz": xyz_str,
         "elements": job.elements,
         "coords": job.coords,
+        "coords_raw": getattr(job, "coords_raw", []),
         "hirshfeld_charges": job.hirshfeld_charges,
         "mulliken_charges": job.mulliken_charges,
         "mayer_charges": job.mayer_charges,

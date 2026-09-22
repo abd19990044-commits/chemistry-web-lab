@@ -44,6 +44,8 @@ import time
 from contextlib import contextmanager
 from typing import Any, Iterator
 
+from services.sqlite_migrations import backup_before_schema_upgrade
+
 from .config import CONFIG, StoreConfig
 from .errors import ConcurrencyError, LeaseLostError, NotFoundError
 from .hashing import content_id, stable_json
@@ -134,6 +136,15 @@ CREATE TABLE IF NOT EXISTS idempotency (
     completed_at  REAL
 );
 CREATE INDEX IF NOT EXISTS idx_idem_created ON idempotency(created_at);
+
+CREATE TABLE IF NOT EXISTS job_tombstones (
+    job_id       TEXT PRIMARY KEY,
+    owner        TEXT NOT NULL,
+    deleted_at   REAL NOT NULL,
+    detail_json  TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_job_tombstones_owner
+    ON job_tombstones(owner, deleted_at);
 """
 
 
@@ -245,6 +256,29 @@ class JobStore:
                 return
             os.makedirs(self.config.state_dir, exist_ok=True)
 
+            backup_path = backup_before_schema_upgrade(
+                self.config.db_path,
+                component="kaggle-orchestrator",
+                target_version=int(CONFIG.manifest_version),
+                required_schema={
+                    "schema_meta": ("key", "value"),
+                    "jobs": ("job_id", "manifest_json"),
+                    "events": ("job_id", "seq"),
+                    "checkpoints": ("job_id", "epoch"),
+                    "leases": ("job_id", "owner", "fence"),
+                    "fence_counter": ("job_id", "last_fence"),
+                    "idempotency": ("key", "request_hash", "job_id"),
+                    "job_tombstones": ("job_id", "deleted_at", "detail_json"),
+                },
+            )
+            if backup_path:
+                log_event(
+                    log,
+                    "sqlite_pre_migration_backup",
+                    "created verified SQLite backup before orchestrator schema migration",
+                    backup_path=backup_path,
+                )
+
             last: Exception | None = None
             for attempt in range(1, 7):
                 try:
@@ -337,8 +371,6 @@ class JobStore:
         silently overwriting each other's state transitions.
         """
         manifest.touch()
-        if fence is not None:
-            self._assert_fence(f"job:{manifest.job_id}", fence)
 
         payload = manifest.to_dict()
         payload.pop("_version", None)
@@ -346,6 +378,23 @@ class JobStore:
         manifest_hash = content_id(payload)
 
         with self.transaction() as conn:
+            tombstone = conn.execute(
+                "SELECT owner FROM job_tombstones WHERE job_id = ?", (manifest.job_id,)
+            ).fetchone()
+            if tombstone is not None:
+                raise ConcurrencyError(
+                    "a deleted Kaggle job cannot be recreated by reconciliation",
+                    job_id=manifest.job_id,
+                    owner=tombstone["owner"],
+                )
+            # The fence check must share the write transaction.  Checking it
+            # on the connection before BEGIN IMMEDIATE leaves a window in
+            # which an old worker can pass the check, another worker can take
+            # over the lease, and the old worker can then clobber the newer
+            # state.  Keeping both operations in one SQLite transaction makes
+            # the optimistic version and lease fence a single decision point.
+            if fence is not None:
+                self._assert_fence(f"job:{manifest.job_id}", fence, conn=conn)
             existing = conn.execute(
                 "SELECT version FROM jobs WHERE job_id = ?", (manifest.job_id,)
             ).fetchone()
@@ -419,6 +468,74 @@ class JobStore:
     def delete_job(self, job_id: str) -> None:
         with self.transaction() as conn:
             conn.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,))
+
+    def tombstone_job(self, job_id: str, owner: str, *, detail: Any = None) -> None:
+        """Persist deletion intent before the remote delete side effect.
+
+        The tombstone is intentionally independent of the jobs row.  Kaggle
+        and the optional Cloudflare read model are eventually consistent and
+        may report a deleted notebook during a later sync; ``put_job`` rejects
+        that resurrection until an explicit administrative restore is added.
+        """
+        with self.transaction() as conn:
+            job_row = conn.execute(
+                "SELECT manifest_json, version FROM jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+            event_rows = conn.execute(
+                "SELECT event_id, epoch, at, trigger, from_state, to_state, actor, "
+                "correlation_id, detail_json FROM events WHERE job_id = ? ORDER BY at, event_id",
+                (job_id,),
+            ).fetchall()
+            forensic_detail = dict(detail) if isinstance(detail, dict) else {"detail": detail}
+            if job_row is not None:
+                forensic_detail["deleted_manifest"] = json.loads(job_row["manifest_json"])
+                forensic_detail["deleted_version"] = int(job_row["version"])
+            if event_rows:
+                forensic_detail["deleted_events"] = [
+                    {
+                        "event_id": row["event_id"], "epoch": row["epoch"], "at": row["at"],
+                        "trigger": row["trigger"], "from_state": row["from_state"],
+                        "to_state": row["to_state"], "actor": row["actor"],
+                        "correlation_id": row["correlation_id"],
+                        "detail": json.loads(row["detail_json"] or "{}"),
+                    }
+                    for row in event_rows
+                ]
+            conn.execute(
+                "INSERT INTO job_tombstones(job_id, owner, deleted_at, detail_json) "
+                "VALUES(?, ?, ?, ?) ON CONFLICT(job_id) DO UPDATE SET "
+                "owner=excluded.owner, deleted_at=excluded.deleted_at, "
+                "detail_json=excluded.detail_json",
+                (job_id, (owner or "").lower(), now(), stable_json(forensic_detail)),
+            )
+            conn.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,))
+
+    def get_tombstone(self, job_id: str, owner: str | None = None) -> dict | None:
+        sql = "SELECT job_id, owner, deleted_at, detail_json FROM job_tombstones WHERE job_id = ?"
+        params: tuple[Any, ...] = (job_id,)
+        if owner is not None:
+            sql += " AND owner = ?"
+            params = (job_id, owner.lower())
+        row = self.conn.execute(sql, params).fetchone()
+        if row is None:
+            return None
+        return {
+            "job_id": row["job_id"], "owner": row["owner"],
+            "deleted_at": row["deleted_at"],
+            "detail": json.loads(row["detail_json"] or "{}"),
+        }
+
+    def is_tombstoned(self, job_id: str, owner: str | None = None) -> bool:
+        if owner is None:
+            row = self.conn.execute(
+                "SELECT 1 FROM job_tombstones WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        else:
+            row = self.conn.execute(
+                "SELECT 1 FROM job_tombstones WHERE job_id = ? AND owner = ?",
+                (job_id, owner.lower()),
+            ).fetchone()
+        return row is not None
 
     # -- events -----------------------------------------------------------
     def append_event(self, event: Event) -> None:
@@ -569,16 +686,18 @@ class JobStore:
             conn.execute("DELETE FROM leases WHERE resource = ? AND fence = ?",
                          (lease.resource, lease.fence))
 
-    def _assert_fence(self, resource: str, fence: int) -> None:
-        row = self.conn.execute(
+    def _assert_fence(self, resource: str, fence: int, *, conn=None) -> None:
+        conn = conn or self.conn
+        row = conn.execute(
             "SELECT fence, expires_at FROM leases WHERE resource = ?", (resource,)
         ).fetchone()
-        if row is None:
-            return
-        if int(row["fence"]) > int(fence):
+        if (row is None or int(row["fence"]) != int(fence)
+                or float(row["expires_at"]) <= now()):
             raise LeaseLostError(
-                "a newer lease holder has taken over this resource; the write is rejected",
-                resource=resource, our_fence=fence, current_fence=int(row["fence"]),
+                "the lease is missing, expired, or owned by another fence; the write is rejected",
+                resource=resource,
+                our_fence=fence,
+                current_fence=int(row["fence"]) if row is not None else None,
             )
 
     @contextmanager
@@ -615,7 +734,7 @@ class JobStore:
         ts = now()
         with self.transaction() as conn:
             conn.execute(
-                "DELETE FROM idempotency WHERE created_at < ?",
+                "DELETE FROM idempotency WHERE status IN ('done', 'failed') AND created_at < ?",
                 (ts - self.config.idempotency_ttl_seconds,),
             )
             row = conn.execute(
@@ -658,16 +777,13 @@ class JobStore:
         self.conn.execute("VACUUM")
 
     def stats(self) -> dict:
-        def _count(table: str) -> int:
-            return int(self.conn.execute(f"SELECT COUNT(*) c FROM {table}").fetchone()["c"])
-
         return {
             "db_path": self.config.db_path,
-            "jobs": _count("jobs"),
+            "jobs": int(self.conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]),
             "active_jobs": int(self.conn.execute(
                 "SELECT COUNT(*) c FROM jobs WHERE is_terminal = 0").fetchone()["c"]),
-            "events": _count("events"),
-            "checkpoints": _count("checkpoints"),
+            "events": int(self.conn.execute("SELECT COUNT(*) c FROM events").fetchone()["c"]),
+            "checkpoints": int(self.conn.execute("SELECT COUNT(*) c FROM checkpoints").fetchone()["c"]),
             "live_leases": int(self.conn.execute(
                 "SELECT COUNT(*) c FROM leases WHERE expires_at > ?", (now(),)).fetchone()["c"]),
         }
@@ -698,4 +814,3 @@ def reset_store() -> None:
             except Exception:
                 pass
             _default_store = None
-

@@ -100,6 +100,18 @@ class TimeoutError_(TransientError):  # noqa: N801 - avoid shadowing builtins
     code = "timeout"
 
 
+class SubmissionUnknownError(TransientError):
+    """A remote submit may have landed, but its outcome cannot be observed.
+
+    Retrying this operation is unsafe until an exact-slug probe proves that
+    Kaggle did not accept the previous request.  It is deliberately distinct
+    from an ordinary network timeout so retry loops cannot treat it as a safe
+    transport replay.
+    """
+
+    code = "submission_unknown"
+
+
 # --------------------------------------------------------------------------
 # Permanent: replaying the identical operation cannot change the outcome.
 # --------------------------------------------------------------------------

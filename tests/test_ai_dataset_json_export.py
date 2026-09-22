@@ -68,7 +68,7 @@ class TestAiDatasetJsonStructure:
 
         # 2. Canonical identity & metadata
         assert record["schema_version"] == SCHEMA_VERSION
-        assert record["hash_version"] == DATASED_VERSION if "hash_version" in record else record["schema_version"] == SCHEMA_VERSION
+        assert record["hash_version"] == DATASET_VERSION if "hash_version" in record else record["schema_version"] == SCHEMA_VERSION
         assert record["dataset_version"] == DATASET_VERSION
         assert record["record_type"] == "analysis_record"
         assert len(record["hash_value"] if "hash_value" in record else record["content_hash"]) == 64

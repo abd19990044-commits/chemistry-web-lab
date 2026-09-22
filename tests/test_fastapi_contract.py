@@ -226,7 +226,7 @@ def test_artifact_listing_classifies_molden(api, tmp_path, monkeypatch):
     monkeypatch.setattr(kr_mod, "fetch_job_results",
                         lambda u, k, j: (zip_path, cleanup))
     r = api.get("/api/v1/kaggle/jobs/chem-tools-x-1a2b3c4d/artifacts",
-                params={"kaggle_username": "tester", "kaggle_key": "0" * 32})
+                headers={"X-Kaggle-Username": "tester", "X-Kaggle-Key": "0" * 32})
     assert r.status_code == 200
     listing = r.json()
     by_name = {a["filename"]: a for a in listing["artifacts"]}
@@ -242,12 +242,30 @@ def test_artifact_download_rejects_path_traversal(api, tmp_path, monkeypatch):
                         lambda u, k, j: (zip_path, cleanup))
     for evil in ("..%2Fsecret", "..\\secret", "%2Fetc%2Fpasswd", "C:%5Csecret", ".."):
         r = api.get("/api/v1/kaggle/jobs/chem-tools-x-1a2b3c4d/artifacts/" + evil,
-                    params={"kaggle_username": "tester", "kaggle_key": "0" * 32})
+                    headers={"X-Kaggle-Username": "tester", "X-Kaggle-Key": "0" * 32})
         assert r.status_code in (400, 404), evil
     r_ok = api.get("/api/v1/kaggle/jobs/chem-tools-x-1a2b3c4d/artifacts/h2o.molden.input",
-                   params={"kaggle_username": "tester", "kaggle_key": "0" * 32})
+                   headers={"X-Kaggle-Username": "tester", "X-Kaggle-Key": "0" * 32})
     assert r_ok.status_code == 200
     assert "[Molden Format]" in r_ok.text
+
+
+def test_artifact_credentials_are_headers_not_query_parameters(api):
+    url = "/api/v1/kaggle/jobs/chem-tools-x-1a2b3c4d/artifacts"
+    response = api.get(
+        url,
+        params={"kaggle_username": "tester", "kaggle_key": "0" * 32},
+    )
+    assert response.status_code == 422
+    operation = api.get("/api/v1/openapi.json").json()["paths"][
+        "/api/v1/kaggle/jobs/{job_id}/artifacts"
+    ]["get"]
+    parameters = operation["parameters"]
+    assert {item["name"] for item in parameters if item["in"] == "query"} == set()
+    assert {item["name"] for item in parameters if item["in"] == "header"} >= {
+        "X-Kaggle-Username",
+        "X-Kaggle-Key",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -323,11 +341,43 @@ def test_fetch_archive_maps_owner_denial_to_403(tmp_path, monkeypatch):
     assert status == 403 and payload["error"]["code"] == "FORBIDDEN"
 
 
+def test_tracked_archive_failure_never_falls_back_to_legacy(monkeypatch):
+    import services.kaggle_service as ks
+    import orca_orchestrator.service as service_module
+
+    legacy_calls = []
+
+    class _TrackedStore:
+        @staticmethod
+        def get_job(job_id):
+            return object()
+
+    class _TrackedService:
+        store = _TrackedStore()
+
+        @staticmethod
+        def fetch_results(creds, job_id):
+            raise RuntimeError("temporary modern fetch failure")
+
+    monkeypatch.setattr(service_module, "get_service", lambda: _TrackedService())
+    monkeypatch.setattr(
+        ks.kaggle_runner,
+        "fetch_job_results",
+        lambda *args: legacy_calls.append(args) or (None, None),
+    )
+    _zip, _cleanup, payload, status = ks.fetch_archive(
+        "alice", "1" * 32, "chem-tools-tracked-1a2b3c4d"
+    )
+    assert status == 502
+    assert payload["ok"] is False
+    assert legacy_calls == []
+
+
 # ---------------------------------------------------------------------------
 # Wave-2 download hardening
 # ---------------------------------------------------------------------------
 def test_download_duplicate_zip_members_and_malicious_names(api, tmp_path, monkeypatch):
-    import kaggle_runner as kr_mod
+    import services.kaggle_service as ks
     d = tmp_path / "dup_stage"
     d.mkdir(parents=True, exist_ok=True)
     zip_path = d / "results.zip"
@@ -335,32 +385,57 @@ def test_download_duplicate_zip_members_and_malicious_names(api, tmp_path, monke
         zf.writestr("h2o.molden.input", "[Molden Format] version A")
         zf.writestr("sub/h2o.molden.input", "[Molden Format] version B")
         zf.writestr("../evil.txt", "should never be reachable by path")
-    monkeypatch.setattr(kr_mod, "fetch_job_results", lambda u, k, j: (str(zip_path), str(d)))
+    monkeypatch.setattr(
+        ks, "fetch_archive",
+        lambda *args, **kwargs: (str(zip_path), str(d), {"ok": True}, 200),
+    )
 
     r = api.get("/api/v1/kaggle/jobs/chem-tools-x-1a2b3c4d/artifacts",
-                params={"kaggle_username": "tester", "kaggle_key": "0" * 32})
-    assert r.status_code == 200
-    names = [a["filename"] for a in r.json()["artifacts"]]
-    assert "h2o.molden.input" in names and "evil.txt" in names
-    # every listed name is a bare basename - the directory component of the
-    # malicious member is stripped, so it can never resolve outside
-    for n in names:
-        assert "/" not in n and "\\" not in n and ".." not in n
+                headers={"X-Kaggle-Username": "tester", "X-Kaggle-Key": "0" * 32})
+    assert r.status_code == 502
+    assert r.json()["error"]["code"] == "ARCHIVE_UNREADABLE"
+    assert not d.exists(), "unsafe staging archives must still be cleaned up"
+
+
+def test_download_rejects_ambiguous_duplicate_basename(api, tmp_path, monkeypatch):
+    import services.kaggle_service as ks
+
+    d = tmp_path / "ambiguous_stage"
+    d.mkdir(parents=True, exist_ok=True)
+    zip_path = d / "results.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("a/result.out", "first")
+        zf.writestr("b/result.out", "second")
+    monkeypatch.setattr(
+        ks, "fetch_archive",
+        lambda *args, **kwargs: (str(zip_path), str(d), {"ok": True}, 200),
+    )
+
+    response = api.get(
+        "/api/v1/kaggle/jobs/chem-tools-x-1a2b3c4d/artifacts/result.out",
+        headers={"X-Kaggle-Username": "tester", "X-Kaggle-Key": "0" * 32},
+    )
+    assert response.status_code == 409
+    assert not d.exists()
 
 
 def test_download_large_artifact_integrity(api, tmp_path, monkeypatch):
-    import kaggle_runner as kr_mod
+    import services.kaggle_service as ks
     d = tmp_path / "big_stage"
     d.mkdir(parents=True, exist_ok=True)
     zip_path = d / "results.zip"
     big = b"x" * (5 * 1024 * 1024)
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("trajectory_big.xyz", big)
-    monkeypatch.setattr(kr_mod, "fetch_job_results", lambda u, k, j: (str(zip_path), str(d)))
+    monkeypatch.setattr(
+        ks, "fetch_archive",
+        lambda *args, **kwargs: (str(zip_path), str(d), {"ok": True}, 200),
+    )
 
     r = api.get("/api/v1/kaggle/jobs/chem-tools-x-1a2b3c4d/artifacts/trajectory_big.xyz",
-                params={"kaggle_username": "tester", "kaggle_key": "0" * 32})
+                headers={"X-Kaggle-Username": "tester", "X-Kaggle-Key": "0" * 32})
     assert r.status_code == 200
+    assert r.headers["content-length"] == str(len(big))
     assert len(r.content) == 5 * 1024 * 1024
     assert hashlib.sha256(r.content).hexdigest() == hashlib.sha256(big).hexdigest()
 
@@ -373,7 +448,7 @@ def test_cleanup_after_success_and_error(api, tmp_path, monkeypatch):
         zf.writestr("h2o.molden.input", "[Molden Format]\\n")
     monkeypatch.setattr(kr_mod, "fetch_job_results", lambda u, k, j: (str(ok_dir / "results.zip"), str(ok_dir)))
     r = api.get("/api/v1/kaggle/jobs/chem-tools-x-1a2b3c4d/artifacts/h2o.molden.input",
-                params={"kaggle_username": "tester", "kaggle_key": "0" * 32})
+                headers={"X-Kaggle-Username": "tester", "X-Kaggle-Key": "0" * 32})
     assert r.status_code == 200
     assert not ok_dir.exists(), "cleanup must remove the staging dir after success"
 
@@ -382,7 +457,7 @@ def test_cleanup_after_success_and_error(api, tmp_path, monkeypatch):
     (bad_dir / "results.zip").write_bytes(b"not a zip at all")
     monkeypatch.setattr(kr_mod, "fetch_job_results", lambda u, k, j: (str(bad_dir / "results.zip"), str(bad_dir)))
     r2 = api.get("/api/v1/kaggle/jobs/chem-tools-x-1a2b3c4d/artifacts/h2o.molden.input",
-                 params={"kaggle_username": "tester", "kaggle_key": "0" * 32})
+                 headers={"X-Kaggle-Username": "tester", "X-Kaggle-Key": "0" * 32})
     assert r2.status_code == 502
     assert not bad_dir.exists(), "cleanup must remove the staging dir after error"
 
@@ -430,10 +505,12 @@ def test_error_contract_502_corrupt_archive(api, tmp_path, monkeypatch):
     (d / "results.zip").write_bytes(b"this is not a zip file")
     monkeypatch.setattr(kr_mod, "fetch_job_results", lambda u, k, j: (str(d / "results.zip"), str(d)))
     r = api.get("/api/v1/kaggle/jobs/chem-tools-x-1a2b3c4d/artifacts",
-                params={"kaggle_username": "tester", "kaggle_key": "0" * 32})
+                headers={"X-Kaggle-Username": "tester", "X-Kaggle-Key": "0" * 32})
     assert r.status_code == 502
     body = r.json()
-    assert body["ok"] is False and body["error"]["code"] == "BAD_GATEWAY"
+    # Preserve the service's actionable domain code while retaining the HTTP
+    # gateway classification in the status code.
+    assert body["ok"] is False and body["error"]["code"] == "ARCHIVE_UNREADABLE"
 
 
 def test_error_contract_404_unknown_job(api, tmp_path, monkeypatch):
@@ -450,6 +527,6 @@ def test_error_contract_404_unknown_job(api, tmp_path, monkeypatch):
     d.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(kr_mod, "fetch_job_results", lambda u, k, j: (None, None))
     r = api.get("/api/v1/kaggle/jobs/chem-tools-x-1a2b3c4d/artifacts",
-                params={"kaggle_username": "tester", "kaggle_key": "0" * 32})
+                headers={"X-Kaggle-Username": "tester", "X-Kaggle-Key": "0" * 32})
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "NOT_FOUND"

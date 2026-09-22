@@ -9,10 +9,11 @@ caller's key.
 import os
 import zipfile
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 
 from api.schemas import ExtractOptCoordsRequest, JobStatusRequest, JobSubmitRequest
 from services import artifact_service, kaggle_service
+from services.auth_service import get_authenticated_owner
 
 router = APIRouter(prefix="/kaggle", tags=["kaggle"])
 
@@ -73,7 +74,7 @@ def verify_kaggle_passcode(req: dict | None = None,
 
 
 @router.post("/jobs")
-def submit_job(req: JobSubmitRequest,
+def submit_job(req: JobSubmitRequest, request: Request,
                idempotency_key: str | None = Header(default=None),
                x_kaggle_passcode: str | None = Header(default=None)):
     """Submits a Kaggle calculation. Authoritative idempotency lives in the
@@ -103,6 +104,7 @@ def submit_job(req: JobSubmitRequest,
         job_name=req.job_name,
         maxdisk_mb=req.maxdisk_mb,
         idem_key=idempotency_key,
+        owner=get_authenticated_owner(request=request),
     )
     return _payload_or_http(payload, status)
 
@@ -125,7 +127,11 @@ def extract_opt_coords(job_id: str, req: ExtractOptCoordsRequest):
 
 
 @router.get("/jobs/{job_id}/artifacts")
-def list_artifacts(job_id: str, kaggle_username: str, kaggle_key: str):
+def list_artifacts(
+    job_id: str,
+    kaggle_username: str = Header(..., alias="X-Kaggle-Username"),
+    kaggle_key: str = Header(..., alias="X-Kaggle-Key"),
+):
     """Artifact manifest: filename, artifact_type, size, sha256 - never
     filesystem paths. Molden appears as artifact_type=molden with filename
     <base>.molden.input."""
@@ -147,8 +153,12 @@ def list_artifacts(job_id: str, kaggle_username: str, kaggle_key: str):
 
 
 @router.get("/jobs/{job_id}/artifacts/{artifact_name}")
-def download_artifact(job_id: str, artifact_name: str, kaggle_username: str,
-                      kaggle_key: str):
+def download_artifact(
+    job_id: str,
+    artifact_name: str,
+    kaggle_username: str = Header(..., alias="X-Kaggle-Username"),
+    kaggle_key: str = Header(..., alias="X-Kaggle-Key"),
+):
     """Streams ONE artifact from the job's results archive.
 
     Path-traversal safety: the requested name is reduced to its basename and
@@ -156,8 +166,6 @@ def download_artifact(job_id: str, artifact_name: str, kaggle_username: str,
     never concatenated onto a filesystem path, so nothing outside the archive
     can be read and archive members cannot escape it.
     """
-    import re as _re
-
     # Basename-safe resolution: reject any separator/parent-navigation up front.
     if (not artifact_name
             or "/" in artifact_name or "\\" in artifact_name
@@ -173,27 +181,13 @@ def download_artifact(job_id: str, artifact_name: str, kaggle_username: str,
     if status != 200:
         raise HTTPException(status_code=status, detail=payload.get("error", "archive unavailable"))
 
-    try:
-        with zipfile.ZipFile(zip_path) as zf:
-            match = None
-            for info in zf.infolist():
-                if info.is_dir():
-                    continue
-                member_base = os.path.basename(info.filename)
-                if member_base == safe_name:
-                    match = info
-                    break
-            if match is None:
-                raise HTTPException(status_code=404, detail="artifact not found in this job's archive")
-            data = zf.read(match)
-    except HTTPException:
-        raise
-    except (OSError, zipfile.BadZipFile) as exc:
-        raise HTTPException(status_code=502, detail="archive unreadable: %s" % exc)
-    finally:
+    resolved, resolved_status, resolved_error = artifact_service.resolve_artifact(
+        zip_path, safe_name)
+    if resolved_status != 200:
         import shutil
         if cleanup_dir:
             shutil.rmtree(cleanup_dir, ignore_errors=True)
+        raise HTTPException(status_code=resolved_status, detail=resolved_error)
 
     low = safe_name.lower()
     if low.endswith((".molden.input", ".molden", ".out", ".log", ".txt", ".inp")):
@@ -205,6 +199,25 @@ def download_artifact(job_id: str, artifact_name: str, kaggle_username: str,
     else:
         media = "application/octet-stream"
 
-    from fastapi.responses import Response
-    return Response(content=data, media_type=media,
-                    headers={"Content-Disposition": 'attachment; filename="%s"' % safe_name})
+    def stream_member():
+        import shutil
+        try:
+            with zipfile.ZipFile(zip_path) as archive:
+                with archive.open(resolved["member_name"], "r") as member:
+                    while True:
+                        chunk = member.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+        finally:
+            if cleanup_dir:
+                shutil.rmtree(cleanup_dir, ignore_errors=True)
+
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        stream_member(), media_type=media,
+        headers={
+            "Content-Disposition": 'attachment; filename="%s"' % safe_name,
+            "Content-Length": str(resolved["size"]),
+        },
+    )

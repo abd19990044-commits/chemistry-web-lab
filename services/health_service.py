@@ -21,6 +21,17 @@ def build_health(*, orchestrator_available: bool, orca_engine_available: bool) -
                "kaggle_cli_ok": cli["ok"],
                "orchestrator": orchestrator_available,
                "orca_engine": orca_engine_available}
+    worker_required = os.environ.get("CHEMISTRY_LAB_REQUIRE_LOCAL_WORKER", "0").lower() in ("1", "true", "yes", "on")
+    payload["local_worker_required"] = worker_required
+    if worker_required:
+        try:
+            from services.local_orca_worker import worker_health
+            worker = worker_health()
+            payload["local_worker"] = worker
+            payload["local_worker_ok"] = bool(worker.get("ok"))
+        except Exception as exc:  # noqa: BLE001
+            payload["local_worker"] = {"ok": False, "error": type(exc).__name__}
+            payload["local_worker_ok"] = False
     if not cli["ok"]:
         payload["error"] = (
             "the kaggle command-line tool is not usable (%s), so no job can be submitted, "
@@ -57,12 +68,14 @@ def build_ready(*, orchestrator_available: bool, orca_engine_available: bool) ->
     """
     health = build_health(orchestrator_available=orchestrator_available,
                           orca_engine_available=orca_engine_available)
-    ready = bool(health.get("storage_writable")) and orchestrator_available
+    worker_ok = (not health.get("local_worker_required")) or bool(health.get("local_worker_ok"))
+    ready = bool(health.get("storage_writable")) and orchestrator_available and worker_ok
     return {"ok": ready, "ready": ready,
             "checks": {
                 "storage": bool(health.get("storage_writable")),
                 "orchestrator": bool(health.get("orchestrator")),
                 "orca_engine": bool(health.get("orca_engine")),
                 "kaggle_cli": bool(health.get("kaggle_cli_ok")),
+                "local_worker": worker_ok,
             },
             "detail": health}

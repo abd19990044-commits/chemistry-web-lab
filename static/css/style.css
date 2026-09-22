@@ -394,7 +394,7 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
   letter-spacing: 0.03em;
 }
 .job-status.status-queued, .job-status.status-running { background: var(--info-bg); color: #C9D1FF; }
-.job-status.status-restarting { background: rgba(255,166,92,0.15); color: var(--amber); }
+.job-status.status-restarting, .job-status.status-cancelling { background: rgba(255,166,92,0.15); color: var(--amber); }
 .job-status.status-complete { background: var(--success-bg); color: var(--teal); }
 .job-status.status-error, .job-status.status-cancelled { background: var(--danger-bg); color: #FFB3B3; }
 .job-status.status-unknown { background: var(--panel-2); color: var(--text-muted); }

@@ -93,6 +93,25 @@ MIN_FREE_GB_DEFAULT = 5.0
 # MANIFEST.txt as left out rather than silently breaking the whole output.
 RESULT_BUDGET_GB_DEFAULT = 10.0
 
+
+def redact_secret_text(text: object, *secrets: object) -> str:
+    """Remove credential material before it reaches logs or error payloads."""
+    rendered = str(text or "")
+    candidates = [
+        globals().get("KAGGLE_KEY"), globals().get("KAGGLE_API_TOKEN"),
+        os.environ.get("KAGGLE_KEY"), os.environ.get("KAGGLE_API_TOKEN"),
+        *secrets,
+    ]
+    for secret in candidates:
+        value = str(secret or "")
+        if len(value) >= 8:
+            rendered = rendered.replace(value, "[REDACTED]")
+    return re.sub(
+        r"(?i)(kaggle_(?:api_)?token|kaggle_key)\s*[:=]\s*(['\"]?)[^\s,;'\"]+\2",
+        r"\1=\2[REDACTED]\2",
+        rendered,
+    )
+
 # Every job slug this site creates starts with this, which is what makes
 # "sign in from another browser and get my job list back" possible.
 JOB_ID_PREFIX = "chem-tools-"
@@ -471,7 +490,7 @@ def encode_files_payload(files_payload: dict[str, str]) -> str:
 # (see build_job_dir below).
 # ─────────────────────────────────────────────────────────────
 KAGGLE_RUNNER_BODY = r'''
-import base64, glob, gzip, json, os, re, random, shutil, signal, subprocess, sys, tarfile, threading, time, zipfile
+import base64, glob, gzip, json, os, re, random, shutil, signal, stat, subprocess, sys, tarfile, threading, time, zipfile
 
 START_TIME = time.time()
 
@@ -673,41 +692,130 @@ def _extract_archive(archive_path, dest_dir):
     # always targets a separate writable scratch directory.
     os.makedirs(dest_dir, exist_ok=True)
     try:
+        max_members = int(os.environ.get("ORCA_ARCHIVE_MAX_MEMBERS", "20000"))
+        max_total = int(os.environ.get("ORCA_ARCHIVE_MAX_EXTRACTED_BYTES", str(30 * 1024**3)))
+        max_member = int(os.environ.get("ORCA_ARCHIVE_MAX_MEMBER_BYTES", str(5 * 1024**3)))
+
+        def target_for(name):
+            raw = str(name or "")
+            portable = raw.replace("\\", "/")
+            if (not portable or "\x00" in portable or portable.startswith("/")
+                    or re.match(r"^[A-Za-z]:", portable)):
+                raise ValueError("unsafe absolute archive member: %r" % raw)
+            normal = os.path.normpath(portable)
+            if normal in ("", ".", "..") or normal.startswith(".." + os.sep):
+                raise ValueError("archive member escapes destination: %r" % raw)
+            root = os.path.realpath(dest_dir)
+            target = os.path.realpath(os.path.join(root, normal))
+            if target == root or not target.startswith(root + os.sep):
+                raise ValueError("archive member escapes destination: %r" % raw)
+            return target
+
+        def validate_budget(rows):
+            if len(rows) > max_members:
+                raise ValueError("archive contains too many members")
+            total = 0
+            for name, size, compressed in rows:
+                size = int(size or 0)
+                if size < 0 or size > max_member:
+                    raise ValueError("archive member exceeds size limit: %s" % name)
+                total += size
+                if total > max_total:
+                    raise ValueError("archive exceeds extracted-size limit")
+                if size > 64 * 1024**2 and size / max(1, int(compressed or 0)) > 500:
+                    raise ValueError("suspicious archive compression ratio: %s" % name)
+
+        def write_member(source, target, mode):
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with open(target, "xb") as output:
+                shutil.copyfileobj(source, output, length=1024 * 1024)
+            try:
+                os.chmod(target, int(mode) & 0o777)
+            except OSError:
+                pass
+
+        def validate_link_target(dest, link_path, link_target):
+            raw = str(link_target or "")
+            portable = raw.replace("\\", "/")
+            if (not portable or "\x00" in portable or portable.startswith("/")
+                    or re.match(r"^[A-Za-z]:", portable) or portable.startswith("\\\\")):
+                raise ValueError("unsafe absolute archive link: %r" % raw)
+            root = os.path.realpath(dest)
+            parent = os.path.dirname(link_path)
+            normal = os.path.normpath(os.path.join(parent, portable))
+            if normal == root or not normal.startswith(root + os.sep):
+                raise ValueError("archive link escapes destination: %r -> %r" % (raw, link_path))
+            return portable
+
         if zipfile.is_zipfile(archive_path):
             with zipfile.ZipFile(archive_path, "r") as zf:
-                zf.extractall(dest_dir)
+                infos = zf.infolist()
+                validate_budget([(i.filename, i.file_size, i.compress_size) for i in infos if not i.is_dir()])
+                targets = set()
+                for info in infos:
+                    target = target_for(info.filename)
+                    if target in targets:
+                        raise ValueError("duplicate archive member target: %s" % info.filename)
+                    targets.add(target)
+                    mode = (info.external_attr >> 16) & 0xFFFF
+                    if stat.S_IFMT(mode) == stat.S_IFLNK:
+                        raw_target = zf.read(info).decode("utf-8", "surrogateescape")
+                        link_target = validate_link_target(dest_dir, target, raw_target)
+                        os.makedirs(os.path.dirname(target), exist_ok=True)
+                        try:
+                            os.symlink(link_target, target)
+                        except OSError:
+                            pass
+                        continue
+                    if info.is_dir():
+                        os.makedirs(target, exist_ok=True)
+                    else:
+                        with zf.open(info, "r") as source:
+                            write_member(source, target, mode or 0o644)
             return True
         if tarfile.is_tarfile(archive_path):
             with tarfile.open(archive_path, "r:*") as tf:
-                # Kaggle kernels run as root and ~/.kaggle holds a live API key,
-                # so an archive fetched from a user-supplied link is untrusted
-                # input. Without a filter, a member named ../../x or a symlink
-                # pointing outside dest_dir writes anywhere on the VM --
-                # including copying the credential into /kaggle/working, where
-                # it persists in the notebook's saved output.
-                try:
-                    tf.extractall(dest_dir, filter="data")      # Python 3.12+
-                except TypeError:
-                    root = os.path.realpath(dest_dir)
-                    safe = []
-                    for member in tf.getmembers():
-                        target = os.path.realpath(os.path.join(dest_dir, member.name))
-                        if not (target == root or target.startswith(root + os.sep)):
-                            log("[orca-import] Refused archive member outside the "
-                                "destination: %s" % member.name)
-                            continue
-                        if member.issym() or member.islnk():
-                            link = os.path.realpath(
-                                os.path.join(os.path.dirname(target), member.linkname))
-                            if not (link == root or link.startswith(root + os.sep)):
-                                log("[orca-import] Refused link escaping the "
-                                    "destination: %s" % member.name)
-                                continue
-                        safe.append(member)
-                    tf.extractall(dest_dir, members=safe)
+                members = tf.getmembers()
+                validate_budget([(m.name, m.size, m.size) for m in members if m.isfile()])
+                targets = set()
+                for member in members:
+                    target = target_for(member.name)
+                    if target in targets:
+                        raise ValueError("duplicate archive member target: %s" % member.name)
+                    targets.add(target)
+                    if member.issym():
+                        link_target = validate_link_target(dest_dir, target, member.linkname)
+                        os.makedirs(os.path.dirname(target), exist_ok=True)
+                        try:
+                            os.symlink(link_target, target)
+                        except OSError:
+                            pass
+                        continue
+                    if member.islnk():
+                        link_source = target_for(member.linkname)
+                        os.makedirs(os.path.dirname(target), exist_ok=True)
+                        try:
+                            os.link(link_source, target)
+                        except OSError:
+                            try:
+                                shutil.copyfile(link_source, target)
+                            except OSError:
+                                pass
+                        continue
+                    if member.isdir():
+                        os.makedirs(target, exist_ok=True)
+                    elif member.isfile():
+                        source = tf.extractfile(member)
+                        if source is None:
+                            raise ValueError("could not read archive member: %s" % member.name)
+                        with source:
+                            write_member(source, target, member.mode)
+                    else:
+                        raise ValueError("special archive member is not allowed: %s" % member.name)
             return True
         log("[orca-import] %s is neither a zip nor a tar archive." % archive_path)
-    except OSError as exc:
+    except (OSError, ValueError, zipfile.BadZipFile, tarfile.TarError) as exc:
+        shutil.rmtree(dest_dir, ignore_errors=True)
         log("[orca-import] Failed to extract %s: %s" % (archive_path, exc))
         if "space" in str(exc).lower() or getattr(exc, "errno", None) == 28:
             log("[orca-import] That was a DISK FULL error while unpacking ORCA. "
@@ -974,31 +1082,77 @@ def _force_block_value(text, block, key, value):
 
 
 def _normalize_maxdisk(text, default_mb):
-    """Ensures exactly one valid MaxDisk directive with the configured budget.
+    """Ensures exactly one valid MaxDisk directive inside %scf with the configured budget.
 
     A caller-configured valid value is PRESERVED - any backend may raise the
     budget, so a valid MaxDisk is never silently replaced with the default.
     Missing or invalid directives fall back to the default, and duplicate
     directives collapse to the first one (ORCA aborts on duplicates).
+    ORCA 6 requires MaxDisk inside %scf; any legacy %maxdisk block is stripped.
     Returns (text, effective_mb, action)."""
-    before = _block_value(text, "maxdisk", "MaxDisk")
+    text = text or ""
+    default_mb = max(1, int(default_mb))
+    legacy_before = None
+    has_invalid_legacy = False
+    legacy_count = 0
+
+    # Strip legacy %maxdisk blocks and extract any existing directive
+    while True:
+        mspan = _find_block(text, "maxdisk")
+        if not mspan:
+            break
+        mbody = _strip_comments(text)[mspan[1]:mspan[2]]
+        directives = list(re.finditer(r"(?i)\bMaxDisk\s+(\S+)", mbody))
+        legacy_count += len(directives)
+        for d in directives:
+            try:
+                v = int(d.group(1))
+                if v > 0:
+                    if legacy_before is None:
+                        legacy_before = v
+                else:
+                    has_invalid_legacy = True
+            except ValueError:
+                has_invalid_legacy = True
+        line_end = text.find("\n", mspan[3])
+        line_end = len(text) if line_end == -1 else line_end + 1
+        text = text[:mspan[0]] + text[line_end:]
+
+    before = _block_value(text, "scf", "MaxDisk")
+    scf_span = _find_block(text, "scf")
+    invalid_in_scf = False
+    scf_count = 0
+    if scf_span:
+        body = _strip_comments(text)[scf_span[1]:scf_span[2]]
+        body_own = re.sub(r"(?is)\b(constraints|scan|potentials|connect|modifyinternal|"
+                          r"invertconstraints|frozenatoms)\b.*?\bend\b", " ", body)
+        directives = list(re.finditer(r"(?i)\bMaxDisk\s+(\S+)", body_own))
+        scf_count = len(directives)
+        if scf_count > 0 and before is None:
+            invalid_in_scf = True
+
     if before is not None and before > 0:
         # Collapse duplicate directives beyond the first (same value kept).
-        span = _find_block(text, "maxdisk")
-        if span:
-            body = text[span[1]:span[2]]
-            if len(re.findall(r"(?i)\bMaxDisk\s+\d+", body)) > 1:
-                kept, seen = [], False
-                for ln in body.splitlines(keepends=True):
-                    if re.match(r"(?i)\s*MaxDisk\s+\d+", ln):
-                        if seen:
-                            continue
-                        seen = True
-                    kept.append(ln)
-                text = text[:span[1]] + "".join(kept) + text[span[3]:]
+        if scf_span and scf_count > 1:
+            body = text[scf_span[1]:scf_span[2]]
+            kept, seen = [], False
+            for ln in body.splitlines(keepends=True):
+                if re.match(r"(?i)\s*MaxDisk\s+\d+", ln):
+                    if seen:
+                        continue
+                    seen = True
+                kept.append(ln)
+            text = text[:scf_span[1]] + "".join(kept) + text[scf_span[3]:]
+            return text, before, "collapsed"
         return text, before, "preserved"
-    return _force_block_value(text, "maxdisk", "MaxDisk", int(default_mb)), int(default_mb), (
-        "inserted" if before is None else "rejected-invalid")
+
+    if legacy_before is not None and legacy_before > 0:
+        action = "collapsed" if legacy_count > 1 else "preserved"
+        return _force_block_value(text, "scf", "MaxDisk", legacy_before), legacy_before, action
+
+    effective = int(default_mb)
+    action = "inserted" if (before is None and not has_invalid_legacy and not invalid_in_scf and legacy_before is None) else "rejected-invalid"
+    return _force_block_value(text, "scf", "MaxDisk", effective), effective, action
 
 
 def _ensure_simple_keyword(text, keyword):
@@ -2303,27 +2457,50 @@ def _package_results(note=""):
 def _write_kaggle_credentials():
     cfg_dir = os.path.expanduser("~/.kaggle")
     os.makedirs(cfg_dir, exist_ok=True)
-    os.environ["KAGGLE_USERNAME"] = KAGGLE_USERNAME
     os.environ["KAGGLE_CONFIG_DIR"] = cfg_dir
-    if KAGGLE_API_TOKEN:
-        os.environ["KAGGLE_API_TOKEN"] = KAGGLE_API_TOKEN
-        os.environ["KAGGLE_KEY"] = KAGGLE_API_TOKEN
+    token = KAGGLE_API_TOKEN or KAGGLE_KEY
+    username = KAGGLE_USERNAME
+    if not token:
+        # Secure default for generated notebooks: use a Kaggle User Secret
+        # configured by the account owner instead of shipping the website's
+        # long-lived credential in script.py.  If User Secrets are not
+        # available, fail clearly; do not silently fall back to embedding or
+        # printing a secret. Kaggle returns HTTP 400 for a missing label, so
+        # each supported label must be probed independently; otherwise a
+        # missing API_TOKEN prevents a valid legacy KAGGLE_KEY from working.
+        try:
+            from kaggle_secrets import UserSecretsClient
+            _secrets = UserSecretsClient()
+            def _read_secret(label):
+                try:
+                    return _secrets.get_secret(label) or None
+                except Exception:
+                    return None
+            token = (_read_secret("KAGGLE_API_TOKEN")
+                     or _read_secret("KAGGLE_TOKEN")
+                     or _read_secret("KAGGLE_KEY"))
+            username = username or _read_secret("KAGGLE_USERNAME")
+        except Exception as _secret_exc:
+            raise RuntimeError(
+                "Continuation requires Kaggle User Secrets KAGGLE_API_TOKEN/KAGGLE_KEY; "
+                "the website credential is intentionally not embedded in notebook source."
+            ) from _secret_exc
+    if not token or not username:
+        raise RuntimeError(
+            "Continuation requires Kaggle User Secrets KAGGLE_USERNAME and KAGGLE_API_TOKEN/KAGGLE_KEY."
+        )
+    os.environ["KAGGLE_USERNAME"] = username
+    if KAGGLE_API_TOKEN or KAGGLE_KEY or token:
+        os.environ["KAGGLE_API_TOKEN"] = token
+        os.environ["KAGGLE_KEY"] = token
         with open(os.path.join(cfg_dir, "access_token"), "w") as fh:
-            fh.write(KAGGLE_API_TOKEN)
+            fh.write(token)
         try:
             os.chmod(os.path.join(cfg_dir, "access_token"), 0o600)
         except OSError:
             pass
         with open(os.path.join(cfg_dir, "kaggle.json"), "w") as fh:
-            json.dump({"username": KAGGLE_USERNAME, "key": KAGGLE_API_TOKEN}, fh)
-        try:
-            os.chmod(os.path.join(cfg_dir, "kaggle.json"), 0o600)
-        except OSError:
-            pass
-    else:
-        os.environ["KAGGLE_KEY"] = KAGGLE_KEY
-        with open(os.path.join(cfg_dir, "kaggle.json"), "w") as fh:
-            json.dump({"username": KAGGLE_USERNAME, "key": KAGGLE_KEY}, fh)
+            json.dump({"username": username, "key": token}, fh)
         try:
             os.chmod(os.path.join(cfg_dir, "kaggle.json"), 0o600)
         except OSError:
@@ -2336,9 +2513,8 @@ _PUSH_URL_RE = re.compile(r"https?://(?:www\.)?kaggle\.com/(?:code/)?([A-Za-z0-9
 def _safe_run_kaggle(args, **kwargs):
     cmd = list(args)
     if sys.platform == "win32" and cmd and cmd[0] == "kaggle":
-        bat = shutil.which("kaggle") or shutil.which("kaggle.bat") or shutil.which("kaggle.cmd")
-        if bat and bat.lower().endswith((".bat", ".cmd")):
-            return subprocess.run([bat] + cmd[1:], shell=True, **kwargs)
+        # Avoid kaggle.cmd and a command shell: arguments stay literal argv.
+        return subprocess.run([sys.executable, "-m", "kaggle"] + cmd[1:], **kwargs)
     return subprocess.run(cmd, **kwargs)
 
 
@@ -2404,7 +2580,7 @@ def _push_continuation_with_retries(job_dir, max_attempts=5, base_delay=15.0):
                 m = _PUSH_URL_RE.search(combined)
                 return (m.group(2) if m else None), (m.group(0) if m else None), combined
             log("[auto-continue] push attempt %d/%d failed (exit %s): %s"
-                % (attempt, max_attempts, last.returncode, combined.strip()[-400:]))
+                % (attempt, max_attempts, last.returncode, redact_secret_text(combined.strip()[-400:])))
         if attempt == max_attempts:
             break
         delay = min(base_delay * (2 ** (attempt - 1)), 90) + random.uniform(0, 5)
@@ -2889,7 +3065,7 @@ if needs_continue:
                          time.strftime("%Hh%Mm", time.gmtime(time.time() - START_TIME)),
                          slug, "; ".join(notes)))
     except Exception as exc:
-        log("WARNING: auto-continuation failed: %s" % exc)
+        log("WARNING: auto-continuation failed: %s" % redact_secret_text(exc))
         final_note = ("%s and the automatic continuation could not be pushed even after "
                       "retries (%s). The files here are the latest partial progress - "
                       "resubmit with the newest geometry to carry on."
@@ -3151,12 +3327,14 @@ def build_job_dir(
             "with its coordinates inline is always small enough."
         )
 
+    # Continuations obtain credentials from Kaggle User Secrets. Long-lived
+    # credentials are never copied into uploaded notebook source.
     header = _build_header({
         "ENCODED_FILES_JSON": encoded_files,
         "INPUT_FILE": input_filename,
         "KAGGLE_USERNAME": auth["username"],
-        "KAGGLE_KEY": auth["key"],
-        "KAGGLE_API_TOKEN": auth["api_token"],
+        "KAGGLE_KEY": None,
+        "KAGGLE_API_TOKEN": None,
         "JOB_BASE_ID": job_base_id,
         "JOB_TITLE": (job_title or "").strip() or pretty_job_title(job_base_id),
         "DATASET_SOURCES": dataset_sources,
@@ -3251,7 +3429,7 @@ def push_job(job_dir: str, kaggle_username: str, kaggle_key: str) -> dict:
             with open(log_path, "w", encoding="utf-8") as lf:
                 lf.write(f"TIMESTAMP: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                          f"RETURNCODE: {result.returncode if result else 'N/A'}\n"
-                         f"STDOUT_STDERR:\n{combined}\n")
+                         f"STDOUT_STDERR:\n{redact_secret_text(combined)}\n")
         except Exception:
             pass
         

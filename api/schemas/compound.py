@@ -11,5 +11,5 @@ class CompoundQueryRequest(BaseModel):
 
 
 class Clean3DRequest(BaseModel):
-    xyz_text: str = Field(..., description="XYZ coordinate block to optimize with force-field")
-    force_field: str = Field(default="UFF", description="Force field to use: UFF or MMFF94")
+    xyz_text: str = Field(..., max_length=10 * 1024 * 1024, description="XYZ coordinate block to optimize with force-field")
+    force_field: str = Field(default="UFF", max_length=16, description="Force field to use: UFF or MMFF94")

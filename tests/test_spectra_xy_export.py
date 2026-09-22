@@ -25,6 +25,7 @@ import tempfile
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+NODE_BIN = os.environ.get("FRONTEND_TEST_NODE") or shutil.which("node")
 
 
 def served(flat, nested):
@@ -274,14 +275,14 @@ console.log(JSON.stringify(out));
 
 @pytest.fixture(scope="module")
 def node_results():
-    if not shutil.which("node"):
+    if not NODE_BIN:
         pytest.skip("node is not available: the production-JS export checks cannot run")
     tmp = tempfile.mkdtemp(prefix="spectra_export_")
     harness = os.path.join(tmp, "export_harness.js")
     with open(harness, "w", encoding="utf-8") as f:
         f.write(NODE_HARNESS)
     try:
-        proc = subprocess.run(["node", harness, APP_JS], capture_output=True, text=True, timeout=120)
+        proc = subprocess.run([NODE_BIN, harness, APP_JS], capture_output=True, text=True, timeout=120)
     finally:
         os.remove(harness)
         os.rmdir(tmp)
@@ -297,14 +298,14 @@ def parity_results():
 
 
 def _run_harness(js_text):
-    if not shutil.which("node"):
+    if not NODE_BIN:
         pytest.skip("node is not available: the production-JS checks cannot run")
     tmp = tempfile.mkdtemp(prefix="spectra_export_")
     harness = os.path.join(tmp, "harness.js")
     with open(harness, "w", encoding="utf-8") as f:
         f.write(js_text)
     try:
-        proc = subprocess.run(["node", harness, APP_JS], capture_output=True, text=True, timeout=120)
+        proc = subprocess.run([NODE_BIN, harness, APP_JS], capture_output=True, text=True, timeout=120)
     finally:
         os.remove(harness)
         os.rmdir(tmp)

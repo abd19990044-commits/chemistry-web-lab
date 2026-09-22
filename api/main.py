@@ -40,7 +40,7 @@ async def lifespan(_app: FastAPI):
 def _create_app() -> FastAPI:
     application = FastAPI(
         title="Chemistry Lab API",
-        version="1.0.3",
+        version="1.0.4",
         description="Versioned API for ORCA-powered computational chemistry "
                     "workflows (generation, Kaggle execution, local agent, artifacts, analysis).",
         docs_url="/api/v1/docs",

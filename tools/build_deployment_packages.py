@@ -102,7 +102,7 @@ def compute_tree_hash(file_hashes: list[tuple[str, str]]) -> str:
 def is_global_excluded(p: Path) -> bool:
     if p.name in GLOBAL_EXCLUDED_NAMES:
         return True
-    if any(part in EXCLUDE_DIRS for part in p.parts):
+    if any(part in EXCLUDE_DIRS or part.startswith(('_tmp_', '_diag_')) for part in p.parts):
         return True
     if p.suffix in EXCLUDE_EXTS:
         return True
@@ -171,7 +171,7 @@ def copy_tree_filtered(src_dir: Path, dst_dir: Path, file_filter=None):
     if not src_dir.exists():
         return
     for root, dirs, files in os.walk(src_dir):
-        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS and not d.startswith(('_tmp_', '_diag_'))]
         rel_root = Path(root).relative_to(src_dir)
         for f in files:
             p = Path(root) / f
@@ -230,6 +230,10 @@ def build_huggingface_package(dest_dir: Path, provenance: dict) -> dict:
         'LICENSE',
         'LICENSE.txt',
         'THIRD_PARTY_LICENSES.md',
+        'requirements-local-agent.txt',
+        'requirements-local-agent-hpc.txt',
+        'docker-entrypoint.sh',
+        'PROJECT_METADATA.json',
     ]
     for rf in hf_root_files:
         src_p = REPO_ROOT / rf
@@ -245,6 +249,9 @@ def build_huggingface_package(dest_dir: Path, provenance: dict) -> dict:
     copy_tree_filtered(REPO_ROOT / 'templates', dest_dir / 'templates')
     copy_tree_filtered(REPO_ROOT / 'static', dest_dir / 'static')
     copy_tree_filtered(REPO_ROOT / 'schema', dest_dir / 'schema')
+    copy_tree_filtered(REPO_ROOT / 'local_agent', dest_dir / 'local_agent')
+    copy_tree_filtered(REPO_ROOT / 'bootstrap', dest_dir / 'bootstrap')
+    copy_tree_filtered(REPO_ROOT / 'dist', dest_dir / 'dist')
 
     # 3. Data runtime assets
     if (REPO_ROOT / 'data' / 'ir_peak_database.json').exists():
@@ -383,6 +390,11 @@ def build_github_package(dest_dir: Path, provenance: dict) -> dict:
         'ARCHITECTURE.md',
         'DEPLOY.md',
         'REPRODUCIBILITY.md',
+        'requirements-local-agent.txt',
+        'requirements-local-agent-hpc.txt',
+        'docker-entrypoint.sh',
+        '.gitattributes',
+        'PROJECT_METADATA.json',
     ]
     for rf in gh_root_files:
         src_p = REPO_ROOT / rf
@@ -398,6 +410,9 @@ def build_github_package(dest_dir: Path, provenance: dict) -> dict:
     copy_tree_filtered(REPO_ROOT / 'templates', dest_dir / 'templates')
     copy_tree_filtered(REPO_ROOT / 'static', dest_dir / 'static')
     copy_tree_filtered(REPO_ROOT / 'schema', dest_dir / 'schema')
+    copy_tree_filtered(REPO_ROOT / 'local_agent', dest_dir / 'local_agent')
+    copy_tree_filtered(REPO_ROOT / 'bootstrap', dest_dir / 'bootstrap')
+    copy_tree_filtered(REPO_ROOT / 'dist', dest_dir / 'dist')
     copy_tree_filtered(REPO_ROOT / 'data', dest_dir / 'data')
     copy_tree_filtered(REPO_ROOT / 'tests', dest_dir / 'tests')
     copy_tree_filtered(REPO_ROOT / 'tools', dest_dir / 'tools')
@@ -411,6 +426,9 @@ def build_github_package(dest_dir: Path, provenance: dict) -> dict:
 
     # 4. orca_engine
     copy_tree_filtered(REPO_ROOT / 'orca_engine', dest_dir / 'orca_engine')
+    copy_tree_filtered(REPO_ROOT / 'local_agent', dest_dir / 'local_agent')
+    copy_tree_filtered(REPO_ROOT / 'bootstrap', dest_dir / 'bootstrap')
+    copy_tree_filtered(REPO_ROOT / 'dist', dest_dir / 'dist')
 
     # 5. GitHub .env.example
     gh_env_example = """# ORCA Web Lab - Local Development & CI Environment Configuration
@@ -508,7 +526,7 @@ def generate_and_verify_manifest(target_dir: Path, release_type: str, provenance
     manifest_json = {
         "schema_version": "orca-web-lab.release-manifest.v1.0",
         "application_name": "orca-web-lab",
-        "version": "1.0.3",
+        "version": "1.0.4",
         "release_type": release_type,
         "package_mode": provenance["package_mode"],
         "source_type": provenance["source_type"],

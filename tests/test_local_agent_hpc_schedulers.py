@@ -60,7 +60,7 @@ def test_slurm_script_generation():
     assert "#SBATCH --account=chem_project_01" in script
     assert "#SBATCH --qos=chem_high" in script
     assert "module load orca/6.0.0" in script
-    assert '"/opt/orca/orca" test_calc_123.inp > test_calc_123.out' in script
+    assert "/opt/orca/orca test_calc_123.inp > test_calc_123.out" in script
 
 
 def test_pbs_script_generation():
@@ -87,7 +87,7 @@ def test_pbs_script_generation():
     assert "#PBS -l walltime=08:00:00" in script
     assert "#PBS -q batch_queue" in script
     assert "#PBS -A pbs_proj_99" in script
-    assert '"/opt/orca/orca" calc.inp > pbs_calc_456.out' in script
+    assert "/opt/orca/orca calc.inp > pbs_calc_456.out" in script
 
 
 def test_lsf_script_generation():
@@ -114,7 +114,7 @@ def test_lsf_script_generation():
     assert "#BSUB -W 02:30:00" in script
     assert "#BSUB -q normal" in script
     assert "#BSUB -P lsf_chem_group" in script
-    assert '"/opt/orca/orca" lsf_calc.inp > lsf_calc_789.out' in script
+    assert "/opt/orca/orca lsf_calc.inp > lsf_calc_789.out" in script
 
 
 def test_pbs_and_lsf_environment_validation():
@@ -283,6 +283,32 @@ def test_lsf_directive_injection_rejected(malicious_queue):
 def test_shell_metacharacters_rejected_in_identifiers(shell_payload):
     with pytest.raises(HpcValidationError):
         validate_scheduler_identifier(shell_payload, "job_id")
+
+
+def test_scheduler_script_quotes_configured_paths_as_shell_data():
+    adapter = SlurmAdapter(config={})
+    script = adapter.generate_sbatch_script(
+        job_id="safe-job",
+        orca_executable="/opt/$(touch hacked)/orca",
+        input_filename="molecule.inp",
+        resources={"cpu_cores": 1},
+        work_dir="/scratch/user dir/$(touch escaped)",
+    )
+    assert "cd -- '/scratch/user dir/$(touch escaped)'" in script
+    assert "'/opt/$(touch hacked)/orca' molecule.inp" in script
+
+
+def test_scheduler_submission_script_must_stay_inside_workdir(tmp_path):
+    work_dir = tmp_path / "work"
+    work_dir.mkdir()
+    outside = tmp_path / "outside.sh"
+    outside.write_text("#!/bin/sh\n", encoding="utf-8")
+    with pytest.raises(HpcValidationError, match="outside"):
+        validate_script_path(str(outside), str(work_dir))
+
+    inside = work_dir / "submit.sh"
+    inside.write_text("#!/bin/sh\n", encoding="utf-8")
+    assert validate_script_path(str(inside), str(work_dir)) == str(inside.resolve())
 
 
 # =========================================================================

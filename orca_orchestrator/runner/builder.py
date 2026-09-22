@@ -119,6 +119,10 @@ def build_header(*, job: JobManifest, epoch: int, creds: KaggleCredentials,
         "hard_session_seconds": CONFIG.kaggle.hard_session_seconds,
     }
 
+    # A long-lived Kaggle token must not be copied into uploaded source.  The
+    # in-kernel runner can use Kaggle User Secrets for continuation. Keep an
+    # explicit opt-in only for legacy deployments that have accepted source
+    # exposure and are migrating away from it.
     return {
         "schema_version": CONFIG.manifest_version,
         "job_id": job.job_id,
@@ -130,8 +134,10 @@ def build_header(*, job: JobManifest, epoch: int, creds: KaggleCredentials,
         "dataset_sources": list(job.dataset_sources),
         "orca_link": orca_link,
         "kaggle_username": creds.username,
-        "kaggle_key": creds.key,
-        "kaggle_api_token": creds.api_token,
+        # Remote continuation credentials must come from Kaggle User Secrets.
+        # Never serialize server-side credentials into uploaded source.
+        "kaggle_key": None,
+        "kaggle_api_token": None,
         "inline_files_b64": encode_inline_files(inline_files or {}),
         "checkpoint_manifest": checkpoint.to_dict() if checkpoint else None,
         "predecessor_slug": predecessor_slug,

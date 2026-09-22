@@ -9,16 +9,57 @@ safely replaces those view functions without modifying Flask globally.
 from __future__ import annotations
 import io, os, re, shutil, zipfile
 from types import MethodType
-from flask import after_this_request, jsonify, request, send_file
+from flask import after_this_request, jsonify, request, send_file, session
 from .account_control import enforce_capacity
 from .credentials import parse as parse_credentials
 from .errors import PayloadTooLargeError, ValidationError
 from .service import get_service
 
 
+def _safe_archive_member(name):
+    normalized = str(name or "").replace("\\", "/")
+    return (bool(normalized) and not normalized.startswith("/")
+            and not re.match(r"^[A-Za-z]:/", normalized)
+            and "\x00" not in normalized
+            and all(part not in ("..", "") for part in normalized.split("/")))
+
+
 def _creds(source):
-    return parse_credentials((source.get("kaggle_username") or "").strip(),
-                             (source.get("kaggle_key") or "").strip())
+    u = (
+        request.headers.get("X-Kaggle-Username")
+        or source.get("kaggle_username")
+        or source.get("username")
+        or ""
+    ).strip()
+    k = (
+        request.headers.get("X-Kaggle-Key")
+        or source.get("kaggle_key")
+        or source.get("key")
+        or ""
+    ).strip()
+    if not k:
+        try:
+            from services.auth_service import get_authenticated_owner
+            from services.kaggle_service import resolve_credentials
+            owner = get_authenticated_owner(session=session, request=request)
+            u, k = resolve_credentials(u, k, owner=owner or u)
+        except Exception:
+            pass
+    return parse_credentials(u, k)
+
+
+def _form_int(source, name, default, *, minimum=0, maximum=10000):
+    """Parse optional workflow integers at the compatibility boundary."""
+    raw = source.get(name)
+    if raw in (None, ""):
+        return default
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        raise ValidationError(f"{name} must be an integer.")
+    if value < minimum or value > maximum:
+        raise ValidationError(f"{name} is outside the supported range.")
+    return value
 
 
 def _legacy_status(state, job_dict=None):
@@ -145,10 +186,36 @@ def submit():
         if not uploaded.filename: continue
         name = os.path.basename(uploaded.filename)
         if name.lower().endswith((".xyz", ".allxyz", ".hess", ".inp", ".pdb", ".mdrestart")): aux[name] = uploaded.read()
-    result = get_service().submit(creds, input_filename=filename, input_content=content,
-                                  job_name=(form.get("job_name") or "").strip(), aux_files=aux,
-                                  dataset_sources=datasets, orca_link=link,
-                                  idempotency_key=request.headers.get("Idempotency-Key"))
+    workflow_id = (form.get("workflow_id") or "").strip() or None
+    parent_job_id = (form.get("parent_job_id") or "").strip() or None
+    step_index = _form_int(form, "step_index", 0, minimum=0)
+    step_count = _form_int(form, "step_count", 1, minimum=1)
+    if step_index >= step_count:
+        raise ValidationError("step_index must be smaller than step_count.")
+    step_name = (form.get("step_name") or "CALC").strip()[:80] or "CALC"
+    try:
+        from services.auth_service import get_authenticated_owner
+        application_owner = get_authenticated_owner(session=session, request=request)
+    except Exception:
+        application_owner = None
+    result = get_service().submit(
+        creds, input_filename=filename, input_content=content,
+        job_name=(form.get("job_name") or "").strip(), aux_files=aux,
+        dataset_sources=datasets, orca_link=link,
+        idempotency_key=request.headers.get("Idempotency-Key"),
+        workflow_id=workflow_id, parent_job_id=parent_job_id,
+        step_index=step_index, step_count=step_count, step_name=step_name,
+        application_owner=application_owner,
+    )
+    try:
+        from services.auth_service import get_authenticated_owner
+        from services.kaggle_service import save_credentials
+        save_credentials(
+            creds.username, creds.key or creds.api_token,
+            owner=application_owner or creds.username,
+        )
+    except Exception:
+        pass
     return jsonify({"ok": True, "kaggle_url": result.url, "job_id": result.job_id,
                     "kaggle_owner": creds.username,
                     "job_title": result.title, "title": result.title, "replayed": result.replayed,
@@ -176,9 +243,15 @@ def status():
 
 def download():
     if request.method == "GET":
+        if not (os.environ.get("ORCA_LOCAL_MODE") == "true" or os.environ.get("ALLOW_QUERY_CREDENTIALS") == "1"):
+            if any(k in request.args for k in ("kaggle_username", "kaggle_key", "username", "key")):
+                raise ValidationError(
+                    "Supplying credentials in query parameters is forbidden for security. "
+                    "Use request headers (X-Kaggle-Username, X-Kaggle-Key) or POST body."
+                )
         data = request.args.to_dict()
     else:
-        data = request.get_json(force=True, silent=True) or {}
+        data = request.get_json(force=True, silent=True) or request.form.to_dict()
     creds = _creds(data); job_id = (data.get("job_id") or "").strip()
     mode = (data.get("mode") or "essential").strip().lower()
     if not job_id: raise ValidationError("Missing job id.")
@@ -201,6 +274,8 @@ def download():
             if os.path.exists(path) and zipfile.is_zipfile(path):
                 with zipfile.ZipFile(path, "r") as src_zf:
                     for item in src_zf.infolist():
+                        if not _safe_archive_member(item.filename):
+                            continue
                         fname_lower = item.filename.lower()
                         if any(fname_lower.endswith(ext) for ext in ESSENTIAL_EXTS) and not any(fname_lower.endswith(ext) for ext in EXCLUDED_EXTS):
                             if item.filename not in added_names:
@@ -222,7 +297,8 @@ def download():
         if bundled and os.path.exists(essential_zip) and zipfile.is_zipfile(essential_zip):
             path = essential_zip
 
-    download_name = f"{job_id}_results.zip" if mode == "essential" else f"{job_id}_full_results.zip"
+    raw_download_name = f"{job_id}_results.zip" if mode == "essential" else f"{job_id}_full_results.zip"
+    download_name = re.sub(r'[\r\n\0"\'/\\]+', "", raw_download_name).strip() or "results.zip"
     file_size = os.path.getsize(path) if os.path.exists(path) else 0
     if file_size <= 100 * 1024 * 1024:
         with open(path, "rb") as fh:

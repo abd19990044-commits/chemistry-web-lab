@@ -14,6 +14,7 @@ Follows all 20 phases and safety constraints:
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -420,7 +421,11 @@ def upload_to_huggingface() -> tuple[bool, str]:
     
     token = get_hf_token()
     headers = {"Authorization": f"Bearer {token}"}
-    r = requests.get(f"https://huggingface.co/api/spaces/{HF_SPACE_SLUG}", headers=headers)
+    r = requests.get(
+        f"https://huggingface.co/api/spaces/{HF_SPACE_SLUG}",
+        headers=headers,
+        timeout=20,
+    )
     if r.status_code != 200:
         raise RuntimeError(f"Hugging Face Space API check failed (HTTP {r.status_code}): {r.text}")
     print(f"[PASS] Connected to Hugging Face Space: {HF_SPACE_SLUG}")
@@ -430,9 +435,19 @@ def upload_to_huggingface() -> tuple[bool, str]:
     temp_work_dir = Path(tempfile.mkdtemp(prefix="hf_upload_workspace"))
     temp_work_dir.mkdir(parents=True, exist_ok=True)
 
-    auth_hf_url = f"https://mc2hf1999:{token}@huggingface.co/spaces/{HF_SPACE_SLUG}.git"
+    # Keep the token out of argv, the persisted Git remote URL, and exception
+    # text.  Git consumes this process-scoped HTTP header from its environment.
+    basic_auth = base64.b64encode(f"mc2hf1999:{token}".encode("utf-8")).decode("ascii")
+    git_env = os.environ.copy()
+    git_env.update({
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "http.extraHeader",
+        "GIT_CONFIG_VALUE_0": f"Authorization: Basic {basic_auth}",
+        "GIT_TERMINAL_PROMPT": "0",
+    })
+    public_hf_url = f"https://huggingface.co/spaces/{HF_SPACE_SLUG}.git"
     print("Cloning remote Space repository...")
-    subprocess.check_call(["git", "clone", auth_hf_url, str(temp_work_dir)])
+    subprocess.check_call(["git", "clone", public_hf_url, str(temp_work_dir)], env=git_env)
 
     # Delete existing tracked files to ensure clean synchronization
     for item in temp_work_dir.iterdir():
@@ -473,7 +488,7 @@ def upload_to_huggingface() -> tuple[bool, str]:
         )
         subprocess.check_call(["git", "commit", "-m", commit_msg], cwd=temp_work_dir)
         print("Pushing to Hugging Face Spaces remote...")
-        subprocess.check_call(["git", "push", "origin", "main"], cwd=temp_work_dir)
+        subprocess.check_call(["git", "push", "origin", "main"], cwd=temp_work_dir, env=git_env)
     else:
         print("[INFO] Hugging Face Space is already up to date.")
 

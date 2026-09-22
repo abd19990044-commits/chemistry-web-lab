@@ -14,9 +14,10 @@ class RuntimeInitRequest(BaseModel):
     platform: str = Field("unknown", description="Operating system: windows, linux, macos, hpc")
     backend_kind: str = Field("local", description="local or hpc")
     scheduler_type: Optional[str] = Field(None, description="slurm, pbs, lsf")
-    agent_version: str = Field("1.0.3", description="Agent version")
+    agent_version: str = Field("1.0.4", description="Agent version")
     protocol_version: int = Field(1, description="Protocol revision")
     capabilities: Dict[str, Any] = Field(default_factory=dict, description="Hardware & ORCA capabilities")
+    installation_secret: Optional[str] = Field(None, description="Cryptographic secret proof for installation identity")
 
 
 class RuntimeInitResponse(BaseModel):
@@ -98,7 +99,7 @@ class PlatformPackageInfo(BaseModel):
     filename: str
     size_bytes: int
     sha256: str
-    version: str = "1.0.3"
+    version: str = "1.0.4"
     file_path: Optional[str] = None
     instructions: List[str] = Field(default_factory=list)
 

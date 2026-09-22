@@ -129,8 +129,22 @@ def observe(client: KaggleClient, job: JobManifest) -> Observation:
     elif status.status == "running":
         try:
             obs.record = read_window(client, slug)
-        except Exception:
+        except (NotFoundError, RuntimeError) as exc:
+            # A running Kaggle kernel commonly has no saved output yet.  This
+            # is expected during startup and is not a remote failure, but it
+            # remains visible in debug logs for diagnosis.
+            log.debug("running window has no ledger yet for %s: %s", job.job_id, exc)
             obs.record = None
+        except Exception as exc:  # noqa: BLE001
+            # A failed output read is not evidence that no ledger exists.  If
+            # it is swallowed, a transient Kaggle outage looks exactly like a
+            # healthy running kernel with no metadata and can hide the real
+            # remote state indefinitely.
+            log.warning("could not read running ledger for %s: %s", job.job_id, exc)
+            obs.error = OrchestratorError(
+                "could not read the Kaggle window ledger while the kernel is running",
+                job_id=job.job_id, slug=slug, error_class=type(exc).__name__,
+            )
     return obs
 
 
@@ -182,7 +196,11 @@ def decide(job: JobManifest, obs: Observation, *, config=CONFIG) -> Decision:
 
     # ---- the kernel is gone -------------------------------------------
     if obs.kernel_missing:
-        if job.state in (JobState.UPLOADING, JobState.RESTARTING):
+        if job.state is JobState.UPLOADING:
+            return Decision(Trigger.PUSH_RETRY,
+                            "the initial kernel is absent; replaying the durable initial submission bundle",
+                            {"slug": job.current_slug}, action="push_initial")
+        if job.state is JobState.RESTARTING:
             return Decision(Trigger.SUCCESSOR_RETRY,
                             "the kernel we believed we pushed does not exist on Kaggle; "
                             "the push did not take effect and must be replayed",
@@ -248,6 +266,19 @@ def decide(job: JobManifest, obs: Observation, *, config=CONFIG) -> Decision:
                         {"next_slug": ledger.legacy_next_slug}, action="adopt_ledger")
 
     kaggle_state = obs.kaggle_state
+
+    # The server may have crashed after Kaggle accepted epoch zero but before
+    # the PUSH_ACK write. Observing the deterministic initial slug is the
+    # acknowledgement; adopt it instead of leaving the manifest UPLOADING or
+    # pushing another version.
+    if job.state is JobState.UPLOADING and kaggle_state in {
+        "queued", "running", "complete", "error", "cancelled"
+    }:
+        return Decision(
+            Trigger.PUSH_ACK,
+            "the deterministic initial kernel exists; recovering the lost push acknowledgement",
+            {"slug": job.current_slug, "kaggle_state": kaggle_state},
+        )
 
     # ---- still working ------------------------------------------------
     if kaggle_state == "queued":
@@ -561,13 +592,20 @@ class Reconciler:
                         job.chain_slugs.append(next_slug)
                     job.current_slug = next_slug
                     job.epoch = max(job.epoch + 1, job.epoch)
-                    job.state = JobState.QUEUED
+                    if job.state is not JobState.QUEUED:
+                        # This is an external-ledger adoption, so the normal
+                        # trigger path may not be available.  Still use the
+                        # model's state-entry method so the watchdog clock is
+                        # reset and the state change is not a raw assignment.
+                        job.enter_state(JobState.QUEUED)
                 if decision.trigger == Trigger.ORCA_COMPLETE:
-                    job.state = JobState.FINISHED
+                    if job.state is not JobState.FINISHED:
+                        job.enter_state(JobState.FINISHED)
                     if decision.detail.get("note"):
                         job.last_note = str(decision.detail["note"])[:2000]
                 elif decision.trigger == Trigger.ORCA_FATAL:
-                    job.state = JobState.FAILED
+                    if job.state is not JobState.FAILED:
+                        job.enter_state(JobState.FAILED)
                     if decision.detail.get("error"):
                         job.last_error = {"message": str(decision.detail["error"])}
                     if decision.detail.get("note"):
@@ -599,7 +637,21 @@ class Reconciler:
             job = self._rollback(job, client, fence, correlation_id, actor)
             return self._save(job, version, fence)
 
-        # ---- push (or re-push) a window ---------------------------------
+        # ---- re-push the initial durable submission ---------------------
+        if decision.action == "push_initial":
+            if decision.trigger is not None:
+                job = self.transition(job, decision.trigger, actor=actor,
+                                      correlation_id=correlation_id, **decision.detail)
+            job = self._push_initial(job, client, correlation_id, actor)
+            completed_submission_dir = None
+            if job.state is JobState.QUEUED:
+                completed_submission_dir = job._extra.pop("submission_dir", None)
+            saved = self._save(job, version, fence)
+            if completed_submission_dir:
+                shutil.rmtree(completed_submission_dir, ignore_errors=True)
+            return saved
+
+        # ---- push (or re-push) a successor window -----------------------
         if decision.action == "push_successor":
             # Take the window's checkpoint FIRST.
             #
@@ -639,9 +691,54 @@ class Reconciler:
                 )
                 if obs.record is not None and obs.record.job is not None:
                     job = self._adopt(job, obs.record, decision, correlation_id, actor)
-        return self._save(job, version, fence)
+        completed_submission_dir = None
+        if decision.trigger is Trigger.PUSH_ACK:
+            completed_submission_dir = job._extra.pop("submission_dir", None)
+        saved = self._save(job, version, fence)
+        if completed_submission_dir:
+            shutil.rmtree(completed_submission_dir, ignore_errors=True)
+        return saved
 
     # -- effects ----------------------------------------------------------
+    def _push_initial(self, job: JobManifest, client: KaggleClient,
+                      correlation_id: str, actor: str) -> JobManifest:
+        """Replay epoch zero from its persisted, credential-free staging dir."""
+        staging_dir = str(job._extra.get("submission_dir") or "")
+        metadata_path = os.path.join(staging_dir, "kernel-metadata.json")
+        if (not staging_dir or not os.path.isdir(staging_dir)
+                or not os.path.isfile(metadata_path)):
+            job.last_error = {
+                "code": "initial_submission_bundle_missing",
+                "message": "The durable initial submission bundle is missing; automatic replay was refused.",
+            }
+            return self.transition(
+                job, Trigger.PUSH_EXHAUSTED, actor=actor,
+                correlation_id=correlation_id, error=job.last_error,
+            )
+        try:
+            result = client.push_kernel(
+                staging_dir, expected_slug=job.job_id, skip_if_active=True
+            )
+        except OrchestratorError as exc:
+            job.last_error = exc.to_dict()
+            job.retry_count += 1
+            job.total_retries += 1
+            if job.retry_count >= self.config.retry.max_attempts:
+                return self.transition(
+                    job, Trigger.PUSH_EXHAUSTED, actor=actor,
+                    correlation_id=correlation_id, error=exc.to_dict(),
+                )
+            return job
+        job.current_slug = result.slug
+        job.current_url = result.url
+        if result.slug not in job.chain_slugs:
+            job.chain_slugs.append(result.slug)
+        return self.transition(
+            job, Trigger.PUSH_ACK, actor=actor,
+            correlation_id=correlation_id, slug=result.slug, url=result.url,
+            replayed_initial=True,
+        )
+
     def _adopt(self, job: JobManifest, record: LedgerRecord, decision: Decision,
                correlation_id: str, actor: str) -> JobManifest:
         """Takes the window's own account of itself as authoritative.
@@ -691,7 +788,8 @@ class Reconciler:
             job.epoch = max(job.epoch + 1, job.epoch)
         if decision.trigger == Trigger.ORCA_COMPLETE and (ledger_job is None or job.state is not JobState.FINISHED):
             previous_state = job.state
-            job.state = JobState.FINISHED
+            if job.state is not JobState.FINISHED:
+                job.enter_state(JobState.FINISHED)
             if decision.detail.get("note"):
                 job.last_note = str(decision.detail["note"])[:2000]
             if ledger_job is None:
@@ -705,7 +803,8 @@ class Reconciler:
                 self.store.append_event(event)
         elif decision.trigger == Trigger.ORCA_FATAL and (ledger_job is None or job.state is not JobState.FAILED):
             previous_state = job.state
-            job.state = JobState.FAILED
+            if job.state is not JobState.FAILED:
+                job.enter_state(JobState.FAILED)
             if decision.detail.get("error"):
                 job.last_error = {"message": str(decision.detail["error"])}
             if decision.detail.get("note"):

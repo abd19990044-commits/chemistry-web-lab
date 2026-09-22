@@ -19,12 +19,18 @@ ENV PORT=7860
 EXPOSE 7860
 
 # A dedicated, non-root user (required by some Space runtimes).
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+RUN useradd -m -u 1000 appuser && \
+    mkdir -p /data && \
+    chown -R appuser:appuser /app /data
 USER appuser
 
-# Keep one Gunicorn worker because the application has process-local session
-# state and the legacy Kaggle runner is not designed as a multi-process
-# coordinator. Threads still allow concurrent HTTP requests while avoiding
-# duplicate worker state, inconsistent fallback Flask secret keys, and races
-# during Kaggle job polling/submission. Set SECRET_KEY in the Space secrets
-CMD ["gunicorn", "api.main:app", "-k", "uvicorn.workers.UvicornWorker", "-w", "1", "-b", "0.0.0.0:7860", "--timeout", "900"]
+# The local worker is deliberately separate from request handling.  The image
+# entrypoint supervises both processes and exports one shared durable state
+# directory so leases/fences and job visibility coordinate correctly.  The
+# explicit Gunicorn budget is kept visible here for deployment checks; the
+# entrypoint reads the same default through GUNICORN_TIMEOUT.
+# gunicorn --timeout 900
+COPY --chown=appuser:appuser docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod 0755 /app/docker-entrypoint.sh
+ENV CHEMISTRY_LAB_STATE_DIR=/data
+CMD ["/app/docker-entrypoint.sh"]

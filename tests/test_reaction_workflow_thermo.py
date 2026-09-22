@@ -252,6 +252,38 @@ def test_multi_opt_geometry_handoff(client):
     assert stages[2]["parent_stage_id"] == stages[1]["stage_id"]
 
 
+def test_unified_successor_input_uses_final_optimization_geometry(client):
+    """A resumed/next stage must be generated from OPT's parsed final XYZ,
+    never from the initial geometry that was used to start OPT."""
+    setup = client.post("/api/v1/reactions/unified-setup", json={
+        "equation": "A -> A",
+        "stages_preset": "opt_freq",
+        "method": "B3LYP",
+        "basis_set": "def2-SVP",
+        "target_host": "server_local",
+    })
+    assert setup.status_code == 200
+    reaction = setup.get_json()["reaction"]
+    sp = _species_by_name(reaction, "A")
+    opt, freq = sp["stages"]
+
+    # The initial geometry has O at 0.000000; this completed OPT has the
+    # authoritative final geometry at O=0.001000.
+    completed = client.post(
+        "/api/v1/reactions/%s/stages/%s/complete" % (reaction["reaction_id"], opt["stage_id"]),
+        json={"species_id": sp["species_id"], "output_text": opt_fixture(-76.40, 1)},
+    )
+    assert completed.status_code == 200
+    fresh = client.get("/api/v1/reactions/%s" % reaction["reaction_id"]).get_json()["reaction"]
+    fresh_sp = _species_by_name(fresh, "A")
+    fresh_opt, fresh_freq = fresh_sp["stages"]
+    assert fresh_opt["state"] == "COMPLETE"
+    assert fresh_freq["state"] == "READY"
+    assert "O 0.00100000 0.00000000 0.00000000" in fresh_freq["input_text"]
+    assert "O 0.00000000 0.00000000 0.00000000" not in fresh_freq["input_text"]
+    assert fresh_freq["geometry_provenance"]["source_stage_id"] == fresh_opt["stage_id"]
+
+
 def test_freq_receives_latest_geometry_and_composite(client):
     reaction = _create(client, "A -> A")
     sp = _species_by_name(reaction, "A")

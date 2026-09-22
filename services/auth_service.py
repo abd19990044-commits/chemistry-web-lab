@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import os
 import secrets
+import sys
 from typing import Any, Dict, Optional
 
 LOGGER = logging.getLogger("chemlab.auth")
@@ -31,6 +32,71 @@ class AuthorizationError(Exception):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+
+
+def _signed_flask_session_from_request(request: Any) -> Optional[Dict[str, Any]]:
+    """Decode the existing Flask session cookie for an ASGI request.
+
+    The production process exposes FastAPI routes and mounts the Flask UI in
+    the same server.  Browser authentication is established by Flask, whose
+    signed-cookie format is not compatible with Starlette's SessionMiddleware.
+    Without this bridge an authenticated browser becomes anonymous whenever a
+    request is handled by a native FastAPI route (notably Local Agent routes).
+
+    Only Flask's own signing serializer is used; an unsigned/spoofed cookie is
+    rejected.  Cookie contents and signature errors are never logged.
+    """
+    if request is None or not hasattr(request, "cookies"):
+        return None
+    try:
+        app_module = sys.modules.get("app")
+        if app_module is None:
+            import app as app_module  # noqa: PLC0415
+        flask_app = getattr(app_module, "app", None)
+        if flask_app is None:
+            return None
+        cookie_name = flask_app.config.get("SESSION_COOKIE_NAME", "session")
+        raw_cookie = request.cookies.get(cookie_name)
+        if not raw_cookie:
+            return None
+        serializer = flask_app.session_interface.get_signing_serializer(flask_app)
+        if serializer is None:
+            return None
+        lifetime = int(flask_app.permanent_session_lifetime.total_seconds())
+        loaded = serializer.loads(raw_cookie, max_age=lifetime)
+        return loaded if isinstance(loaded, dict) else None
+    except Exception:  # invalid, expired, or unavailable signed session
+        return None
+
+
+def browser_csrf_is_valid(request: Any) -> bool:
+    """Validate CSRF for a request carrying a signed Flask browser session.
+
+    Requests without an authenticated/signed browser cookie have no ambient
+    browser authority and are left to endpoint authentication.  This mirrors
+    Flask's protection for native FastAPI routes, which otherwise bypass the
+    Flask ``before_request`` hook entirely.
+    """
+    if request is None or str(getattr(request, "method", "GET")).upper() in {
+        "GET", "HEAD", "OPTIONS"
+    }:
+        return True
+    signed_session = _signed_flask_session_from_request(request)
+    if not isinstance(signed_session, dict):
+        return True
+
+    auth_header = str(getattr(request, "headers", {}).get("authorization", ""))
+    if auth_header.startswith("Bearer ") and not signed_session.get("user"):
+        if is_valid_bearer_token(auth_header[7:].strip()):
+            return True
+
+    expected = str(signed_session.get("csrf_token") or "")
+    supplied = str(
+        getattr(request, "headers", {}).get("x-csrf-token")
+        or getattr(request, "headers", {}).get("x-csrftoken")
+        or ""
+    )
+    return bool(expected and supplied and secrets.compare_digest(expected, supplied))
 
 
 def is_valid_bearer_token(token: str) -> bool:
@@ -104,6 +170,8 @@ def get_authenticated_owner(
                 sess = None
         elif hasattr(request, "state"):
             sess = getattr(request.state, "session", None)
+        if not isinstance(sess, dict):
+            sess = _signed_flask_session_from_request(request)
 
     if isinstance(sess, dict):
         user_info = sess.get("user")

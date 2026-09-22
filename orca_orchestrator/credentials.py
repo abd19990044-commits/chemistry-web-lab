@@ -14,18 +14,12 @@ itself, which self-continues. `watchdog.py` is therefore best-effort by
 construction, and the boundary is documented in ARCHITECTURE.md instead of
 being papered over.
 
-Known residual exposure, stated honestly
-----------------------------------------
-The in-kernel runner must authenticate to Kaggle in order to push its own
-successor, so the credential is embedded in the pushed kernel source. It
-therefore lives inside a private Kaggle notebook belonging to the user, for as
-long as that notebook exists. This design does not create that exposure -- any
-self-continuing kernel has it -- but it does mitigate it: the token is written
-only into `is_private` kernels, is scrubbed from every log record by
-`logging_ext.RedactingFilter`, is removed from the kernel's filesystem
-immediately after the successor push, and the runner installs an excepthook so
-a traceback can never print it. Users are advised in the UI to use a dedicated
-token they can revoke.
+Continuation credential boundary
+--------------------------------
+Generated kernels never receive the server-side Kaggle credential. The runner
+uses Kaggle User Secrets for self-continuation. Logs are redacted and
+tracebacks are prevented from printing known secrets; a dedicated, revocable
+Kaggle token remains recommended.
 """
 from __future__ import annotations
 

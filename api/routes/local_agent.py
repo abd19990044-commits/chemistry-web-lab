@@ -50,7 +50,11 @@ def runtime_init(req: RuntimeInitRequest) -> Dict[str, Any]:
         agent_version=req.agent_version,
         protocol_version=req.protocol_version,
         capabilities=req.capabilities,
+        installation_secret=req.installation_secret,
     )
+    if not res.get("ok"):
+        status_code = status.HTTP_403_FORBIDDEN if res.get("error_code") == "INSTALLATION_AUTH_REQUIRED" else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=res.get("error"))
     return res
 
 
@@ -89,10 +93,9 @@ def runtime_finalize(req: RuntimeFinalizeRequest) -> Dict[str, Any]:
 @router.post("/runtime/end", summary="Agent process signals graceful exit")
 def runtime_end(
     agent_session_id: str = Query(...),
-    runtime_secret: Optional[str] = Query(None),
     authorization: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
-    cred = runtime_secret or ""
+    cred = ""
     if authorization and authorization.startswith("Bearer "):
         cred = authorization[7:].strip()
     if not cred:
@@ -139,13 +142,9 @@ async def websocket_agent_endpoint(websocket: WebSocket):
     await websocket.accept()
     auth_header = websocket.headers.get("Authorization") or ""
     session_id_param = websocket.query_params.get("agent_session_id") or ""
-    secret_param = websocket.query_params.get("runtime_secret") or ""
-
     cred = ""
     if auth_header.startswith("Bearer "):
         cred = auth_header[7:].strip()
-    elif secret_param:
-        cred = secret_param.strip()
 
     if not session_id_param or not cred:
         await websocket.send_json({"type": "ERROR", "error": "Missing agent_session_id or runtime_secret"})
@@ -179,10 +178,52 @@ async def websocket_agent_endpoint(websocket: WebSocket):
                 local_agent_service.record_heartbeat(session_id_param, capabilities=msg.get("capabilities"))
                 await websocket.send_json({"type": "HEARTBEAT_ACK", "timestamp": msg.get("timestamp")})
             elif mtype == "JOB_RESULT":
-                job_id = msg.get("job_id")
+                job_id = str(msg.get("job_id") or "").strip()
                 payload = msg.get("result") or {}
-                local_agent_service.record_job_result(session_id_param, job_id, payload)
-                await websocket.send_json({"type": "JOB_RESULT_ACK", "job_id": job_id})
+                if not job_id or not isinstance(payload, dict):
+                    await websocket.send_json({
+                        "type": "JOB_RESULT_NACK",
+                        "job_id": job_id,
+                        "error": "Invalid job result payload",
+                    })
+                    continue
+                try:
+                    exit_code = int(payload.get("exit_code", 0))
+                except (TypeError, ValueError):
+                    await websocket.send_json({
+                        "type": "JOB_RESULT_NACK",
+                        "job_id": job_id,
+                        "error": "Invalid exit_code",
+                    })
+                    continue
+                result = local_agent_service.complete_agent_job(
+                    job_id=job_id,
+                    agent_session_id=session_id_param,
+                    runtime_session_secret=cred,
+                    exit_code=exit_code,
+                    stdout_tail=str(payload.get("stdout_tail") or ""),
+                    parsed_results=(payload.get("parsed_results")
+                                    if isinstance(payload.get("parsed_results"), dict)
+                                    else {}),
+                    error_message=(str(payload.get("error_message"))
+                                   if payload.get("error_message") else None),
+                    output_text=(str(payload.get("output_text"))
+                                 if payload.get("output_text") is not None else None),
+                    xyz_structure=(str(payload.get("xyz_structure"))
+                                   if payload.get("xyz_structure") is not None else None),
+                )
+                if result.get("ok"):
+                    await websocket.send_json({
+                        "type": "JOB_RESULT_ACK",
+                        "job_id": job_id,
+                        "status": result.get("status"),
+                    })
+                else:
+                    await websocket.send_json({
+                        "type": "JOB_RESULT_NACK",
+                        "job_id": job_id,
+                        "error": result.get("error", "Result persistence failed"),
+                    })
     except WebSocketDisconnect:
         local_agent_service._WS_CONNECTIONS.pop(session_id_param, None)
         local_agent_service._WS_OWNERS.pop(session_id_param, None)

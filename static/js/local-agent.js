@@ -6,6 +6,8 @@
     const LocalAgentClient = {
         devices: [],
         selectedDeviceId: null,
+        _deviceFetchGeneration: 0,
+        _deviceFetchController: null,
 
         async init() {
             this.bindEvents();
@@ -33,7 +35,7 @@
                 }
                 const siteKeyInput = document.getElementById('input-site-api-key');
                 if (siteKeyInput) {
-                    const saved = localStorage.getItem('orca_site_api_key');
+                    const saved = sessionStorage.getItem('orca_site_api_key');
                     if (saved) siteKeyInput.value = saved;
                 }
             } catch (e) {
@@ -169,6 +171,9 @@
                             throw new Error(data.error || 'Failed to save Kaggle credentials');
                         }
                         if (kaggleModal) kaggleModal.classList.add('hidden');
+                        if (typeof window.setKaggleSignedIn === 'function') {
+                            window.setKaggleSignedIn(username, key);
+                        }
                         alert('Kaggle credentials saved securely and enabled.');
                         const kaggleTab = document.getElementById('backend-tab-kaggle');
                         if (kaggleTab) kaggleTab.classList.remove('disabled');
@@ -392,19 +397,28 @@
         },
 
         async fetchDevices() {
+            const generation = ++this._deviceFetchGeneration;
+            if (this._deviceFetchController) this._deviceFetchController.abort();
+            const controller = new AbortController();
+            this._deviceFetchController = controller;
             try {
                 let clientId = localStorage.getItem('orca_local_client_id');
                 if (!clientId) {
                     clientId = 'client_' + Math.random().toString(36).substring(2, 15);
                     localStorage.setItem('orca_local_client_id', clientId);
                 }
-                const siteApiKey = localStorage.getItem('orca_site_api_key') || '';
+                const siteApiKey = sessionStorage.getItem('orca_site_api_key') || '';
                 const headers = { 'X-User-Id': clientId };
                 if (siteApiKey) headers['X-Site-API-Key'] = siteApiKey;
 
-                const resp = await fetch('/api/v1/local-agent/devices', { headers });
+                const resp = await fetch('/api/v1/local-agent/devices', {
+                    headers,
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
                 if (resp.ok) {
                     const data = await resp.json();
+                    if (generation !== this._deviceFetchGeneration || controller.signal.aborted) return [];
                     this.devices = data.devices || [];
                     this.renderDeviceList();
                     this.renderDeviceDropdown();
@@ -412,7 +426,9 @@
                     return this.devices;
                 }
             } catch (err) {
-                console.warn('Failed to fetch runtime devices:', err);
+                if (err.name !== 'AbortError') console.warn('Failed to fetch runtime devices:', err);
+            } finally {
+                if (generation === this._deviceFetchGeneration) this._deviceFetchController = null;
             }
             return [];
         },
@@ -427,7 +443,7 @@
                 clientId = 'client_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
                 localStorage.setItem('orca_local_client_id', clientId);
             }
-            const siteApiKey = localStorage.getItem('orca_site_api_key') || '';
+            const siteApiKey = sessionStorage.getItem('orca_site_api_key') || '';
             const headers = { 'Content-Type': 'application/json', 'X-User-Id': clientId };
             if (siteApiKey) {
                 headers['X-Site-API-Key'] = siteApiKey;
@@ -529,6 +545,15 @@
             const prevVal = selectEl.value;
             selectEl.innerHTML = '';
 
+            // Preserve server-side targets while refreshing the asynchronous
+            // Local Agent device list.
+            [['server_local', 'Server Host ORCA'], ['kaggle_cloud', 'Kaggle Cloud Backend']].forEach(([value, label]) => {
+                const opt = document.createElement('option');
+                opt.value = value;
+                opt.textContent = label;
+                selectEl.appendChild(opt);
+            });
+
             const onlineDevices = this.devices.filter(d => d.status === 'ONLINE');
 
             if (this.devices && this.devices.length > 0) {
@@ -550,6 +575,8 @@
                 selectEl.value = prevVal;
             } else if (onlineDevices.length > 0) {
                 selectEl.value = onlineDevices[0].agent_session_id;
+            } else {
+                selectEl.value = 'server_local';
             }
             this.selectedDeviceId = selectEl.value;
         },

@@ -74,7 +74,9 @@ def test_bug1_running_status_sync_without_output_files(temp_state_dir):
 
     # Act step
     from orca_orchestrator.legacy_compat import _legacy_status
-    reconciled = reconciler._act(job, decision, obs, mock_client, fence=1, correlation_id="test", actor="system")
+    lease = store.acquire_lease(f"job:{job_id}", "test", ttl_seconds=30)
+    assert lease is not None
+    reconciled = reconciler._act(job, decision, obs, mock_client, fence=lease.fence, correlation_id="test", actor="system")
     assert reconciled.state in (JobState.READY, JobState.RUNNING)
     assert _legacy_status(reconciled.state) == "running"
 
@@ -491,7 +493,6 @@ H   0.000000000000  -0.757123456789  -0.468898765432
 
     shutil.rmtree(mock_slug_dir, ignore_errors=True)
     os.environ.pop("ORCA_LOCAL_MODE", None)
-
 
 
 

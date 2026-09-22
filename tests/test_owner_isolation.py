@@ -67,12 +67,12 @@ def isolated_api(tmp_path, monkeypatch):
 
 
 def _creds(user):
-    return {"kaggle_username": user, "kaggle_key": "0" * 32}
+    return {"X-Kaggle-Username": user, "X-Kaggle-Key": "0" * 32}
 
 
 def test_A_owner_can_list_own_artifacts(isolated_api):
     client, reached = isolated_api
-    r = client.get("/api/v1/kaggle/jobs/%s/artifacts" % JOB_ID, params=_creds(OWNER_A))
+    r = client.get("/api/v1/kaggle/jobs/%s/artifacts" % JOB_ID, headers=_creds(OWNER_A))
     assert r.status_code == 200
     types = {a["filename"]: a["artifact_type"] for a in r.json()["artifacts"]}
     assert types["h2o.molden.input"] == "molden"
@@ -80,7 +80,7 @@ def test_A_owner_can_list_own_artifacts(isolated_api):
 
 def test_B_other_owner_job_is_403(isolated_api):
     client, reached = isolated_api
-    r = client.get("/api/v1/kaggle/jobs/%s/artifacts" % JOB_ID, params=_creds(OWNER_B))
+    r = client.get("/api/v1/kaggle/jobs/%s/artifacts" % JOB_ID, headers=_creds(OWNER_B))
     assert r.status_code == 403
     assert r.json()["error"]["code"] == "FORBIDDEN"
 
@@ -88,14 +88,14 @@ def test_B_other_owner_job_is_403(isolated_api):
 def test_C_other_owner_artifact_is_403(isolated_api):
     client, reached = isolated_api
     r = client.get("/api/v1/kaggle/jobs/%s/artifacts/h2o_opt.out" % JOB_ID,
-                   params=_creds(OWNER_B))
+                   headers=_creds(OWNER_B))
     assert r.status_code == 403
 
 
 def test_D_other_owner_molden_is_403(isolated_api):
     client, reached = isolated_api
     r = client.get("/api/v1/kaggle/jobs/%s/artifacts/h2o.molden.input" % JOB_ID,
-                   params=_creds(OWNER_B))
+                   headers=_creds(OWNER_B))
     assert r.status_code == 403
     assert "h2o.molden.input" not in (r.text or "")
 
@@ -113,7 +113,7 @@ def test_E_unknown_job_is_404(isolated_api, tmp_path, monkeypatch):
     monkeypatch.setattr(kr_mod, "fetch_job_results", lambda u, k, j: (None, None))
     client, reached = isolated_api
     r = client.get("/api/v1/kaggle/jobs/chem-tools-none-1a2b3c4d/artifacts",
-                   params=_creds(OWNER_A))
+                   headers=_creds(OWNER_A))
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "NOT_FOUND"
 
@@ -121,14 +121,14 @@ def test_E_unknown_job_is_404(isolated_api, tmp_path, monkeypatch):
 def test_F_missing_credentials_rejected(isolated_api):
     client, reached = isolated_api
     r = client.get("/api/v1/kaggle/jobs/%s/artifacts" % JOB_ID,
-                   params={"kaggle_username": "", "kaggle_key": ""})
-    assert r.status_code == 400
+                   headers={})
+    assert r.status_code == 422
 
 
 def test_G_owner_denial_never_falls_back_to_legacy_fetch(isolated_api):
     client, reached = isolated_api
     r = client.get("/api/v1/kaggle/jobs/%s/artifacts/h2o.molden.input" % JOB_ID,
-                   params=_creds(OWNER_B))
+                   headers=_creds(OWNER_B))
     assert r.status_code == 403
     assert reached["legacy"] == 0, \
         "an owner denial must NEVER reach the legacy Kaggle fetch path"

@@ -679,23 +679,46 @@ def test_cross_process_lock_timeout_fails_closed(tmp_path):
     # 2. Process B attempts with timeout 0.2s -> MUST time out and NOT enter
     p_b = multiprocessing.Process(target=_lock_worker_b, args=(lock_file, 0.2, b_results))
     p_b.start()
-    p_b.join(timeout=5.0)
+    # Windows ``spawn`` imports this large test module before invoking the
+    # worker.  Under the complete suite that cold start can exceed five
+    # seconds even though the lock timeout itself remains 0.2 seconds.
+    p_b.join(timeout=20.0)
 
+    assert not p_b.is_alive(), "lock contender did not finish after process startup"
+    assert p_b.exitcode == 0
     assert len(b_results) == 1
     assert b_results[0]["entered"] is False
     assert b_results[0]["timed_out"] is True
 
     # 3. Process A is instructed to release
     release_event.set()
-    p_a.join(timeout=5.0)
+    p_a.join(timeout=20.0)
+    assert not p_a.is_alive()
+    assert p_a.exitcode == 0
 
     # 4. Process C acquires normally
     p_c = multiprocessing.Process(target=_lock_worker_c, args=(lock_file, c_results))
     p_c.start()
-    p_c.join(timeout=5.0)
+    p_c.join(timeout=20.0)
 
+    assert not p_c.is_alive()
+    assert p_c.exitcode == 0
     assert len(c_results) == 1
     assert c_results[0]["entered"] is True
+
+
+def test_cross_process_lock_is_reentrant_without_dropping_outer_os_lock(tmp_path):
+    lock_path = str(tmp_path / "reentrant.lock")
+    outer = local_orca.CrossProcessFileLock(lock_path, timeout=1.0)
+    nested_instance = local_orca.CrossProcessFileLock(lock_path, timeout=1.0)
+    with outer:
+        with outer:
+            with nested_instance:
+                assert outer._is_locked is True
+                assert nested_instance._is_locked is True
+        assert outer._is_locked is True
+    assert outer._is_locked is False
+    assert nested_instance._is_locked is False
 
 
 def _settings_contention_writer(state_dir: str, value: str, hold_duration: float, ready_event):

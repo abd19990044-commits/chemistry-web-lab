@@ -27,7 +27,8 @@ import threading
 import time
 import uuid
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+import signal
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 _BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _ORCA_ENGINE_SRC = os.path.join(_BASE_DIR, "orca_engine", "src")
@@ -40,6 +41,7 @@ from orca_engine.reporting import job_to_dict
 DEFAULT_LOCAL_ORCA_TIMEOUT_S = 3600
 DEFAULT_LOCAL_ORCA_CONCURRENCY = 1
 DEFAULT_KAGGLE_CONCURRENCY = 5
+HEARTBEAT_SECONDS = 0.5
 
 _DEFAULT_SETTINGS: Dict[str, Any] = {
     "enabled": True,
@@ -54,7 +56,24 @@ _DEFAULT_SETTINGS: Dict[str, Any] = {
 }
 
 _THREAD_LOCK = threading.Lock()
+_THREAD_LOCKS_GUARD = threading.Lock()
+_THREAD_LOCKS: Dict[str, threading.RLock] = {}
+_OS_LOCK_STATES: Dict[str, Dict[str, Any]] = {}
 _ACTIVE_LOCAL_PROCESS_MEM: Dict[str, Any] = {}
+
+
+def _shared_thread_lock(lock_path: str) -> threading.RLock:
+    """Return one re-entrant lock per lock file within this process.
+
+    A new ``CrossProcessFileLock`` used to create a new thread lock every
+    time.  That protects separate instances in separate processes via the OS
+    lock, but not two instances in the same Windows process (where file
+    locking is process-scoped).  The keyed lock closes that same-process race
+    while remaining re-entrant for diagnostic helpers that nest the lock.
+    """
+    key = os.path.abspath(lock_path)
+    with _THREAD_LOCKS_GUARD:
+        return _THREAD_LOCKS.setdefault(key, threading.RLock())
 
 
 class LockAcquisitionError(TimeoutError):
@@ -74,15 +93,27 @@ class CrossProcessFileLock:
     def __init__(self, lock_path: str, timeout: float = 30.0):
         self.lock_path = lock_path
         self.timeout = timeout
-        self._thread_lock = threading.Lock()
+        self._thread_lock = _shared_thread_lock(lock_path)
         self._fd: Optional[Any] = None
         self._is_locked: bool = False
+        self._acquire_depth: int = 0
 
     def acquire(self, blocking: bool = True, timeout: Optional[float] = None) -> bool:
         eff_timeout = self.timeout if timeout is None else timeout
         acquired_thread = self._thread_lock.acquire(blocking=blocking, timeout=eff_timeout if blocking else 0)
         if not acquired_thread:
             return False
+
+        lock_key = os.path.abspath(self.lock_path)
+        current_thread = threading.get_ident()
+        with _THREAD_LOCKS_GUARD:
+            existing = _OS_LOCK_STATES.get(lock_key)
+            if existing is not None and existing.get("owner_thread") == current_thread:
+                existing["depth"] = int(existing.get("depth") or 0) + 1
+                self._fd = existing["fd"]
+                self._is_locked = True
+                self._acquire_depth += 1
+                return True
 
         try:
             os.makedirs(os.path.dirname(os.path.abspath(self.lock_path)), exist_ok=True)
@@ -107,6 +138,13 @@ class CrossProcessFileLock:
                     import fcntl
                     fcntl.flock(self._fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 self._is_locked = True
+                self._acquire_depth += 1
+                with _THREAD_LOCKS_GUARD:
+                    _OS_LOCK_STATES[lock_key] = {
+                        "fd": self._fd,
+                        "depth": 1,
+                        "owner_thread": current_thread,
+                    }
                 return True
             except (BlockingIOError, OSError, IOError):
                 if not blocking or (time.time() - start >= eff_timeout):
@@ -122,31 +160,45 @@ class CrossProcessFileLock:
                 time.sleep(0.01)
 
     def release(self) -> None:
-        if self._fd is not None:
+        if self._acquire_depth <= 0:
+            return
+        lock_key = os.path.abspath(self.lock_path)
+        release_os_lock = False
+        fd = None
+        with _THREAD_LOCKS_GUARD:
+            state = _OS_LOCK_STATES.get(lock_key)
+            if state is not None and state.get("owner_thread") == threading.get_ident():
+                state["depth"] = int(state.get("depth") or 1) - 1
+                fd = state.get("fd")
+                if state["depth"] <= 0:
+                    _OS_LOCK_STATES.pop(lock_key, None)
+                    release_os_lock = True
+        self._acquire_depth -= 1
+        if release_os_lock and fd is not None:
             try:
                 if platform.system() == "Windows":
                     import msvcrt
-                    self._fd.seek(0)
+                    fd.seek(0)
                     try:
-                        msvcrt.locking(self._fd.fileno(), msvcrt.LK_UNLCK, 1)
+                        msvcrt.locking(fd.fileno(), msvcrt.LK_UNLCK, 1)
                     except Exception:
                         pass
                 else:
                     import fcntl
                     try:
-                        fcntl.flock(self._fd.fileno(), fcntl.LOCK_UN)
+                        fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
                     except Exception:
                         pass
-                self._fd.close()
+                fd.close()
             except Exception:
                 pass
+        if self._acquire_depth == 0:
             self._fd = None
-        self._is_locked = False
-        if self._thread_lock.locked():
-            try:
-                self._thread_lock.release()
-            except RuntimeError:
-                pass
+            self._is_locked = False
+        try:
+            self._thread_lock.release()
+        except RuntimeError:
+            pass
 
     def __enter__(self) -> CrossProcessFileLock:
         if not self.acquire():
@@ -158,13 +210,58 @@ class CrossProcessFileLock:
 
 
 def _get_process_lock(state_dir: Optional[str] = None, timeout: float = 30.0) -> CrossProcessFileLock:
-    base = state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR") or os.path.join(os.getcwd(), "data")
+    base = (state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR")
+            or os.environ.get("ORCA_STATE_DIR") or os.path.join(os.getcwd(), "data"))
     return CrossProcessFileLock(os.path.join(base, ".local_orca_process.lock"), timeout=timeout)
 
 
 def _get_settings_lock(state_dir: Optional[str] = None, timeout: float = 30.0) -> CrossProcessFileLock:
-    base = state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR") or os.path.join(os.getcwd(), "data")
+    base = (state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR")
+            or os.environ.get("ORCA_STATE_DIR") or os.path.join(os.getcwd(), "data"))
     return CrossProcessFileLock(os.path.join(base, ".local_orca_settings.lock"), timeout=timeout)
+
+
+def _terminate_process_tree(proc_or_pid: Any, grace_seconds: float = 1.5) -> None:
+    """Terminate an ORCA process and all descendants, best effort but bounded."""
+    proc = proc_or_pid if isinstance(proc_or_pid, subprocess.Popen) else None
+    pid = int(proc.pid if proc is not None else proc_or_pid)
+    if proc is not None and proc.poll() is not None:
+        return
+
+    if platform.system() == "Windows":
+        # /T is essential for ORCA MPI/helper descendants.  Popen's process
+        # object alone only targets the parent executable.
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                       capture_output=True, check=False)
+    else:
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGTERM)
+        except (ProcessLookupError, OSError):
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except (ProcessLookupError, OSError):
+                pass
+
+    deadline = time.monotonic() + max(0.0, grace_seconds)
+    while proc is not None and proc.poll() is None and time.monotonic() < deadline:
+        time.sleep(0.05)
+
+    if proc is not None and proc.poll() is None:
+        if platform.system() == "Windows":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                           capture_output=True, check=False)
+        else:
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGKILL)
+            except (ProcessLookupError, OSError):
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except (ProcessLookupError, OSError):
+                    pass
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            pass
 
 
 def detect_orca_candidates() -> List[str]:
@@ -193,7 +290,8 @@ def detect_orca_candidates() -> List[str]:
 
 def get_local_orca_settings(state_dir: Optional[str] = None) -> Dict[str, Any]:
     """Loads persisted local ORCA configuration without automatic path fabrication."""
-    base = state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR") or os.path.join(os.getcwd(), "data")
+    base = (state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR")
+            or os.environ.get("ORCA_STATE_DIR") or os.path.join(os.getcwd(), "data"))
     cfg_file = os.path.join(base, "local_orca_settings.json")
     try:
         with _get_settings_lock(base):
@@ -222,30 +320,6 @@ def get_local_orca_settings(state_dir: Optional[str] = None) -> Dict[str, Any]:
         return dict(_DEFAULT_SETTINGS)
 
 
-def save_local_orca_settings(settings: Dict[str, Any], state_dir: Optional[str] = None) -> Dict[str, Any]:
-    """Saves local ORCA settings atomically with fail-closed lock semantics."""
-    base = state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR") or os.path.join(os.getcwd(), "data")
-    os.makedirs(base, exist_ok=True)
-    cfg_file = os.path.join(base, "local_orca_settings.json")
-    with _get_settings_lock(base):
-        current = dict(_DEFAULT_SETTINGS)
-        if os.path.isfile(cfg_file):
-            try:
-                with open(cfg_file, "r", encoding="utf-8") as f:
-                    current.update(json.load(f))
-            except Exception:
-                pass
-        current.update(settings)
-        # Ensure hard limit of 1 on local concurrency
-        current["concurrency"] = DEFAULT_LOCAL_ORCA_CONCURRENCY
-        tmp = cfg_file + ".tmp." + uuid.uuid4().hex
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(current, f, indent=2)
-        os.replace(tmp, cfg_file)
-        return current
-
-
-
 FORBIDDEN_EXECUTABLE_NAMES = {
     "cmd.exe", "cmd", "powershell.exe", "powershell", "pwsh.exe", "pwsh",
     "bash", "sh", "zsh", "csh", "tcsh", "python.exe", "python", "python3",
@@ -268,10 +342,35 @@ def is_safe_executable_path(exe_path: str) -> Tuple[bool, Optional[str]]:
     if base_name in FORBIDDEN_EXECUTABLE_NAMES:
         return False, f"Executable '{base_name}' is a forbidden shell/system utility."
 
-    if not (base_name.startswith("orca") or base_name == "orca"):
-        return False, f"Executable '{base_name}' does not match expected ORCA binary naming pattern."
-
     return True, None
+
+
+def save_local_orca_settings(settings: Dict[str, Any], state_dir: Optional[str] = None) -> Dict[str, Any]:
+    """Saves local ORCA settings atomically with fail-closed lock semantics."""
+    base = (state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR")
+            or os.environ.get("ORCA_STATE_DIR") or os.path.join(os.getcwd(), "data"))
+    os.makedirs(base, exist_ok=True)
+    cfg_file = os.path.join(base, "local_orca_settings.json")
+    with _get_settings_lock(base):
+        current = dict(_DEFAULT_SETTINGS)
+        if os.path.isfile(cfg_file):
+            try:
+                with open(cfg_file, "r", encoding="utf-8") as f:
+                    current.update(json.load(f))
+            except Exception:
+                pass
+        current.update(settings)
+        if "orca_executable" in current and current["orca_executable"]:
+            safe, err_msg = is_safe_executable_path(str(current["orca_executable"]))
+            if not safe:
+                raise ValueError(f"Invalid executable path: {err_msg}")
+        # Ensure hard limit of 1 on local concurrency
+        current["concurrency"] = DEFAULT_LOCAL_ORCA_CONCURRENCY
+        tmp = cfg_file + ".tmp." + uuid.uuid4().hex
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(current, f, indent=2)
+        os.replace(tmp, cfg_file)
+        return current
 
 def validate_local_orca_config(
     settings: Optional[Dict[str, Any]] = None,
@@ -310,14 +409,18 @@ def validate_local_orca_config(
     # Validate Executable
     if not exe_path:
         errors.append("ORCA_EXECUTABLE_NOT_FOUND: executable path is empty")
-    elif not os.path.isfile(exe_path):
-        errors.append("ORCA_EXECUTABLE_NOT_FOUND: executable file does not exist")
     else:
-        is_win = platform.system() == "Windows"
-        if not is_win and not os.access(exe_path, os.X_OK):
-            errors.append("ORCA_EXECUTABLE_NOT_LAUNCHABLE: file is not executable")
+        safe, err_msg = is_safe_executable_path(exe_path)
+        if not safe:
+            errors.append(f"ORCA_EXECUTABLE_FORBIDDEN: {err_msg}")
+        elif not os.path.isfile(exe_path):
+            errors.append("ORCA_EXECUTABLE_NOT_FOUND: executable file does not exist")
         else:
-            details["executable_valid"] = True
+            is_win = platform.system() == "Windows"
+            if not is_win and not os.access(exe_path, os.X_OK):
+                errors.append("ORCA_EXECUTABLE_NOT_LAUNCHABLE: file is not executable")
+            else:
+                details["executable_valid"] = True
 
     # Validate Input Directory
     if not inp_dir:
@@ -522,10 +625,13 @@ def verify_process_identity(persisted: Optional[Dict[str, Any]]) -> str:
     # 2. Compare executable paths if available on both
     if persisted_exe and live_exe:
         def norm(p: str) -> str:
-            return os.path.normcase(os.path.normpath(str(p)))
+            try:
+                return os.path.normcase(os.path.realpath(str(p)))
+            except Exception:
+                return os.path.normcase(os.path.normpath(str(p)))
         p_n = norm(persisted_exe)
         l_n = norm(live_exe)
-        if p_n == l_n or p_n in l_n or l_n in p_n:
+        if p_n == l_n or os.path.basename(p_n) == os.path.basename(l_n):
             return "MATCH"
         else:
             return "MISMATCH"
@@ -557,9 +663,36 @@ def _write_active_process_file(data: Dict[str, Any], state_dir: str) -> None:
     os.makedirs(state_dir, exist_ok=True)
     active_path = os.path.join(state_dir, "local_orca_active.json")
     tmp = active_path + ".tmp." + uuid.uuid4().hex
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-    os.replace(tmp, active_path)
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        # Windows can briefly deny ReplaceFile/os.replace while a concurrent
+        # reader still has the old JSON open.  The write is already staged in
+        # a uniquely named file, so a short bounded retry preserves atomicity
+        # without turning a harmless polling collision into a failed ORCA
+        # attempt.  Other errors remain fatal and are surfaced to the caller.
+        last_error: Optional[OSError] = None
+        for attempt in range(8):
+            try:
+                os.replace(tmp, active_path)
+                last_error = None
+                break
+            except OSError as exc:
+                last_error = exc
+                if os.name != "nt" or getattr(exc, "winerror", None) not in {5, 32}:
+                    raise
+                time.sleep(0.025 * (attempt + 1))
+        if last_error is not None:
+            raise last_error
+    finally:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
 
 
 def _clear_active_process_file(state_dir: str) -> None:
@@ -574,7 +707,8 @@ def _clear_active_process_file(state_dir: str) -> None:
 def cancel_local_orca_job(job_id: str, attempt_id: Optional[str] = None, state_dir: Optional[str] = None) -> bool:
     """Terminates an actively executing local ORCA process ONLY if process identity matches."""
     global _ACTIVE_LOCAL_PROCESS_MEM
-    base = state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR") or os.path.join(os.getcwd(), "data")
+    base = (state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR")
+            or os.environ.get("ORCA_STATE_DIR") or os.path.join(os.getcwd(), "data"))
     with _get_process_lock(base):
         active = _read_active_process_file(base) or dict(_ACTIVE_LOCAL_PROCESS_MEM)
         if not active:
@@ -589,20 +723,13 @@ def cancel_local_orca_job(job_id: str, attempt_id: Optional[str] = None, state_d
                 proc: Optional[subprocess.Popen] = _ACTIVE_LOCAL_PROCESS_MEM.get("proc")
                 if proc and proc.poll() is None:
                     try:
-                        proc.terminate()
-                        time.sleep(0.3)
-                        if proc.poll() is None:
-                            proc.kill()
-                            proc.wait(timeout=2.0)
+                        _terminate_process_tree(proc)
                     except Exception:
                         pass
                 elif active.get("pid"):
                     pid = active.get("pid")
                     try:
-                        if platform.system() == "Windows":
-                            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
-                        else:
-                            os.kill(int(pid), 9)
+                        _terminate_process_tree(int(pid))
                     except Exception:
                         pass
                 _ACTIVE_LOCAL_PROCESS_MEM.clear()
@@ -630,7 +757,8 @@ def cancel_local_orca_job(job_id: str, attempt_id: Optional[str] = None, state_d
 
 def get_active_local_process_info(state_dir: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Returns metadata for the currently running local ORCA process, if any."""
-    base = state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR") or os.path.join(os.getcwd(), "data")
+    base = (state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR")
+            or os.environ.get("ORCA_STATE_DIR") or os.path.join(os.getcwd(), "data"))
     with _get_process_lock(base):
         active = _read_active_process_file(base) or dict(_ACTIVE_LOCAL_PROCESS_MEM)
         if active:
@@ -643,6 +771,99 @@ def get_active_local_process_info(state_dir: Optional[str] = None) -> Optional[D
     return None
 
 
+def validate_local_orca_output(
+    output_file: str,
+    *,
+    stage_kind: Optional[str] = None,
+    return_code: Optional[int] = None,
+    input_file: str = "",
+    duration_seconds: float = 0.0,
+    output_text: Optional[str] = None,
+    artifacts: Optional[List[str]] = None,
+    process_finished_at: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Validate a completed ORCA output without launching a second process.
+
+    This is deliberately separate from ``execute_local_orca_job`` so a fresh
+    worker can adopt a process whose parent died, wait for it, and validate the
+    durable output rather than re-running the chemistry.  ``return_code=None``
+    means the original parent disappeared before it could persist the exit
+    code; a normal ORCA marker is accepted but surfaced as a warning.
+    """
+    output_path = str(output_file or "")
+    if output_text is None:
+        try:
+            output_text = pathlib.Path(output_path).read_text(encoding="utf-8", errors="replace") if output_path else ""
+        except OSError:
+            output_text = ""
+    output_text = output_text or ""
+    process_ok = return_code in (None, 0)
+    parser = OrcaParser(output_text)
+    parsed_jobs = parser.parse()
+    parsed: Dict[str, Any] = {}
+    if parsed_jobs:
+        last_job = parsed_jobs[-1]
+        parsed = job_to_dict(1, last_job)
+        parsed["energy_hartree"] = parsed.get("electronic_energy_hartree") or parsed.get("scf_energy_hartree")
+        parsed["final_energy_hartree"] = parsed["energy_hartree"]
+        parsed["frequencies"] = getattr(last_job, "vibrational_frequencies_cm", []) or []
+        parsed["coordinates"] = getattr(last_job, "coords", [])
+        parsed["converged"] = getattr(last_job, "converged", False)
+
+    parse_ok = bool(
+        parsed.get("energy_hartree") is not None
+        or parsed.get("final_energy_hartree") is not None
+        or parsed.get("frequencies")
+    )
+    normal_end = "ORCA TERMINATED NORMALLY" in output_text.upper()
+    if stage_kind in ("OPT", "OPT_FREQ"):
+        has_opt = bool(parsed.get("converged") or "OPTIMIZATION RUN DONE" in output_text or parsed.get("coordinates"))
+        has_energy = bool(parsed.get("energy_hartree") is not None or parsed.get("final_energy_hartree") is not None)
+        scientific_ok = normal_end and has_opt and has_energy
+    elif stage_kind in ("FREQ", "NUMFREQ"):
+        has_freq = bool(parsed.get("frequencies") or "VIBRATIONAL FREQUENCIES" in output_text)
+        has_energy = bool(parsed.get("energy_hartree") is not None or parsed.get("final_energy_hartree") is not None)
+        scientific_ok = normal_end and has_freq and has_energy
+    elif stage_kind == "SP":
+        scientific_ok = normal_end and bool(parsed.get("energy_hartree") is not None or parsed.get("final_energy_hartree") is not None)
+    else:
+        scientific_ok = parse_ok and normal_end
+
+    error = ""
+    error_code = None
+    if return_code not in (None, 0):
+        error = f"ORCA process exited with non-zero return code: {return_code}"
+        error_code = "PROCESS_FAILED"
+    elif not parse_ok:
+        error = "Failed to parse required chemical observables from ORCA output."
+        error_code = "PARSE_FAILED"
+    elif not normal_end:
+        error = "ORCA output does not contain the normal termination marker."
+        error_code = "ORCA_NOT_TERMINATED_NORMALLY"
+    elif not scientific_ok:
+        error = f"Scientific validation failed for stage kind {stage_kind}: output is incomplete or malformed."
+        error_code = "SCIENTIFIC_VALIDATION_FAILED"
+
+    return {
+        "ok": bool(process_ok and parse_ok and scientific_ok),
+        "process_ok": process_ok,
+        "parse_ok": parse_ok,
+        "scientific_ok": scientific_ok,
+        "return_code_unknown": return_code is None,
+        "error": error,
+        "error_code": error_code,
+        "exit_code": return_code,
+        "output_text": output_text,
+        "parsed": parsed,
+        "stage_result": parsed,
+        "duration_seconds": duration_seconds,
+        "input_file": input_file,
+        "output_file": output_path,
+        "artifacts": list(artifacts or []),
+        "process_finished_at": process_finished_at or time.time(),
+    }
+
+
 def execute_local_orca_job(
     job_id: str,
     input_text: str,
@@ -652,13 +873,17 @@ def execute_local_orca_job(
     state_dir: Optional[str] = None,
     timeout_seconds: Optional[int] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    heartbeat_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    cancel_requested_callback: Optional[Callable[[], bool]] = None,
+    detach_requested_callback: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
     """Safely executes an ORCA calculation locally with strict concurrency, process identity, and scientific validation.
     
     Returns a structured dictionary with process_ok, parse_ok, and scientific_ok.
     """
     global _ACTIVE_LOCAL_PROCESS_MEM
-    base = state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR") or os.path.join(os.getcwd(), "data")
+    base = (state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR")
+            or os.environ.get("ORCA_STATE_DIR") or os.path.join(os.getcwd(), "data"))
     cfg = settings if settings is not None else get_local_orca_settings(base)
     validation = validate_local_orca_config(cfg, base)
 
@@ -681,7 +906,24 @@ def execute_local_orca_job(
             "artifacts": [],
         }
 
-    safe_job_id = re.sub(r"[^a-zA-Z0-9_.-]", "_", job_id)
+    safe_job_id = re.sub(r"[^a-zA-Z0-9_.-]", "_", str(job_id))
+    if safe_job_id in {"", ".", ".."} or len(safe_job_id) > 120:
+        return {
+            "ok": False,
+            "process_ok": False,
+            "parse_ok": False,
+            "scientific_ok": False,
+            "error": "Invalid local job identifier.",
+            "error_code": "INVALID_JOB_ID",
+            "exit_code": -1,
+            "output_text": "",
+            "parsed": {},
+            "stage_result": None,
+            "duration_seconds": 0.0,
+            "input_file": "",
+            "output_file": "",
+            "artifacts": [],
+        }
     attempt_id = attempt_id or uuid.uuid4().hex
 
     # Enforce strictly 1 active local process atomically across threads and processes
@@ -711,7 +953,15 @@ def execute_local_orca_job(
                     _clear_active_process_file(base)
                     _ACTIVE_LOCAL_PROCESS_MEM.clear()
 
-            if _ACTIVE_LOCAL_PROCESS_MEM.get("running"):
+            # This cache is process-local only.  It must be scoped to the
+            # registry it came from; otherwise an unrelated state directory
+            # in the same Python process can be blocked by a stale entry.
+            memory_state_dir = _ACTIVE_LOCAL_PROCESS_MEM.get("state_dir")
+            memory_matches_state = (
+                not memory_state_dir
+                or os.path.abspath(str(memory_state_dir)) == os.path.abspath(base)
+            )
+            if _ACTIVE_LOCAL_PROCESS_MEM.get("running") and memory_matches_state:
                 if _ACTIVE_LOCAL_PROCESS_MEM.get("proc") and _ACTIVE_LOCAL_PROCESS_MEM["proc"].poll() is not None:
                     _ACTIVE_LOCAL_PROCESS_MEM.clear()
                 else:
@@ -743,6 +993,7 @@ def execute_local_orca_job(
                 "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "executable": cfg["orca_executable"],
                 "metadata": metadata or {},
+                "state_dir": os.path.abspath(base),
             }
             _write_active_process_file(reserve_data, base)
             _ACTIVE_LOCAL_PROCESS_MEM = dict(reserve_data)
@@ -791,6 +1042,8 @@ def execute_local_orca_job(
         cmd = [sys.executable, str(orca_executable), f"{safe_job_id}.inp"]
 
     proc = None
+    detached = False
+    process_finished_at: Optional[float] = None
     try:
         with open(work_out, "w", encoding="utf-8", errors="replace") as out_f:
             proc = subprocess.Popen(
@@ -800,6 +1053,8 @@ def execute_local_orca_job(
                 stderr=subprocess.STDOUT,
                 shell=False,
                 text=True,
+                start_new_session=(os.name != "nt"),
+                creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0),
             )
             with _get_process_lock(base):
                 live_identity = get_live_process_identity(proc.pid)
@@ -814,20 +1069,96 @@ def execute_local_orca_job(
                     "start_time": start_time,
                     "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(start_time)),
                     "input_path": str(canonical_inp_file),
-                    "output_path": str(job_output_dir / f"{safe_job_id}.out"),
+                    # The running process writes to the scratch/work directory.
+                    # Persist that real path for streaming/recovery and keep the
+                    # canonical result destination as a separate identity.
+                    "output_path": str(work_out),
+                    "canonical_output_path": str(job_output_dir / f"{safe_job_id}.out"),
                     "working_directory": str(work_dir),
                     "executable": live_identity.get("executable") or str(orca_executable),
                     "metadata": metadata or {},
+                    "state_dir": os.path.abspath(base),
+                    "command": cmd,
+                    "command_fingerprint": __import__("hashlib").sha256(
+                        json.dumps({"command": cmd, "cwd": str(work_dir)}, sort_keys=True).encode("utf-8")
+                    ).hexdigest(),
+                    "hostname": platform.node(),
                 }
                 _write_active_process_file(proc_info, base)
                 _ACTIVE_LOCAL_PROCESS_MEM.update(proc_info)
                 _ACTIVE_LOCAL_PROCESS_MEM["proc"] = proc
 
+            if heartbeat_callback:
+                heartbeat_callback(dict(proc_info))
+
             try:
-                proc.wait(timeout=timeout)
+                deadline = time.monotonic() + timeout
+                while proc.poll() is None:
+                    if detach_requested_callback and detach_requested_callback():
+                        detached = True
+                        return {
+                            "ok": False,
+                            "detached": True,
+                            "process_ok": True,
+                            "parse_ok": False,
+                            "scientific_ok": False,
+                            "error": "Worker detached from still-running local job.",
+                            "error_code": "DETACHED",
+                            "exit_code": None,
+                            "output_text": "",
+                            "parsed": {},
+                            "stage_result": None,
+                            "duration_seconds": time.time() - start_time,
+                            "input_file": str(canonical_inp_file),
+                            "output_file": str(work_out),
+                            "artifacts": [],
+                            "pid": proc.pid,
+                            "process_finished_at": None,
+                        }
+                    if cancel_requested_callback and cancel_requested_callback():
+                        _terminate_process_tree(proc)
+                        partial_output = work_out.read_text(encoding="utf-8", errors="replace") if work_out.exists() else ""
+                        partial_canonical = job_output_dir / f"{safe_job_id}.out"
+                        if work_out.exists():
+                            shutil.copy2(work_out, partial_canonical)
+                        return {
+                            "ok": False,
+                            "process_ok": False,
+                            "parse_ok": False,
+                            "scientific_ok": False,
+                            "error": "Local ORCA process cancelled by user.",
+                            "error_code": "CANCELLED",
+                            "exit_code": -15,
+                            "output_text": partial_output,
+                            "parsed": {},
+                            "stage_result": None,
+                            "duration_seconds": time.time() - start_time,
+                            "input_file": str(canonical_inp_file),
+                            "output_file": str(partial_canonical),
+                            "artifacts": [],
+                            "process_finished_at": time.time(),
+                        }
+                    if heartbeat_callback:
+                        heartbeat_callback(dict(proc_info))
+                    if time.monotonic() >= deadline:
+                        raise subprocess.TimeoutExpired(cmd, timeout)
+                    time.sleep(min(HEARTBEAT_SECONDS, 0.5))
+                # Capture process completion before artifact copying and
+                # scientific parsing. A cancellation received during slow
+                # finalization must not override a completion that already
+                # happened at the operating-system level.
+                process_finished_at = time.time()
             except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
+                _terminate_process_tree(proc)
+                # Preserve the partial log before returning.  Previously the
+                # timeout path returned a work-directory path but skipped the
+                # normal artifact synchronization, so the evidence of a
+                # long-running failure was left outside the canonical result
+                # directory and could be lost on cleanup.
+                partial_output = work_out.read_text(encoding="utf-8", errors="replace") if work_out.exists() else ""
+                partial_canonical = job_output_dir / f"{safe_job_id}.out"
+                if work_out.exists():
+                    shutil.copy2(work_out, partial_canonical)
                 with _get_process_lock(base):
                     _clear_active_process_file(base)
                     _ACTIVE_LOCAL_PROCESS_MEM.clear()
@@ -839,13 +1170,14 @@ def execute_local_orca_job(
                     "error": f"Local ORCA calculation timed out after {timeout} seconds.",
                     "error_code": "TIMEOUT",
                     "exit_code": -1,
-                    "output_text": work_out.read_text(encoding="utf-8", errors="replace") if work_out.exists() else "",
+                    "output_text": partial_output,
                     "parsed": {},
                     "stage_result": None,
                     "duration_seconds": time.time() - start_time,
                     "input_file": str(canonical_inp_file),
                     "output_file": str(job_output_dir / f"{safe_job_id}.out"),
                     "artifacts": [],
+                    "process_finished_at": time.time(),
                 }
     except Exception as exc:
         with _get_process_lock(base):
@@ -866,11 +1198,13 @@ def execute_local_orca_job(
             "input_file": str(canonical_inp_file),
             "output_file": str(job_output_dir / f"{safe_job_id}.out"),
             "artifacts": [],
+            "process_finished_at": time.time(),
         }
     finally:
         with _get_process_lock(base):
-            _clear_active_process_file(base)
-            _ACTIVE_LOCAL_PROCESS_MEM.clear()
+            if not detached:
+                _clear_active_process_file(base)
+                _ACTIVE_LOCAL_PROCESS_MEM.clear()
 
     duration = time.time() - start_time
     exit_code = proc.returncode if proc else -1
@@ -885,6 +1219,11 @@ def execute_local_orca_job(
                 shutil.copy2(item, dest)
             artifacts.append(item.name)
 
+    if work_dir != job_output_dir and not detached:
+        try:
+            shutil.rmtree(work_dir, ignore_errors=True)
+        except Exception:
+            pass
     canonical_out_file = job_output_dir / f"{safe_job_id}.out"
     output_text = canonical_out_file.read_text(encoding="utf-8", errors="replace") if canonical_out_file.is_file() else ""
 
@@ -904,66 +1243,14 @@ def execute_local_orca_job(
             "input_file": str(canonical_inp_file),
             "output_file": str(canonical_out_file),
             "artifacts": artifacts,
+            "process_finished_at": process_finished_at or time.time(),
         }
 
-    # 4. Authoritative Scientific Parsing & Validation
-    parser = OrcaParser(output_text)
-    parsed_jobs = parser.parse()
-
-    parsed: Dict[str, Any] = {}
-    if parsed_jobs:
-        last_job = parsed_jobs[-1]
-        parsed = job_to_dict(1, last_job)
-        parsed["energy_hartree"] = parsed.get("electronic_energy_hartree") or parsed.get("scf_energy_hartree")
-        parsed["final_energy_hartree"] = parsed["energy_hartree"]
-        parsed["frequencies"] = getattr(last_job, "vibrational_frequencies_cm", []) or []
-        parsed["coordinates"] = getattr(last_job, "coords", [])
-        parsed["converged"] = getattr(last_job, "converged", False)
-
-    parse_ok = bool(parsed.get("energy_hartree") is not None or parsed.get("final_energy_hartree") is not None or parsed.get("frequencies"))
-    
-    # Stage-level validation check
-    scientific_ok = False
-    stage_result = None
-
-    if stage_kind in ("OPT", "OPT_FREQ"):
-        has_opt = bool(parsed.get("converged") or "OPTIMIZATION RUN DONE" in output_text or parsed.get("coordinates"))
-        has_energy = bool(parsed.get("energy_hartree") is not None or parsed.get("final_energy_hartree") is not None)
-        scientific_ok = has_opt and has_energy
-    elif stage_kind in ("FREQ", "NUMFREQ"):
-        has_freq = bool(parsed.get("frequencies") or "VIBRATIONAL FREQUENCIES" in output_text)
-        has_energy = bool(parsed.get("energy_hartree") is not None or parsed.get("final_energy_hartree") is not None)
-        scientific_ok = has_freq and has_energy
-    elif stage_kind == "SP":
-        scientific_ok = bool(parsed.get("energy_hartree") is not None or parsed.get("final_energy_hartree") is not None)
-    else:
-        # Default generic scientific validation
-        scientific_ok = parse_ok and ("ORCA TERMINATED NORMALLY" in output_text or parsed.get("energy_hartree") is not None)
-
-    ok = process_ok and parse_ok and scientific_ok
-
-    error_msg = ""
-    error_code = None
-    if not parse_ok:
-        error_msg = "Failed to parse required chemical observables from ORCA output."
-        error_code = "PARSE_FAILED"
-    elif not scientific_ok:
-        error_msg = f"Scientific validation failed for stage kind {stage_kind}: output is incomplete or malformed."
-        error_code = "SCIENTIFIC_VALIDATION_FAILED"
-
-    return {
-        "ok": ok,
-        "process_ok": process_ok,
-        "parse_ok": parse_ok,
-        "scientific_ok": scientific_ok,
-        "error": error_msg,
-        "error_code": error_code,
-        "exit_code": exit_code,
-        "output_text": output_text,
-        "parsed": parsed,
-        "stage_result": parsed,
-        "duration_seconds": duration,
-        "input_file": str(canonical_inp_file),
-        "output_file": str(canonical_out_file),
-        "artifacts": artifacts,
-    }
+    # 4. Authoritative Scientific Parsing & Validation.  Keeping this helper
+    # shared with restart reconciliation prevents a second implementation from
+    # declaring a recovered process successful under different rules.
+    return validate_local_orca_output(
+        str(canonical_out_file), stage_kind=stage_kind, return_code=exit_code,
+        input_file=str(canonical_inp_file), duration_seconds=duration, output_text=output_text,
+        artifacts=artifacts, process_finished_at=process_finished_at,
+    )

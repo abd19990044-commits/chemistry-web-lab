@@ -132,8 +132,7 @@ def test_submit_retry_replays_a_landed_push(monkeypatch):
     store = JobStore(StoreConfig(state_dir=tempfile.mkdtemp(prefix="orca-rep-")))
     svc = service_mod.OrchestratorService(store, start_watchdog=False)
 
-    with pytest.raises(RuntimeError):
-        svc.submit(CREDS, input_filename="mol.inp", input_content=INP)
+    first = svc.submit(CREDS, input_filename="mol.inp", input_content=INP)
     assert len(landed) == 1
 
     # The retry (same payload, same idempotency semantics) must REPLAY the
@@ -142,6 +141,7 @@ def test_submit_retry_replays_a_landed_push(monkeypatch):
     assert len(landed) == 1, "a retry after a landed push must never push again"
     assert result.job_id == store.list_jobs()[0].job_id
     assert result.replayed or result.slug
+    assert first.job_id == result.job_id
 
 
 def test_submit_failure_without_a_landed_kernel_releases_the_key(monkeypatch):

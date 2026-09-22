@@ -6,6 +6,8 @@
   let activeReactionId = null;
   let activeReactionData = null;
   let executionPollInterval = null;
+  let executionPollGeneration = 0;
+  let executionPollController = null;
 
   function initUnifiedReactionController() {
     const calcThermoBtn = document.getElementById('reaction-calc-thermo-btn');
@@ -86,8 +88,18 @@
         }
 
         const solventVal = document.getElementById('unified-setup-solvent')?.value || 'none';
-        const targetHost = document.getElementById('unified-setup-target-device')?.value || 'server_local';
-        const concurrencyLimit = parseInt(document.getElementById('unified-setup-concurrency')?.value || '1', 10);
+        const targetHost = document.getElementById('unified-setup-target-host')?.value || 'server_local';
+        const concurrencyLimit = parseInt(document.getElementById('unified-setup-max-concurrency')?.value || '1', 10);
+
+        // Combined select values are presentation-only; the backend receives
+        // separate ORCA solvent model and solvent fields.
+        let solvModel = 'none';
+        let solvent = 'Water';
+        const solvMatch = /^([A-Za-z0-9]+)\(([^()]+)\)$/.exec(solventVal);
+        if (solvMatch) {
+          solvModel = solvMatch[1].toUpperCase();
+          solvent = solvMatch[2];
+        }
 
         // Check if user selected connected computer / local agent
         let agentSessionId = null;
@@ -101,14 +113,16 @@
         const workflowConfig = {
           method: document.getElementById('unified-setup-method')?.value || 'B3LYP',
           basis: document.getElementById('unified-setup-basis')?.value || 'def2-SVP',
-          disp: document.getElementById('unified-setup-disp')?.value || 'D3BJ',
-          solv_model: solventVal !== 'none' ? 'CPCM' : 'none',
-          solvent: solventVal !== 'none' ? solventVal : 'Water',
+          disp: document.getElementById('unified-setup-dispersion')?.value || 'D3BJ',
+          solv_model: solvModel,
+          solvent: solvent,
           cores: parseInt(document.getElementById('resource_cpu_cores')?.value || '4', 10),
           ram: parseInt(document.getElementById('resource_ram_gb')?.value || '2', 10) * 1000,
           stages: stageDefs,
           backend: targetHost,
           target_device: agentSessionId,
+          dataset_sources: document.getElementById('kaggle-dataset')?.value || '',
+          orca_link: document.getElementById('kaggle-orca-link')?.value || '',
         };
 
         try {
@@ -139,6 +153,10 @@
             body: JSON.stringify({ max_concurrency: concurrencyLimit })
           });
           const startData = await startRes.json();
+          if (!startRes.ok || !startData.ok) {
+            const error = startData.error?.message || startData.error || `HTTP ${startRes.status}`;
+            throw new Error(error);
+          }
           if (startData.reaction) activeReactionData = startData.reaction;
 
           // 3. Scroll to reaction workspace & render
@@ -187,25 +205,44 @@
   }
 
   function startExecutionPolling(rxnId) {
-    if (executionPollInterval) clearInterval(executionPollInterval);
-    executionPollInterval = setInterval(async () => {
+    executionPollGeneration += 1;
+    const generation = executionPollGeneration;
+    if (executionPollInterval) clearTimeout(executionPollInterval);
+    if (executionPollController) executionPollController.abort();
+
+    const pollOnce = async () => {
+      if (generation !== executionPollGeneration) return;
+      const controller = new AbortController();
+      executionPollController = controller;
       try {
-        const res = await fetch(`/api/v1/reactions/${encodeURIComponent(rxnId)}`);
+        const res = await fetch(`/api/v1/reactions/${encodeURIComponent(rxnId)}`, {
+          signal: controller.signal,
+          cache: 'no-store'
+        });
         const data = await res.json();
+        if (generation !== executionPollGeneration || controller.signal.aborted) return;
         if (data.ok && data.reaction) {
           activeReactionData = data.reaction;
           renderReactionExecutionWorkspace(activeReactionData);
 
           if (data.reaction.state === 'COMPLETE' || data.reaction.thermodynamics) {
-            clearInterval(executionPollInterval);
+            clearTimeout(executionPollInterval);
             executionPollInterval = null;
+            executionPollController = null;
             renderThermodynamicsResults(data.reaction);
+            return;
           }
         }
       } catch (err) {
-        console.warn('Execution poll error:', err);
+        if (err.name !== 'AbortError') console.warn('Execution poll error:', err);
+      } finally {
+        if (generation === executionPollGeneration && executionPollInterval !== null) {
+          executionPollInterval = setTimeout(pollOnce, 2500);
+        }
       }
-    }, 2500);
+    };
+
+    executionPollInterval = setTimeout(pollOnce, 0);
   }
 
   function renderReactionExecutionWorkspace(rxn) {
@@ -412,6 +449,10 @@
           body: JSON.stringify({ max_concurrency: concurrencyLimit })
         });
         const startData = await startRes.json();
+        if (!startRes.ok || !startData.ok) {
+          const error = startData.error?.message || startData.error || `HTTP ${startRes.status}`;
+          throw new Error(error);
+        }
         if (startData && startData.reaction) activeReactionData = startData.reaction;
 
         renderReactionExecutionWorkspace(activeReactionData || { reaction_id: reactionId, state: 'RUNNING' });

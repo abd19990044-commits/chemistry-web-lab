@@ -377,7 +377,10 @@ def rebuild_from_kaggle(client: KaggleClient, job_id: str,
     job.chain_slugs = slugs
     job.current_slug = newest["slug"]
     job.current_url = newest.get("url", "")
-    job.state = JobState.QUEUED
+    # Legacy adoption is an external observation rather than a normal trigger,
+    # but it still must update the model's state-entry clock.  A raw assignment
+    # leaves a newly adopted job looking CREATED to stall detection.
+    job.enter_state(JobState.QUEUED)
     job.last_note = (
         "Adopted from Kaggle without an orchestrator ledger. This job was submitted by an "
         "earlier version of the runner, so its checkpoint history is not available. It is "

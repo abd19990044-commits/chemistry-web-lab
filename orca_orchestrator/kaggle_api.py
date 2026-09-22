@@ -40,8 +40,8 @@ from typing import Sequence
 
 from .config import CONFIG
 from .credentials import KaggleCredentials, kaggle_environment
-from .errors import (NotFoundError, OrchestratorError, TimeoutError_, TransientError,
-                     ValidationError)
+from .errors import (NotFoundError, OrchestratorError, SubmissionUnknownError,
+                     TimeoutError_, TransientError, ValidationError)
 from .logging_ext import get_logger, log_event, redact
 from .retry import RetryPolicy, classify_subprocess_failure
 
@@ -53,15 +53,15 @@ _PUSH_URL_RE = re.compile(
 _JOB_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,79}$")
 
 #: Kaggle status word -> our vocabulary.
-_STATUS_WORDS = (
-    ("complete", "complete"),
-    ("error", "error"),
-    ("running", "running"),
-    ("queued", "queued"),
-    ("queue", "queued"),
-    ("cancel", "cancelled"),
-    ("new_script", "queued"),
-)
+_STRUCTURED_STATUS_MAP = {
+    "NEW_SCRIPT": "queued",
+    "QUEUED": "queued",
+    "RUNNING": "running",
+    "COMPLETE": "complete",
+    "ERROR": "error",
+    "CANCELLED": "cancelled",
+    "CANCELED": "cancelled",
+}
 
 KERNEL_ACTIVE_STATUSES = frozenset({"running", "queued"})
 KERNEL_STOPPED_STATUSES = frozenset({"complete", "error", "cancelled"})
@@ -85,11 +85,18 @@ def classify_status(text: str) -> str:
     *slug* decide the status -- a notebook called `chem-tools-error-test` would
     read as an errored job forever."""
     quoted = re.findall(r'status\s+"([^"]+)"', text or "", flags=re.IGNORECASE)
-    probe = (quoted[-1] if quoted else (text or "")).lower()
-    for needle, status in _STATUS_WORDS:
-        if needle in probe:
-            return status
-    return "unknown"
+    # If Kaggle did not emit the structured status field, the remaining text
+    # is not authoritative: titles, slugs and diagnostics can contain words
+    # such as "error" or "running".  Treat it as unknown and let the
+    # reconciler retry instead of inventing a terminal state.
+    if not quoted:
+        return "unknown"
+    # Kaggle's value is an enum-like token (usually
+    # ``KernelWorkerStatus.RUNNING``).  Match the final enum member exactly;
+    # substring matching would misclassify values such as INCOMPLETE or an
+    # error message embedded in a future status string.
+    probe = quoted[-1].strip().rsplit(".", 1)[-1].upper()
+    return _STRUCTURED_STATUS_MAP.get(probe, "unknown")
 
 
 @dataclass
@@ -296,16 +303,21 @@ class KaggleClient:
             except TransientError as exc:
                 try:
                     existing = self.kernel_exists(expected_slug)
-                except OrchestratorError:
-                    existing = None
-                if existing is not None and existing.is_active:
+                except OrchestratorError as probe_exc:
+                    raise SubmissionUnknownError(
+                        "the Kaggle push outcome is unknown; refusing a blind retry",
+                        slug=expected_slug,
+                        push_error=type(exc).__name__,
+                        probe_error=type(probe_exc).__name__,
+                    ) from exc
+                if existing is not None:
                     log_event(log, "push_accepted_despite_error",
                               "the push attempt failed at transport level, but the "
-                              "kernel already exists and is active at the deterministic "
+                              "kernel exists at the deterministic "
                               "slug; treating the push as landed instead of pushing a "
                               "duplicate version",
                               slug=expected_slug, kaggle_status=existing.status)
-                    combined = "verified active after transport error"
+                    combined = "verified existing kernel after transport error"
                     break
                 if number >= self.retry.max_attempts:
                     raise
@@ -443,9 +455,12 @@ class KaggleClient:
                 shutil.rmtree(path, ignore_errors=True) if os.path.isdir(path) else os.remove(path)
             proc = self._run(args, timeout=timeout, operation="kernels_output", slug=slug, allow_nonzero=True)
             if proc.returncode != 0:
-                downloaded = [f for f in os.listdir(out_dir) if os.path.isfile(os.path.join(out_dir, f))]
-                if not downloaded:
-                    raise classify_subprocess_failure(proc.returncode, proc.combined)
+                # A non-zero exit after creating a few files is a torn
+                # download, not a successful result.  Accepting those files
+                # used to let archive fallback package an incomplete result
+                # and mark it durable.  RetryPolicy will clear this directory
+                # before the next attempt; only a zero exit is authoritative.
+                raise classify_subprocess_failure(proc.returncode, proc.combined)
             return out_dir
 
         try:

@@ -29,6 +29,37 @@ from .hashing import sha256_bytes
 
 log = logging.getLogger("orca.result_store")
 
+MAX_ARCHIVE_FILES = int(os.environ.get("ORCA_MAX_ARCHIVE_FILES", "10000"))
+MAX_ARCHIVE_EXTRACTED_BYTES = int(os.environ.get("ORCA_MAX_ARCHIVE_EXTRACTED_BYTES", str(4 * 1024 ** 3)))
+
+
+def _safe_zip_member(name: str) -> bool:
+    raw = str(name or "").replace("\\", "/")
+    clean = raw.rstrip("/")
+    if not clean or "\x00" in clean or clean.startswith("/"):
+        return False
+    if len(clean) >= 2 and clean[1] == ":":
+        return False
+    return all(part not in ("", ".", "..") for part in clean.split("/"))
+
+
+def _validate_zip_budget(zf: zipfile.ZipFile) -> None:
+    infos = zf.infolist()
+    if len(infos) > MAX_ARCHIVE_FILES:
+        raise ValueError(f"archive contains too many files ({len(infos)} > {MAX_ARCHIVE_FILES})")
+    total = 0
+    for info in infos:
+        if not _safe_zip_member(info.filename):
+            raise ValueError(f"unsafe archive member: {info.filename!r}")
+        # Unix symlink entries are represented in external_attr even though
+        # ZipInfo.is_dir() is false.  Never extract them into a job workspace.
+        mode = (info.external_attr >> 16) & 0o170000
+        if mode == 0o120000:
+            raise ValueError(f"symlink archive member is not allowed: {info.filename!r}")
+        total += int(info.file_size or 0)
+        if total > MAX_ARCHIVE_EXTRACTED_BYTES:
+            raise ValueError("archive extracted-size budget exceeded")
+
 
 class ResultDurabilityState(str, Enum):
     """Lifecycle states for scientific result durability."""
@@ -176,19 +207,36 @@ class ResultArtifactStore:
             target_zip = os.path.join(staging_dir, "results.zip")
 
             if os.path.isfile(raw_zip_or_dir_path) and zipfile.is_zipfile(raw_zip_or_dir_path):
+                with zipfile.ZipFile(raw_zip_or_dir_path, "r") as source_zip:
+                    _validate_zip_budget(source_zip)
                 shutil.copy2(raw_zip_or_dir_path, target_zip)
             elif os.path.isdir(raw_zip_or_dir_path):
                 # Bundle directory into results.zip
                 existing_zip = os.path.join(raw_zip_or_dir_path, "results.zip")
                 if os.path.isfile(existing_zip) and zipfile.is_zipfile(existing_zip):
+                    with zipfile.ZipFile(existing_zip, "r") as source_zip:
+                        _validate_zip_budget(source_zip)
                     shutil.copy2(existing_zip, target_zip)
                 else:
+                    file_count = 0
+                    raw_total = 0
                     with zipfile.ZipFile(target_zip, "w", zipfile.ZIP_DEFLATED) as zf:
                         for root, _, files in os.walk(raw_zip_or_dir_path):
                             for f in files:
                                 p = os.path.join(root, f)
                                 rel_p = os.path.relpath(p, raw_zip_or_dir_path)
+                                if not _safe_zip_member(rel_p):
+                                    raise ValueError(f"unsafe result path: {rel_p!r}")
+                                file_count += 1
+                                raw_total += os.path.getsize(p)
+                                if file_count > MAX_ARCHIVE_FILES or raw_total > MAX_ARCHIVE_EXTRACTED_BYTES:
+                                    raise ValueError("result directory exceeds archive safety budget")
                                 zf.write(p, rel_p)
+
+            if not os.path.isfile(target_zip) or not zipfile.is_zipfile(target_zip):
+                raise ValueError("result archive is missing or invalid")
+            with zipfile.ZipFile(target_zip, "r") as verified_zip:
+                _validate_zip_budget(verified_zip)
 
             # Record results.zip artifact
             zip_size = os.path.getsize(target_zip)
@@ -207,6 +255,7 @@ class ResultArtifactStore:
             total_size = zip_size
             try:
                 with zipfile.ZipFile(target_zip, "r") as zf:
+                    _validate_zip_budget(zf)
                     for item in zf.infolist():
                         if item.is_dir():
                             continue
@@ -239,6 +288,8 @@ class ResultArtifactStore:
                                     storage_ref=os.path.basename(item.filename),
                                 )
                             )
+            except ValueError:
+                raise
             except Exception as exc:
                 log.warning("Could not extract sub-artifacts from results.zip for job %s: %s", job_id, exc)
 

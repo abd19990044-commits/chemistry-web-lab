@@ -131,7 +131,7 @@
       </div>
 
       <form id="explorer-form" class="tool-form">
-        <input type="text" id="explorer-query" placeholder="e.g. Aspirin   or   CC(=O)OC1=CC=CC=C1C(=O)O" autocomplete="off" required>
+        <input type="text" id="explorer-query" aria-label="Search compound by name or SMILES" placeholder="e.g. Aspirin   or   CC(=O)OC1=CC=CC=C1C(=O)O" autocomplete="off" required>
         <button type="submit" class="btn btn-primary"><span class="btn-label">Analyze</span></button>
       </form>
 
@@ -719,7 +719,7 @@ Products:   12 CO2 + 6 H2O</pre>
               </div>
               <div>
                 <label for="input-site-api-key">Site API Key / Secret (Optional)</label>
-                <input type="password" id="input-site-api-key" placeholder="Optional site secret" autocomplete="off" onchange="localStorage.setItem('orca_site_api_key', this.value.trim())">
+                <input type="password" id="input-site-api-key" placeholder="Optional site secret" autocomplete="off" onchange="sessionStorage.setItem('orca_site_api_key', this.value.trim())">
               </div>
             </div>
 
@@ -1460,9 +1460,9 @@ Products:   12 CO2 + 6 H2O</pre>
                 <option value="theoretical_only">View: Theoretical Only</option>
                 <option value="experimental_only">View: Experimental Only</option>
               </select>
-              <input type="text" id="uv-graph-title" class="form-input" style="max-width:200px;" placeholder="Graph title (auto)">
-              <input type="text" id="uv-x-title" class="form-input" style="max-width:170px;" placeholder="X title (auto)">
-              <input type="text" id="uv-y-title" class="form-input" style="max-width:170px;" placeholder="Y title (auto)">
+              <input type="text" id="uv-graph-title" class="form-input" style="max-width:200px;" placeholder="Graph title (auto: UV-Vis Spectrum)">
+              <input type="text" id="uv-x-title" class="form-input" style="max-width:170px;" placeholder="X title (auto: Wavelength, λ (nm))">
+              <input type="text" id="uv-y-title" class="form-input" style="max-width:170px;" placeholder="Y title (auto: ε / Abs)">
               <button type="button" id="uv-titles-reset" class="btn btn-ghost btn-small" title="Restore default titles">Reset Titles</button>
               <button type="button" id="uv-export-xy-visible" class="btn btn-secondary btn-small" title="Export all visible curves as Origin-friendly tab-delimited XY text">Export Visible XY</button>
               <span class="field-hint" id="engine-uvvis-import-status" style="flex-basis:100%;"></span>
@@ -1670,9 +1670,9 @@ Products:   12 CO2 + 6 H2O</pre>
                 <option value="theoretical_only">View: Theoretical Only</option>
                 <option value="experimental_only">View: Experimental Only</option>
               </select>
-              <input type="text" id="ir-graph-title" class="form-input" style="max-width:200px;" placeholder="Graph title (auto)">
-              <input type="text" id="ir-x-title" class="form-input" style="max-width:170px;" placeholder="X title (auto)">
-              <input type="text" id="ir-y-title" class="form-input" style="max-width:170px;" placeholder="Y title (auto)">
+              <input type="text" id="ir-graph-title" class="form-input" style="max-width:200px;" placeholder="Graph title (auto: UV-Vis Spectrum)">
+              <input type="text" id="ir-x-title" class="form-input" style="max-width:170px;" placeholder="X title (auto: Wavenumber (cm⁻¹))">
+              <input type="text" id="ir-y-title" class="form-input" style="max-width:170px;" placeholder="Y title (auto: %T / Abs)">
               <button type="button" id="ir-titles-reset" class="btn btn-ghost btn-small" title="Restore scientifically correct default titles">Reset Titles</button>
               <button type="button" id="ir-export-xy-visible" class="btn btn-secondary btn-small" title="Export all visible curves as Origin-friendly tab-delimited XY text">Export Visible XY</button>
               <button type="button" id="ir-remove-imported" class="btn btn-ghost btn-small" title="Remove all imported ORCA spectra (keeps the current calculation)">Remove Imported</button>
@@ -1804,9 +1804,9 @@ Products:   12 CO2 + 6 H2O</pre>
                 <div class="form-group">
                   <label for="ir-y-mode">Y-Axis Representation:</label>
                   <select id="ir-y-mode" class="form-select">
-                    <option value="transmittance" selected>Transmittance (%T) [FTIR / Pseudo-%T]</option>
-                    <option value="theory_intensity">Theoretical IR Intensity (km/mol)</option>
-                    <option value="absorbance">Absorbance (AU)</option>
+                    <option value="transmittance" selected>Transmittance (%) [FTIR Standard]</option>
+                    <option value="theory_intensity">Integrated IR Intensity (km·mol⁻¹)</option>
+                    <option value="absorbance">Absorbance (a.u.)</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -2870,7 +2870,7 @@ Products:   12 CO2 + 6 H2O</pre>
           <div class="form-group">
             <label class="form-label font-bold" style="color: #cbd5e1;">Solvent Model:</label>
             <select id="unified-setup-solvent" class="form-select" style="background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 0.5rem; border-radius: 6px;">
-              <option value="gas" selected>Gas Phase (No Solvation)</option>
+              <option value="none" selected>Gas Phase (No Solvation)</option>
               <option value="CPCM(Water)">CPCM (Water)</option>
               <option value="CPCM(Acetonitrile)">CPCM (Acetonitrile)</option>
               <option value="CPCM(Ethanol)">CPCM (Ethanol)</option>
@@ -2884,8 +2884,9 @@ Products:   12 CO2 + 6 H2O</pre>
           <div class="form-group">
             <label class="form-label font-bold" style="color: #cbd5e1;">Target Execution Host:</label>
             <select id="unified-setup-target-host" class="form-select" style="background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 0.5rem; border-radius: 6px;">
-              <option value="server_host" selected>Server Host ORCA</option>
+              <option value="server_local" selected>Server Host ORCA</option>
               <option value="local_agent">Connected Local Agent / Workstation</option>
+              <option value="kaggle">Kaggle Cloud Backend</option>
             </select>
           </div>
 

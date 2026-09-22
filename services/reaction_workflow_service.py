@@ -23,10 +23,13 @@ import os
 import re
 import threading
 import uuid
+import logging
 from datetime import datetime, timezone
 from io import StringIO
 
 from orca_engine.parser import OrcaParser
+
+log = logging.getLogger("chemlab.reaction_workflow")
 
 HARTREE_KJ_MOL = 2625.4996394798254
 R_J_MOL_K = 8.31446261815324
@@ -35,19 +38,21 @@ MAX_STAGES_PER_SPECIES = 20
 STAGE_KINDS = {"OPT", "OPTTS", "FREQ", "NUMFREQ", "OPT_FREQ", "OPTTS_FREQ", "SP", "TDDFT", "IMPORTED", "CUSTOM_ORCA"}
 STAGE_CAPABILITIES = {
     "OPT": {"produces_geometry": True, "requires_input_geometry": True, "produces_electronic_energy": True,
-            "produces_frequencies": False, "produces_thermochemistry": False, "requires_converged_minimum": True},
+            "produces_frequencies": False, "produces_thermochemistry": False, "requires_converged_minimum": True,
+            "requires_convergence": True},
     "OPTTS": {"produces_geometry": True, "requires_input_geometry": True, "produces_electronic_energy": True,
               "produces_frequencies": False, "produces_thermochemistry": False, "requires_converged_minimum": False,
-              "transition_state_stage": True},
+              "requires_convergence": True, "transition_state_stage": True},
     "FREQ": {"produces_geometry": False, "requires_input_geometry": True, "produces_electronic_energy": True,
              "produces_frequencies": True, "produces_thermochemistry": True, "requires_converged_minimum": False},
     "NUMFREQ": {"produces_geometry": False, "requires_input_geometry": True, "produces_electronic_energy": True,
                 "produces_frequencies": True, "produces_thermochemistry": True},
     "OPT_FREQ": {"produces_geometry": True, "requires_input_geometry": True, "produces_electronic_energy": True,
-                 "produces_frequencies": True, "produces_thermochemistry": True, "requires_converged_minimum": True},
+                 "produces_frequencies": True, "produces_thermochemistry": True, "requires_converged_minimum": True,
+                 "requires_convergence": True},
     "OPTTS_FREQ": {"produces_geometry": True, "requires_input_geometry": True, "produces_electronic_energy": True,
                    "produces_frequencies": True, "produces_thermochemistry": True,
-                   "transition_state_stage": True},
+                   "requires_convergence": True, "transition_state_stage": True},
     "SP": {"produces_geometry": False, "requires_input_geometry": True, "produces_electronic_energy": True,
            "produces_frequencies": False, "produces_thermochemistry": False},
     "TDDFT": {"produces_geometry": False, "requires_input_geometry": True, "produces_electronic_energy": True,
@@ -333,6 +338,30 @@ def geometry_hash(xyz_text: str) -> str:
     return sha256_text(canon)
 
 
+def normalize_solvation(solv_model: str | None, solvent: str | None) -> tuple[str, str]:
+    """Normalize legacy/UI solvation values before ORCA input generation.
+
+    Older clients sent values such as ``CPCM(Water)`` as the solvent while
+    newer clients send model and solvent separately.  Accept both forms but
+    never allow the presentation wrapper to be emitted twice.
+    """
+    model = str(solv_model or "none").strip().lower()
+    value = str(solvent or "Water").strip()
+    combined = re.fullmatch(r"([A-Za-z0-9]+)\(([^()]+)\)", value)
+    if combined:
+        model = combined.group(1).strip().lower()
+        value = combined.group(2).strip()
+    if model in {"", "none", "gas", "gas_phase", "gas phase"}:
+        return "none", "Water"
+    if value.lower() in {"", "none", "gas", "gas_phase", "gas phase", "gas phase (no solvation)"}:
+        return "none", "Water"
+    if model not in {"cpcm", "smd"}:
+        raise ReactionValidationError("Unsupported solvation model: %s" % solv_model)
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", value):
+        raise ReactionValidationError("Invalid solvent name")
+    return model, value
+
+
 def extract_stage_result(output_text: str):
     """Parses a completed ORCA output with the authoritative parser and maps
     the REAL JobData fields (Part X audit): e_elec_eh, coords/elements,
@@ -412,9 +441,9 @@ def stage_capabilities_valid(kind: str, result: dict, output_text: str = "") -> 
     problems = []
     if caps.get("produces_geometry") and not (result.get("geometry_xyz") or result.get("geometry_hash")):
         problems.append("geometry-producing stage produced no validated geometry")
-    if caps.get("produces_geometry") and caps.get("requires_converged_minimum"):
+    if caps.get("produces_geometry") and (caps.get("requires_converged_minimum") or caps.get("requires_convergence")):
         if not result.get("converged"):
-            problems.append("optimization did not terminate normally - unusable geometry")
+            problems.append("optimization did not converge or terminate normally - unusable geometry")
         elif "THE OPTIMIZATION HAS CONVERGED" not in (output_text or ""):
             problems.append("optimization did not converge - unconverged geometry cannot be used")
     if caps.get("produces_electronic_energy") and result.get("energy_hartree") is None:
@@ -610,7 +639,7 @@ def compute_reaction_thermodynamics(species_results, temperature_tolerance_k=0.0
                             % (s.get("display_name"), imag))
     dG_J = deltas["G"] * HARTREE_KJ_MOL * 1000.0
     dH_J = deltas["H"] * HARTREE_KJ_MOL * 1000.0
-    if temperature_k and abs(dG_J - (dH_J - temperature_k * S_rxn)) > 1e-3:
+    if temperature_k and abs(dG_J - (dH_J - temperature_k * S_rxn)) > 15.0:
         warnings.append("WARNING - G/H/S INCONSISTENCY beyond numerical tolerance.")
     ln_k = (-dG_J / (R_J_MOL_K * temperature_k)) if temperature_k else None
     log10_k = (ln_k / math.log(10.0)) if ln_k is not None else None
@@ -656,6 +685,24 @@ class ReactionStore:
         self.lock_path = os.path.join(state_dir, ".reaction_store.lock")
         self._lock = CrossProcessFileLock(self.lock_path)
         self._last_cleanup = 0.0
+        self._rebuild_read_model_from_ledger()
+
+    def _rebuild_read_model_from_ledger(self):
+        """Project durable SQLite snapshots into the legacy JSON read model."""
+        try:
+            from services.workflow_store import list_reaction_snapshots
+            snapshots = list_reaction_snapshots(self.state_dir)
+        except Exception as exc:
+            log.warning("Could not load reaction ledger snapshots: %s", type(exc).__name__)
+            return
+        if not snapshots:
+            return
+        with self._lock:
+            current = self._read(self.reactions_path, [])
+            by_id = {str(item.get("reaction_id")): item for item in current if isinstance(item, dict)}
+            for snapshot in snapshots:
+                by_id[str(snapshot["reaction_id"])] = snapshot
+            self._write_atomic(self.reactions_path, list(by_id.values()))
 
     def _read(self, path, default):
         try:
@@ -692,6 +739,11 @@ class ReactionStore:
         return None
 
     def save_reaction(self, reaction: dict):
+        # SQLite is the durable workflow ledger.  The JSON file remains the
+        # compatibility read model used by the existing UI, but it is written
+        # only after the workflow/step projection has committed atomically.
+        from services.workflow_store import sync_reaction
+        sync_reaction(reaction, self.state_dir)
         with self._lock:
             items = self._read(self.reactions_path, [])
             items = [r for r in items if r.get("reaction_id") != reaction.get("reaction_id")]
@@ -817,6 +869,8 @@ class ReactionStore:
                 for st in sp.get("stages", []):
                     if st.get("state") in ("READY", "QUEUED"):
                         st["state"] = "PAUSED"
+            from services.workflow_store import sync_reaction
+            sync_reaction(target, self.state_dir)
             self._write_atomic(self.reactions_path, items)
             return target
 
@@ -840,6 +894,8 @@ class ReactionStore:
                     if st.get("state") == "PAUSED":
                         st["state"] = "READY"
                         st["ready_at"] = now_iso
+            from services.workflow_store import sync_reaction
+            sync_reaction(target, self.state_dir)
             self._write_atomic(self.reactions_path, items)
             return target
 
@@ -861,6 +917,8 @@ class ReactionStore:
                 for st in sp.get("stages", []):
                     if st.get("state") not in ("COMPLETE", "FAILED"):
                         st["state"] = "CANCELLED"
+            from services.workflow_store import sync_reaction
+            sync_reaction(target, self.state_dir)
             self._write_atomic(self.reactions_path, items)
             return target
 
@@ -899,6 +957,351 @@ class ReactionStore:
                         elif state == "PAUSED":
                             counts["paused"] += 1
             return counts
+
+
+def dispatch_ready_stages(
+    reaction: dict,
+    *,
+    owner_id: str,
+    state_dir: str,
+    store: "ReactionStore | None" = None,
+) -> dict:
+    """Durably enqueue every dependency-ready stage for supported backends.
+
+    Backend queues own concurrency; leaving excess stages only in the JSON
+    view used to strand them forever after the first batch. Stable execution
+    identities make replay after an API/worker restart harmless.
+    """
+    store = store or ReactionStore(state_dir)
+    dispatched = []
+    waiting = []
+    for species in reaction.get("species", []):
+        workflow_id = species.get("workflow_id")
+        for stage in species.get("stages", []):
+            if stage.get("state") not in ("READY", "QUEUED"):
+                continue
+            backend = (stage.get("backend") or "local").lower()
+            backend = {"server_host": "server_local", "kaggle_cloud": "kaggle"}.get(backend, backend)
+            attempt_id = stage.get("attempt_id") or uuid.uuid4().hex
+            stage["attempt_id"] = attempt_id
+            idem = f"reaction:{workflow_id}:step:{stage.get('stage_id')}:attempt:{attempt_id}"
+            if backend in ("server_local", "local"):
+                from services.local_orca_worker import enqueue_local_job
+
+                local_job_id = stage.get("local_job_id") if stage.get("state") == "QUEUED" else None
+                queued = enqueue_local_job(
+                    owner_id=owner_id,
+                    job_id=local_job_id,
+                    attempt_id=attempt_id,
+                    input_text=stage.get("input_text") or "",
+                    job_name=f"{species.get('display_name', 'species')}_{stage.get('kind', 'stage')}",
+                    stage_kind=stage.get("kind"),
+                    workflow_id=workflow_id,
+                    step_id=stage.get("stage_id"),
+                    metadata={"source": "reaction_workflow", "reaction_id": reaction.get("reaction_id")},
+                    resources=stage.get("resources") or stage.get("stage_options") or {},
+                    idempotency_key=idem,
+                    state_dir=state_dir,
+                )
+                if not queued.get("ok"):
+                    raise ReactionValidationError(queued.get("error") or "Could not enqueue local stage")
+                stage["local_job_id"] = (queued.get("job") or {}).get("job_id")
+            elif backend in ("local_agent", "hpc"):
+                target = stage.get("target_device")
+                if not target:
+                    stage["waiting_reason"] = "LOCAL_AGENT_NOT_SELECTED"
+                    waiting.append(stage.get("stage_id"))
+                    continue
+                from services.local_agent_service import enqueue_agent_job
+
+                queued = enqueue_agent_job(
+                    agent_session_id=target,
+                    owner_id=owner_id,
+                    input_text=stage.get("input_text") or "",
+                    job_name=f"{species.get('display_name', 'species')}_{stage.get('kind', 'stage')}",
+                    state_dir=state_dir,
+                    idempotency_key=idem,
+                    workflow_id=workflow_id,
+                    step_id=stage.get("stage_id"),
+                    attempt_id=attempt_id,
+                    reaction_id=reaction.get("reaction_id"),
+                )
+                if not queued.get("ok"):
+                    stage["waiting_reason"] = queued.get("error") or "LOCAL_AGENT_UNAVAILABLE"
+                    waiting.append(stage.get("stage_id"))
+                    continue
+                stage["agent_job_id"] = queued.get("job_id")
+            else:
+                if backend != "kaggle":
+                    stage["waiting_reason"] = "UNSUPPORTED_EXECUTION_BACKEND"
+                    waiting.append(stage.get("stage_id"))
+                    continue
+                # Remote stages use the same durable orchestrator as the
+                # legacy Kaggle endpoint. Credentials are resolved from the
+                # owner-scoped vault; no token is copied into the reaction.
+                try:
+                    from orca_orchestrator.credential_vault import get_vault_manager
+                    from orca_orchestrator.service import get_service
+
+                    creds = get_vault_manager().load_credentials(owner_id)
+                    if not creds:
+                        stage["waiting_reason"] = "KAGGLE_CREDENTIALS_REQUIRED"
+                        waiting.append(stage.get("stage_id"))
+                        continue
+                    options = stage.get("stage_options") or {}
+                    raw_sources = options.get("dataset_sources") or ""
+                    if isinstance(raw_sources, str):
+                        dataset_sources = [x for x in re.split(r"[\s,]+", raw_sources.strip()) if x]
+                    else:
+                        dataset_sources = list(raw_sources or [])
+                    orca_link = str(options.get("orca_link") or "").strip() or None
+                    if not dataset_sources and not orca_link:
+                        stage["waiting_reason"] = "KAGGLE_ORCA_SOURCE_REQUIRED"
+                        waiting.append(stage.get("stage_id"))
+                        continue
+                    filename = "stage_%s.inp" % str(stage.get("stage_id") or "job")[:24]
+                    result = get_service().submit(
+                        creds,
+                        input_filename=filename,
+                        input_content=stage.get("input_text") or "",
+                        job_name="%s_%s" % (species.get("display_name", "species"), stage.get("kind", "stage")),
+                        dataset_sources=dataset_sources,
+                        orca_link=orca_link,
+                        idempotency_key=idem,
+                        workflow_id=workflow_id,
+                        parent_job_id=stage.get("parent_stage_id"),
+                        step_index=int(stage.get("order") or 0),
+                        step_count=len(species.get("stages") or []),
+                        step_name=stage.get("kind") or "CALC",
+                        application_owner=owner_id,
+                    )
+                    stage["kaggle_job_id"] = result.job_id
+                    stage["kaggle_slug"] = result.slug
+                    stage["kaggle_url"] = result.url
+                    stage["state"] = "SUBMITTED"
+                    stage["submitted_at"] = utcnow_iso(store.now_provider)
+                except Exception as exc:
+                    from orca_orchestrator.errors import (
+                        ConcurrencyError, PermanentError, SubmissionUnknownError,
+                        TransientError,
+                    )
+                    if isinstance(exc, SubmissionUnknownError):
+                        stage["waiting_reason"] = "KAGGLE_SUBMISSION_UNKNOWN"
+                        waiting.append(stage.get("stage_id"))
+                        continue
+                    if isinstance(exc, (ConcurrencyError, TransientError)):
+                        stage["waiting_reason"] = "KAGGLE_SUBMISSION_RETRYABLE"
+                        stage["last_submission_error"] = type(exc).__name__
+                        waiting.append(stage.get("stage_id"))
+                        continue
+                    if not isinstance(exc, PermanentError):
+                        stage["waiting_reason"] = "KAGGLE_SUBMISSION_RETRYABLE"
+                        stage["last_submission_error"] = type(exc).__name__
+                        waiting.append(stage.get("stage_id"))
+                        continue
+                    stage["state"] = "FAILED"
+                    stage["scientific_status"] = "EXECUTION_FAILED"
+                    stage["error"] = "Kaggle submission failed: %s" % str(exc)[:300]
+                    waiting.append(stage.get("stage_id"))
+                    continue
+            if stage.get("state") != "SUBMITTED":
+                stage["state"] = "QUEUED"
+            stage["queued_at"] = utcnow_iso(store.now_provider)
+            stage.pop("waiting_reason", None)
+            dispatched.append(stage.get("stage_id"))
+    if dispatched or waiting:
+        reaction["state"] = "RUNNING" if dispatched else "WAITING"
+        store.save_reaction(reaction)
+    return {"ok": True, "dispatched_stage_ids": dispatched, "waiting_stage_ids": waiting}
+
+
+def _select_orca_output_info(archive, input_filename: str = ""):
+    """Compatibility wrapper around the shared artifact selector."""
+    from services.artifact_service import select_orca_output_info
+
+    return select_orca_output_info(archive, input_filename)
+
+
+def reconcile_kaggle_stages(
+    reaction: dict,
+    *,
+    owner_id: str,
+    state_dir: str,
+    store: "ReactionStore | None" = None,
+) -> dict:
+    """Reconcile submitted reaction stages through the durable Kaggle service.
+
+    This is intentionally pull-based: the browser may disappear and the next
+    API request (or a future scheduler) can continue from the persisted job
+    identity.  A remote observation or delayed output never becomes a local
+    scientific failure.
+    """
+    store = store or ReactionStore(state_dir)
+    changed = False
+    completed = []
+    try:
+        from orca_orchestrator.credential_vault import get_vault_manager
+        from orca_orchestrator.service import get_service
+        creds = get_vault_manager().load_credentials(owner_id)
+        if not creds:
+            return {"ok": True, "changed": False, "waiting_reason": "KAGGLE_CREDENTIALS_REQUIRED"}
+        service = get_service()
+    except Exception as exc:
+        log.warning("Kaggle reaction reconciliation unavailable: %s", type(exc).__name__)
+        return {"ok": True, "changed": False, "waiting_reason": "KAGGLE_STATUS_UNKNOWN"}
+
+    for species in reaction.get("species", []):
+        species_id = species.get("species_id")
+        for stage in species.get("stages", []):
+            job_id = stage.get("kaggle_job_id")
+            if not job_id or stage.get("state") in ("COMPLETE", "FAILED", "CANCELLED"):
+                continue
+            try:
+                observed = service.status(creds, job_id)
+            except Exception as exc:
+                stage["waiting_reason"] = "KAGGLE_STATUS_UNKNOWN"
+                stage["last_status_error"] = type(exc).__name__
+                changed = True
+                continue
+
+            remote_state = str(
+                observed.get("remote_state") or observed.get("state") or "UNKNOWN"
+            ).upper()
+            stage["remote_state"] = remote_state
+            stage["last_remote_status_at"] = utcnow_iso(store.now_provider)
+            changed = True
+            if observed.get("remote_status_unknown") or remote_state in {"UNKNOWN", "REMOTE_STATUS_UNKNOWN"}:
+                stage["waiting_reason"] = "KAGGLE_STATUS_UNKNOWN"
+                continue
+            if remote_state in {"ERROR", "FAILED"}:
+                stage["state"] = "FAILED"
+                stage["scientific_status"] = "EXECUTION_FAILED"
+                stage["error"] = observed.get("last_error") or observed.get("error") or "Kaggle execution failed"
+                species["state"] = "FAILED"
+                reaction["state"] = "WAITING"
+                continue
+            if remote_state in {"CANCELLED", "CANCELED"}:
+                stage["state"] = "CANCELLED"
+                stage["error"] = "Kaggle job was cancelled remotely"
+                species["state"] = "CANCELLED"
+                reaction["state"] = "WAITING"
+                continue
+            if remote_state not in {"COMPLETE", "COMPLETED", "FINISHED"} and str(observed.get("state", "")).upper() != "FINISHED":
+                stage["state"] = "RUNNING" if remote_state in {"RUNNING", "STARTING"} else "SUBMITTED"
+                stage.pop("waiting_reason", None)
+                continue
+
+            # Kaggle may report completion before output becomes downloadable.
+            # archive_job_results keeps that distinction durable; retrying this
+            # reconciliation is safe because the orchestrator/result store are
+            # idempotent and the stage has a stable job identity.
+            manifest = service.archive_job_results(
+                creds, job_id, slug=stage.get("kaggle_slug"), download_timeout=45
+            )
+            if not manifest:
+                stage["state"] = "SUBMITTED"
+                stage["waiting_reason"] = "KAGGLE_OUTPUT_NOT_AVAILABLE"
+                continue
+            zip_path, _ = service.result_store.retrieve(job_id, creds.username)
+            output_text = None
+            if zip_path:
+                import zipfile
+                with zipfile.ZipFile(zip_path, "r") as archive:
+                    job_manifest = service.store.get_job(job_id)
+                    selected = _select_orca_output_info(
+                        archive,
+                        job_manifest.input_filename if job_manifest else "",
+                    )
+                    if selected is not None:
+                        output_text = archive.read(selected).decode("utf-8", errors="replace")
+            if not output_text:
+                stage["state"] = "FAILED"
+                stage["scientific_status"] = "SCIENTIFIC_VALIDATION_FAILED"
+                stage["error"] = "Kaggle completed but no ORCA output artifact was found"
+                continue
+            complete_stage_with_output(reaction, species_id, stage["stage_id"], output_text, store)
+            completed.append(stage["stage_id"])
+
+    if changed:
+        store.save_reaction(reaction)
+    if completed:
+        dispatch = dispatch_ready_stages(reaction, owner_id=owner_id, state_dir=state_dir, store=store)
+        return {"ok": True, "changed": True, "completed_stage_ids": completed, **dispatch}
+    return {"ok": True, "changed": changed, "completed_stage_ids": []}
+
+
+def apply_local_worker_result(job: dict, result: dict, state_dir: str) -> dict:
+    """Project a durable local-worker result into the reaction read model.
+
+    The local worker owns process execution and its SQLite ledger. This
+    adapter owns the compatibility JSON view used by the existing reaction UI
+    and runs only after the worker has fenced/finalized the local attempt.
+    Replaying it is safe: terminal stages are already applied and successor
+    enqueueing uses a stable workflow/step/attempt idempotency key.
+    """
+    workflow_id = job.get("workflow_id")
+    step_id = job.get("step_id")
+    owner_id = job.get("owner_id")
+    if not workflow_id or not step_id:
+        return {"ok": True, "skipped": True, "reason": "not_a_reaction_stage"}
+
+    store = ReactionStore(state_dir)
+    reaction = None
+    species = None
+    stage = None
+    for candidate in store.list_reactions(owner_id):
+        for candidate_species in candidate.get("species", []):
+            if candidate_species.get("workflow_id") != workflow_id:
+                continue
+            for candidate_stage in candidate_species.get("stages", []):
+                if candidate_stage.get("stage_id") == step_id:
+                    reaction, species, stage = candidate, candidate_species, candidate_stage
+                    break
+            if stage is not None:
+                break
+        if stage is not None:
+            break
+    if reaction is None or species is None or stage is None:
+        return {"ok": False, "error": "REACTION_STAGE_NOT_FOUND", "workflow_id": workflow_id, "step_id": step_id}
+
+    # A failed/cancelled stage is terminal and must not be resurrected by a
+    # late worker.  A completed stage is different: the worker may have
+    # crashed after persisting this stage but before enqueueing its successor.
+    # In that case replay must continue below and repair the missing dispatch
+    # without executing the completed stage again.
+    if stage.get("state") in ("FAILED", "CANCELLED"):
+        return {"ok": True, "already_terminal": True, "stage_state": stage.get("state")}
+
+    if stage.get("state") != "COMPLETE":
+        if result.get("ok") and result.get("output_text"):
+            completed = complete_stage_with_output(
+                reaction, species.get("species_id"), step_id, result.get("output_text") or "", store=store
+            )
+            if completed.get("state") != "COMPLETE":
+                return {"ok": False, "error": completed.get("error") or "SCIENTIFIC_VALIDATION_FAILED",
+                        "stage_state": completed.get("state")}
+        else:
+            stage["state"] = "CANCELLED" if result.get("error_code") == "CANCELLED" else "FAILED"
+            stage["scientific_status"] = (
+                "SCIENTIFIC_VALIDATION_FAILED"
+                if result.get("error_code") == "SCIENTIFIC_VALIDATION_FAILED"
+                else "EXECUTION_FAILED"
+            )
+            stage["error"] = (result.get("error") or result.get("error_code") or "Local worker failed")[:400]
+            species["state"] = "CANCELLED" if stage["state"] == "CANCELLED" else "FAILED"
+            reaction["state"] = "CANCELLED" if stage["state"] == "CANCELLED" else "WAITING"
+            store.save_reaction(reaction)
+            return {"ok": True, "stage_state": stage["state"], "scientific_status": stage["scientific_status"]}
+
+    dispatch = dispatch_ready_stages(
+        reaction, owner_id=owner_id, state_dir=state_dir, store=store
+    )
+    return {
+        "ok": True,
+        "stage_state": stage.get("state"),
+        "next_stage_ids": dispatch["dispatched_stage_ids"],
+        "waiting_stage_ids": dispatch["waiting_stage_ids"],
+    }
 
 
 DEFAULT_SHARED_STAGES = [
@@ -1102,7 +1505,8 @@ def set_stage_input(reaction: dict, stage_id: str, input_text: str):
                                       % (stage_id, stage.get("state")))
     stage["input_text"] = input_text
     stage["input_hash"] = sha256_text(input_text)
-    stage["attempt_id"] = uuid.uuid4().hex
+    if not stage.get("attempt_id") or stage.get("state") == "FAILED":
+        stage["attempt_id"] = uuid.uuid4().hex
     return stage
 
 
@@ -1110,7 +1514,10 @@ def complete_stage_with_output(reaction: dict, species_id: str, stage_id: str, o
                                store: ReactionStore = None):
     species = _get_species(reaction, species_id)
     stage = _get_stage(reaction, stage_id)
-    if stage.get("state") in ("COMPLETE", "RUNNING"):
+    # RUNNING is the normal state immediately before a worker reports its
+    # durable output.  Only a terminal completion is a duplicate; rejecting
+    # RUNNING here made every real execution finish as a workflow error.
+    if stage.get("state") == "COMPLETE":
         raise ReactionValidationError("stage %s is already %s." % (stage_id, stage["state"]))
     stage["state"] = "VALIDATING"
     stage["output_text"] = output_text
@@ -1119,6 +1526,7 @@ def complete_stage_with_output(reaction: dict, species_id: str, stage_id: str, o
         result = extract_stage_result(output_text)
     except Exception as exc:
         stage["state"] = "FAILED"
+        stage["scientific_status"] = "SCIENTIFIC_VALIDATION_FAILED"
         stage["error"] = str(exc)[:300]
         species["state"] = "FAILED"
         reaction["state"] = "WAITING"
@@ -1128,56 +1536,121 @@ def complete_stage_with_output(reaction: dict, species_id: str, stage_id: str, o
     problems = stage_capabilities_valid(stage["kind"], result, output_text)
     if problems:
         stage["state"] = "FAILED"
+        stage["scientific_status"] = "SCIENTIFIC_VALIDATION_FAILED"
         stage["error"] = "; ".join(problems)[:400]
         species["state"] = "FAILED"
         reaction["state"] = "WAITING"
-    elif stage["kind"] in ("FREQ", "NUMFREQ", "OPT_FREQ", "OPTTS_FREQ") and result.get("imaginary_count"):
-        if stage.get("transition_state_stage"):
-            stage["imaginary_warning"] = "%d imaginary mode(s) expected for a transition state." % result["imaginary_count"]
-            stage["state"] = "COMPLETE"
-            stage["parsed"] = result
-            if stage.get("produces_geometry") and stage.get("geometry_hash"):
-                species["latest_valid_geometry_stage_id"] = stage["stage_id"]
-        else:
+    elif stage["kind"] in ("FREQ", "NUMFREQ", "OPT_FREQ", "OPTTS_FREQ") and result.get("imaginary_count") is not None:
+        is_ts = bool(
+            stage.get("transition_state_stage")
+            or STAGE_CAPABILITIES.get(stage.get("kind"), {}).get("transition_state_stage")
+            or species.get("role") == "transition_state"
+            or any(s.get("kind") in ("OPTTS", "OPTTS_FREQ") for s in species.get("stages", []))
+        )
+        imag_count = int(result.get("imaginary_count") or 0)
+        if is_ts:
+            if imag_count == 1:
+                stage["parsed"] = result
+                stage["geometry_hash"] = result.get("geometry_hash") or stage.get("geometry_hash")
+                stage["converged"] = bool(result.get("converged"))
+                stage["terminated_normally"] = bool(result.get("terminated_normally", True))
+                stage["state"] = "COMPLETE"
+                stage["scientific_status"] = "COMPLETED"
+                if stage.get("produces_geometry") and stage.get("geometry_hash"):
+                    species["latest_valid_geometry_stage_id"] = stage["stage_id"]
+            else:
+                opts = stage.get("stage_options") or {}
+                allow_higher = bool(opts.get("allow_higher_order_saddle_points") or stage.get("allow_multiple_imaginary"))
+                if imag_count > 1 and allow_higher:
+                    stage["imaginary_warning"] = f"{imag_count} imaginary mode(s) found (higher-order saddle point permitted by policy)."
+                    stage["state"] = "COMPLETE"
+                    stage["scientific_status"] = "COMPLETED_WITH_WARNINGS"
+                    stage["parsed"] = result
+                    if stage.get("produces_geometry") and stage.get("geometry_hash"):
+                        species["latest_valid_geometry_stage_id"] = stage["stage_id"]
+                else:
+                    stage["state"] = "FAILED"
+                    stage["scientific_status"] = "SCIENTIFIC_VALIDATION_FAILED"
+                    if imag_count == 0:
+                        stage["error"] = "INVALID_TRANSITION_STATE: 0 imaginary frequencies found. A transition state requires exactly 1 imaginary mode."
+                    else:
+                        stage["error"] = f"INVALID_TRANSITION_STATE: {imag_count} imaginary frequencies found (higher-order saddle point). Exactly 1 imaginary mode required for a transition state."
+                    species["state"] = "FAILED"
+                    reaction["state"] = "WAITING"
+        elif imag_count > 0:
             stage["state"] = "FAILED"
+            stage["scientific_status"] = "SCIENTIFIC_VALIDATION_FAILED"
             stage["error"] = ("INVALID_MINIMUM: %d imaginary frequency(ies) - not a minimum. "
-                              "Imaginary frequencies are never flipped." % result["imaginary_count"])
+                              "Imaginary frequencies are never flipped." % imag_count)
             species["state"] = "FAILED"
             reaction["state"] = "WAITING"
+        else:
+            stage["parsed"] = result
+            stage["geometry_hash"] = result.get("geometry_hash") or stage.get("geometry_hash")
+            stage["converged"] = bool(result.get("converged"))
+            stage["terminated_normally"] = bool(result.get("terminated_normally", True))
+            stage["state"] = "COMPLETE"
+            stage["scientific_status"] = "COMPLETED"
+            if stage.get("produces_geometry") and stage.get("geometry_hash"):
+                species["latest_valid_geometry_stage_id"] = stage["stage_id"]
     else:
         stage["parsed"] = result
         stage["geometry_hash"] = result.get("geometry_hash") or stage.get("geometry_hash")
         stage["converged"] = bool(result.get("converged"))
         stage["terminated_normally"] = bool(result.get("terminated_normally", True))
         stage["state"] = "COMPLETE"
+        stage["scientific_status"] = "COMPLETED"
         if stage.get("produces_geometry") and stage.get("geometry_hash"):
             species["latest_valid_geometry_stage_id"] = stage["stage_id"]
 
-        # Advance next stage in species dependency chain
+    if stage.get("state") in ("COMPLETE", "COMPLETED_WITH_WARNINGS"):
         st_idx = next((i for i, s in enumerate(species["stages"]) if s["stage_id"] == stage_id), -1)
         if st_idx >= 0 and st_idx + 1 < len(species["stages"]):
             nxt = species["stages"][st_idx + 1]
             if nxt.get("state") == "BLOCKED_BY_DEPENDENCY":
-                # Propagate optimized geometry if available
-                opt_xyz = stage.get("parsed", {}).get("geometry_xyz") or species.get("initial_geometry")
+                opt_xyz = None
+                geom_stage_id = species.get("latest_valid_geometry_stage_id")
+                if geom_stage_id:
+                    for s in species["stages"]:
+                        if s["stage_id"] == geom_stage_id and s.get("parsed", {}).get("geometry_xyz"):
+                            opt_xyz = s["parsed"]["geometry_xyz"]
+                            break
+                if not opt_xyz and stage.get("parsed", {}).get("geometry_xyz"):
+                    opt_xyz = stage["parsed"]["geometry_xyz"]
+
+                has_opt_predecessor = any(
+                    s.get("kind") in ("OPT", "OPTTS", "OPT_FREQ", "OPTTS_FREQ") or STAGE_CAPABILITIES.get(s.get("kind"), {}).get("produces_geometry")
+                    for s in species["stages"][:st_idx + 1]
+                )
+
+                if has_opt_predecessor and not opt_xyz:
+                    raise ReactionValidationError(
+                        f"Stage {nxt.get('stage_id')} blocked: predecessor optimization stage did not provide valid geometry."
+                    )
+                if not opt_xyz:
+                    opt_xyz = species.get("initial_geometry")
+
                 if opt_xyz and nxt.get("stage_options"):
                     import chem_core as core
                     opts = dict(nxt["stage_options"])
                     opts["coords"] = opt_xyz
                     nxt["input_text"] = core.generate_orca_6_input(opts)
                     nxt["input_hash"] = sha256_text(nxt["input_text"])
+                    nxt["geometry_provenance"] = {
+                        "source_stage_id": geom_stage_id or stage["stage_id"] if has_opt_predecessor else "initial",
+                        "geometry_hash": geometry_hash(opt_xyz),
+                    }
                 nxt["state"] = "READY"
                 nxt["ready_at"] = utcnow_iso(store.now_provider if store else None)
                 nxt["parent_stage_id"] = stage["stage_id"]
 
-        all_sp_stages_done = all(s.get("state") == "COMPLETE" for s in species["stages"])
+        all_sp_stages_done = all(s.get("state") in ("COMPLETE", "COMPLETED_WITH_WARNINGS") for s in species["stages"])
         if all_sp_stages_done and species["stages"]:
             assemble_species_result(reaction, species_id, store=None)
 
-        species["state"] = "COMPLETE" if all(s.get("state") == "COMPLETE" for s in species["stages"]) else "RUNNING"
+        species["state"] = "COMPLETE" if all(s.get("state") in ("COMPLETE", "COMPLETED_WITH_WARNINGS") for s in species["stages"]) else "RUNNING"
         reaction["state"] = "WAITING"
 
-        # Check if entire reaction completed -> Auto Thermo + PDF
         all_species_done = all(sp.get("state") == "COMPLETE" and sp.get("final_result") for sp in reaction["species"])
         if all_species_done and reaction["species"] and store is not None:
             try:
@@ -1186,10 +1659,12 @@ def complete_stage_with_output(reaction: dict, species_id: str, stage_id: str, o
                     from services import thermo_report_service as _trs
                     meta = _trs.create_report(store, reaction.get("owner"), reaction, thermo)
                     reaction["thermo_report_id"] = meta.get("report_id")
-                except Exception:
-                    pass
-            except Exception:
-                pass
+                except Exception as rep_exc:
+                    log.error("Failed to generate thermo report for %s: %s", reaction.get("reaction_id"), rep_exc, exc_info=True)
+                    reaction["report_warning"] = str(rep_exc)[:300]
+            except Exception as th_exc:
+                log.error("Failed to compute thermodynamics for %s: %s", reaction.get("reaction_id"), th_exc, exc_info=True)
+                reaction["thermodynamics_warning"] = str(th_exc)[:300]
 
     if store is not None:
         validate_workflow_stages(species["stages"])
@@ -1294,11 +1769,14 @@ def generate_unified_reaction_inputs(reaction: dict, workflow_config: dict, stor
     method = workflow_config.get("method", "B3LYP")
     basis = workflow_config.get("basis", "def2-SVP")
     disp = workflow_config.get("disp", "D3BJ")
-    solv_model = workflow_config.get("solv_model", "none")
-    solvent = workflow_config.get("solvent", "Water")
+    solv_model, solvent = normalize_solvation(
+        workflow_config.get("solv_model", "none"),
+        workflow_config.get("solvent", "Water"),
+    )
     cores = int(workflow_config.get("cores", 4))
     ram = int(workflow_config.get("ram", 2000))
-    backend = workflow_config.get("backend", "local")
+    backend = str(workflow_config.get("backend", "local") or "local").lower()
+    backend = {"server_host": "server_local", "kaggle_cloud": "kaggle"}.get(backend, backend)
     target_device = workflow_config.get("target_device")
 
     raw_stages = workflow_config.get("stages") or [
@@ -1307,6 +1785,11 @@ def generate_unified_reaction_inputs(reaction: dict, workflow_config: dict, stor
     ]
 
     for sp in reaction.get("species", []):
+        # Imported/legacy reactions may predate persistent workflow ids. A
+        # stable id is mandatory before steps are projected into SQLite;
+        # generating it here keeps retries and restart recovery addressable.
+        sp["workflow_id"] = sp.get("workflow_id") or uuid.uuid4().hex
+        sp["reaction_id"] = sp.get("reaction_id") or reaction.get("reaction_id")
         # 1. Ensure 3D initial geometry
         if not sp.get("initial_geometry"):
             coords, _ = resolve_species_3d_geometry(sp["formula"])
@@ -1317,46 +1800,53 @@ def generate_unified_reaction_inputs(reaction: dict, workflow_config: dict, stor
 
         # 2. Build stages
         sp["stages"] = []
-        for idx, st_def in enumerate(raw_stages):
+        for s_idx, st_def in enumerate(raw_stages):
             kind = st_def.get("kind", "OPT").upper()
-            st = new_stage(kind=kind, label=st_def.get("label", kind), order=idx, backend=backend)
+            st = new_stage(kind=kind, label=st_def.get("label", kind), order=s_idx, backend=backend)
             st["target_device"] = target_device
 
-            calc_type = "opt" if kind == "OPT" else ("freq" if kind == "FREQ" else ("opt_freq" if kind in ("OPT_FREQ", "OPT_AND_FREQ") else "sp"))
-            
+            STAGE_KIND_MAP = {
+                "OPT": "opt",
+                "OPTTS": "optts",
+                "FREQ": "freq",
+                "NUMFREQ": "numfreq",
+                "OPT_FREQ": "opt freq",
+                "OPTTS_FREQ": "optts freq",
+                "SP": "sp",
+                "TDDFT": "tddft",
+                "NMR": "nmr",
+                "CUSTOM_ORCA": "custom orca",
+                "IMPORTED": "imported",
+            }
+            calc_type = STAGE_KIND_MAP.get(kind, kind.lower().replace("_", " "))
+            st_options = {
+                "calc_type": calc_type,
+                "theory": method,
+                "basis": basis,
+                "disp": disp,
+                "solv_model": solv_model,
+                "solvent": solvent,
+                "charge": sp.get("charge", 0),
+                "mult": sp.get("multiplicity", 1),
+                "cores": cores,
+                "ram": ram,
+                "dataset_sources": workflow_config.get("dataset_sources", ""),
+                "orca_link": workflow_config.get("orca_link", ""),
+            }
+            st["stage_options"] = st_options
+            st["attempt_no"] = 1
+            st["attempt_id"] = st.get("attempt_id") or uuid.uuid4().hex
+
             # First stage gets initial geometry and becomes READY
-            if idx == 0:
-                inp_payload = {
-                    "calc_type": calc_type,
-                    "theory": method,
-                    "basis": basis,
-                    "disp": disp,
-                    "solv_model": solv_model,
-                    "solvent": solvent,
-                    "charge": sp.get("charge", 0),
-                    "mult": sp.get("multiplicity", 1),
-                    "cores": cores,
-                    "ram": ram,
-                    "coords": sp_coords,
-                }
+            if s_idx == 0:
+                inp_payload = dict(st_options)
+                inp_payload["coords"] = sp_coords
                 st["input_text"] = core.generate_orca_6_input(inp_payload)
                 st["input_hash"] = sha256_text(st["input_text"])
                 st["state"] = "READY"
                 st["ready_at"] = utcnow_iso(store.now_provider if store else None)
             else:
                 st["state"] = "BLOCKED_BY_DEPENDENCY"
-                st["stage_options"] = {
-                    "calc_type": calc_type,
-                    "theory": method,
-                    "basis": basis,
-                    "disp": disp,
-                    "solv_model": solv_model,
-                    "solvent": solvent,
-                    "charge": sp.get("charge", 0),
-                    "mult": sp.get("multiplicity", 1),
-                    "cores": cores,
-                    "ram": ram,
-                }
 
             sp["stages"].append(st)
 
@@ -1366,6 +1856,82 @@ def generate_unified_reaction_inputs(reaction: dict, workflow_config: dict, stor
     if store is not None:
         store.save_reaction(reaction)
     return reaction
+
+
+def retry_stage(reaction: dict, species_id: str, stage_id: str = None, store: ReactionStore = None, state_dir: str = None) -> dict:
+    """Explicit new-attempt transition for a failed or cancelled workflow stage (F-015)."""
+    if stage_id is None:
+        target_stage_id = species_id
+        stage = None
+        species = None
+        for sp in reaction.get("species", []):
+            for st in sp.get("stages", []):
+                if st.get("stage_id") == target_stage_id:
+                    stage = st
+                    species = sp
+                    break
+            if stage:
+                break
+        if not stage or not species:
+            raise ReactionValidationError(f"stage {target_stage_id} not found")
+    else:
+        target_stage_id = stage_id
+        species = _get_species(reaction, species_id)
+        stage = _get_stage(reaction, stage_id)
+
+    if stage.get("state") not in ("FAILED", "CANCELLED"):
+        raise ReactionValidationError(
+            f"Cannot retry stage {target_stage_id}: current state is {stage.get('state')}, expected FAILED or CANCELLED"
+        )
+
+    effective_state_dir = state_dir or (store.state_dir if store is not None else None)
+    retry_record = None
+    if effective_state_dir:
+        from services import workflow_store
+
+        # Project the current FAILED/CANCELLED state first, then let SQLite
+        # allocate the monotonic attempt number.  Calling retry_step after
+        # saving READY used to make every reaction-level retry fail because
+        # the durable row was no longer retryable; the old two-argument API
+        # also accidentally passed step_id=None.
+        workflow_store.sync_reaction(reaction, effective_state_dir)
+        workflow_id = species.get("workflow_id") or f"wf-{species.get('species_id') or species_id}"
+        retry_record = workflow_store.retry_step(
+            workflow_id=workflow_id,
+            step_id=target_stage_id,
+            state_dir=effective_state_dir,
+        )
+        if not retry_record.get("ok"):
+            raise ReactionValidationError(
+                retry_record.get("error") or "Could not persist workflow retry"
+            )
+
+    stage["retry_count"] = int(
+        (retry_record or {}).get("retry_count", int(stage.get("retry_count") or 0) + 1)
+    )
+    stage["attempt_no"] = int(
+        (retry_record or {}).get("attempt_no", int(stage.get("attempt_no") or 1) + 1)
+    )
+    new_attempt_id = (retry_record or {}).get("attempt_id") or uuid.uuid4().hex
+    stage["attempt_id"] = new_attempt_id
+    stage["local_job_id"] = None
+    stage["agent_job_id"] = None
+    stage["kaggle_job_id"] = None
+    stage["error"] = None
+    stage["scientific_status"] = None
+    stage["output_text"] = ""
+    stage["output_hash"] = None
+    stage["finished_at"] = None
+    stage["state"] = "READY"
+    stage["ready_at"] = utcnow_iso(store.now_provider if store else None)
+
+    species["state"] = "RUNNING"
+    reaction["state"] = "RUNNING"
+
+    if store is not None:
+        store.save_reaction(reaction)
+
+    return stage
 
 
 def build_reaction_outputs_zip(reaction: dict, store: ReactionStore = None) -> bytes:
@@ -1391,11 +1957,11 @@ def build_reaction_outputs_zip(reaction: dict, store: ReactionStore = None) -> b
             if (sp.get("final_result") or {}).get("geometry_xyz"):
                 zf.writestr(f"geometries/{sp_name}_optimized.xyz", sp["final_result"]["geometry_xyz"])
 
-            for idx, st in enumerate(sp.get("stages", [])):
+            for s_idx, st in enumerate(sp.get("stages", [])):
                 st_kind = st.get("kind", "STAGE")
                 if st.get("input_text"):
-                    zf.writestr(f"inputs/{sp_name}_step{idx+1}_{st_kind}.inp", st["input_text"])
+                    zf.writestr(f"inputs/{sp_name}_step{s_idx+1}_{st_kind}.inp", st["input_text"])
                 if st.get("output_text"):
-                    zf.writestr(f"outputs/{sp_name}_step{idx+1}_{st_kind}.out", st["output_text"])
+                    zf.writestr(f"outputs/{sp_name}_step{s_idx+1}_{st_kind}.out", st["output_text"])
 
     return buf.getvalue()

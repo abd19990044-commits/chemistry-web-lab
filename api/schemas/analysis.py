@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 
 
 class AnalyzeOutputRequest(BaseModel):
-    output_text: str = Field(..., description="Raw ORCA calculation output text")
-    job_id: Optional[str] = Field(None, description="Optional job identifier")
+    output_text: str = Field(..., max_length=60 * 1024 * 1024, description="Raw ORCA calculation output text")
+    job_id: Optional[str] = Field(None, max_length=200, description="Optional job identifier")
 
 
 class AnalysisJobSummary(BaseModel):

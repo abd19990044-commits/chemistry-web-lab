@@ -4,8 +4,8 @@
 CRITICAL INVARIANTS:
 1. Every Agent process launch generates a NEW Connection API (CLA_...).
 2. Connection APIs are strictly ephemeral and tied to agent_session_id.
-3. NO permanent authentication secrets are persisted to disk or databases.
-4. Server stores SHA-256 verifiers, never plaintext Connection APIs.
+3. Installation proof is persistent private state; pairing/runtime credentials are ephemeral.
+4. Server stores SHA-256 verifiers, never plaintext Connection APIs or installation proofs.
 5. In Single-Owner mode, claiming one token invalidates any remaining unclaimed tokens for that session.
 6. The browser NEVER receives runtime_session_secret; it is delivered ONLY to the Agent via finalize/bootstrap channel.
 7. nprocs * maxcore_mb <= usable_ram_mb is strictly enforced.
@@ -13,6 +13,7 @@ CRITICAL INVARIANTS:
 from __future__ import annotations
 
 import contextlib
+import base64
 import hashlib
 import hmac
 import json
@@ -26,6 +27,8 @@ import time
 import uuid
 from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
+from services.sqlite_migrations import backup_before_schema_upgrade
+
 TOKEN_PREFIX = "CLA_"
 DEFAULT_LOCAL_ORCA_CONCURRENCY = 1
 DEFAULT_MAXDISK_MB = 20000
@@ -34,7 +37,31 @@ HEARTBEAT_TIMEOUT_SECONDS = 90  # Session marked OFFLINE if no heartbeat within 
 _REGISTRY_LOCK = threading.Lock()
 _WS_CONNECTIONS: Dict[str, Any] = {}  # agent_session_id -> WebSocket wrapper
 _WS_OWNERS: Dict[str, str] = {}       # agent_session_id -> owner_id
-_PENDING_SECRETS: Dict[str, str] = {} # agent_session_id -> in-memory runtime_session_secret awaiting Agent finalize
+
+
+def _pairing_cipher(state_dir: Optional[str] = None):
+    """Return a process-independent cipher for one-time pairing delivery."""
+    from cryptography.fernet import Fernet
+
+    configured = (os.environ.get("SECRET_KEY") or os.environ.get("FLASK_SECRET_KEY") or "").encode("utf-8")
+    if configured:
+        material = hashlib.sha256(b"local-agent-pairing-v1\0" + configured).digest()
+    else:
+        base = state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR") or os.path.join(os.getcwd(), "data")
+        os.makedirs(base, exist_ok=True)
+        key_path = os.path.join(base, ".local_agent_pairing.key")
+        try:
+            fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            fd = None
+        if fd is not None:
+            with os.fdopen(fd, "wb") as key_file:
+                key_file.write(secrets.token_bytes(32))
+        with open(key_path, "rb") as key_file:
+            material = key_file.read(32)
+        if len(material) != 32:
+            raise RuntimeError("Invalid local-agent pairing encryption key")
+    return Fernet(base64.urlsafe_b64encode(material))
 
 
 def _get_db_path(state_dir: Optional[str] = None) -> str:
@@ -45,16 +72,45 @@ def _get_db_path(state_dir: Optional[str] = None) -> str:
 
 @contextlib.contextmanager
 def _db_connection(db_path: str) -> Iterator[sqlite3.Connection]:
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=30.0)
+    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA synchronous=NORMAL")
     try:
         yield conn
     finally:
         conn.close()
 
 
+def _table_columns(conn: sqlite3.Connection, table: str) -> Set[str]:
+    safe = table.replace('"', '""')
+    return {str(row[1]) for row in conn.execute(f'PRAGMA table_info("{safe}")')}
+
+
 def _init_db(db_path: str) -> None:
+    backup_before_schema_upgrade(
+        db_path,
+        component="local-agent-registry",
+        target_version=2,
+        required_schema={
+            "agent_schema": ("version",),
+            "agent_installations": ("installation_id", "installation_secret_hash"),
+            "agent_runtime_sessions": (
+                "agent_session_id", "runtime_secret_hash", "pending_secret_ciphertext",
+            ),
+            "agent_runtime_tokens": ("token_id", "token_verifier"),
+            "agent_jobs": (
+                "job_id", "output_text", "workflow_id", "step_id", "attempt_id",
+                "projection_status", "process_pid", "process_start_time",
+                "process_command_fingerprint", "process_workspace", "process_last_heartbeat",
+            ),
+            "agent_job_idempotency": ("idempotency_key", "job_id"),
+        },
+    )
     with _db_connection(db_path) as conn:
         conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("CREATE TABLE IF NOT EXISTS agent_schema(version INTEGER NOT NULL)")
         conn.execute("""
         CREATE TABLE IF NOT EXISTS agent_installations (
             installation_id TEXT PRIMARY KEY,
@@ -63,7 +119,8 @@ def _init_db(db_path: str) -> None:
             backend_kind TEXT NOT NULL DEFAULT 'local',
             scheduler_type TEXT,
             created_at REAL NOT NULL,
-            last_seen REAL NOT NULL
+            last_seen REAL NOT NULL,
+            installation_secret_hash TEXT
         );
         """)
 
@@ -85,6 +142,11 @@ def _init_db(db_path: str) -> None:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_runtime_owner ON agent_runtime_sessions(owner_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_runtime_inst ON agent_runtime_sessions(installation_id);")
+
+        if "installation_secret_hash" not in _table_columns(conn, "agent_installations"):
+            conn.execute(
+                "ALTER TABLE agent_installations ADD COLUMN installation_secret_hash TEXT"
+            )
 
         conn.execute("""
         CREATE TABLE IF NOT EXISTS agent_runtime_tokens (
@@ -118,11 +180,38 @@ def _init_db(db_path: str) -> None:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_jobs_session ON agent_jobs(agent_session_id, status);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_jobs_owner ON agent_jobs(owner_id);")
-        for col, col_type in [("output_text", "TEXT"), ("xyz_structure", "TEXT"), ("artifacts_zip_path", "TEXT")]:
-            try:
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS agent_job_idempotency (
+            idempotency_key TEXT PRIMARY KEY,
+            owner_id TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            job_id TEXT NOT NULL,
+            created_at REAL NOT NULL
+        );
+        """)
+        agent_job_columns = _table_columns(conn, "agent_jobs")
+        for col, col_type in [
+            ("output_text", "TEXT"),
+            ("xyz_structure", "TEXT"),
+            ("artifacts_zip_path", "TEXT"),
+            ("cancel_requested", "INTEGER NOT NULL DEFAULT 0"),
+            ("workflow_id", "TEXT"),
+            ("step_id", "TEXT"),
+            ("attempt_id", "TEXT"),
+            ("reaction_id", "TEXT"),
+            ("projection_status", "TEXT NOT NULL DEFAULT 'NOT_REQUIRED'"),
+            ("process_pid", "INTEGER"),
+            ("process_start_time", "REAL"),
+            ("process_command_fingerprint", "TEXT"),
+            ("process_workspace", "TEXT"),
+            ("process_last_heartbeat", "REAL"),
+        ]:
+            if col not in agent_job_columns:
                 conn.execute(f"ALTER TABLE agent_jobs ADD COLUMN {col} {col_type};")
-            except sqlite3.OperationalError:
-                pass
+        if "pending_secret_ciphertext" not in _table_columns(conn, "agent_runtime_sessions"):
+            conn.execute("ALTER TABLE agent_runtime_sessions ADD COLUMN pending_secret_ciphertext TEXT")
+        conn.execute("DELETE FROM agent_schema")
+        conn.execute("INSERT INTO agent_schema(version) VALUES (2)")
         conn.commit()
 
 
@@ -155,6 +244,7 @@ def init_runtime_session(
     protocol_version: int = 1,
     capabilities: Optional[Dict[str, Any]] = None,
     state_dir: Optional[str] = None,
+    installation_secret: Optional[str] = None,
 ) -> Dict[str, Any]:
     db_path = _get_db_path(state_dir)
     _init_db(db_path)
@@ -163,17 +253,47 @@ def init_runtime_session(
     with _REGISTRY_LOCK, _db_connection(db_path) as conn:
         cursor = conn.cursor()
 
+        # F-018: Installation authentication and spoofing protection
+        cursor.execute("SELECT installation_secret_hash FROM agent_installations WHERE installation_id = ?", (installation_id,))
+        inst_row = cursor.fetchone()
+
+        given_hash = hashlib.sha256(installation_secret.encode("utf-8")).hexdigest() if installation_secret else None
+
+        if inst_row is not None:
+            cursor.execute(
+                "SELECT agent_session_id, connection_state FROM agent_runtime_sessions "
+                "WHERE installation_id = ? AND connection_state IN ('ONLINE', 'RECONNECTING')",
+                (installation_id,),
+            )
+            active_s = cursor.fetchone()
+            stored_hash = inst_row[0]
+            valid_proof = bool(
+                stored_hash and given_hash
+                and hmac.compare_digest(given_hash, stored_hash)
+            )
+            # Legacy installations without a stored verifier may enrol a
+            # secret only while inactive. Otherwise an attacker who knows the
+            # public installation id could become the first writer and evict
+            # the live legitimate session.
+            if active_s and not valid_proof:
+                return {
+                    "ok": False,
+                    "error": "Cannot supersede active installation session without valid installation secret proof.",
+                    "error_code": "INSTALLATION_AUTH_REQUIRED",
+                }
+
+        secret_hash_to_store = given_hash or (inst_row[0] if inst_row else None)
         cursor.execute(
             """
             INSERT OR REPLACE INTO agent_installations (
-                installation_id, display_name, platform, backend_kind, scheduler_type, created_at, last_seen
+                installation_id, display_name, platform, backend_kind, scheduler_type, created_at, last_seen, installation_secret_hash
             ) VALUES (
                 ?, ?, ?, ?, ?,
                 COALESCE((SELECT created_at FROM agent_installations WHERE installation_id = ?), ?),
-                ?
+                ?, ?
             )
             """,
-            (installation_id, device_name, platform.lower(), backend_kind.lower(), scheduler_type, installation_id, now_t, now_t),
+            (installation_id, device_name, platform.lower(), backend_kind.lower(), scheduler_type, installation_id, now_t, now_t, secret_hash_to_store),
         )
 
         cursor.execute(
@@ -183,6 +303,26 @@ def init_runtime_session(
             WHERE installation_id = ? AND connection_state IN ('UNPAIRED', 'ONLINE', 'RECONNECTING', 'OFFLINE')
             """,
             (now_t, installation_id),
+        )
+
+        # Never automatically replay a RUNNING agent job. The old ORCA/MPI
+        # process may have survived the companion agent crash, and assigning
+        # that logical job to the new session would launch a duplicate. Keep
+        # the original session/process association as recovery evidence and
+        # require an explicit operator retry (a new attempt) if identity cannot
+        # be proved.
+        cursor.execute(
+            """
+            UPDATE agent_jobs
+            SET status = 'RECOVERY_REQUIRED',
+                error_message = 'Companion agent restarted while this job was running; automatic replay was refused'
+            WHERE status = 'RUNNING'
+              AND agent_session_id IN (
+                  SELECT agent_session_id FROM agent_runtime_sessions
+                  WHERE installation_id = ? AND agent_session_id <> ?
+              )
+            """,
+            (installation_id, agent_session_id),
         )
 
         cursor.execute(
@@ -217,11 +357,13 @@ def init_runtime_session(
 
         conn.commit()
 
+    projection_report = reconcile_agent_workflow_projections(state_dir=state_dir)
     return {
         "ok": True,
         "agent_session_id": agent_session_id,
         "installation_id": installation_id,
         "status": "UNPAIRED",
+        "workflow_reconciliation": projection_report,
     }
 
 
@@ -286,8 +428,9 @@ def claim_runtime_token(
         runtime_session_secret = f"CRS_{secrets.token_urlsafe(32)}"
         secret_hash = hash_runtime_secret(runtime_session_secret)
 
-        # Store secret in memory awaiting Agent finalize
-        _PENDING_SECRETS[session_id] = runtime_session_secret
+        pending_ciphertext = _pairing_cipher(state_dir).encrypt(
+            runtime_session_secret.encode("utf-8")
+        ).decode("ascii")
 
         final_display_name = (custom_device_name or disp_name).strip()
 
@@ -297,10 +440,11 @@ def claim_runtime_token(
         cursor.execute(
             """
             UPDATE agent_runtime_sessions
-            SET owner_id = ?, runtime_secret_hash = ?, paired_at = ?, last_seen = ?, connection_state = 'ONLINE'
+            SET owner_id = ?, runtime_secret_hash = ?, pending_secret_ciphertext = ?,
+                paired_at = ?, last_seen = ?, connection_state = 'ONLINE'
             WHERE agent_session_id = ?
             """,
-            (owner_id, secret_hash, now_t, now_t, session_id),
+            (owner_id, secret_hash, pending_ciphertext, now_t, now_t, session_id),
         )
 
         cursor.execute("UPDATE agent_runtime_tokens SET claimed_at = ? WHERE token_id = ?", (now_t, token_id))
@@ -343,10 +487,12 @@ def finalize_agent_runtime(
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT s.agent_session_id, s.owner_id, s.connection_state, s.runtime_secret_hash
+            SELECT s.agent_session_id, s.owner_id, s.connection_state,
+                   s.runtime_secret_hash, s.pending_secret_ciphertext
             FROM agent_runtime_sessions s
             JOIN agent_runtime_tokens t ON s.agent_session_id = t.agent_session_id
             WHERE s.agent_session_id = ? AND t.token_verifier = ?
+              AND t.claimed_at IS NOT NULL AND t.invalidated_at IS NULL
             """,
             (agent_session_id, verifier),
         )
@@ -354,14 +500,41 @@ def finalize_agent_runtime(
         if not row:
             return {"ok": False, "error": "Invalid session or connection API proof.", "error_code": "INVALID_AGENT_PROOF"}
 
-        sess_id, owner_id, conn_state, stored_hash = row
+        sess_id, owner_id, conn_state, stored_hash, pending_ciphertext = row
         if not owner_id or conn_state not in ("ONLINE", "RECONNECTING"):
             return {"ok": False, "error": "Session has not yet been claimed by website user.", "error_code": "AWAITING_CLAIM"}
 
-        secret = _PENDING_SECRETS.get(sess_id)
-        if not secret:
-            # Reconstruct or reject if already claimed and finalized
-            return {"ok": True, "agent_session_id": sess_id, "owner_id": owner_id, "status": "ONLINE"}
+        if not pending_ciphertext:
+            return {"ok": False, "error": "Pairing credential was already finalized.",
+                    "error_code": "PAIRING_ALREADY_FINALIZED"}
+        try:
+            secret = _pairing_cipher(state_dir).decrypt(
+                pending_ciphertext.encode("ascii")
+            ).decode("utf-8")
+        except Exception:
+            return {"ok": False,
+                    "error": "Pairing credential cannot be decrypted by this deployment.",
+                    "error_code": "PAIRING_KEY_MISMATCH"}
+
+        # F-029: One-time delivery. Clear pending ciphertext and invalidate token.
+        now_t = time.time()
+        cursor.execute(
+            """
+            UPDATE agent_runtime_sessions
+            SET pending_secret_ciphertext = NULL
+            WHERE agent_session_id = ?
+            """,
+            (sess_id,),
+        )
+        cursor.execute(
+            """
+            UPDATE agent_runtime_tokens
+            SET invalidated_at = ?
+            WHERE agent_session_id = ? AND token_verifier = ?
+            """,
+            (now_t, sess_id, verifier),
+        )
+        conn.commit()
 
         return {
             "ok": True,
@@ -411,7 +584,13 @@ def authenticate_runtime_session(
             return None
 
         now_t = time.time()
-        cursor.execute("UPDATE agent_runtime_sessions SET last_seen = ?, connection_state = 'ONLINE' WHERE agent_session_id = ?", (now_t, sess_id))
+        # Successful runtime authentication proves the Agent received the
+        # one-time credential, so the recoverable ciphertext can be erased.
+        cursor.execute(
+            "UPDATE agent_runtime_sessions SET last_seen = ?, connection_state = 'ONLINE', "
+            "pending_secret_ciphertext = NULL WHERE agent_session_id = ?",
+            (now_t, sess_id),
+        )
         cursor.execute("UPDATE agent_installations SET last_seen = ? WHERE installation_id = ?", (now_t, inst_id))
         conn.commit()
 
@@ -508,9 +687,21 @@ def disconnect_user_device(agent_session_id: str, owner_id: str, state_dir: Opti
         affected = cursor.rowcount
         if affected > 0:
             cursor.execute("UPDATE agent_runtime_tokens SET invalidated_at = ? WHERE agent_session_id = ?", (now_t, agent_session_id))
+            cursor.execute(
+                """
+                UPDATE agent_jobs
+                SET status = 'FAILED', error_message = 'Agent disconnected', completed_at = ?,
+                    projection_status = CASE WHEN workflow_id IS NOT NULL AND step_id IS NOT NULL THEN 'PENDING' ELSE projection_status END
+                WHERE agent_session_id = ? AND status NOT IN ('COMPLETED', 'FAILED', 'CANCELLED')
+                """,
+                (now_t, agent_session_id),
+            )
         conn.commit()
-
-    _PENDING_SECRETS.pop(agent_session_id, None)
+    if affected > 0:
+        try:
+            reconcile_agent_workflow_projections(state_dir=state_dir)
+        except Exception:
+            pass
 
     if affected > 0 and agent_session_id in _WS_CONNECTIONS:
         try:
@@ -554,9 +745,22 @@ def end_runtime_session(agent_session_id: str, state_dir: Optional[str] = None) 
         )
         cursor.execute("UPDATE agent_runtime_tokens SET invalidated_at = ? WHERE agent_session_id = ?", (now_t, agent_session_id))
         affected = cursor.rowcount
+        if affected > 0:
+            cursor.execute(
+                """
+                UPDATE agent_jobs
+                SET status = 'FAILED', error_message = 'Agent runtime session ended', completed_at = ?,
+                    projection_status = CASE WHEN workflow_id IS NOT NULL AND step_id IS NOT NULL THEN 'PENDING' ELSE projection_status END
+                WHERE agent_session_id = ? AND status NOT IN ('COMPLETED', 'FAILED', 'CANCELLED')
+                """,
+                (now_t, agent_session_id),
+            )
         conn.commit()
-
-    _PENDING_SECRETS.pop(agent_session_id, None)
+    if affected > 0:
+        try:
+            reconcile_agent_workflow_projections(state_dir=state_dir)
+        except Exception:
+            pass
 
     if affected > 0 and agent_session_id in _WS_CONNECTIONS:
         try:
@@ -673,6 +877,10 @@ def calculate_orca_resource_directives(
     }
 
 
+def _strip_orca_line_comments(line: str) -> str:
+    return line.split("#")[0].strip()
+
+
 def inject_orca_resources(input_text: str, resources: Dict[str, Any]) -> str:
     res = calculate_orca_resource_directives(
         cpu_cores=resources.get("cpu_cores", 1),
@@ -687,18 +895,28 @@ def inject_orca_resources(input_text: str, resources: Dict[str, Any]) -> str:
     in_pal = False
 
     for line in lines:
-        s_line = line.strip().lower()
+        stripped = _strip_orca_line_comments(line)
+        s_line = stripped.lower()
+
+        # F-023: Structure- and comment-aware block handling
         if s_line.startswith("%pal"):
+            tokens = s_line.split()
+            if len(tokens) >= 2 and tokens[-1] == "end":
+                # Single-line %pal ... end; do not enter multi-line in_pal state
+                continue
             in_pal = True
             continue
+
         if in_pal:
-            if s_line == "end":
+            tokens = s_line.split()
+            if tokens and tokens[0] == "end":
                 in_pal = False
             continue
-        if s_line.startswith("%maxcore"):
+
+        tokens = s_line.split()
+        if tokens and tokens[0] in ("%maxcore", "%maxdisk", "maxdisk"):
             continue
-        if s_line.startswith("maxdisk"):
-            continue
+
         cleaned_lines.append(line)
 
     injections: List[str] = []
@@ -733,25 +951,81 @@ def enqueue_agent_job(
     input_text: str,
     job_name: str = "calculation",
     state_dir: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
+    workflow_id: Optional[str] = None,
+    step_id: Optional[str] = None,
+    attempt_id: Optional[str] = None,
+    reaction_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Enqueues an ORCA calculation job for a specific connected companion agent."""
     db_path = _get_db_path(state_dir)
     _init_db(db_path)
     now_t = time.time()
     job_id = f"job_{uuid.uuid4().hex[:12]}"
+    request_hash = hashlib.sha256(json.dumps({
+        "agent_session_id": agent_session_id,
+        "owner_id": owner_id,
+        "job_name": job_name,
+        "input_text": input_text,
+        "workflow_id": workflow_id,
+        "step_id": step_id,
+        "attempt_id": attempt_id,
+        "reaction_id": reaction_id,
+    }, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
     with _REGISTRY_LOCK, _db_connection(db_path) as conn:
         cursor = conn.cursor()
+        target = cursor.execute(
+            "SELECT owner_id, connection_state FROM agent_runtime_sessions "
+            "WHERE agent_session_id = ?",
+            (agent_session_id,),
+        ).fetchone()
+        if not target:
+            return {"ok": False, "error": "AGENT_SESSION_NOT_FOUND"}
+        if target[0] != owner_id:
+            return {"ok": False, "error": "AGENT_SESSION_NOT_OWNED"}
+        if target[1] in ("STOPPED", "SUPERSEDED", "REVOKED"):
+            return {"ok": False, "error": "AGENT_SESSION_INACTIVE"}
+        if idempotency_key:
+            cursor.execute(
+                "SELECT owner_id, request_hash, job_id FROM agent_job_idempotency "
+                "WHERE idempotency_key = ?", (idempotency_key,))
+            prior = cursor.fetchone()
+            if prior:
+                if prior[0] != owner_id or prior[1] != request_hash:
+                    return {"ok": False, "error": "IDEMPOTENCY_KEY_REUSE"}
+                cursor.execute("SELECT status, created_at FROM agent_jobs WHERE job_id = ?",
+                               (prior[2],))
+                job_row = cursor.fetchone()
+                return {
+                    "ok": True, "job_id": prior[2],
+                    "agent_session_id": agent_session_id,
+                    "status": job_row[0] if job_row else "UNKNOWN",
+                    "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                                  time.gmtime(job_row[1] if job_row else now_t)),
+                    "replayed": True,
+                }
         cursor.execute(
             """
             INSERT INTO agent_jobs (
                 job_id, agent_session_id, owner_id, job_name, input_text,
                 status, created_at, started_at, completed_at, exit_code,
-                stdout_tail, parsed_results_json, error_message
-            ) VALUES (?, ?, ?, ?, ?, 'QUEUED', ?, NULL, NULL, NULL, '', '{}', NULL)
+                stdout_tail, parsed_results_json, error_message, workflow_id,
+                step_id, attempt_id, reaction_id, projection_status
+            ) VALUES (?, ?, ?, ?, ?, 'QUEUED', ?, NULL, NULL, NULL, '', '{}', NULL,
+                      ?, ?, ?, ?, ?)
             """,
-            (job_id, agent_session_id, owner_id, job_name, input_text, now_t),
+            (job_id, agent_session_id, owner_id, job_name, input_text, now_t,
+             workflow_id, step_id, attempt_id, reaction_id,
+             "PENDING" if workflow_id and step_id else "NOT_REQUIRED"),
         )
+        if idempotency_key:
+            cursor.execute(
+                "INSERT INTO agent_job_idempotency "
+                "(idempotency_key, owner_id, request_hash, job_id, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (idempotency_key, owner_id, request_hash, job_id, now_t),
+            )
         conn.commit()
 
     return {
@@ -778,6 +1052,9 @@ def poll_next_agent_job(
     now_t = time.time()
     with _REGISTRY_LOCK, _db_connection(db_path) as conn:
         cursor = conn.cursor()
+        # SELECT-then-UPDATE must be one write transaction.  The process-local
+        # lock does not protect a second web worker/process sharing SQLite.
+        conn.execute("BEGIN IMMEDIATE")
         # Refresh last_seen timestamp
         cursor.execute(
             "UPDATE agent_runtime_sessions SET last_seen = ? WHERE agent_session_id = ?",
@@ -801,9 +1078,13 @@ def poll_next_agent_job(
 
         job_id, job_name, input_text, created_at = row
         cursor.execute(
-            "UPDATE agent_jobs SET status = 'RUNNING', started_at = ? WHERE job_id = ?",
-            (now_t, job_id),
+            "UPDATE agent_jobs SET status = 'RUNNING', started_at = ? "
+            "WHERE job_id = ? AND agent_session_id = ? AND status = 'QUEUED'",
+            (now_t, job_id, agent_session_id),
         )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return {"ok": True, "job": None}
         conn.commit()
 
     return {
@@ -834,7 +1115,11 @@ def update_agent_job_progress(
     now_t = time.time()
     with _REGISTRY_LOCK, _db_connection(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT stdout_tail FROM agent_jobs WHERE job_id = ? AND agent_session_id = ?", (job_id, agent_session_id))
+        cursor.execute(
+            "SELECT stdout_tail, cancel_requested, status FROM agent_jobs "
+            "WHERE job_id = ? AND agent_session_id = ?",
+            (job_id, agent_session_id),
+        )
         row = cursor.fetchone()
         if not row:
             return {"ok": False, "error": "JOB_NOT_FOUND"}
@@ -843,13 +1128,204 @@ def update_agent_job_progress(
         # Keep the latest 50 KB of log output to prevent unbounded database bloat
         combined = (existing_tail + "\n" + stdout_chunk)[-50000:]
         cursor.execute(
-            "UPDATE agent_jobs SET stdout_tail = ? WHERE job_id = ?",
-            (combined, job_id),
+            "UPDATE agent_jobs SET stdout_tail = ? "
+            "WHERE job_id = ? AND agent_session_id = ? "
+            "AND status IN ('RUNNING', 'CANCEL_REQUESTED')",
+            (combined, job_id, agent_session_id),
         )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return {"ok": False, "error": "JOB_NOT_RUNNING"}
         cursor.execute("UPDATE agent_runtime_sessions SET last_seen = ? WHERE agent_session_id = ?", (now_t, agent_session_id))
         conn.commit()
 
-    return {"ok": True}
+    return {"ok": True, "cancel_requested": bool(row[1]), "status": row[2]}
+
+
+def register_agent_job_process(
+    job_id: str,
+    agent_session_id: str,
+    runtime_session_secret: str,
+    *,
+    pid: int,
+    process_start_time: float,
+    command_fingerprint: str,
+    workspace: str,
+    recovering: bool = False,
+    state_dir: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Persist or recover a Local Agent process after strong installation checks.
+
+    A restarted companion may rebind only a RECOVERY_REQUIRED job that belongs
+    to the same installation and owner.  The companion is responsible for
+    checking PID create-time and command/workspace before requesting recovery;
+    the server records that proof for diagnostics and prevents cross-device
+    adoption.
+    """
+    db_path = _get_db_path(state_dir)
+    _init_db(db_path)
+    auth = authenticate_runtime_session(agent_session_id, runtime_session_secret, state_dir=state_dir)
+    if not auth:
+        return {"ok": False, "error": "UNAUTHORIZED_AGENT_SESSION"}
+    if int(pid) <= 0 or float(process_start_time) <= 0:
+        return {"ok": False, "error": "INVALID_PROCESS_IDENTITY"}
+    fingerprint = str(command_fingerprint or "").strip()
+    workspace_text = str(workspace or "").strip()
+    if not fingerprint or not workspace_text:
+        return {"ok": False, "error": "INCOMPLETE_PROCESS_IDENTITY"}
+
+    now_t = time.time()
+    with _REGISTRY_LOCK, _db_connection(db_path) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT j.status, j.agent_session_id, j.owner_id,
+                   old.installation_id
+            FROM agent_jobs j
+            JOIN agent_runtime_sessions old ON old.agent_session_id = j.agent_session_id
+            WHERE j.job_id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+        if not row:
+            conn.rollback()
+            return {"ok": False, "error": "JOB_NOT_FOUND"}
+        status, old_session_id, owner_id, old_installation_id = row
+        if owner_id != auth.get("owner_id") or old_installation_id != auth.get("installation_id"):
+            conn.rollback()
+            return {"ok": False, "error": "PROCESS_RECOVERY_NOT_AUTHORIZED"}
+
+        if recovering:
+            if status != "RECOVERY_REQUIRED":
+                conn.rollback()
+                return {"ok": False, "error": "JOB_NOT_RECOVERABLE", "status": status}
+            changed = conn.execute(
+                """
+                UPDATE agent_jobs
+                SET agent_session_id = ?, status = 'RUNNING', error_message = NULL,
+                    process_pid = ?, process_start_time = ?,
+                    process_command_fingerprint = ?, process_workspace = ?,
+                    process_last_heartbeat = ?
+                WHERE job_id = ? AND agent_session_id = ? AND status = 'RECOVERY_REQUIRED'
+                """,
+                (agent_session_id, int(pid), float(process_start_time), fingerprint,
+                 workspace_text, now_t, job_id, old_session_id),
+            )
+        else:
+            if old_session_id != agent_session_id or status != "RUNNING":
+                conn.rollback()
+                return {"ok": False, "error": "JOB_NOT_RUNNING", "status": status}
+            changed = conn.execute(
+                """
+                UPDATE agent_jobs
+                SET process_pid = ?, process_start_time = ?,
+                    process_command_fingerprint = ?, process_workspace = ?,
+                    process_last_heartbeat = ?
+                WHERE job_id = ? AND agent_session_id = ? AND status = 'RUNNING'
+                """,
+                (int(pid), float(process_start_time), fingerprint, workspace_text,
+                 now_t, job_id, agent_session_id),
+            )
+        if changed.rowcount != 1:
+            conn.rollback()
+            return {"ok": False, "error": "STATE_CONFLICT"}
+        conn.commit()
+    return {"ok": True, "status": "RUNNING", "recovered": bool(recovering)}
+
+
+def request_agent_job_cancel(
+    job_id: str,
+    owner_id: str,
+    state_dir: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Persist cancellation; a running Agent sees it on its next heartbeat."""
+    db_path = _get_db_path(state_dir)
+    _init_db(db_path)
+    now_t = time.time()
+    with _REGISTRY_LOCK, _db_connection(db_path) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT status FROM agent_jobs WHERE job_id=? AND owner_id=?",
+            (job_id, owner_id),
+        ).fetchone()
+        if not row:
+            conn.rollback()
+            return {"ok": False, "error": "JOB_NOT_FOUND"}
+        if row[0] in ("COMPLETED", "FAILED", "CANCELLED"):
+            conn.rollback()
+            return {"ok": True, "status": row[0], "terminal": True}
+        new_state = "CANCELLED" if row[0] == "QUEUED" else "CANCEL_REQUESTED"
+        changed = conn.execute(
+            "UPDATE agent_jobs SET status=?, cancel_requested=1, "
+            "completed_at=CASE WHEN ?='CANCELLED' THEN ? ELSE completed_at END, "
+            "error_message='Cancellation requested by user' "
+            "WHERE job_id=? AND owner_id=? AND status=?",
+            (new_state, new_state, now_t, job_id, owner_id, row[0]),
+        )
+        if changed.rowcount != 1:
+            conn.rollback()
+            return {"ok": False, "error": "STATE_CONFLICT"}
+        conn.commit()
+    return {"ok": True, "status": new_state}
+
+
+def list_agent_jobs(
+    owner_id: str,
+    state_dir: Optional[str] = None,
+    limit: int = 200,
+) -> List[Dict[str, Any]]:
+    """Return the durable Local Agent queue for one authenticated owner.
+
+    This read model deliberately comes from SQLite rather than the websocket
+    registry.  A disconnected browser or Agent therefore cannot make queued
+    work disappear from ``My Jobs``.
+    """
+    if not owner_id:
+        return []
+    db_path = _get_db_path(state_dir)
+    _init_db(db_path)
+    safe_limit = max(1, min(int(limit), 1000))
+    now_t = time.time()
+    with _REGISTRY_LOCK, _db_connection(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT j.job_id, j.agent_session_id, j.job_name, j.status,
+                   j.created_at, j.started_at, j.completed_at, j.exit_code,
+                   j.error_message, j.workflow_id, j.step_id, j.attempt_id,
+                   j.process_last_heartbeat, j.cancel_requested,
+                   s.connection_state, s.last_seen AS agent_last_seen,
+                   i.display_name AS device_name
+            FROM agent_jobs j
+            LEFT JOIN agent_runtime_sessions s
+              ON s.agent_session_id = j.agent_session_id
+            LEFT JOIN agent_installations i
+              ON i.installation_id = s.installation_id
+            WHERE j.owner_id = ?
+            ORDER BY j.created_at DESC
+            LIMIT ?
+            """,
+            (owner_id, safe_limit),
+        ).fetchall()
+
+    jobs: List[Dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        if item["status"] == "QUEUED":
+            last_seen = float(item.get("agent_last_seen") or 0)
+            connected = item.get("connection_state") not in {
+                None, "STOPPED", "SUPERSEDED", "REVOKED", "OFFLINE"
+            }
+            if not connected or now_t - last_seen > HEARTBEAT_TIMEOUT_SECONDS:
+                item["waiting_reason"] = "Waiting for the Local Agent to reconnect."
+            else:
+                item["waiting_reason"] = "Waiting for the Local Agent to claim this job."
+        elif item["status"] == "CANCEL_REQUESTED":
+            item["waiting_reason"] = "Waiting for the Local Agent to confirm cancellation."
+        else:
+            item["waiting_reason"] = None
+        jobs.append(item)
+    return jobs
 
 
 def complete_agent_job(
@@ -872,11 +1348,30 @@ def complete_agent_job(
         return {"ok": False, "error": "UNAUTHORIZED_AGENT_SESSION"}
 
     now_t = time.time()
-    status = "COMPLETED" if exit_code == 0 else "FAILED"
+    combined_output = (output_text or "") + "\n" + (stdout_tail or "")
+    normal_end = "ORCA TERMINATED NORMALLY" in combined_output.upper()
+    status = "COMPLETED" if exit_code == 0 and normal_end else "FAILED"
+    if status == "FAILED" and exit_code == 0 and not error_message:
+        error_message = "ORCA output does not contain the normal termination marker."
     results_json = json.dumps(parsed_results or {})
 
     with _REGISTRY_LOCK, _db_connection(db_path) as conn:
         cursor = conn.cursor()
+        cursor.execute(
+            "SELECT status, cancel_requested, owner_id, workflow_id, step_id, attempt_id, reaction_id "
+            "FROM agent_jobs WHERE job_id = ? AND agent_session_id = ?",
+            (job_id, agent_session_id),
+        )
+        existing = cursor.fetchone()
+        if not existing:
+            return {"ok": False, "error": "JOB_NOT_FOUND"}
+        if existing[0] in ("COMPLETED", "FAILED", "CANCELLED"):
+            # Completion delivery is idempotent; a retry after a successful
+            # response must not turn into a false error or rewrite history.
+            return {"ok": True, "status": existing[0]}
+        if bool(existing[1]):
+            status = "CANCELLED"
+            error_message = error_message or "Cancellation requested by user"
         cursor.execute(
             """
             UPDATE agent_jobs
@@ -884,14 +1379,110 @@ def complete_agent_job(
                 stdout_tail = ?, parsed_results_json = ?, error_message = ?,
                 output_text = COALESCE(?, output_text),
                 xyz_structure = COALESCE(?, xyz_structure)
+            -- A companion may finish and deliver its result before a
+            -- separate progress/claim heartbeat reaches the server (for
+            -- short jobs or a transient poll response). The authenticated
+            -- runtime session and exact job/session identity still fence the
+            -- update; accepting QUEUED here prevents a valid result from
+            -- being discarded solely because the claim acknowledgement was
+            -- lost.
             WHERE job_id = ? AND agent_session_id = ?
+              AND status IN ('RUNNING', 'QUEUED', 'CANCEL_REQUESTED')
             """,
             (status, now_t, exit_code, stdout_tail[-50000:], results_json, error_message, output_text, xyz_structure, job_id, agent_session_id),
         )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return {"ok": False, "error": "JOB_NOT_RUNNING"}
         cursor.execute("UPDATE agent_runtime_sessions SET last_seen = ? WHERE agent_session_id = ?", (now_t, agent_session_id))
         conn.commit()
 
-    return {"ok": True, "status": status}
+    projection = None
+    if existing[3] and existing[4]:
+        try:
+            from services.reaction_workflow_service import apply_local_worker_result
+
+            projection = apply_local_worker_result(
+                {
+                    "owner_id": existing[2],
+                    "workflow_id": existing[3],
+                    "step_id": existing[4],
+                    "attempt_id": existing[5],
+                    "reaction_id": existing[6],
+                },
+                {
+                    "ok": status == "COMPLETED",
+                    "output_text": combined_output,
+                    "parsed": parsed_results or {},
+                    "exit_code": exit_code,
+                    "error_code": "CANCELLED" if status == "CANCELLED" else (
+                        None if status == "COMPLETED" else "EXECUTION_FAILED"
+                    ),
+                    "error": error_message,
+                },
+                state_dir or os.path.dirname(db_path),
+            )
+            projection_status = "APPLIED" if projection.get("ok") else "PENDING"
+        except Exception as exc:  # noqa: BLE001
+            projection = {"ok": False, "error": type(exc).__name__}
+            projection_status = "PENDING"
+        with _REGISTRY_LOCK, _db_connection(db_path) as conn:
+            conn.execute(
+                "UPDATE agent_jobs SET projection_status=? WHERE job_id=? AND projection_status='PENDING'",
+                (projection_status, job_id),
+            )
+            conn.commit()
+
+    return {"ok": True, "status": status, "workflow_projection": projection}
+
+
+def reconcile_agent_workflow_projections(state_dir: Optional[str] = None) -> Dict[str, int]:
+    """Replay durable terminal Agent results into workflow state after restart."""
+    db_path = _get_db_path(state_dir)
+    _init_db(db_path)
+    with _REGISTRY_LOCK, _db_connection(db_path) as conn:
+        rows = conn.execute(
+            "SELECT job_id, owner_id, workflow_id, step_id, attempt_id, reaction_id, "
+            "status, exit_code, output_text, stdout_tail, parsed_results_json, error_message "
+            "FROM agent_jobs WHERE projection_status='PENDING' "
+            "AND status IN ('COMPLETED','FAILED','CANCELLED')"
+        ).fetchall()
+    applied = failed = 0
+    for row in rows:
+        try:
+            from services.reaction_workflow_service import apply_local_worker_result
+
+            parsed = json.loads(row[10] or "{}")
+            result = apply_local_worker_result(
+                {
+                    "owner_id": row[1], "workflow_id": row[2], "step_id": row[3],
+                    "attempt_id": row[4], "reaction_id": row[5],
+                },
+                {
+                    "ok": row[6] == "COMPLETED",
+                    "output_text": (row[8] or "") + "\n" + (row[9] or ""),
+                    "parsed": parsed, "exit_code": row[7],
+                    "error_code": "CANCELLED" if row[6] == "CANCELLED" else (
+                        None if row[6] == "COMPLETED" else "EXECUTION_FAILED"
+                    ),
+                    "error": row[11],
+                },
+                state_dir or os.path.dirname(db_path),
+            )
+            if not result.get("ok"):
+                failed += 1
+                continue
+            with _REGISTRY_LOCK, _db_connection(db_path) as conn:
+                conn.execute(
+                    "UPDATE agent_jobs SET projection_status='APPLIED' "
+                    "WHERE job_id=? AND projection_status='PENDING'",
+                    (row[0],),
+                )
+                conn.commit()
+            applied += 1
+        except Exception:
+            failed += 1
+    return {"examined": len(rows), "applied": applied, "failed": failed}
 
 
 def get_agent_job_status(

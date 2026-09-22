@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from enum import Enum
+from pathlib import Path
 
 from orca_engine.models import CoordinateUnit, JobData, SpinChannel
 from orca_engine.regex import RegexLibrary
@@ -289,9 +290,16 @@ class OrcaParser:
 
         coordinate = self._extract_coordinate(line)
         if coordinate is not None:
-            element, xyz = coordinate
+            if len(coordinate) == 3:
+                element, xyz, raw_xyz = coordinate
+            else:
+                element, xyz = coordinate
+                raw_xyz = (str(xyz[0]), str(xyz[1]), str(xyz[2]))
             self.job.elements.append(element)
             self.job.coords.append(xyz)
+            if not hasattr(self.job, "coords_raw") or self.job.coords_raw is None:
+                self.job.coords_raw = []
+            self.job.coords_raw.append(raw_xyz)
             return
 
         # The section is over. Re-dispatch the terminating line through the
@@ -715,6 +723,7 @@ class OrcaParser:
         self.job.coords_unit = unit
         self.job.elements = []
         self.job.coords = []
+        self.job.coords_raw = []
 
     def _enter_orbitals(self, match: re.Match[str], line: str) -> None:
         """Enter orbital parsing state and capture a spin header if present.
@@ -741,14 +750,14 @@ class OrcaParser:
         self.job.tddft_cm = []
         self.job.tddft_fosc = []
 
-    def _extract_coordinate(self, line: str) -> tuple[str, tuple[float, float, float]] | None:
+    def _extract_coordinate(self, line: str) -> tuple[str, tuple[float, float, float], tuple[str, str, str]] | None:
         """Extract one coordinate row using negative slicing.
 
         Args:
             line: Candidate coordinate line.
 
         Returns:
-            ``(element, (x, y, z))`` if the line looks like a coordinate row;
+            ``(element, (x, y, z), (raw_x, raw_y, raw_z))`` if the line looks like a coordinate row;
             otherwise ``None``.
         """
 
@@ -767,7 +776,7 @@ class OrcaParser:
                 symbol = match.group("symbol").capitalize()
                 if match.group("ghost"):
                     symbol = f"{symbol}:"
-                return symbol, (x, y, z)
+                return symbol, (x, y, z), (parts[-3], parts[-2], parts[-1])
 
         return None
 
