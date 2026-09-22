@@ -7,7 +7,7 @@ used by the web process.
 ## Windows PowerShell
 
 ```powershell
-$env:CHEMISTRY_LAB_STATE_DIR = 'G:\orca web lab\.state-prod'
+$env:CHEMISTRY_LAB_STATE_DIR = '.\.state-prod'
 $env:PYTHONUTF8 = '1'
 python -m pip install -r requirements.txt
 

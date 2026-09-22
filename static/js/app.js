@@ -8009,8 +8009,7 @@
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = "center";
     ctx.fillStyle = isLight ? "#4338ca" : "#818cf8";
-    const uvLeftYTitle = uvCustomTitles.y || (
-      spectrumNormalizeMode in { "all": 1, "theoretical_only": 1 }
+    const uvLeftYTitle = uvCustomTitles.y || (spectrumNormalizeMode in { "all": 1, "theoretical_only": 1 }
         ? "Normalized Intensity (a.u.)"
         : "Molar Absorption Coefficient, ε (M⁻¹ cm⁻¹)"
     );
@@ -8907,7 +8906,7 @@
     }
 
     const irXTitle = irCustomTitles.x || "Wavenumber (cm⁻¹)";
-    const irGraphTitle = irCustomTitles.title || "Vibrational IR Spectrum";
+    const irGraphTitle = irCustomTitles.title || "Simulated IR Spectrum";
 
     ctx.font = "bold 12px Inter, sans-serif";
     ctx.fillText(irXTitle, padding.left + plotW / 2, padding.top + plotH + 36);
@@ -8937,7 +8936,7 @@
     if (isIntensity) {
       yAxisTitle = "Integrated IR Intensity (km·mol⁻¹)";
     } else if (isTrans) {
-      yAxisTitle = "Transmittance (%)";
+      yAxisTitle = isTheoOnly ? "Theoretical IR Transmittance (Pseudo-%T)" : "Transmittance (%)";
     } else if (isAbs) {
       yAxisTitle = "Absorbance (a.u.)";
     }

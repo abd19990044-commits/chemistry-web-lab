@@ -119,6 +119,10 @@ else:
     sys.exit(0)
 """
     script_path.write_text(code, encoding="utf-8")
+    try:
+        script_path.chmod(script_path.stat().st_mode | 0o755)
+    except Exception:
+        pass
     return script_path
 
 

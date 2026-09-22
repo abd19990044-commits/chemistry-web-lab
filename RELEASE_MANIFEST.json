@@ -8,10 +8,10 @@
   "source_git_state": "dirty_snapshot",
   "source_git_sha": "f0440913cf560bb8aff89b2e16c73c9e9976ef61-dirty",
   "source_git_dirty": true,
-  "package_tree_hash": "12d91a43e4c83d77036e108772047d930f22e74d69e1796a5461c8be6460dc2c",
-  "generated_at": "2026-09-22T01:02:53Z",
+  "package_tree_hash": "2604cf67c0954687e1b98629f01c98193641c2cea651fbeca8099700799bc7a1",
+  "generated_at": "2026-09-22T01:44:53Z",
   "file_count": 431,
-  "total_size_bytes": 34605711,
+  "total_size_bytes": 34606092,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
@@ -49,8 +49,8 @@
       "source_origin": "repo_source"
     },
     "api/main.py": {
-      "sha256": "2a16ddbe8872e253ab0653259ac030da3b68bd8701899ee37f642196b002a41d",
-      "size_bytes": 5339,
+      "sha256": "2d775cc2829e25733af3f14630544882cd722375cc3c788a9d2e79d35b05f606",
+      "size_bytes": 5471,
       "source_origin": "repo_source"
     },
     "api/middleware.py": {
@@ -469,8 +469,8 @@
       "source_origin": "repo_source"
     },
     "docs/PHASE2_PRODUCTION_RUNBOOK.md": {
-      "sha256": "7254fada02f1fc4d6d5021593019cfcb9c52507617acc0391400fe20789659f4",
-      "size_bytes": 3079,
+      "sha256": "397e95fbbf4d1dd73642d556cc8a05cc2bfd4685a0dc7895b7085479f6c9545b",
+      "size_bytes": 3065,
       "source_origin": "repo_source"
     },
     "docs/SCIENTIFIC_JSON_SCHEMA.md": {
@@ -559,8 +559,8 @@
       "source_origin": "orca_engine_component"
     },
     "orca_engine/.gitignore": {
-      "sha256": "3483108f29e56cf2cc00ab35cb9ecaa1325a6b710fa02c45d86ba753c2d78ede",
-      "size_bytes": 570,
+      "sha256": "1e70ee3c1ce7eda1856e8b2f828d8778b6e5854900b1b9b26cddcbd0de6056a5",
+      "size_bytes": 548,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/CHANGELOG.md": {
@@ -1344,8 +1344,8 @@
       "source_origin": "repo_source"
     },
     "README.md": {
-      "sha256": "31e64ce7cb5450f0e25cef7d1c8390614820cf312433f1d399300dc89a38f8ee",
-      "size_bytes": 32208,
+      "sha256": "abf092242aad049a00a23a7440a545ca028a341859331640851956dc7e064139",
+      "size_bytes": 32210,
       "source_origin": "package_metadata"
     },
     "REPRODUCIBILITY.md": {
@@ -1529,8 +1529,8 @@
       "source_origin": "repo_source"
     },
     "services/local_orca_service.py": {
-      "sha256": "40c8c1d6350f37297807e4fd467057425e60d4b5332636eee34c8145ba68f0b3",
-      "size_bytes": 52823,
+      "sha256": "c17ef589cc7e3645d06563bcb30a43fbddc0d405dfea12c2317ca8528cfbc516",
+      "size_bytes": 52873,
       "source_origin": "repo_source"
     },
     "services/local_orca_worker.py": {
@@ -1589,8 +1589,8 @@
       "source_origin": "repo_source"
     },
     "static/js/app.js": {
-      "sha256": "06460460f3ac25c8d9d341601210bfb7d8ca30374d2d4b190528fb59a508cdd7",
-      "size_bytes": 585532,
+      "sha256": "d7fdf92ce22bccef2961d0170589dbff8af22e2c39b25dd6c731188881375669",
+      "size_bytes": 585581,
       "source_origin": "repo_source"
     },
     "static/js/kaggle_credentials.js": {
@@ -1879,8 +1879,8 @@
       "source_origin": "repo_source"
     },
     "tests/test_local_orca_backend.py": {
-      "sha256": "3f21adb7a1508dbf673be3fee27ae087acaaa1e3e97d69e73f943611d0c814f8",
-      "size_bytes": 34516,
+      "sha256": "2a286705347028a4ee1dc357ac7ba2900e31e18b471095d263cb4e8370a4207d",
+      "size_bytes": 34622,
       "source_origin": "repo_source"
     },
     "tests/test_local_orca_worker.py": {
@@ -2039,8 +2039,8 @@
       "source_origin": "repo_source"
     },
     "tests/test_reaction_workflow_thermo.py": {
-      "sha256": "08f5c424a02e5f6e7ee66a589e7446926c08d6d8da555d6a2d8bcdf2a29f906e",
-      "size_bytes": 28703,
+      "sha256": "ca4607b90fbaa91c7ccf578cc3e1e83ebd366f036cf58dbba825257f840aef0f",
+      "size_bytes": 28781,
       "source_origin": "repo_source"
     },
     "tests/test_reliability_repairs.py": {
@@ -2164,7 +2164,7 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "d19532519e0c291b5c73b3e997b105d778100abe617c9e60e25a1d9e2452552e",
+      "sha256": "b909de036f5e26f7efd342e8643eae84af468f9b0f4a4cca3ff65d28fc050ee8",
       "size_bytes": 57929,
       "source_origin": "generated_manifest"
     }

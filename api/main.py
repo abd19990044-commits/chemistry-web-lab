@@ -108,6 +108,9 @@ async def _http_error(request: Request, exc: HTTPException):
              503: "SERVICE_UNAVAILABLE", 504: "GATEWAY_TIMEOUT"}
     code = codes.get(exc.status_code, "ERROR")
     detail = exc.detail if isinstance(exc.detail, str) else "request failed"
+    if isinstance(exc.detail, dict):
+        code = exc.detail.get("code", code)
+        detail = exc.detail.get("message", detail)
     return JSONResponse(status_code=exc.status_code, content={
         "ok": False, "error": {"code": code, "message": detail}})
 

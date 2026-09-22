@@ -332,12 +332,12 @@ def is_safe_executable_path(exe_path: str) -> Tuple[bool, Optional[str]]:
     if not exe_path or not exe_path.strip():
         return False, "Executable path is empty."
 
-    norm_path = exe_path.strip().replace("/", "\\")
-    parts = norm_path.split("\\")
-    if ".." in parts or any(p == ".." for p in parts):
+    norm_path = exe_path.strip().replace("\\", "/")
+    parts = [p for p in norm_path.split("/") if p]
+    if ".." in parts:
         return False, "Path traversal ('..') detected in executable path."
 
-    base_name = os.path.basename(norm_path).lower()
+    base_name = parts[-1].lower() if parts else ""
 
     if base_name in FORBIDDEN_EXECUTABLE_NAMES:
         return False, f"Executable '{base_name}' is a forbidden shell/system utility."
@@ -417,7 +417,8 @@ def validate_local_orca_config(
             errors.append("ORCA_EXECUTABLE_NOT_FOUND: executable file does not exist")
         else:
             is_win = platform.system() == "Windows"
-            if not is_win and not os.access(exe_path, os.X_OK):
+            is_py = exe_path.lower().endswith(".py")
+            if not is_win and not is_py and not os.access(exe_path, os.X_OK):
                 errors.append("ORCA_EXECUTABLE_NOT_LAUNCHABLE: file is not executable")
             else:
                 details["executable_valid"] = True

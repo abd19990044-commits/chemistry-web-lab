@@ -1,5 +1,5 @@
 ---
-title: Chemistry Lab: Computational Chemistry Platform
+title: "Chemistry Lab: Computational Chemistry Platform"
 emoji: ⚛️
 colorFrom: blue
 colorTo: indigo

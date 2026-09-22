@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - GITHUB-SOURCE-RELEASE
-# Generated: 2026-09-22T01:02:53Z
+# Generated: 2026-09-22T01:44:53Z
 # Package Mode: SNAPSHOT_FROM_WORKTREE
 # Source State: dirty_snapshot
 # Source Git SHA: f0440913cf560bb8aff89b2e16c73c9e9976ef61-dirty
-# Package Tree Hash: 12d91a43e4c83d77036e108772047d930f22e74d69e1796a5461c8be6460dc2c
+# Package Tree Hash: 2604cf67c0954687e1b98629f01c98193641c2cea651fbeca8099700799bc7a1
 # Total Files: 430
-# Total Size: 34,547,782 bytes (32.95 MB)
+# Total Size: 34,548,163 bytes (32.95 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -16,7 +16,7 @@
 .gitignore                                         |      1,031 B | d00caf0ce57ec555f4ecea42279509138f5377e2ceb3902d01de60e89dd06179
 api/__init__.py                                    |        238 B | ea951dbebe30f73ec82a1c92bdc7f8c2b5c8b9788b7758dd9ea26811377767cc
 api/dependencies.py                                |        355 B | b9125004623c53196d20f98012d5a7a87aab81d2026b5adbe33a6304851d7717
-api/main.py                                        |      5,339 B | 2a16ddbe8872e253ab0653259ac030da3b68bd8701899ee37f642196b002a41d
+api/main.py                                        |      5,471 B | 2d775cc2829e25733af3f14630544882cd722375cc3c788a9d2e79d35b05f606
 api/middleware.py                                  |      3,178 B | 8a1ce700fc2470a86c0d67c0da0973dda8ce7bd11ff3e0137d29e75fce0963c3
 api/routes/__init__.py                             |         84 B | 78f74e6949770ed6015d90084546ff5a07267e0783623d8f1ecb4b73b9910c2a
 api/routes/analysis.py                             |      1,361 B | bc7c5eb3fa6fcd1f5746f0af771b17dcbc258864598866b239edcb5a2803a4b3
@@ -100,7 +100,7 @@ Dockerfile                                         |      1,293 B | ad86dcdac85b
 docs/HPC_LOCAL_AGENT.md                            |      1,342 B | fb707ab6f5923f937e0d4e4d7580f6c38b70bd01d404cbd1766c405ca33f6d32
 docs/LOCAL_AGENT_PROTOCOL.md                       |        459 B | eaefd8e4be5f4d0a267104a399b0a30cf511e01a13e2590cffcec5b57631b1a0
 docs/LOCAL_AGENT_SETUP.md                          |      6,734 B | a23320b674a3774ae59a8a6313eef7f584589d953e643d603213a84e2efcf8a6
-docs/PHASE2_PRODUCTION_RUNBOOK.md                  |      3,079 B | 7254fada02f1fc4d6d5021593019cfcb9c52507617acc0391400fe20789659f4
+docs/PHASE2_PRODUCTION_RUNBOOK.md                  |      3,065 B | 397e95fbbf4d1dd73642d556cc8a05cc2bfd4685a0dc7895b7085479f6c9545b
 docs/SCIENTIFIC_JSON_SCHEMA.md                     |     20,598 B | 3a5efcca4e91af8f364de87ac0ff635146d25f6715ad1b32c0d3a28bceaab2d6
 kaggle_runner/__init__.py                          |      1,347 B | 73d30fc6625d564f90a6698b681178df4c4f8a389e7ea1507994c8be03f0de3a
 kaggle_runner.py                                   |    192,260 B | 4ad2ca2e627efd39ff6e1d8f0f5942c218caa695bf27372befc8b89418084522
@@ -118,7 +118,7 @@ local_agent/protocol.py                            |      1,232 B | 8e7e2c4d6829
 local_agent/security.py                            |     10,080 B | 23b87c2a89f071e64043e1f4b3f8557e1ad619f461f2b4ff07500dfa141dffe8
 local_agent/storage.py                             |      5,723 B | aa54c26d835b80e7667da2234ea6f8413b1deb28e8e62045e026a40cccf6176d
 orca_engine/.github/workflows/ci.yml               |      2,261 B | 95001c5859975b25297ba894df9ea49201aded1a0be4d5b0dbe898f4b98f052e
-orca_engine/.gitignore                             |        570 B | 3483108f29e56cf2cc00ab35cb9ecaa1325a6b710fa02c45d86ba753c2d78ede
+orca_engine/.gitignore                             |        548 B | 1e70ee3c1ce7eda1856e8b2f828d8778b6e5854900b1b9b26cddcbd0de6056a5
 orca_engine/CHANGELOG.md                           |      5,796 B | 8fd6e6c1dab9e695f22f3161cc4761f2707e6ff71eb8c0fd73479ddb2cc78878
 orca_engine/CITATION.cff                           |      1,465 B | 9b17803a4c4e258ed02ec7e6b380bb39c783c25cd1d01e5efbcedfa958576411
 orca_engine/CONTRIBUTING.md                        |      2,848 B | 233e8de59194d2e600afb899421b46d97450495905df664e6aedf9f80ff368a8
@@ -275,7 +275,7 @@ PROJECT_METADATA.json                              |      1,528 B | 5223f60b319a
 pyproject.toml                                     |      3,118 B | 012b0089aea24d7720969565c360d5a20b0042234fe8c37e64e2379d5d2d9c64
 pytest.ini                                         |        220 B | 0fbda3abc2c9c82bbb017377a88c1551aad3deb58524172958f7fc51378faa02
 reaction_conditions.py                             |      3,085 B | 6a2c5e254658c10f64b02bb7eb72724b5c711e22818ff0759890729d259913b7
-README.md                                          |     32,208 B | 31e64ce7cb5450f0e25cef7d1c8390614820cf312433f1d399300dc89a38f8ee
+README.md                                          |     32,210 B | abf092242aad049a00a23a7440a545ca028a341859331640851956dc7e064139
 REPRODUCIBILITY.md                                 |      3,865 B | 891bf9662224ed0278904006d0af18724dcde6f0a604d4ed2142e5cbf3a81474
 requirements-local-agent-hpc.txt                   |         50 B | da98b2ee52ac5e7b5f7da63ebd02c12f99fc41fb2c2db9f7236c4cb269dace4e
 requirements-local-agent.txt                       |         50 B | da98b2ee52ac5e7b5f7da63ebd02c12f99fc41fb2c2db9f7236c4cb269dace4e
@@ -312,7 +312,7 @@ services/execution_backend.py                      |      7,155 B | 5036ab7b9a09
 services/health_service.py                         |      3,897 B | 71a2efbdab2b83325ece1574623d20c3828589e39caaf526a0d75ca2793985e4
 services/kaggle_service.py                         |     34,075 B | 22066c1ee3408a4dd3741232e0fee0f8abc695d1263ea8e4b6a674fb3dc5d58e
 services/local_agent_service.py                    |     64,254 B | f7c49bb76937b95e7808454cbc263676c253b9c5949561e41f3d20ae951ea655
-services/local_orca_service.py                     |     52,823 B | 40c8c1d6350f37297807e4fd467057425e60d4b5332636eee34c8145ba68f0b3
+services/local_orca_service.py                     |     52,873 B | c17ef589cc7e3645d06563bcb30a43fbddc0d405dfea12c2317ca8528cfbc516
 services/local_orca_worker.py                      |     57,113 B | 4a19b9c82f04084832f506ba19929f1633fc4951adf44a10bb2a389d42552c33
 services/orca_service.py                           |      3,748 B | 60680256ad793abc97716295021577164033f2c58073b5e9f1958e14b8bb1553
 services/reaction_diagram_service.py               |      9,333 B | f86d6ce030aa63f58b6d6705811fb327f70198eab6b95a706f662fafd83530e4
@@ -324,7 +324,7 @@ static/css/style.css                               |     86,815 B | 4e1f34faef3f
 static/css/theme.css                               |      4,191 B | 0f46f52179f51f6f9e33d6afd4c1186a55cd4bff5de3e631055a9290c21cb0da
 static/docs/ChemistryLab_User_Manual.docx          |     46,938 B | 35f84c0a37efc80a0283904d56198d18cdba7a648f2492f4c6c76f331ce9b211
 static/job_runtime_fix.js                          |      1,641 B | 9133e459435dfad6a353c774a92c10cf37656eb529f114ca61dec2be5a63c697
-static/js/app.js                                   |    585,532 B | 06460460f3ac25c8d9d341601210bfb7d8ca30374d2d4b190528fb59a508cdd7
+static/js/app.js                                   |    585,581 B | d7fdf92ce22bccef2961d0170589dbff8af22e2c39b25dd6c731188881375669
 static/js/kaggle_credentials.js                    |     14,739 B | edf3657183f78584163fb9a0f8b9823ce200262096a7973c0e4a8888f530405a
 static/js/local-agent.js                           |     30,320 B | 87021c1098d20d216535fecbeb3b96ce18ac22c8b5af906b047cbe1e8272ba13
 static/js/reaction-editor.js                       |      8,373 B | a11362d1a686ac234f10a365525cba3ea50ec937e14ece09f84557b889b3f4a7
@@ -382,7 +382,7 @@ tests/test_local_agent_pairing.py                  |      5,724 B | ae70e99eac43
 tests/test_local_agent_resources.py                |      2,325 B | 4615a38463d26e5718b6ce7d356e17544232053baac7916ee7580f9c5d6634f3
 tests/test_local_agent_separate_process_transport.py |      6,523 B | 613f559fd2b6c37c8384229dd4670567c5149ee240c9ca1b5884df19b5bbc239
 tests/test_local_jobs_tracking.py                  |     12,044 B | cd8d3f9bbf055d2653bbaf5d7701196c2ebd09331dc22cc21f2b1a5e94dd18f0
-tests/test_local_orca_backend.py                   |     34,516 B | 3f21adb7a1508dbf673be3fee27ae087acaaa1e3e97d69e73f943611d0c814f8
+tests/test_local_orca_backend.py                   |     34,622 B | 2a286705347028a4ee1dc357ac7ba2900e31e18b471095d263cb4e8370a4207d
 tests/test_local_orca_worker.py                    |      9,527 B | 4f52ba591b35c5a3f7ba9838beba7b0a74df6e8b38e46be81f78577c5bddea08
 tests/test_main_script_routes_and_contracts.py     |      8,253 B | 7a29d77a00aa58168119c4df7a4d5045559d3d250f5f318062666fa8db8bfb76
 tests/test_maxdisk_and_archive.py                  |     11,155 B | fb542c4e5f413e9edfd58e7a379b1d0899b16e27e9e44caa589d949efc141509
@@ -414,7 +414,7 @@ tests/test_reaction.py                             |     21,928 B | fefb748d85d8
 tests/test_reaction_tenant_isolation_and_spoofing.py |      6,718 B | 3bf4a60de3fa31d00616a3a1c85105efff53cfea8794fc46fd1a686cb42017a1
 tests/test_reaction_thermochemistry_audit.py       |     11,611 B | 38dde8813c68af5dc3b94fb354fbbe0671cb1ef5e726f6c59b8056290a638561
 tests/test_reaction_unified_3d_and_downloads.py    |      8,757 B | e25770316e34d746a84ab73055b03028b54af52ea5d69a8bd00fa89e47a4b553
-tests/test_reaction_workflow_thermo.py             |     28,703 B | 08f5c424a02e5f6e7ee66a589e7446926c08d6d8da555d6a2d8bcdf2a29f906e
+tests/test_reaction_workflow_thermo.py             |     28,781 B | ca4607b90fbaa91c7ccf578cc3e1e83ebd366f036cf58dbba825257f840aef0f
 tests/test_reliability_repairs.py                  |     19,702 B | dc432d80df1e527286557a0fb45cd0358ed2d96ec66b0b74912a3bb18be72328
 tests/test_repeated_execution_regression.py        |     22,608 B | 07d0cb7ecba84fe0815bc279ed2b1da616662c66ca83a11ec2420751e81d59db
 tests/test_scientific_benchmarks.py                |      3,692 B | e3726ac450f8c3c5d3b3c46b421aa2f7541fbf27a71671c8200d80eb77316dd9

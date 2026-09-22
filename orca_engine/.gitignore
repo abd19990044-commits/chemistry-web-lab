@@ -32,7 +32,6 @@ coverage.xml
 Thumbs.db
 
 # Generated reports
-ORCA_Parsed_Data.json
 ORCA_Parsed_Data.csv
 
 # ORCA output corpus.
