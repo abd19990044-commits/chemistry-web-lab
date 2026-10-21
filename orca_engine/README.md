@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/salamhasan/orca-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/salamhasan/orca-engine/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
-[![License: Academic & Non-Commercial v1.1](https://img.shields.io/badge/License-Academic%20%26%20Non--Commercial%20v1.1-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Checked with mypy](https://img.shields.io/badge/mypy-strict-blue)](https://mypy-lang.org/)
 
 A streaming parser and thermochemistry engine for [ORCA](https://www.faccts.de/orca/)
@@ -207,8 +207,8 @@ If this software contributes to work you publish, please cite it. See
 
 ## License
 
-The proprietary source code of `orca_engine` is part of the Chemistry Lab suite and is governed by the [ORCA Web Lab Academic and Non-Commercial License v1.1](LICENSE).
+`orca_engine` is part of Chemistry Lab and is available under the [MIT License](LICENSE).
 
-Copyright (c) 2026 Abdulsalam S. Hasan. All rights reserved.
+Copyright (c) 2026 Abdulsalam S. Hasan.
 
 Third-party dependencies and external tools remain subject to their respective independent licenses. See `THIRD_PARTY_LICENSES.md` in the root repository.

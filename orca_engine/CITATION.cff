@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 title: "orca-engine: a streaming parser and thermochemistry engine for ORCA output files"
-message: "If you use this software, please cite it using these metadata (ORCA Web Lab Academic and Non-Commercial License v1.1)."
+message: "If you use this software, please cite it using these metadata (MIT License)."
 type: software
 authors:
   - family-names: Hasan
@@ -29,3 +29,5 @@ abstract: >-
   orbitals drawn from different geometry optimization steps, atomic-unit
   coordinates reported as Angstrom, and error terminations masked by a
   subsequent rerun.
+
+license: MIT

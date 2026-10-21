@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+import math
 import os
 import re
 from typing import Any, Dict, List, Optional
@@ -28,6 +29,8 @@ def validate_scheduler_identifier(val: Any, field_name: str = "identifier", max_
     s = val.strip()
     if not s:
         raise HpcValidationError(f"{field_name} cannot be empty")
+    if s.startswith("-"):
+        raise HpcValidationError(f"{field_name} must not start with a command-line option prefix")
     if len(s) > max_len:
         raise HpcValidationError(f"{field_name} exceeds maximum length of {max_len} characters")
     if any(c in s for c in ("\n", "\r", "\0")):
@@ -46,6 +49,8 @@ def validate_filename(val: Any, field_name: str = "filename", max_len: int = 255
     s = val.strip()
     if not s:
         raise HpcValidationError(f"{field_name} cannot be empty")
+    if s.startswith("-"):
+        raise HpcValidationError(f"{field_name} must not start with a command-line option prefix")
     if len(s) > max_len:
         raise HpcValidationError(f"{field_name} exceeds maximum length of {max_len} characters")
     if any(c in s for c in ("\n", "\r", "\0", "/", "\\")):
@@ -81,14 +86,19 @@ def validate_numeric_resource(
     allow_float: bool = False,
 ) -> int | float:
     """Validates positive numeric resource allocations."""
-    if val is None:
-        raise HpcValidationError(f"{field_name} cannot be None")
+    if val is None or isinstance(val, bool):
+        raise HpcValidationError(f"{field_name} must be numeric")
     try:
+        numeric = float(val)
+        if not math.isfinite(numeric):
+            raise ValueError("non-finite resource")
         if allow_float:
-            num = float(val)
+            num = numeric
         else:
+            if not numeric.is_integer():
+                raise ValueError("fractional integer resource")
             num = int(val)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         raise HpcValidationError(f"{field_name} must be numeric, got {val!r}")
     if num < min_val or num > max_val:
         raise HpcValidationError(f"{field_name} value {num} out of bounds [{min_val}, {max_val}]")

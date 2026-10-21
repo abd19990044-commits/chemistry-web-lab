@@ -13,7 +13,7 @@ pinned: false
 
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![ORCA 6.x Compatible](https://img.shields.io/badge/ORCA-6.0%20%7C%206.1-orange.svg)](https://www.faccts.de/orca/)
-[![License: Academic & Non-Commercial v1.1](https://img.shields.io/badge/License-Academic%20%26%20Non--Commercial%20v1.1-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22119038.svg)](https://doi.org/10.5281/zenodo.22119038)
 [![RDKit Chemistry](https://img.shields.io/badge/RDKit-2025.03-teal.svg)](https://www.rdkit.org/)
 [![CI Build Status](https://github.com/abd19990044-commits/chemistry-web-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/abd19990044-commits/chemistry-web-lab/actions/workflows/ci.yml)
@@ -31,15 +31,17 @@ pinned: false
 - [Comprehensive API Endpoints](#-comprehensive-api-endpoints)
 - [Testing & Quality Assurance](#-testing--quality-assurance)
 - [Production Deployment (Docker & Hugging Face Spaces)](#-production-deployment)
-- [License, Commercial Terms & Citation](#-license-commercial-terms--citation)
+- [License & Citation](#-license--citation)
 
 ---
+
+[Production review and deployment limits (Arabic)](docs/PRODUCTION_REVIEW_AR.md)
 
 ## 🔬 Executive Overview
 
 **Chemistry Lab** is a modern computational chemistry web platform for molecular structure exploration, high-performance ORCA quantum-chemistry workflows, scientific result analysis, spectroscopy visualization, reaction thermochemistry, and AI/ML scientific dataset generation. It seamlessly unifies:
 1. **Interactive Chemical Studios**: 2D molecule drawing, reaction stoichiometry, and PubChem 3D coordinate resolution.
-2. **Primary High-Performance Execution**: Standalone **Local & HPC Companion Agent** packages for Windows, Linux, macOS, and supercomputing clusters (Slurm, PBS, LSF) with ephemeral random pairing tokens (`CLA_...`) and full local privacy.
+2. **Primary High-Performance Execution**: Standalone **Local Companion Agent** packages for Windows, Linux, and macOS, plus scheduler adapter utilities (HPC dispatch is not integrated) with ephemeral random pairing tokens (`CLA_...`).
 3. **Quantum Chemistry Engine (`orca_engine`)**: WebGL 3D rendering, frontier orbital diagrams (HOMO/LUMO), conceptual DFT descriptors, Gaussian-convoluted UV-Vis/IR/NMR spectra, and composite thermochemistry.
 4. **AI & Machine Learning Ready Dataset Pipeline**: One-click generation and export of canonical, tensor-ready quantum datasets (`${name}_canonical_ai_dataset.json`) conforming to Draft 2020-12 schema, complete with GNN graphs (nodes, edges, adjacency/distance matrices), quantum target tensors, invariant physical features, and scaffold-based leak-free cross-validation keys.
 5. **Optional Secondary Cloud Fallback**: Fault-tolerant multi-session Kaggle cloud runner for users without local ORCA installations, operating under direct user control in strict compliance with Kaggle Acceptable Use Policies.
@@ -78,7 +80,7 @@ pinned: false
 
 ## 💻 Primary Execution: Local & HPC Companion Agent
 
-The **primary and recommended execution pathway** for Chemistry Lab is direct execution on your own hardware using the lightweight, standalone **Chemistry Lab Companion Agent**. This eliminates cloud timeouts, keeps your research data 100% private, and leverages your workstation's or cluster's full hardware potential (multi-threading, GPU acceleration, and AVX-512 optimizations).
+The **primary and recommended execution pathway** for Chemistry Lab is direct execution on your own hardware using the lightweight, standalone **Chemistry Lab Companion Agent**. ORCA runs on your computer; job metadata, input files, logs, and result artifacts travel through the web server. Configure retention and access controls for your deployment. CPU and memory budgets are configurable; acceleration depends on the installed ORCA build and method.
 
 ### 1. Workflow & Connection Model
 1. **Choose Execution Platform**: Windows, Linux, macOS, or HPC Cluster.
@@ -87,7 +89,7 @@ The **primary and recommended execution pathway** for Chemistry Lab is direct ex
 4. **Run Launcher**:
    - **Windows**: Run `install_and_run.bat` (or PowerShell `bootstrap_windows.ps1`).
    - **Linux / macOS**: Run `bash install_and_run.sh`.
-   - **HPC Cluster**: Run `bash install_hpc_agent.sh --scheduler slurm`.
+   - **HPC Cluster**: See the HPC support limitation below before using the package.
 5. **Ephemeral Connection API**: Every time the Agent script starts, it generates a **NEW** cryptographically random Connection API (`CLA_...` with >= 256 bits of entropy) and displays it in the terminal.
 6. **Copy API**: Copy the `CLA_...` token from the terminal.
 7. **Website Connection**: On the Chemistry Lab website, navigate to **Connect Computer** (or click the device icon in the topbar).
@@ -99,11 +101,14 @@ The **primary and recommended execution pathway** for Chemistry Lab is direct ex
 13. **Resilient Reconnection**: Temporary network drops automatically reconnect without requiring re-pairing or browser prompts.
 14. **Process Restart Model**: If you stop or restart the Agent process, the old API becomes permanently invalid and a new API must be entered.
 
-### 2. HPC Supercomputer Integration
-For university and enterprise clusters, the Agent runs on a login or service node and interfaces directly with the cluster workload manager:
-- **Architecture**: `Chemistry Lab Server -> (Secure WSS) -> HPC Agent on Login Node -> (Scheduler) -> Compute Nodes -> ORCA`.
-- **Supported Adapters**: SLURM (`sbatch`), PBS Pro / Torque (`qsub`), and IBM LSF (`bsub`).
-- **Profile-Aware**: Directives are structured and site-profile aware based on institutional MPI configurations.
+### 2. HPC support limitation
+
+Slurm, PBS, and LSF adapters can render scheduler scripts, but the companion
+runtime does not integrate scheduler submission, durable scheduler job tracking,
+or cancellation. `--backend hpc` refuses execution with an actionable error so
+ORCA cannot accidentally run on a login node. To use an allocation, start the
+agent with `--backend local` inside a compute allocation obtained through your
+institution's scheduler, following the site's MPI and resource rules. The HPC launchers require a Slurm, PBS, or LSF allocation ID and refuse startup on a login node.
 
 ---
 
@@ -221,13 +226,13 @@ Ready for ingestion into graph machine learning frameworks (PyTorch Geometric, D
 For users who do not have a local ORCA installation or need temporary remote GPU/CPU compute, Chemistry Lab provides an **optional secondary cloud fallback** powered by Kaggle notebooks.
 
 ### Direct User Operation & Legal Responsibility
-- **Direct Operation Without Third-Party Intermediation**: Chemistry Lab does NOT operate Kaggle as a third-party service provider or broker. The platform is designed for direct personal user operation; all calculations are executed directly within the user's private Kaggle account using their own personal credentials without server retention.
+- **Direct Operation Without Third-Party Intermediation**: Chemistry Lab does NOT operate Kaggle as a third-party service provider or broker. The platform is designed for direct personal user operation; all calculations are executed directly within the user's private Kaggle account using their own personal credentials. The optional encrypted vault and job/result stores retain data according to deployment configuration.
 - **Sole User Liability**: When running calculations on Kaggle, the user is solely and entirely responsible for compliance with Kaggle's Terms of Service, Acceptable Use Policy, and community rules, and bears full legal and operational liability for any violation thereof.
 
 ### Kaggle Acceptable Use Policy & Ethical Compute Standards
 To ensure that all interactions with Kaggle remain fully ethical, lawful, and compliant with Kaggle's platform policies:
 1. **Legitimate Scientific & Educational Workloads Only**: Calculations dispatched to Kaggle are strictly confined to legitimate computational chemistry simulations, educational demonstrations, and academic modeling using ORCA. General-purpose arbitrary code execution, bot hosting, and background proxies are not permitted.
-2. **Zero Commercial Compute Resale**: Chemistry Lab is an academic, non-commercial software project. It does NOT resell, broker, sub-license, or monetize Kaggle compute resources.
+2. **Zero Commercial Compute Resale**: The MIT license for Chemistry Lab grants no rights to resell, broker, sublicense, or monetize Kaggle compute resources. Users must follow Kaggle terms independently.
 3. **Individual Account Authenticity**: Every job runs under the user's individual Kaggle account using their personal API token. The platform does not provide shared pool accounts, public tokens, or automated multi-account rotation.
 4. **Adherence to Platform Quotas & Resource Limits**: Users must strictly respect Kaggle's resource limits (e.g. weekly GPU/TPU hours and 12-hour session limits). Chemistry Lab does not attempt to circumvent quotas, bypass resource restrictions, or run denial-of-service workloads.
 5. **Strictly Prohibited Activities**: In accordance with Kaggle's Acceptable Use Policy, users are strictly prohibited from using Chemistry Lab or its Kaggle integration for:
@@ -337,7 +342,7 @@ Open your browser and navigate to: **`http://127.0.0.1:7860`**
 
 ## 🧪 Testing & Quality Assurance
 
-Chemistry Lab includes a comprehensive, 100% automated test suite with full mock harnesses and zero external dependencies:
+Chemistry Lab includes an automated test suite with mocked integrations and separate live-server checks:
 
 ```bash
 # 1. Run full test suite with detailed reporting
@@ -384,40 +389,17 @@ To deploy as a Hugging Face Space:
 
 ---
 
-## 📜 License, Commercial Terms & Citation
+## 📜 License & Citation
 
-### Proprietary Source-Available Software
-Chemistry Lab is proprietary software owned solely by **Abdulsalam S. Hasan**.
+### MIT License
 
-The software is available free of charge for permitted academic, educational, personal, and other non-commercial uses under the **ORCA Web Lab Academic and Non-Commercial License v1.1**.
+Chemistry Lab, including its integrated `orca_engine` and Cloudflare control plane,
+is licensed under the [MIT License](LICENSE).
+Copyright (c) 2026 Abdulsalam S. Hasan.
 
-- **Permitted Free Use:** Personal learning, classroom teaching, academic coursework, student theses, dissertation research, independent academic research resulting in open scholarly publications, and scientific benchmarking.
-- **Nature-and-Purpose Standard:** Eligibility is determined by the non-commercial nature and purpose of the activity, not solely by organizational status.
-- **Source Available:** The complete source code is accessible for academic study, peer review, scientific reproducibility, and local non-commercial adaptation.
-- **Ownership Retention:** Copyright (c) 2026 Abdulsalam S. Hasan. All rights reserved. The license grants usage permission only and does NOT transfer ownership, title, copyright, commercial rights, or trademark rights.
-
-See the complete terms in the [LICENSE](LICENSE) file.
-
-### Commercial Licensing & Enterprise Use
-Commercial use is **strictly prohibited** under the Academic and Non-Commercial License. A separate, written **Commercial License Agreement** is required for:
-- Use within or on behalf of for-profit corporations (including internal corporate R&D);
-- Commercial SaaS, cloud hosting, or calculation services for paying customers;
-- Fee-for-service testing, contract research, or consulting deliverables;
-- Sponsored commercial research conducted on behalf of commercial entities;
-- Integration into commercial products, hardware appliances, or OEM distributions.
-
-Commercial terms, pricing, and deployment parameters are negotiated separately.
-
-### Future Intellectual Property Assignment
-Any assignment or transfer of proprietary intellectual property rights owned or controlled by Abdulsalam S. Hasan must be executed through a separate, written Intellectual Property Assignment Agreement. Third-party software components remain subject to their respective licenses and are not assigned.
-
-### Licensing & Commercial Inquiries
-For commercial licensing, Enterprise editions, cloud deployment permissions, or intellectual property inquiries:
-
-- **Author & Rights Holder:** Abdulsalam S. Hasan
-- **Email:** [abd.19990044@gmail.com](mailto:abd.19990044@gmail.com)
-- **WhatsApp:** [+9647715541279](https://wa.me/9647715541279)
-- **Repository:** [https://github.com/abd19990044-commits/chemistry-web-lab](https://github.com/abd19990044-commits/chemistry-web-lab)
+You may use, modify, distribute, sublicense, and sell the software, including for
+commercial purposes, provided the copyright and permission notices accompany all
+copies or substantial portions. The software is provided without warranty.
 
 ### Third-Party Software & ORCA Boundary
 - **Third-Party Components:** External libraries (RDKit, Flask, Cryptography, 3Dmol.js, etc.) remain governed by their respective open-source licenses. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for the complete dependency inventory.
@@ -434,6 +416,6 @@ If you use Chemistry Lab in your academic research, teaching, or computational m
   version = {1.0.3},
   doi     = {10.5281/zenodo.22119038},
   url     = {https://doi.org/10.5281/zenodo.22119038},
-  note    = {Academic and Non-Commercial Research Platform}
+  note    = {MIT-licensed Computational Chemistry Platform}
 }
 ```

@@ -37,6 +37,8 @@ class ProcessLock:
         self._locked = False
 
     def acquire(self) -> bool:
+        if self._locked:
+            return True
         self.lock_file.parent.mkdir(parents=True, exist_ok=True)
         try:
             if platform.system() == "Windows":
@@ -84,11 +86,11 @@ class ProcessLock:
             except Exception:
                 pass
             self._fd = None
-            try:
-                if self.lock_file.is_file():
-                    self.lock_file.unlink()
-            except Exception:
-                pass
+            # Keep the inode stable.  Removing a lock file after unlocking it
+            # races with a new owner: that owner can hold the old inode while
+            # a third process locks a newly created file at the same path.
+            # The small PID file is harmless; OS locks, not its existence or
+            # contents, determine whether an installation is in use.
             self._locked = False
 
 

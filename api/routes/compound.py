@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import Response
 from api.schemas.compound import CompoundQueryRequest
 from services import compound_service
 
@@ -23,7 +24,6 @@ def resolve_compound(req: CompoundQueryRequest) -> Dict[str, Any]:
 
 @router.post("/export-cdxml", summary="Export single compound to ChemDraw XML (.cdxml)")
 def export_compound_cdxml(req: CompoundQueryRequest) -> Response:
-    from fastapi.responses import Response
     import chem_core as core
     smiles = core.resolve_compound_to_smiles(req.query)
     if not smiles:

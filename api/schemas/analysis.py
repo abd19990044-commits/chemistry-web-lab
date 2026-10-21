@@ -14,7 +14,7 @@ class AnalyzeOutputRequest(BaseModel):
 class AnalysisJobSummary(BaseModel):
     job_index: int
     energy_hartree: Optional[float] = None
-    converged: bool = False
+    converged: Optional[bool] = Field(default=None, description="Null when convergence has not been independently established")
     frequencies: List[float] = Field(default_factory=list)
 
 
@@ -22,7 +22,10 @@ class AnalysisResponse(BaseModel):
     ok: bool = True
     job_count: int
     final_energy_hartree: Optional[float] = None
-    converged: bool = False
+    converged: Optional[bool] = Field(default=None, description="Null when convergence has not been independently established")
+    terminated_normally: Optional[bool] = None
+    execution_succeeded: bool = False
+    final_job: Dict[str, Any] = Field(default_factory=dict)
     jobs: List[Dict[str, Any]] = Field(default_factory=list)
 
 
@@ -30,5 +33,6 @@ class FrequencyResponse(BaseModel):
     ok: bool = True
     frequencies: List[float] = Field(default_factory=list)
     ir_intensities: List[float] = Field(default_factory=list)
+    vibrational_frequencies: List[float] = Field(default_factory=list)
     has_imaginary: bool = False
     zero_point_energy_hartree: Optional[float] = None

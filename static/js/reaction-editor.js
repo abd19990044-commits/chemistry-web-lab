@@ -163,11 +163,11 @@
       tr.appendChild(statusTd);
 
       const eTd = document.createElement('td');
-      eTd.textContent = sp.final_result && sp.final_result.energy_hartree ? sp.final_result.energy_hartree.toFixed(6) : '-';
+      eTd.textContent = sp.final_result && sp.final_result.energy_hartree != null ? sp.final_result.energy_hartree.toFixed(6) : '-';
       tr.appendChild(eTd);
 
       const gTd = document.createElement('td');
-      gTd.textContent = sp.final_result && sp.final_result.gibbs_hartree ? sp.final_result.gibbs_hartree.toFixed(6) : '-';
+      gTd.textContent = sp.final_result && sp.final_result.gibbs_hartree != null ? sp.final_result.gibbs_hartree.toFixed(6) : '-';
       tr.appendChild(gTd);
 
       tbody.appendChild(tr);
@@ -183,12 +183,12 @@
     const kEq = document.getElementById('val-rxn-k-eq');
     const warnBox = document.getElementById('reactions-warnings-container');
 
-    if (dE) dE.textContent = th.delta_E_elec_kcal_mol ? `${th.delta_E_elec_kcal_mol.toFixed(2)} kcal/mol` : (th.delta_E_elec_hartree ? `${th.delta_E_elec_hartree.toFixed(6)} Eh` : '-');
-    if (dZpe) dZpe.textContent = th.delta_ZPE_kcal_mol ? `${th.delta_ZPE_kcal_mol.toFixed(2)} kcal/mol` : (th.delta_ZPE_hartree ? `${th.delta_ZPE_hartree.toFixed(6)} Eh` : '-');
-    if (dH) dH.textContent = th.delta_H_kcal_mol ? `${th.delta_H_kcal_mol.toFixed(2)} kcal/mol` : (th.delta_H_hartree ? `${th.delta_H_hartree.toFixed(6)} Eh` : '-');
-    if (dG) dG.textContent = th.delta_G_kcal_mol ? `${th.delta_G_kcal_mol.toFixed(2)} kcal/mol` : (th.delta_G_hartree ? `${th.delta_G_hartree.toFixed(6)} Eh` : '-');
-    if (dS) dS.textContent = th.delta_S_j_mol_k ? `${th.delta_S_j_mol_k.toFixed(2)}` : '-';
-    if (kEq) kEq.textContent = th.k_eq_scientific || (th.log10_k_eq !== undefined ? `log10 K = ${th.log10_k_eq.toFixed(2)}` : '-');
+    if (dE) dE.textContent = th.delta_E_elec_kcal_mol != null ? `${th.delta_E_elec_kcal_mol.toFixed(2)} kcal/mol` : (th.delta_E_elec_hartree != null ? `${th.delta_E_elec_hartree.toFixed(6)} Eh` : '-');
+    if (dZpe) dZpe.textContent = th.delta_ZPE_kcal_mol != null ? `${th.delta_ZPE_kcal_mol.toFixed(2)} kcal/mol` : (th.delta_ZPE_hartree != null ? `${th.delta_ZPE_hartree.toFixed(6)} Eh` : '-');
+    if (dH) dH.textContent = th.delta_H_kcal_mol != null ? `${th.delta_H_kcal_mol.toFixed(2)} kcal/mol` : (th.delta_H_hartree != null ? `${th.delta_H_hartree.toFixed(6)} Eh` : '-');
+    if (dG) dG.textContent = th.delta_G_kcal_mol != null ? `${th.delta_G_kcal_mol.toFixed(2)} kcal/mol` : (th.delta_G_hartree != null ? `${th.delta_G_hartree.toFixed(6)} Eh` : '-');
+    if (dS) dS.textContent = th.delta_S_j_mol_k != null ? `${th.delta_S_j_mol_k.toFixed(2)}` : '-';
+    if (kEq) kEq.textContent = th.k_eq_scientific || (th.log10_k_eq != null ? `log10 K = ${th.log10_k_eq.toFixed(2)}` : '-');
 
     if (warnBox) {
       if (th.warnings && th.warnings.length > 0) {

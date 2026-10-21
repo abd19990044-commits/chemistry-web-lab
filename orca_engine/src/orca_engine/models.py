@@ -195,6 +195,7 @@ class JobData:
     rotational_entropy_cal_mol_k: float | None = None
     translational_entropy_cal_mol_k: float | None = None
     total_entropy_cal_mol_k: float | None = None
+    electronic_entropy_cal_mol_k: float | None = None
     elements: list[str] = field(default_factory=list)
     coords: list[tuple[float, float, float]] = field(default_factory=list)
     coords_raw: list[tuple[str, str, str]] = field(default_factory=list)
@@ -745,7 +746,7 @@ class ReactionResult:
 
     @property
     def keq_standard(self) -> float | None:
-        """Standard-state (1 atm) equilibrium constant K_eq."""
+        """Compatibility alias for K evaluated at the reported reference state."""
         return self.equilibrium_constant_keq
 
 

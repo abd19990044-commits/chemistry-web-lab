@@ -22,6 +22,7 @@ import {
 } from "./db";
 import { errorResponse, jsonResponse, getCorsHeaders } from "./errors";
 import { assertNoSecrets, sanitizeOwner, validateAuth } from "./security";
+import { PayloadTooLargeError, readLimitedJsonBody } from "./body";
 import {
   CloudflareCheckpointRecord,
   CloudflareCredentialMetadata,
@@ -83,21 +84,13 @@ export default {
     // 4. Request Body Inspection & Size Cap
     let bodyJson: any = null;
     if (["POST", "PUT", "PATCH"].includes(method)) {
-      const contentLength = request.headers.get("content-length");
-      if (contentLength && parseInt(contentLength, 10) > MAX_PAYLOAD_BYTES) {
-        return errorResponse("Payload exceeds maximum size limit of 1 MB.", 413, "PAYLOAD_TOO_LARGE");
-      }
-
       try {
-        const text = await request.text();
-        if (text.length > MAX_PAYLOAD_BYTES) {
-          return errorResponse("Payload exceeds maximum size limit of 1 MB.", 413, "PAYLOAD_TOO_LARGE");
-        }
-        if (text.trim()) {
-          bodyJson = JSON.parse(text);
-        }
+        bodyJson = await readLimitedJsonBody(request, MAX_PAYLOAD_BYTES);
       } catch (err) {
-        return errorResponse("Malformed JSON request body.", 400, "INVALID_JSON");
+        if (err instanceof PayloadTooLargeError) {
+          return errorResponse(err.message, 413, "PAYLOAD_TOO_LARGE", request, env);
+        }
+        return errorResponse("Malformed JSON request body.", 400, "INVALID_JSON", request, env);
       }
 
       // Assert NO Kaggle API keys or credential fields exist in payload

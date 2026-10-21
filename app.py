@@ -395,7 +395,7 @@ def _csrf_protection():
             token = body.get("csrf_token")
 
     expected = session.get("csrf_token")
-    if not expected or not token or not secrets.compare_digest(str(expected), str(token)):
+    if not expected or not token or not secrets.compare_digest(str(expected).encode("utf-8"), str(token).encode("utf-8")):
         log.warning("CSRF validation rejected %s request to %s from %s", request.method, request.path, request.remote_addr)
         return jsonify({
             "ok": False,
@@ -565,21 +565,18 @@ def api_license():
         "product_name": "Chemistry Lab",
         "application": "chemistry-lab",
         "version": "1.0.4",
-        "license_name": "ORCA Web Lab Academic and Non-Commercial License v1.1",
-        "license_type": "Source-Available Academic & Non-Commercial",
-        "copyright": "Copyright (c) 2026 Abdulsalam S. Hasan. All rights reserved.",
+        "license_name": "MIT License",
+        "license_type": "Open Source",
+        "spdx_id": "MIT",
+        "copyright": "Copyright (c) 2026 Abdulsalam S. Hasan",
         "author": "Abdulsalam S. Hasan",
         "permitted_uses": [
-            "academic_research",
-            "classroom_teaching",
-            "student_theses",
-            "scientific_benchmarks",
-            "peer_review_reproducibility",
-            "local_non_commercial_modification",
+            "academic_research", "commercial_use", "modification", "distribution",
+            "sublicensing", "sale",
         ],
-        "non_commercial_standard": "Nature and purpose of the activity, regardless of organizational entity type.",
-        "commercial_use": "Prohibited under academic license; requires separate Commercial License.",
-        "full_ip_assignment": "Requires separate written agreement executed with the author.",
+        "conditions": "Include the copyright and permission notices in all copies or substantial portions.",
+        "commercial_use": "Permitted under the MIT License.",
+        "warranty": "Provided AS IS, without warranty of any kind.",
         "contact": {
             "name": "Abdulsalam S. Hasan",
             "email": "abd.19990044@gmail.com",

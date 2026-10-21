@@ -53,10 +53,18 @@
     forget.addEventListener("click", async () => {
       forget.disabled = true;
       try {
-        await fetch("/api/kaggle/credentials", { method: "DELETE" });
+        const response = await fetch("/api/kaggle/credentials", { method: "DELETE" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      } catch (error) {
+        status.textContent = "Could not delete saved credentials. Please retry: " + error.message;
+        forget.disabled = false;
+        return;
+      }
+      try {
+        localStorage.removeItem(USER_KEY);
+        localStorage.removeItem(KEY_KEY);
       } catch (_) {}
-      localStorage.removeItem(USER_KEY);
-      localStorage.removeItem(KEY_KEY);
       if (username) username.value = "";
       if (key) key.value = "";
       if (remember) remember.checked = false;

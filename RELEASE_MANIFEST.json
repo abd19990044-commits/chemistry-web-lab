@@ -2,25 +2,25 @@
   "schema_version": "orca-web-lab.release-manifest.v1.0",
   "application_name": "orca-web-lab",
   "version": "1.0.4",
-  "release_type": "github-source-release",
+  "release_type": "production-review-source-snapshot",
   "package_mode": "SNAPSHOT_FROM_WORKTREE",
-  "source_type": "dirty_worktree_snapshot",
-  "source_git_state": "dirty_snapshot",
-  "source_git_sha": "f0440913cf560bb8aff89b2e16c73c9e9976ef61-dirty",
+  "source_type": "worktree",
+  "source_git_state": "working_tree_snapshot",
+  "source_git_sha": null,
   "source_git_dirty": true,
-  "package_tree_hash": "8ecc28a30ff222603ce891f49952b8dae7f56765df321448af28d26f3ca3b8af",
-  "generated_at": "2026-09-22T03:00:04Z",
-  "file_count": 433,
-  "total_size_bytes": 34650000,
+  "package_tree_hash": "b3d2b2cb3bd1c5bb706f686715b81c5c471eab12b996f7274a40ab49fe8769c7",
+  "generated_at": "2026-10-21T22:58:40Z",
+  "file_count": 428,
+  "total_size_bytes": 32269975,
   "runtime_critical_files": {
     ".dockerignore": {
-      "sha256": "830ca76a1d9d56ee98673710c7612c557d9474b68b2cc1b1ecb9fbbc302c929e",
-      "size_bytes": 667,
+      "sha256": "2a033c5cf97438e283821c42ea5575633a86a01f2f371bde1410867089b25e87",
+      "size_bytes": 832,
       "source_origin": "repo_source"
     },
     ".env.example": {
-      "sha256": "83912c6ed8a1efd3cfdfa393f42ed6faa99616d54e274b6e7ec9e027c87ed934",
-      "size_bytes": 670,
+      "sha256": "40fde75cebf67bcdf87c814ad5d7329becc4837ce82e62916fff46564b430e75",
+      "size_bytes": 896,
       "source_origin": "package_metadata"
     },
     ".gitattributes": {
@@ -29,14 +29,74 @@
       "source_origin": "repo_source"
     },
     ".github/workflows/ci.yml": {
-      "sha256": "12e2f44fa16729e1c6772669c1d82286d074a9592e9244ead586479682cf49d0",
-      "size_bytes": 9523,
+      "sha256": "3a336bd13d259da0460fc7484e6d8b14b687aee2f15fab3ef0650a4c761724c7",
+      "size_bytes": 10200,
       "source_origin": "repo_source"
     },
     ".gitignore": {
-      "sha256": "d00caf0ce57ec555f4ecea42279509138f5377e2ceb3902d01de60e89dd06179",
-      "size_bytes": 1031,
+      "sha256": "43915a1470dc0b7beae54ccc1ccc3fec012ba9c97e55e7aa67beacd6018557a7",
+      "size_bytes": 1140,
       "source_origin": "repo_source"
+    },
+    "ARCHITECTURE.md": {
+      "sha256": "a50d3a2703d48a159a61037d46fea6a2279d0b3a6bf79bb9bc307675c6656f8b",
+      "size_bytes": 48949,
+      "source_origin": "repo_source"
+    },
+    "CITATION.cff": {
+      "sha256": "aec26590e1ba6104371f86519c6ad4457619774f47aad46a8850557a82656b25",
+      "size_bytes": 1235,
+      "source_origin": "repo_source"
+    },
+    "CONTRIBUTING.md": {
+      "sha256": "90f09f13ad655c3943fda988d954217f4b67fc5e5e8b170bd1fa4b97275b8d69",
+      "size_bytes": 665,
+      "source_origin": "repo_source"
+    },
+    "DEPLOY.md": {
+      "sha256": "b66533624f0af20cfa9129ccb45a7dd9acec72d57679ec91d4e7160a1be7c25b",
+      "size_bytes": 9630,
+      "source_origin": "repo_source"
+    },
+    "Dockerfile": {
+      "sha256": "ad86dcdac85be7a0417486215ab143b562a7daaa677b98bb3d6251b987deda77",
+      "size_bytes": 1293,
+      "source_origin": "repo_source"
+    },
+    "LICENSE": {
+      "sha256": "fd6a1650f54541e73d3970051eb4a1f0c8d1c6b9b7ed9530f4dc107b3fea044e",
+      "size_bytes": 1076,
+      "source_origin": "legal_document"
+    },
+    "LICENSE.txt": {
+      "sha256": "fd6a1650f54541e73d3970051eb4a1f0c8d1c6b9b7ed9530f4dc107b3fea044e",
+      "size_bytes": 1076,
+      "source_origin": "legal_document"
+    },
+    "PROJECT_METADATA.json": {
+      "sha256": "fcadcca801079f0f82684cb139fb29c8dff6e60a627a8b2d10d2bd3fab3cfd69",
+      "size_bytes": 1504,
+      "source_origin": "repo_source"
+    },
+    "README.md": {
+      "sha256": "a08a706b671352039c731b99e0606478bcafa422a5d917b6c0f6318145a7d835",
+      "size_bytes": 30216,
+      "source_origin": "package_metadata"
+    },
+    "REPRODUCIBILITY.md": {
+      "sha256": "891bf9662224ed0278904006d0af18724dcde6f0a604d4ed2142e5cbf3a81474",
+      "size_bytes": 3865,
+      "source_origin": "repo_source"
+    },
+    "SECURITY.md": {
+      "sha256": "195d14642a9299051d202711f328ea7d07b8d9e830a414c093a40c6b7ad3fd99",
+      "size_bytes": 5759,
+      "source_origin": "repo_source"
+    },
+    "THIRD_PARTY_LICENSES.md": {
+      "sha256": "e4c966905317d17912e9211122acd1ed3bcf4e1012c455d78279e366ce2af0d0",
+      "size_bytes": 9735,
+      "source_origin": "legal_document"
     },
     "api/__init__.py": {
       "sha256": "ea951dbebe30f73ec82a1c92bdc7f8c2b5c8b9788b7758dd9ea26811377767cc",
@@ -69,13 +129,13 @@
       "source_origin": "repo_source"
     },
     "api/routes/compound.py": {
-      "sha256": "3d48a273fb24964b508e50bc0c2e78a0e32979a4b7cc5fa75ee253f95b956ace",
-      "size_bytes": 1599,
+      "sha256": "5e230fbd2ceb5dd556d2816cd32ac1d1e7cdaf4b6f8be209237ad4792d6dbe4f",
+      "size_bytes": 1595,
       "source_origin": "repo_source"
     },
     "api/routes/health.py": {
-      "sha256": "acb83867a18c3016a662cffd32ecbcad53adb22602cf170b155f24ab3430c6cc",
-      "size_bytes": 639,
+      "sha256": "601fccc28f4cb793eb10992482d5c0069b1c6563cdeadbec8a488e65f314a46d",
+      "size_bytes": 764,
       "source_origin": "repo_source"
     },
     "api/routes/kaggle.py": {
@@ -89,8 +149,8 @@
       "source_origin": "repo_source"
     },
     "api/routes/orca.py": {
-      "sha256": "1bb9ae8786393042e17a9af99119c581c5e9617adb7f43cfd2ecdee6d55c0581",
-      "size_bytes": 463,
+      "sha256": "0085c3bcd7e4c60411dd09c742447e5f3d8bcd4b8652c94e9922d51965716e97",
+      "size_bytes": 598,
       "source_origin": "repo_source"
     },
     "api/schemas/__init__.py": {
@@ -99,8 +159,8 @@
       "source_origin": "repo_source"
     },
     "api/schemas/analysis.py": {
-      "sha256": "e03598494b355843550a5744ed2bfae2600dd002251e20c62a365b05092fdb07",
-      "size_bytes": 1115,
+      "sha256": "12b00f6eec025d25df50d06df4b777a6b90ef9ef26395c0dabf18dcd49f29b78",
+      "size_bytes": 1531,
       "source_origin": "repo_source"
     },
     "api/schemas/compound.py": {
@@ -114,13 +174,8 @@
       "source_origin": "repo_source"
     },
     "app.py": {
-      "sha256": "9b6a79bed92df79d04a1961a38c1e1c5ccfd022dc8591226cc79427b7360a9b0",
-      "size_bytes": 207083,
-      "source_origin": "repo_source"
-    },
-    "ARCHITECTURE.md": {
-      "sha256": "a50d3a2703d48a159a61037d46fea6a2279d0b3a6bf79bb9bc307675c6656f8b",
-      "size_bytes": 48949,
+      "sha256": "f428b279afbb24a8314df5dffade8631ad76ddfdb2569ab0bf47a08c3c0a5a09",
+      "size_bytes": 206866,
       "source_origin": "repo_source"
     },
     "benchmarks/benzene_tddft.out": {
@@ -134,13 +189,13 @@
       "source_origin": "repo_source"
     },
     "bootstrap/hpc/install_hpc_agent.sh": {
-      "sha256": "b56aab2dfdaa310f7abb4f3fb12dc391a9250d98d3141bc8be02d0a2727485d5",
-      "size_bytes": 4398,
+      "sha256": "24f1ab33bf0b22d0f1562a3f6dd34ae09bffb06a90f00db09902b56f8c2e7f0e",
+      "size_bytes": 4875,
       "source_origin": "repo_source"
     },
     "bootstrap/hpc/start_hpc_agent.sh": {
-      "sha256": "b56aab2dfdaa310f7abb4f3fb12dc391a9250d98d3141bc8be02d0a2727485d5",
-      "size_bytes": 4398,
+      "sha256": "24f1ab33bf0b22d0f1562a3f6dd34ae09bffb06a90f00db09902b56f8c2e7f0e",
+      "size_bytes": 4875,
       "source_origin": "repo_source"
     },
     "bootstrap/linux/install_and_run.sh": {
@@ -154,8 +209,8 @@
       "source_origin": "repo_source"
     },
     "bootstrap/macos/install_and_run.command": {
-      "sha256": "37defc343d59f9e13e2a6ce0fcd5361e53bcc14854c45ee24b66a793da1c545e",
-      "size_bytes": 3891,
+      "sha256": "ea6b101d6ac85cb8dd2e516a84b03c08d6dec981906aa7cea6f3414be9a5d48e",
+      "size_bytes": 3796,
       "source_origin": "repo_source"
     },
     "bootstrap/macos/install_and_run.sh": {
@@ -164,13 +219,13 @@
       "source_origin": "repo_source"
     },
     "bootstrap/windows/bootstrap_windows.ps1": {
-      "sha256": "c6305f7d981f1a8ac81063274da630c545194a308a17333fbc6f834f5efcd2a1",
-      "size_bytes": 5178,
+      "sha256": "db3a8b9afe01a9ab3ef222d1775cfa7d08bcc6a7be4b2dc52ee725f2e243ccc5",
+      "size_bytes": 5044,
       "source_origin": "repo_source"
     },
     "bootstrap/windows/install_and_run.bat": {
-      "sha256": "366604a476b82ca6959bd93fdd4085e4a1e1d98f4b47fc99a08fe248bf999b26",
-      "size_bytes": 5411,
+      "sha256": "a8e948054ca1e42e465aac1374fd0199e7908052b4ef202b45c88107cccd03cc",
+      "size_bytes": 5243,
       "source_origin": "repo_source"
     },
     "chem_core/__init__.py": {
@@ -184,13 +239,8 @@
       "source_origin": "repo_source"
     },
     "chem_core.py": {
-      "sha256": "48db5af2d672b540f385cc58fe80374da71e6a66b465c31ab3a1c1b3220534d3",
-      "size_bytes": 80651,
-      "source_origin": "repo_source"
-    },
-    "CITATION.cff": {
-      "sha256": "d64038dd42e6dd83a58aee6090dd9088aeea44bf160e9d6a30c3172369efa9d2",
-      "size_bytes": 1221,
+      "sha256": "8bc05f7e31c0b7ff1d6a987bbf07fe2f429a686f3af864f891c4a290c76a4908",
+      "size_bytes": 81568,
       "source_origin": "repo_source"
     },
     "cloudflare-control-plane/.dev.vars.example": {
@@ -204,13 +254,23 @@
       "source_origin": "cloudflare_worker_component"
     },
     "cloudflare-control-plane/.gitignore": {
-      "sha256": "15bfa5c94a6180b58045c29f84da917b57299ccc312f88aa49ba30e32373e600",
-      "size_bytes": 237,
+      "sha256": "4a2e3c467db576ea0f4ec1b631cd8a46dea12b7683e1d9c15f4a0c796250dd79",
+      "size_bytes": 219,
       "source_origin": "cloudflare_worker_component"
     },
     "cloudflare-control-plane/LICENSE": {
-      "sha256": "4327184cf49abafe975c1aeffd961001b7afa58175281a441fd7972f243ae023",
-      "size_bytes": 1633,
+      "sha256": "fd6a1650f54541e73d3970051eb4a1f0c8d1c6b9b7ed9530f4dc107b3fea044e",
+      "size_bytes": 1076,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/README.md": {
+      "sha256": "80f5c26429f94586c4a4bcbc635e700d827db3324895f70e874ec1285591f36f",
+      "size_bytes": 7535,
+      "source_origin": "cloudflare_worker_component"
+    },
+    "cloudflare-control-plane/SECURITY.md": {
+      "sha256": "8c890183b338924b2883b138f5faa80b55c8e7fa98ecc800a5afe52e411f33d1",
+      "size_bytes": 1700,
       "source_origin": "cloudflare_worker_component"
     },
     "cloudflare-control-plane/migrations/0001_initial.sql": {
@@ -223,19 +283,19 @@
       "size_bytes": 1126,
       "source_origin": "cloudflare_worker_component"
     },
+    "cloudflare-control-plane/package-lock.json": {
+      "sha256": "881bef98b388ec7e545922bdfb761f75491d7952ae80658330b351d3f0cfd90c",
+      "size_bytes": 83441,
+      "source_origin": "cloudflare_worker_component"
+    },
     "cloudflare-control-plane/package.json": {
-      "sha256": "09d5b576166071343b1d76f13f7da6f01685aab4ff979e4e776b22c9c672f70d",
-      "size_bytes": 791,
+      "sha256": "084e1b9e7fb8f0b35b8fd2828024e899e43f1ca1d5629ac85e80087ebacd9729",
+      "size_bytes": 773,
       "source_origin": "cloudflare_worker_component"
     },
-    "cloudflare-control-plane/README.md": {
-      "sha256": "80f5c26429f94586c4a4bcbc635e700d827db3324895f70e874ec1285591f36f",
-      "size_bytes": 7535,
-      "source_origin": "cloudflare_worker_component"
-    },
-    "cloudflare-control-plane/SECURITY.md": {
-      "sha256": "8c890183b338924b2883b138f5faa80b55c8e7fa98ecc800a5afe52e411f33d1",
-      "size_bytes": 1700,
+    "cloudflare-control-plane/src/body.ts": {
+      "sha256": "3f245c3e81b34453c8e720eb0b5366478407f2d6fd110602b01a54b5c67555fa",
+      "size_bytes": 1295,
       "source_origin": "cloudflare_worker_component"
     },
     "cloudflare-control-plane/src/db.ts": {
@@ -249,8 +309,8 @@
       "source_origin": "cloudflare_worker_component"
     },
     "cloudflare-control-plane/src/index.ts": {
-      "sha256": "9ef22bf56ea45d2bc3c9413acabb286efb9d2d1f29bb549fd29da79c672b7b80",
-      "size_bytes": 14123,
+      "sha256": "1ff6637cd1d2f8af39575a0d94c13ab1576423bdcb7f6032bef2a5f39371d3df",
+      "size_bytes": 13887,
       "source_origin": "cloudflare_worker_component"
     },
     "cloudflare-control-plane/src/security.ts": {
@@ -263,6 +323,11 @@
       "size_bytes": 3186,
       "source_origin": "cloudflare_worker_component"
     },
+    "cloudflare-control-plane/tests/body.test.ts": {
+      "sha256": "4001781e3ceef16b27a6cae27a28501a0595fbf7b71a4938a20a25502c50a683",
+      "size_bytes": 2984,
+      "source_origin": "cloudflare_worker_component"
+    },
     "cloudflare-control-plane/tsconfig.json": {
       "sha256": "74920202c9714e4c73d6b09e8b9f02fd68e335350bee9c3292c7fd6bbc99430a",
       "size_bytes": 273,
@@ -272,31 +337,6 @@
       "sha256": "e68db5dd2577d1e8f4fdd767b0cdc7e670c6cf1bdff6eb63a556b41d9f9194d3",
       "size_bytes": 568,
       "source_origin": "cloudflare_worker_component"
-    },
-    "CONTRIBUTING.md": {
-      "sha256": "2a20718f38dea0f7510d70e83722fae8ec194cf96434f514d9c896a972e287c9",
-      "size_bytes": 2149,
-      "source_origin": "repo_source"
-    },
-    "data/.local_agent_pairing.key": {
-      "sha256": "d584e03956b64775b5b38a6318d0b0193eb8829bccee936ea79a032efca9d9fc",
-      "size_bytes": 32,
-      "source_origin": "repo_source"
-    },
-    "data/.local_orca_process.lock": {
-      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
-      "size_bytes": 1,
-      "source_origin": "repo_source"
-    },
-    "data/.local_orca_settings.lock": {
-      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
-      "size_bytes": 1,
-      "source_origin": "repo_source"
-    },
-    "data/.reaction_store.lock": {
-      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
-      "size_bytes": 1,
-      "source_origin": "repo_source"
     },
     "data/examples/analysis_freq.json": {
       "sha256": "c765e672633730cb92bf7ee87815b54dd7762f6c5451f414daca69d4650b0b30",
@@ -364,8 +404,8 @@
       "source_origin": "repo_source"
     },
     "data/examples/training_dataset_h2o.jsonl": {
-      "sha256": "a702f4c373aef0a15a3a7025b6438f44d088c7ffa5a2bd3737dec5f3f391f2fc",
-      "size_bytes": 919,
+      "sha256": "90ee66e3034e51a077488e3a1468cb1f7dfcee7116ad089e4be0643ca1c8d3e2",
+      "size_bytes": 918,
       "source_origin": "repo_source"
     },
     "data/examples/training_manifest_h2o.json": {
@@ -373,84 +413,9 @@
       "size_bytes": 565,
       "source_origin": "repo_source"
     },
-    "data/local_agent_registry.db": {
-      "sha256": "98d5888051d660a10770961f5901610b70e3ec77299a1788890adbcf4d8f9759",
-      "size_bytes": 167936,
-      "source_origin": "repo_source"
-    },
-    "data/local_orca_settings.json": {
-      "sha256": "41ace376c4e1ceea873227549bd271bbe33ab617435b0fba82ad7f101fdd3072",
-      "size_bytes": 418,
-      "source_origin": "repo_source"
-    },
-    "data/local_orca_worker.sqlite3": {
-      "sha256": "f22f18dca70df0df9a5f2e201c0a97883d689ccc4a4e735c29d03bda9bb9c7e1",
-      "size_bytes": 225280,
-      "source_origin": "repo_source"
-    },
-    "data/migration_backups/local_agent_registry.db.local-agent-registry.pre-v2.20260915T144747Z.f01f8c5d.bak": {
-      "sha256": "e3cacfd1f0a9d8b05f19e0a073d4c9d26292c4a04c83f5f1e91ea0d7880ef6ee",
-      "size_bytes": 139264,
-      "source_origin": "repo_source"
-    },
-    "data/workflow_steps.sqlite3": {
-      "sha256": "f7549ee26f5a2f3f585935965a42f0dec63909be18364f65ff5187f39ba6767c",
-      "size_bytes": 53248,
-      "source_origin": "repo_source"
-    },
-    "DEPLOY.md": {
-      "sha256": "9f75c8e1b564870fdb53c5a6540a1bd845cff4b8a31ae41299ba3cab6725db97",
-      "size_bytes": 9716,
-      "source_origin": "repo_source"
-    },
-    "dist/orca_engine-1.0.3-py3-none-any.whl": {
-      "sha256": "1214f200fdb4e14919b5793c1a2caf1f9724691e4e1371114822ba67200a574f",
-      "size_bytes": 100666,
-      "source_origin": "repo_source"
-    },
-    "dist/orca_web_lab-1.0.3-py3-none-any.whl": {
-      "sha256": "559001ad10814bbaa8275865835ab151a0975cdc2c9534969bf2bb3fd24e8498",
-      "size_bytes": 868793,
-      "source_origin": "repo_source"
-    },
-    "dist/orca_web_lab-1.0.3.tar.gz": {
-      "sha256": "eb6b1b058a734b7b8fe0929d79251684b4eff1ec7fdd12fe62b7fef49481a6de",
-      "size_bytes": 771166,
-      "source_origin": "repo_source"
-    },
-    "dist/packages/checksums.txt": {
-      "sha256": "26b0053a5d53f2594e0529de397ffaece66ff492f55675d42d2401c6374b746a",
-      "size_bytes": 376,
-      "source_origin": "repo_source"
-    },
-    "dist/packages/ChemistryLabAgent-HPC.zip": {
-      "sha256": "f56eac43f6eb9954fdf15ff9565ff495a9f7df94a0b0930bd408ce5178767d69",
-      "size_bytes": 29368,
-      "source_origin": "repo_source"
-    },
-    "dist/packages/ChemistryLabAgent-Linux.zip": {
-      "sha256": "3d8703a4cbcb3c4471786c4a52ad84062d18411423241ccecd4ba290533753b1",
-      "size_bytes": 29011,
-      "source_origin": "repo_source"
-    },
-    "dist/packages/ChemistryLabAgent-macOS.zip": {
-      "sha256": "168825111dc0d12a1dae0c6ada9eb97bab50dcf82c66666f635f1249bd04f34d",
-      "size_bytes": 28794,
-      "source_origin": "repo_source"
-    },
-    "dist/packages/ChemistryLabAgent-Windows.zip": {
-      "sha256": "264282a63c35b035e9c0707a443994260635f9fecfc6ab5ea622c32f0acbf64f",
-      "size_bytes": 29681,
-      "source_origin": "repo_source"
-    },
     "docker-entrypoint.sh": {
       "sha256": "472019c117525cd946595777c35b3df343e7bf5ecece3223a7ddf66c84809a9b",
       "size_bytes": 1517,
-      "source_origin": "repo_source"
-    },
-    "Dockerfile": {
-      "sha256": "ad86dcdac85be7a0417486215ab143b562a7daaa677b98bb3d6251b987deda77",
-      "size_bytes": 1293,
       "source_origin": "repo_source"
     },
     "docs/HPC_LOCAL_AGENT.md": {
@@ -473,6 +438,11 @@
       "size_bytes": 3065,
       "source_origin": "repo_source"
     },
+    "docs/PRODUCTION_REVIEW_AR.md": {
+      "sha256": "35a8fd0e5119875869b5a6786f09676b51a4908103f0b7f1482ebbf1ffb979b8",
+      "size_bytes": 10376,
+      "source_origin": "repo_source"
+    },
     "docs/SCIENTIFIC_JSON_SCHEMA.md": {
       "sha256": "3a5efcca4e91af8f364de87ac0ff635146d25f6715ad1b32c0d3a28bceaab2d6",
       "size_bytes": 20598,
@@ -488,24 +458,14 @@
       "size_bytes": 192260,
       "source_origin": "repo_source"
     },
-    "LICENSE": {
-      "sha256": "5be6f2b9d34c8d3d2ca7d26e91013abe150c6070ed5ec976dd95745c444d268e",
-      "size_bytes": 21091,
-      "source_origin": "legal_document"
-    },
-    "LICENSE.txt": {
-      "sha256": "5be6f2b9d34c8d3d2ca7d26e91013abe150c6070ed5ec976dd95745c444d268e",
-      "size_bytes": 21091,
-      "source_origin": "legal_document"
-    },
     "local_agent/__init__.py": {
       "sha256": "eb63ac249dcaa94ba6f8d9d6e3b125809a00f4799c8358264cee98cbd7dc8029",
       "size_bytes": 89,
       "source_origin": "repo_source"
     },
     "local_agent/agent.py": {
-      "sha256": "4d93cc46bb2847e1a3c8b9ac8369ef98c9e7922c3c8587e2dbeec1e17830f82a",
-      "size_bytes": 36837,
+      "sha256": "52f4a961dd5bf6b5c9d228d2b061dec9b40351a78e04ad22ef7ed94fd3e62a45",
+      "size_bytes": 37991,
       "source_origin": "repo_source"
     },
     "local_agent/config.py": {
@@ -519,8 +479,8 @@
       "source_origin": "repo_source"
     },
     "local_agent/hpc/base.py": {
-      "sha256": "1cfdb95ac92b976dff9a283ed20f67f96b8d72955477e28af3868263be87bd32",
-      "size_bytes": 7707,
+      "sha256": "5f826f5a267e31b82635bd3403a7d43c47803be75159ef12baae85224adbbaec",
+      "size_bytes": 8232,
       "source_origin": "repo_source"
     },
     "local_agent/hpc/lsf.py": {
@@ -544,8 +504,8 @@
       "source_origin": "repo_source"
     },
     "local_agent/security.py": {
-      "sha256": "23b87c2a89f071e64043e1f4b3f8557e1ad619f461f2b4ff07500dfa141dffe8",
-      "size_bytes": 10080,
+      "sha256": "2406341cff95b094145b66a2c97d33058dc88b17cabfc352154da191bdc3eaef",
+      "size_bytes": 10349,
       "source_origin": "repo_source"
     },
     "local_agent/storage.py": {
@@ -569,13 +529,78 @@
       "source_origin": "orca_engine_component"
     },
     "orca_engine/CITATION.cff": {
-      "sha256": "9b17803a4c4e258ed02ec7e6b380bb39c783c25cd1d01e5efbcedfa958576411",
-      "size_bytes": 1465,
+      "sha256": "04473c87e019b7d55cee2ba910ed86612c6e1d2b292ddd2b74f792e9baedc763",
+      "size_bytes": 1437,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/CONTRIBUTING.md": {
-      "sha256": "233e8de59194d2e600afb899421b46d97450495905df664e6aedf9f80ff368a8",
-      "size_bytes": 2848,
+      "sha256": "e121bb3f39c5c0d8f107fc1cc0568eaf451540df470fca0b98665fbf7b925b9a",
+      "size_bytes": 2806,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/LICENSE": {
+      "sha256": "fd6a1650f54541e73d3970051eb4a1f0c8d1c6b9b7ed9530f4dc107b3fea044e",
+      "size_bytes": 1076,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/ORCA_Parsed_Data.json": {
+      "sha256": "61fa8a9e78775e4e5bee23d1b7308ec930365a59d69acf4e71622fdc5d5507e8",
+      "size_bytes": 57494,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/README.md": {
+      "sha256": "9cde3e6077514283144b07890f7fef3661385d4c222c2f6d1dc6e67409860b37",
+      "size_bytes": 8223,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/README.md": {
+      "sha256": "17b8a122afef90baf0ed78776772122c34f2711d68f8cb836106e94bef333f32",
+      "size_bytes": 1319,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/GLU.OUT": {
+      "sha256": "6fed77f1963f1dc788478ce3dd70dc636a80930805b997640507bbcd9e4ae516",
+      "size_bytes": 8585,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/GLUC.OUT": {
+      "sha256": "fbb3e975dc4f1c8328414ff51aeb546b0d39fba2197f3357332be7e0e612b97c",
+      "size_bytes": 128005,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/H.out": {
+      "sha256": "73c8d69801cc153f14dd53b904f75de51a48590428b9865fcb7ef38f4f220e12",
+      "size_bytes": 36468,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/H1.out": {
+      "sha256": "05ca093faeb4494d414dc9f00ad76366b64e34ceb7f0418cf0278958431ce778",
+      "size_bytes": 40861,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/NAPHHover.out": {
+      "sha256": "ed9807578f392517bccd6ea0bb9b367134f4748e7ebf777421d002f5fa9cd485",
+      "size_bytes": 41890,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/NAPHbropt.out": {
+      "sha256": "42fdc2470f9ce1157dc51e80ca10384943fa98b1269f09e9fa8110a1cc25d9be",
+      "size_bytes": 534579,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/NAPHbruv.out": {
+      "sha256": "80fb14512b57eeca74d54c012def9f09e4efec0c492bfd3df6e720634202e4c9",
+      "size_bytes": 192981,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/NAPHover.out": {
+      "sha256": "7010e631f67398cf39aa4b0895f51a139e509200c83036f91c9e34dfa2f708f0",
+      "size_bytes": 149391,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/data/orcafile/orca5/NAPHuv.out": {
+      "sha256": "c515dc9952dbb0544b871388a30a3377fcdd9537f73952cfe1ee12e87a40c886",
+      "size_bytes": 187399,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/data/orcafile/orca5/aaa.out": {
@@ -603,29 +628,9 @@
       "size_bytes": 108167,
       "source_origin": "orca_engine_component"
     },
-    "orca_engine/data/orcafile/orca5/GLU.OUT": {
-      "sha256": "6fed77f1963f1dc788478ce3dd70dc636a80930805b997640507bbcd9e4ae516",
-      "size_bytes": 8585,
-      "source_origin": "orca_engine_component"
-    },
-    "orca_engine/data/orcafile/orca5/GLUC.OUT": {
-      "sha256": "fbb3e975dc4f1c8328414ff51aeb546b0d39fba2197f3357332be7e0e612b97c",
-      "size_bytes": 128005,
-      "source_origin": "orca_engine_component"
-    },
     "orca_engine/data/orcafile/orca5/glucuv.out": {
       "sha256": "27b1548525b0937f69b317f04e5f26e5cd59f706a8a65f5824df658c8ed74e52",
       "size_bytes": 164319,
-      "source_origin": "orca_engine_component"
-    },
-    "orca_engine/data/orcafile/orca5/H.out": {
-      "sha256": "73c8d69801cc153f14dd53b904f75de51a48590428b9865fcb7ef38f4f220e12",
-      "size_bytes": 36468,
-      "source_origin": "orca_engine_component"
-    },
-    "orca_engine/data/orcafile/orca5/H1.out": {
-      "sha256": "05ca093faeb4494d414dc9f00ad76366b64e34ceb7f0418cf0278958431ce778",
-      "size_bytes": 40861,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/data/orcafile/orca5/in.out": {
@@ -813,24 +818,9 @@
       "size_bytes": 247440,
       "source_origin": "orca_engine_component"
     },
-    "orca_engine/data/orcafile/orca5/NAPHbropt.out": {
-      "sha256": "42fdc2470f9ce1157dc51e80ca10384943fa98b1269f09e9fa8110a1cc25d9be",
-      "size_bytes": 534579,
-      "source_origin": "orca_engine_component"
-    },
-    "orca_engine/data/orcafile/orca5/NAPHbruv.out": {
-      "sha256": "80fb14512b57eeca74d54c012def9f09e4efec0c492bfd3df6e720634202e4c9",
-      "size_bytes": 192981,
-      "source_origin": "orca_engine_component"
-    },
     "orca_engine/data/orcafile/orca5/naphh.out": {
       "sha256": "64a6c753654e2fc8177464f0569042e8fe3c6682182280b13ca669dc6e30db1d",
       "size_bytes": 45227,
-      "source_origin": "orca_engine_component"
-    },
-    "orca_engine/data/orcafile/orca5/NAPHHover.out": {
-      "sha256": "ed9807578f392517bccd6ea0bb9b367134f4748e7ebf777421d002f5fa9cd485",
-      "size_bytes": 41890,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/data/orcafile/orca5/naphopt.out": {
@@ -841,16 +831,6 @@
     "orca_engine/data/orcafile/orca5/naphopt1.out": {
       "sha256": "515785c98279792408b366fcf7594ddbadfde2bf5987ac3be6f1415694845433",
       "size_bytes": 192418,
-      "source_origin": "orca_engine_component"
-    },
-    "orca_engine/data/orcafile/orca5/NAPHover.out": {
-      "sha256": "7010e631f67398cf39aa4b0895f51a139e509200c83036f91c9e34dfa2f708f0",
-      "size_bytes": 149391,
-      "source_origin": "orca_engine_component"
-    },
-    "orca_engine/data/orcafile/orca5/NAPHuv.out": {
-      "sha256": "c515dc9952dbb0544b871388a30a3377fcdd9537f73952cfe1ee12e87a40c886",
-      "size_bytes": 187399,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/data/orcafile/orca6.1/nap.out": {
@@ -923,29 +903,9 @@
       "size_bytes": 1016340,
       "source_origin": "orca_engine_component"
     },
-    "orca_engine/data/README.md": {
-      "sha256": "17b8a122afef90baf0ed78776772122c34f2711d68f8cb836106e94bef333f32",
-      "size_bytes": 1319,
-      "source_origin": "orca_engine_component"
-    },
-    "orca_engine/LICENSE": {
-      "sha256": "5be6f2b9d34c8d3d2ca7d26e91013abe150c6070ed5ec976dd95745c444d268e",
-      "size_bytes": 21091,
-      "source_origin": "orca_engine_component"
-    },
-    "orca_engine/ORCA_Parsed_Data.json": {
-      "sha256": "61fa8a9e78775e4e5bee23d1b7308ec930365a59d69acf4e71622fdc5d5507e8",
-      "size_bytes": 57494,
-      "source_origin": "orca_engine_component"
-    },
     "orca_engine/pyproject.toml": {
-      "sha256": "81f555659cf1b3f3ab73e99fd7e6e800a2f4688472ad35ead372cd705b180040",
-      "size_bytes": 2957,
-      "source_origin": "orca_engine_component"
-    },
-    "orca_engine/README.md": {
-      "sha256": "65b905305cbc3edff36680114a14013fedcf39c16d8279ffbc4bcfbcb841d9e5",
-      "size_bytes": 8386,
+      "sha256": "97d129207c20cfbb7efc77af0368aa435c42c15d7a67ef87778e9a72e4a316ca",
+      "size_bytes": 2924,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/scripts/run_mutations.py": {
@@ -999,8 +959,8 @@
       "source_origin": "orca_engine_component"
     },
     "orca_engine/src/orca_engine/models.py": {
-      "sha256": "0d6dfaa5216ab033b81cc88da65068c74829ded827be6c3e84c3cf86d675fbf7",
-      "size_bytes": 29437,
+      "sha256": "7b2ad69cbf6d0e6d07ca00d39a6087b21e31495db8a6fc5ae1887586dc6dafbd",
+      "size_bytes": 29510,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/src/orca_engine/nmr.py": {
@@ -1009,8 +969,8 @@
       "source_origin": "orca_engine_component"
     },
     "orca_engine/src/orca_engine/parser.py": {
-      "sha256": "da116edc079e60c39c13b067f4c63dc8c5dbbc85715f8c196347cbf8bb014e64",
-      "size_bytes": 39782,
+      "sha256": "c5d319cc78af249a63b115dc969b16298e94a345b0872052e13224b0cea7f119",
+      "size_bytes": 40124,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/src/orca_engine/py.typed": {
@@ -1019,8 +979,8 @@
       "source_origin": "orca_engine_component"
     },
     "orca_engine/src/orca_engine/regex.py": {
-      "sha256": "a2d7daf3e13eb832d6faba3cf06b5a674f6bf2c576ec6c2606b13c81cbcc0862",
-      "size_bytes": 10611,
+      "sha256": "97a8f4ab08fd824c651b92ba10a1eb12a7fe2ab0b490723755334c520a325fda",
+      "size_bytes": 10751,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/src/orca_engine/reporting.py": {
@@ -1029,8 +989,8 @@
       "source_origin": "orca_engine_component"
     },
     "orca_engine/src/orca_engine/thermochemistry.py": {
-      "sha256": "c78b1fcc0cd2f9a980ee6f2b0dec00ef112aed9dd8d6582cdf57dc514702e07c",
-      "size_bytes": 39569,
+      "sha256": "d00e687f4c4a2effb93375b66f4d779a4b7a75c2dbe4bed1e8d1d677e4c89694",
+      "size_bytes": 42487,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/src/orca_engine/web/app.js": {
@@ -1051,6 +1011,11 @@
     "orca_engine/tests/conftest.py": {
       "sha256": "4030aa94a628059cc1771d07913e98863f587c0d57a8c3a2b65161df3d66aec9",
       "size_bytes": 1144,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/data/UPPERCASE_SUFFIX.OUT": {
+      "sha256": "b9a9cb52fcc1c58db8e3eadaf4d826546fd6054bef45088c0ea35f6079d4a4d3",
+      "size_bytes": 786,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/tests/data/compound_job_first_fails.out": {
@@ -1138,11 +1103,6 @@
       "size_bytes": 823,
       "source_origin": "orca_engine_component"
     },
-    "orca_engine/tests/data/UPPERCASE_SUFFIX.OUT": {
-      "sha256": "b9a9cb52fcc1c58db8e3eadaf4d826546fd6054bef45088c0ea35f6079d4a4d3",
-      "size_bytes": 786,
-      "source_origin": "orca_engine_component"
-    },
     "orca_engine/tests/test_io_and_cli.py": {
       "sha256": "adce937e1c517c6b0b9d98c804a1195c9706547ee4d722360a2fa99e9fcc3e6c",
       "size_bytes": 10963,
@@ -1151,6 +1111,11 @@
     "orca_engine/tests/test_parser.py": {
       "sha256": "3a4c8a1a8cd8db9590b0a38ae9c25624daed760b83603576c5cdeb203b3402d9",
       "size_bytes": 24750,
+      "source_origin": "orca_engine_component"
+    },
+    "orca_engine/tests/test_production_thermochemistry_review.py": {
+      "sha256": "e31da1d6463383e64f27177318e56e4fe42f71b577c26078534a95da0059470f",
+      "size_bytes": 4278,
       "source_origin": "orca_engine_component"
     },
     "orca_engine/tests/test_thermochemistry.py": {
@@ -1323,14 +1288,9 @@
       "size_bytes": 23649,
       "source_origin": "repo_source"
     },
-    "PROJECT_METADATA.json": {
-      "sha256": "5223f60b319a99829edc7875e5187fe2d468fae60981d2c95d382aabaaef934c",
-      "size_bytes": 1528,
-      "source_origin": "repo_source"
-    },
     "pyproject.toml": {
-      "sha256": "012b0089aea24d7720969565c360d5a20b0042234fe8c37e64e2379d5d2d9c64",
-      "size_bytes": 3118,
+      "sha256": "4d3d1abbd08092005504c6f1111bc30d992db60a9eae9d5ca969eafbe3372019",
+      "size_bytes": 3604,
       "source_origin": "repo_source"
     },
     "pytest.ini": {
@@ -1341,16 +1301,6 @@
     "reaction_conditions.py": {
       "sha256": "6a2c5e254658c10f64b02bb7eb72724b5c711e22818ff0759890729d259913b7",
       "size_bytes": 3085,
-      "source_origin": "repo_source"
-    },
-    "README.md": {
-      "sha256": "abf092242aad049a00a23a7440a545ca028a341859331640851956dc7e064139",
-      "size_bytes": 32210,
-      "source_origin": "package_metadata"
-    },
-    "REPRODUCIBILITY.md": {
-      "sha256": "891bf9662224ed0278904006d0af18724dcde6f0a604d4ed2142e5cbf3a81474",
-      "size_bytes": 3865,
       "source_origin": "repo_source"
     },
     "requirements-local-agent-hpc.txt": {
@@ -1364,7 +1314,7 @@
       "source_origin": "repo_source"
     },
     "requirements.txt": {
-      "sha256": "21c357e0f4bf0c1e8e0c85e241b6631891efb08e923774dfdc93455be1506363",
+      "sha256": "adabc1d4d02fe9ea655cf75dbc5e175e3f322d99c988ca3436c7c59c48136602",
       "size_bytes": 1013,
       "source_origin": "repo_source"
     },
@@ -1424,8 +1374,8 @@
       "source_origin": "repo_source"
     },
     "scripts/generate_academic_manual.py": {
-      "sha256": "5c0acdc0ab0908b7010320d26ead9b078785dc4ed0bdb9c4cd55bc5201e3948b",
-      "size_bytes": 35954,
+      "sha256": "840421006340a9c508f35a68e00813da8fcc91e351c77d24563172cf0fca583f",
+      "size_bytes": 35825,
       "source_origin": "repo_source"
     },
     "scripts/inspect_manual.py": {
@@ -1478,19 +1428,14 @@
       "size_bytes": 5235,
       "source_origin": "repo_source"
     },
-    "SECURITY.md": {
-      "sha256": "195d14642a9299051d202711f328ea7d07b8d9e830a414c093a40c6b7ad3fd99",
-      "size_bytes": 5759,
-      "source_origin": "repo_source"
-    },
     "services/__init__.py": {
       "sha256": "06fb368edded0f9a6c940f5f4c28073c5297bd96fc43b5b809ef3236ce317f05",
       "size_bytes": 66,
       "source_origin": "repo_source"
     },
     "services/analysis_service.py": {
-      "sha256": "3e4bf83d698d7daa45c589c2a431232b11bd15b967ad72a403a81215a5e020c8",
-      "size_bytes": 2314,
+      "sha256": "78367aee1a92da29ef7cfb5152b5db6f8c4b83ac12e384ce0bdaf8732f66a3d1",
+      "size_bytes": 2973,
       "source_origin": "repo_source"
     },
     "services/artifact_service.py": {
@@ -1499,8 +1444,8 @@
       "source_origin": "repo_source"
     },
     "services/auth_service.py": {
-      "sha256": "e7c2598d6cbdae27e5198f4bdbcf9b44586be5cec855e45c27ba3c78bb6f2d01",
-      "size_bytes": 10278,
+      "sha256": "deb00d616292d615285b0ff6f21a495de3075c1af4a05e2de7dc98fd5fb203ed",
+      "size_bytes": 11117,
       "source_origin": "repo_source"
     },
     "services/cdxml_service.py": {
@@ -1519,8 +1464,8 @@
       "source_origin": "repo_source"
     },
     "services/health_service.py": {
-      "sha256": "71a2efbdab2b83325ece1574623d20c3828589e39caaf526a0d75ca2793985e4",
-      "size_bytes": 3897,
+      "sha256": "a7b90d78ffea8bc1b53867bf4224c0a38fe08670c271c653414751a9394ac471",
+      "size_bytes": 4054,
       "source_origin": "repo_source"
     },
     "services/kaggle_service.py": {
@@ -1534,8 +1479,8 @@
       "source_origin": "repo_source"
     },
     "services/local_orca_service.py": {
-      "sha256": "c17ef589cc7e3645d06563bcb30a43fbddc0d405dfea12c2317ca8528cfbc516",
-      "size_bytes": 52873,
+      "sha256": "9c3393e1c32b59c61eef577737d524bd8fc2cf18d91b6b5438397a4709929b79",
+      "size_bytes": 52991,
       "source_origin": "repo_source"
     },
     "services/local_orca_worker.py": {
@@ -1544,8 +1489,8 @@
       "source_origin": "repo_source"
     },
     "services/orca_service.py": {
-      "sha256": "60680256ad793abc97716295021577164033f2c58073b5e9f1958e14b8bb1553",
-      "size_bytes": 3748,
+      "sha256": "e69f42896561d2d370070626c4088889a3f2d2f5db5d5a76bbeb906e68e380b4",
+      "size_bytes": 5729,
       "source_origin": "repo_source"
     },
     "services/reaction_diagram_service.py": {
@@ -1584,8 +1529,8 @@
       "source_origin": "repo_source"
     },
     "static/docs/ChemistryLab_User_Manual.docx": {
-      "sha256": "35f84c0a37efc80a0283904d56198d18cdba7a648f2492f4c6c76f331ce9b211",
-      "size_bytes": 46938,
+      "sha256": "860cbe085b734426f2dbdfd0baf107c23b8f173447ce5ac7b16452c302e10d2b",
+      "size_bytes": 48215,
       "source_origin": "repo_source"
     },
     "static/job_runtime_fix.js": {
@@ -1594,13 +1539,13 @@
       "source_origin": "repo_source"
     },
     "static/js/app.js": {
-      "sha256": "1d969c33b79c32404be2b41e177d21a5353170f0b0c9811002557261aa731bda",
-      "size_bytes": 586104,
+      "sha256": "b749043f69c527e9813d6e153469c8df9574a4dce1a712b380c55b0d14b00bc6",
+      "size_bytes": 586293,
       "source_origin": "repo_source"
     },
     "static/js/kaggle_credentials.js": {
-      "sha256": "edf3657183f78584163fb9a0f8b9823ce200262096a7973c0e4a8888f530405a",
-      "size_bytes": 14739,
+      "sha256": "f426072b4d32ef3fa4400236c4373b3bffadbc83865cc675826433d6a4ef9f74",
+      "size_bytes": 15110,
       "source_origin": "repo_source"
     },
     "static/js/local-agent.js": {
@@ -1609,8 +1554,8 @@
       "source_origin": "repo_source"
     },
     "static/js/reaction-editor.js": {
-      "sha256": "a11362d1a686ac234f10a365525cba3ea50ec937e14ece09f84557b889b3f4a7",
-      "size_bytes": 8373,
+      "sha256": "af9ab0e1d8ca4605eaa1c014d345d6d2bf60970077dd335ed81ef9674a480c6b",
+      "size_bytes": 8455,
       "source_origin": "repo_source"
     },
     "static/js/reaction-unified.js": {
@@ -1624,13 +1569,13 @@
       "source_origin": "repo_source"
     },
     "templates/index.html": {
-      "sha256": "a6df06c094565a8bde36c4b09f78a94808fc8846646f68844b66d79e92e79507",
-      "size_bytes": 196516,
+      "sha256": "e6c277e88e16f17fcb82eebfb188e3578c3ea3590bbd053cb48ee8aef042b848",
+      "size_bytes": 193720,
       "source_origin": "repo_source"
     },
     "tests/conftest.py": {
-      "sha256": "e6ee44e643b1120833aa709ade94b8602e5ec146446443fb18a88d8cc0cf120d",
-      "size_bytes": 5349,
+      "sha256": "bd9932478c86e1b6c6f229e0c688a32f463aeb84a784961f00b2fb312420f2b3",
+      "size_bytes": 7777,
       "source_origin": "repo_source"
     },
     "tests/fake_orca.py": {
@@ -1683,6 +1628,11 @@
       "size_bytes": 2765,
       "source_origin": "repo_source"
     },
+    "tests/test_backend_production_review.py": {
+      "sha256": "e6ad3cba30d61f24d8e0102be4524a7b1c8daed83c471317613c3461f6d0e40e",
+      "size_bytes": 7789,
+      "source_origin": "repo_source"
+    },
     "tests/test_bootstrap_and_packaging.py": {
       "sha256": "08a585c2ca22fc80fc116a93f43c308a644a6b0ada23fca729592b5707c1da1d",
       "size_bytes": 13873,
@@ -1708,6 +1658,11 @@
       "size_bytes": 2279,
       "source_origin": "repo_source"
     },
+    "tests/test_cloud_test_isolation.py": {
+      "sha256": "b4cd3ca8a30d97c4b8dc70134f74bc811d5041062444ad0932aeef9f2bb64aff",
+      "size_bytes": 777,
+      "source_origin": "repo_source"
+    },
     "tests/test_cloudflare_controller.py": {
       "sha256": "29abf3417a5dd6268ba6685cdca81ee06aa2510510d31695d32af01607504096",
       "size_bytes": 20778,
@@ -1731,6 +1686,11 @@
     "tests/test_continuation.py": {
       "sha256": "544054c3e728d1d10498b46fdb238facf313b61d67835dbea395d4857747cdb2",
       "size_bytes": 27068,
+      "source_origin": "repo_source"
+    },
+    "tests/test_coordinate_import_production_review.py": {
+      "sha256": "65fd3cb0196d3265cdf998ecd1d0ec15a927e3c9477c76055394f687c902a364",
+      "size_bytes": 1753,
       "source_origin": "repo_source"
     },
     "tests/test_csrf_and_security_headers.py": {
@@ -1768,6 +1728,11 @@
       "size_bytes": 6840,
       "source_origin": "repo_source"
     },
+    "tests/test_execution_production_review.py": {
+      "sha256": "90243f2312e72ac064c2257ed80a0e37c7ebeba960e7378eee380179a1fd6a3e",
+      "size_bytes": 9364,
+      "source_origin": "repo_source"
+    },
     "tests/test_experimental_spectrum.py": {
       "sha256": "54f8d7def56f43af8e889631ff7d4063dec125b6d666865e32b4511e45c971a7",
       "size_bytes": 11017,
@@ -1788,6 +1753,11 @@
       "size_bytes": 17959,
       "source_origin": "repo_source"
     },
+    "tests/test_frontend_production_review.py": {
+      "sha256": "70f66fdd62df0de4fc9886bb5f48a85b765bc09249b58438835ead2077259c73",
+      "size_bytes": 7630,
+      "source_origin": "repo_source"
+    },
     "tests/test_frontend_xss_hardening.py": {
       "sha256": "369e34c712b8858fe18b44786004c2c4e6c97f3c97946f70352eae0e6edc731c",
       "size_bytes": 5975,
@@ -1796,6 +1766,11 @@
     "tests/test_full_system_audit.py": {
       "sha256": "91b3fded7e14f46e433c3c746d8178f70e4001cabb84e5e4ed30e05f3006c7ac",
       "size_bytes": 8490,
+      "source_origin": "repo_source"
+    },
+    "tests/test_hpc_launcher_production_review.py": {
+      "sha256": "1a862644c41124306a806a0c59b7b0857bd3c6555aa9d709770611e5b56fd439",
+      "size_bytes": 1041,
       "source_origin": "repo_source"
     },
     "tests/test_ir_spectrum.py": {
@@ -1829,13 +1804,13 @@
       "source_origin": "repo_source"
     },
     "tests/test_licensing.py": {
-      "sha256": "7388cd0d326289d85619757e234a4a016af1411b463dd59e179307711cbb0562",
-      "size_bytes": 13999,
+      "sha256": "d0af7d3681f7eaace40dd3fd126024b5ac239bb374f63a5ea58a371d46e01927",
+      "size_bytes": 3111,
       "source_origin": "repo_source"
     },
     "tests/test_licensing_compliance.py": {
-      "sha256": "74698183b03a43a4ae37c6dfbe69ec1d2ccd12b04d959480d678601086d3cb73",
-      "size_bytes": 7884,
+      "sha256": "37ec5b94a555b55da68b8ee6e0020830b1f137fa851e1bfe9f9f78760a5bc071",
+      "size_bytes": 1391,
       "source_origin": "repo_source"
     },
     "tests/test_lifecycle_simulation.py": {
@@ -1993,6 +1968,11 @@
       "size_bytes": 4751,
       "source_origin": "repo_source"
     },
+    "tests/test_packaging_production_review.py": {
+      "sha256": "1bfcda327cfbd5d4bf9e5436ee396404a3970b862ee0a1c651f5ccb4beacc7d2",
+      "size_bytes": 1277,
+      "source_origin": "repo_source"
+    },
     "tests/test_phase2_hardening.py": {
       "sha256": "f1f2554c60f778a3be355517a44cd0342e8fb6c19fecdbda3235e6026efeadf7",
       "size_bytes": 42591,
@@ -2128,19 +2108,14 @@
       "size_bytes": 2163,
       "source_origin": "repo_source"
     },
-    "THIRD_PARTY_LICENSES.md": {
-      "sha256": "ccde48b9db055d777b19ef6702983cc0ef17d72e775c45fc2e4321ae058836b8",
-      "size_bytes": 9328,
-      "source_origin": "legal_document"
-    },
     "tools/build_deployment_packages.py": {
-      "sha256": "9907ca20bd4d8089e8d2b3deb4eb75a14587fe7d3fa8b906631b9e8349d24664",
-      "size_bytes": 24988,
+      "sha256": "03c64cbe19b2c6b1d989010b59416e946a5494b4cad3d995db832f12c16bdcbf",
+      "size_bytes": 24958,
       "source_origin": "repo_source"
     },
     "tools/build_local_agent_packages.py": {
-      "sha256": "0b4a79d0df0a9ac6117a3f7b96a44ca2de13c47125770b3c3d1085027204aa0f",
-      "size_bytes": 6497,
+      "sha256": "2c71fcf8b4efe0dc83de8801a04c12f89ac282938c19ffacabb3647c22f8b3b1",
+      "size_bytes": 6808,
       "source_origin": "repo_source"
     },
     "tools/export_thermochemistry_json.py": {
@@ -2164,8 +2139,8 @@
       "source_origin": "repo_source"
     },
     "tools/sync_deploy_manager.py": {
-      "sha256": "7a57b7d3739291a0b0771e93c662a76c02e73f898e193cd38de84f27a2b7917f",
-      "size_bytes": 22670,
+      "sha256": "4accfe6196299b182baa63141f8c54c32be7524278099aed6fb5c6e966df6d1a",
+      "size_bytes": 22599,
       "source_origin": "repo_source"
     },
     "tools/verify_release.py": {
@@ -2174,8 +2149,8 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "08681781f3fa9d4c2bc05595b27b5aa2602eb3f171d4d4385705c2b83c413c36",
-      "size_bytes": 58195,
+      "sha256": "77b41c0d096654fae8a3c9599da3e146d67ab96414360dab1c0d94f03179db90",
+      "size_bytes": 57491,
       "source_origin": "generated_manifest"
     }
   }

@@ -100,7 +100,9 @@ class CrossProcessFileLock:
 
     def acquire(self, blocking: bool = True, timeout: Optional[float] = None) -> bool:
         eff_timeout = self.timeout if timeout is None else timeout
-        acquired_thread = self._thread_lock.acquire(blocking=blocking, timeout=eff_timeout if blocking else 0)
+        # CPython rejects any timeout argument when blocking=False.
+        acquired_thread = (self._thread_lock.acquire(timeout=eff_timeout)
+                           if blocking else self._thread_lock.acquire(blocking=False))
         if not acquired_thread:
             return False
 

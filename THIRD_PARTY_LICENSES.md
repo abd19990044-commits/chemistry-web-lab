@@ -7,20 +7,15 @@ or interfaced with by ORCA Web Lab.
 
 ---
 
-## 1. Proprietary Code vs Third-Party Software Boundary
+## 1. MIT Application Code and Third-Party Software Boundary
 
-> **Core Legal Boundary Notice:**
-> The ORCA Web Lab Academic and Non-Commercial License v1.1 applies **only** to original,
-> proprietary materials owned or controlled by the author and copyright holder,
-> **Abdulsalam S. Hasan**.
->
-> This includes all proprietary application modules, orchestration engines, web interfaces,
-> schemas, tools, and the integrated `orca_engine` parser and thermochemistry engine.
->
-> Third-party libraries, runtime dependencies, web fonts, external programs, datasets,
-> and cloud APIs remain subject to their own respective licenses, terms of service, and
-> conditions as detailed below. Nothing in the ORCA Web Lab license modifies, replaces,
-> or overrides the independent licenses governing these third-party components.
+The [MIT License](LICENSE) covers the original Chemistry Lab application code,
+orchestration modules, web interfaces, schemas, tools, integrated `orca_engine`,
+and Cloudflare control plane. Copyright (c) 2026 Abdulsalam S. Hasan.
+
+Third-party libraries, fonts, external programs, datasets, and cloud APIs retain
+their respective licenses and terms. The application license does not replace
+those terms or grant any rights to ORCA itself.
 
 ---
 
@@ -65,18 +60,26 @@ from `requirements.txt` and `pyproject.toml`:
 
 | Component | Version Constraint | License | Authors / Organization | Upstream Source |
 | :--- | :--- | :--- | :--- | :--- |
-| **Flask** | `>=3.0.3, <4.0.0` | BSD-3-Clause | Pallets Projects | https://github.com/pallets/flask |
+| **Flask** | `>=3.1.3, <4.0.0` | BSD-3-Clause | Pallets Projects | https://github.com/pallets/flask |
 | **Gunicorn** | `>=22.0.0` | MIT | Benoit Chesneau et al. | https://github.com/benoitc/gunicorn |
-| **Requests** | `>=2.32.3` | Apache-2.0 | Kenneth Reitz / PSF | https://github.com/psf/requests |
+| **Requests** | `>=2.33.0` | Apache-2.0 | Kenneth Reitz / PSF | https://github.com/psf/requests |
 | **RDKit** | `>=2023.9.0` | BSD-3-Clause | Greg Landrum et al. | https://github.com/rdkit/rdkit |
 | **Kaggle API** | `>=2.2.3` | Apache-2.0 | Kaggle Inc. / Google LLC | https://github.com/Kaggle/kaggle-api |
 | **Google Auth** | `>=2.32.0` | Apache-2.0 | Google LLC | https://github.com/googleapis/google-auth-library-python |
-| **Pillow** | `>=10.0.0` | HPND / Historical | Alex Clark / Jeffrey A. Clark | https://github.com/python-pillow/Pillow |
+| **Pillow** | `>=13.0.0` | HPND / Historical | Alex Clark / Jeffrey A. Clark | https://github.com/python-pillow/Pillow |
 | **Rarfile** | `>=4.0` | ISC | Marko Kreen | https://github.com/markokr/rarfile |
 | **OpenPyXL** | `>=3.1.2` | MIT | Eric Gazoni, Charlie Clark | https://foss.heptapod.net/openpyxl/openpyxl |
 | **JSONSchema** | `>=4.20.0` | MIT | Julian Berman | https://github.com/python-jsonschema/jsonschema |
-| **Cryptography**| `>=41.0.0` | Apache-2.0 / BSD | Python Cryptographic Authority | https://github.com/pyca/cryptography |
+| **Cryptography**| `>=50.0.0` | Apache-2.0 / BSD | Python Cryptographic Authority | https://github.com/pyca/cryptography |
 | **NumPy** | `>=1.24.0` | BSD-3-Clause | NumPy Developers | https://github.com/numpy/numpy |
+| **FastAPI** | `>=0.110.0` | MIT | Sebastián Ramírez et al. | https://github.com/fastapi/fastapi |
+| **Uvicorn** | `>=0.28.0` | BSD-3-Clause | Encode | https://github.com/encode/uvicorn |
+| **a2wsgi** | `>=1.10.0` | Apache-2.0 | a2wsgi contributors | https://github.com/abersheeran/a2wsgi |
+| **Pydantic** | `>=2.6.0` | MIT | Pydantic contributors | https://github.com/pydantic/pydantic |
+| **HTTPX** | `>=0.27.0` | BSD-3-Clause | Encode | https://github.com/encode/httpx |
+| **Websockets** | `>=12.0` | BSD-3-Clause | Aymeric Augustin et al. | https://github.com/python-websockets/websockets |
+| **psutil** | `>=5.9.0` | BSD-3-Clause | Giampaolo Rodola et al. | https://github.com/giampaolo/psutil |
+| **fpdf2** | `>=2.7.0` | LGPL-3.0-only | fpdf2 contributors | https://github.com/py-pdf/fpdf2 |
 | **Pytest** | `>=8.0.0` | MIT | Holger Krekel et al. | https://github.com/pytest-dev/pytest |
 | **Pytest-Cov** | `>=5.0.0` | MIT | pytest-dev | https://github.com/pytest-dev/pytest-cov |
 
@@ -104,9 +107,9 @@ The following table reflects build and development dependencies in `cloudflare-c
 | Component | Version Constraint | License | Authors / Organization | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **TypeScript** | `^5.5.4` | Apache-2.0 | Microsoft Corp. | TypeScript language compiler |
-| **Wrangler** | `^3.75.0` | MIT / Apache-2.0 | Cloudflare Inc. | Cloudflare Workers CLI |
-| **Vitest** | `^2.0.5` | MIT | Anthony Fu et al. | Unit testing framework |
-| **@cloudflare/workers-types** | `^4.20240903.0` | MIT | Cloudflare Inc. | Type definitions for Workers runtime |
+| **Wrangler** | `^4.151.3` | MIT / Apache-2.0 | Cloudflare Inc. | Cloudflare Workers CLI |
+| **Vitest** | `^5.0.5` | MIT | Anthony Fu et al. | Unit testing framework |
+| **@cloudflare/workers-types** | `^5.20261021.1` | MIT | Cloudflare Inc. | Type definitions for Workers runtime |
 
 ---
 
@@ -141,9 +144,9 @@ This Font Software is licensed under the SIL Open Font License, Version 1.1. Thi
 
 ---
 
-## 9. Proprietary Licensing and Official Contact
+## 9. Project Contact
 
-The contact details below apply **ONLY** to ORCA Web Lab proprietary code, commercial licensing, and academic permissions. Third-party software components remain subject to their respective licenses and must be contacted through their original licensors where applicable.
+The contact details below apply to Chemistry Lab project questions. Third-party software components remain subject to their respective licenses and must be contacted through their original licensors where applicable.
 
 **ORCA Web Lab Licensing Contact:**
 - **Author / Rights Holder:** Abdulsalam S. Hasan

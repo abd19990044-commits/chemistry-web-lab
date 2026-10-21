@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -133,6 +134,10 @@ class ThermochemistryEngine:
             extended thermodynamic descriptors, and a physical consistency report.
         """
 
+        for label, value in (("Temperature", custom_temperature_k), ("Pressure", custom_pressure_atm)):
+            if value is not None and (not math.isfinite(value) or value <= 0):
+                raise ValueError(f"{label} must be finite and positive.")
+
         parsed = self.resolve_reaction(reaction)
         result = ReactionResult(reaction=parsed)
 
@@ -152,21 +157,36 @@ class ThermochemistryEngine:
 
         # Extended thermochemistry factors:
         temperatures = result.consistency.mixed_temperatures_k
-        temp_k = temperatures[0] if len(temperatures) == 1 else None
+        thermal_jobs = [
+            (self._get_best_freq_job(name, molecule.jobs) or self._get_best_electronic_job(name, molecule.jobs)) if molecule else None
+            for name in dict.fromkeys(parsed.species_names())
+            for molecule in [self._molecules.get(normalize_molecule_name(name))]
+        ]
+        temperatures_complete = all(job is not None and job.metadata.temperature_k is not None and math.isfinite(job.metadata.temperature_k) and job.metadata.temperature_k > 0 for job in thermal_jobs)
+        temp_k = temperatures[0] if len(temperatures) == 1 and temperatures_complete else None
 
-        # Determine temperature source
-        if len(temperatures) == 1:
+        # A temperature printed by one species cannot fill another's missing T.
+        if temp_k is not None:
             result.temperature_source = "ORCA_OUTPUT"
         else:
             result.temperature_source = "NOT_REPORTED"
 
         pressures = result.consistency.mixed_pressures_atm
-        if len(pressures) == 1:
+        pressures_complete = all(job is not None and job.metadata.pressure_atm is not None and math.isfinite(job.metadata.pressure_atm) and job.metadata.pressure_atm > 0 for job in thermal_jobs)
+        if len(pressures) == 1 and pressures_complete:
             result.pressure_source = "ORCA_OUTPUT"
         else:
             result.pressure_source = "NOT_REPORTED"
 
         result.temperature_k = temp_k
+        phases = {job.metadata.phase for job in thermal_jobs if job is not None}
+        result.phase = next(iter(phases)) if len(phases) == 1 else "Mixed/unknown"
+        if result.phase.lower() == "gas" and len(pressures) == 1 and pressures_complete:
+            result.standard_state = f"Gas Phase ({pressures[0]:g} atm)"
+        elif result.phase.lower() == "gas":
+            result.standard_state = "Gas Phase (pressure not reported or mixed)"
+        else:
+            result.standard_state = "Solution/mixed phase (standard state not established)"
 
         # Structured composite provenance
         composite_details: dict[str, Any] = {}
@@ -244,7 +264,6 @@ class ThermochemistryEngine:
                     result.keq_status = "UNDERFLOW"
                     result.keq_reason = "Delta G is too large and positive, K_eq approaches zero."
                 else:
-                    import math
                     result.equilibrium_constant_keq = math.exp(exponent)
                     result.keq_status = "AVAILABLE"
 
@@ -270,46 +289,38 @@ class ThermochemistryEngine:
                         elif exponent_req < -700.0:
                             result.keq_requested = 0.0
                         else:
-                            import math
                             result.keq_requested = math.exp(exponent_req)
 
-                # Pressure evaluation & ideal gas correction
-                p_eval = custom_pressure_atm if custom_pressure_atm is not None and custom_pressure_atm > 0 else (pressures[0] if len(pressures) == 1 else None)
+                # ORCA Gibbs energies already contain the pressure printed in
+                # their thermochemistry blocks. Shift from that pressure, never
+                # implicitly from 1 atm (which would double-count the term).
+                p_eval = custom_pressure_atm if custom_pressure_atm is not None else (pressures[0] if len(pressures) == 1 else None)
                 result.pressure_atm = p_eval
-                if p_eval is not None and abs(p_eval - 1.0) > 1e-4:
-                    n_prod_gas = sum(term.coefficient for term in parsed.products if (m := self._molecules.get(normalize_molecule_name(term.molecule_name))) and any(j.metadata.phase == "Gas" for j in m.jobs))
-                    n_react_gas = sum(term.coefficient for term in parsed.reactants if (m := self._molecules.get(normalize_molecule_name(term.molecule_name))) and any(j.metadata.phase == "Gas" for j in m.jobs))
-                    delta_n_gas = n_prod_gas - n_react_gas
-                    if delta_n_gas != 0:
-                        import math
-                        delta_g_press = delta_n_gas * r_gas * temp_k * math.log(p_eval)
-                        g_press_corr = gibbs + delta_g_press
-                        result.delta_g_pressure_corrected_kcal_mol = g_press_corr
-                        result.pressure_correction_applied = True
-                        exponent_p = -g_press_corr / (r_gas * temp_k)
-                        if exponent_p > 700.0:
-                            result.keq_pressure_corrected = float("inf")
-                            result.keq_pressure_status = "OVERFLOW"
-                            result.keq_pressure_reason = "Pressure-corrected Delta G is too large and negative, K_eq(P) approaches infinity."
-                        elif exponent_p < -700.0:
-                            result.keq_pressure_corrected = 0.0
-                            result.keq_pressure_status = "UNDERFLOW"
-                            result.keq_pressure_reason = "Pressure-corrected Delta G is too large and positive, K_eq(P) approaches zero."
-                        else:
-                            result.keq_pressure_corrected = math.exp(exponent_p)
-                            result.keq_pressure_status = "AVAILABLE"
-                    else:
-                        result.delta_g_pressure_corrected_kcal_mol = gibbs
-                        result.keq_pressure_corrected = result.equilibrium_constant_keq
-                        result.keq_pressure_status = result.keq_status
-                        result.keq_pressure_reason = result.keq_reason
-                        result.pressure_correction_applied = False
+                delta_g_press, pressure_error = self._pressure_shift(parsed, p_eval, temp_k) if custom_pressure_atm is not None else (0.0, None)
+                if pressure_error is not None:
+                    result.keq_pressure_status = "NOT_REPORTED"
+                    result.keq_pressure_reason = pressure_error
+                    result.consistency.warnings.append(pressure_error)
                 else:
-                    result.delta_g_pressure_corrected_kcal_mol = gibbs
-                    result.keq_pressure_corrected = result.equilibrium_constant_keq
-                    result.keq_pressure_status = result.keq_status
-                    result.keq_pressure_reason = result.keq_reason
-                    result.pressure_correction_applied = False
+                    g_press_corr = gibbs + delta_g_press
+                    result.delta_g_pressure_corrected_kcal_mol = g_press_corr
+                    result.pressure_correction_applied = abs(delta_g_press) > 1e-12
+                    if result.pressure_correction_applied:
+                        result.consistency.warnings.append(
+                            "PRESSURE_REFERENCE_SHIFT: The corrected free energy and its exponential use the requested pressure reference; this does not change the thermodynamic standard Kp."
+                        )
+                    exponent_p = -g_press_corr / (r_gas * temp_k)
+                    if exponent_p > 700.0:
+                        result.keq_pressure_corrected = float("inf")
+                        result.keq_pressure_status = "OVERFLOW"
+                        result.keq_pressure_reason = "Pressure-corrected Delta G is too large and negative."
+                    elif exponent_p < -700.0:
+                        result.keq_pressure_corrected = 0.0
+                        result.keq_pressure_status = "UNDERFLOW"
+                        result.keq_pressure_reason = "Pressure-corrected Delta G is too large and positive."
+                    else:
+                        result.keq_pressure_corrected = math.exp(exponent_p)
+                        result.keq_pressure_status = "AVAILABLE"
             else:
                 result.keq_status = "NOT_REPORTED"
                 result.keq_reason = "TEMPERATURE_MISSING"
@@ -323,6 +334,31 @@ class ThermochemistryEngine:
 
         self._log_consistency(result.consistency)
         return result
+
+    def _pressure_shift(self, reaction: Reaction, pressure_atm: float, temperature_k: float) -> tuple[float, str | None]:
+        """Sum nu*RT*ln(P_target/P_source) using the selected thermal jobs.
+
+        Only gas species contribute. This changes the pressure reference of
+        the reported free energy; it is not a new thermodynamic standard Kp.
+        """
+        gas_terms = []
+        for sign, terms in ((-1, reaction.reactants), (1, reaction.products)):
+            for term in terms:
+                molecule = self._molecules.get(normalize_molecule_name(term.molecule_name))
+                job = self._get_best_freq_job(term.molecule_name, molecule.jobs) if molecule else None
+                if job is None:
+                    return 0.0, "PRESSURE_REFERENCE_MISSING"
+                if job.metadata.phase.lower() == "gas":
+                    gas_terms.append((sign * term.coefficient, job.metadata.pressure_atm))
+        # At a common pressure the shift cancels for Delta n(gas) = 0.
+        if gas_terms and len({p for _, p in gas_terms}) == 1 and abs(sum(n for n, _ in gas_terms)) <= BALANCE_TOLERANCE:
+            return 0.0, None
+        correction = 0.0
+        for coefficient, source_pressure in gas_terms:
+            if source_pressure is None or not math.isfinite(source_pressure) or source_pressure <= 0:
+                return 0.0, "PRESSURE_REFERENCE_MISSING"
+            correction += coefficient * PhysConst.GAS_CONSTANT_KCAL_MOL_K * temperature_k * math.log(pressure_atm / source_pressure)
+        return correction, None
 
     def check_consistency(self, reaction: Reaction) -> ConsistencyReport:
         """Check atom balance, charge balance, and level-of-theory agreement.
@@ -509,7 +545,7 @@ class ThermochemistryEngine:
                 name = name.strip("'\"").strip()
 
             coefficient = float(coeff_text) if coeff_text else 1.0
-            if coefficient <= 0:
+            if not math.isfinite(coefficient) or coefficient <= 0:
                 raise ReactionParseError(f"Coefficient must be positive in term '{text}'")
 
             terms.append(
@@ -627,7 +663,11 @@ class ThermochemistryEngine:
                 if disp not in dispersions:
                     dispersions.append(disp)
                     
-            for job in molecule.jobs:
+            # Only the selected thermal calculation defines the conditions of
+            # the energy in this result. Earlier thermochemistry blocks and
+            # unrelated SP metadata must not override those conditions.
+            conditions_job = freq_job or latest_e_job
+            for job in ([conditions_job] if conditions_job is not None else []):
                 temperature = job.metadata.temperature_k
                 if temperature is not None and temperature not in temperatures:
                     temperatures.append(temperature)
@@ -788,14 +828,17 @@ class ThermochemistryEngine:
                 return -freq_job.entropy_correction_eh / freq_job.metadata.temperature_k
             if freq_job.total_entropy_cal_mol_k is not None:
                 return freq_job.total_entropy_cal_mol_k / (PhysConst.HARTREE_TO_KCAL * 1000.0)
-            if freq_job.vibrational_entropy_cal_mol_k is not None:
-                tot_s = (
-                    (freq_job.vibrational_entropy_cal_mol_k or 0.0) +
-                    (freq_job.rotational_entropy_cal_mol_k or 0.0) +
-                    (freq_job.translational_entropy_cal_mol_k or 0.0) +
-                    (freq_job.electronic_entropy_cal_mol_k or 0.0)
-                )
-                return tot_s / (PhysConst.HARTREE_TO_KCAL * 1000.0)
+            entropy_components = (
+                freq_job.vibrational_entropy_cal_mol_k,
+                freq_job.rotational_entropy_cal_mol_k,
+                freq_job.translational_entropy_cal_mol_k,
+                freq_job.electronic_entropy_cal_mol_k,
+            )
+            # A missing component is unknown, not a physical zero. In particular
+            # electronic entropy is non-zero for degenerate/open-shell states.
+            if all(value is not None for value in entropy_components):
+                return sum(entropy_components) / (PhysConst.HARTREE_TO_KCAL * 1000.0)
+
 
         return None
 

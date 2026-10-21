@@ -28,3 +28,5 @@ abstract: >-
   The orchestration layer uses an explicit finite-state machine, verified
   checkpoints, idempotent operations, leases, reconciliation, and watchdog
   recovery to survive hosted-notebook session limits and web-service restarts.
+
+license: MIT

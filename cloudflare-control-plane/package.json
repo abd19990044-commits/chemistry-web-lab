@@ -18,11 +18,11 @@
     "control-plane"
   ],
   "author": "Chemistry Lab Team",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240903.0",
+    "@cloudflare/workers-types": "^5.20261021.1",
     "typescript": "^5.5.4",
-    "vitest": "^2.0.5",
-    "wrangler": "^3.75.0"
+    "vitest": "^5.0.5",
+    "wrangler": "^4.151.3"
   }
 }

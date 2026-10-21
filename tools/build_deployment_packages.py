@@ -40,6 +40,8 @@ EXCLUDE_DIRS = {
     '.wrangler',
     '.venv',
     'venv',
+    'env',
+    '.env',
     'scratch',
     '.state',
     '.data',
@@ -55,6 +57,8 @@ EXCLUDE_EXTS = {
     '.pyc',
     '.pyo',
     '.pyd',
+    '.db',
+    '.sqlite3',
     '.coverage',
     '.swp',
     '.swo',
@@ -100,11 +104,18 @@ def compute_tree_hash(file_hashes: list[tuple[str, str]]) -> str:
 
 
 def is_global_excluded(p: Path) -> bool:
-    if p.name in GLOBAL_EXCLUDED_NAMES:
+    if p.name in GLOBAL_EXCLUDED_NAMES or (p.name.startswith(".env") and p.name != ".env.example"):
         return True
-    if any(part in EXCLUDE_DIRS or part.startswith(('_tmp_', '_diag_')) for part in p.parts):
+    # Exclusions describe repository content, not the checkout's ancestors.
+    # A checkout under /workspace/scratch or /home/user/GitHub must still ship
+    # its API and packages; filtering the absolute path silently emptied them.
+    try:
+        relative = p.resolve().relative_to(REPO_ROOT.resolve())
+    except ValueError:
+        relative = Path(p.name)
+    if any(part in EXCLUDE_DIRS or part.startswith(('_tmp_', '_diag_')) for part in relative.parts):
         return True
-    if p.suffix in EXCLUDE_EXTS:
+    if p.suffix in EXCLUDE_EXTS or any(p.name.endswith(suffix) for suffix in (".db-wal", ".db-shm", ".sqlite3-wal", ".sqlite3-shm")):
         return True
     return False
 
@@ -343,17 +354,12 @@ Verify container health at any time:
 GET /health
 ```
 
-### 6. License & Commercial Use
-ORCA Web Lab is proprietary source-available software authored and owned solely by **Abdulsalam S. Hasan**.
-
-The software is available free of charge for permitted academic, educational, personal, and non-commercial scientific research under the **ORCA Web Lab Academic and Non-Commercial License v1.1** (see `LICENSE`). Non-commercial eligibility is determined by the nature and purpose of the activity.
-
-Commercial use (including internal corporate R&D, sponsored commercial research, commercial SaaS hosting, or product integration) requires a separate written **Commercial License**. Full intellectual property assignment requires a separate written agreement executed with the author.
-
-**Commercial Licensing & Permissions Contact:**
-- **Author & Rights Holder:** Abdulsalam S. Hasan
-- **Email:** [abd.19990044@gmail.com](mailto:abd.19990044@gmail.com)
-- **WhatsApp:** [+9647715541279](https://wa.me/9647715541279)
+### 6. License
+Chemistry Lab is available under the MIT License (see `LICENSE`).
+Copyright (c) 2026 Abdulsalam S. Hasan.
+Commercial use, modification, distribution, sublicensing, and sale are permitted
+subject to preserving the copyright and permission notices. Third-party
+components and ORCA retain their own licenses; ORCA is not bundled.
 """
     (dest_dir / 'README.md').write_text(hf_readme, encoding='utf-8', newline='\n')
 
