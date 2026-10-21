@@ -7,7 +7,7 @@ import os
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 _BASE_DIR = Path(__file__).resolve().parent.parent
 _DIST_DIR = _BASE_DIR / "dist" / "packages"
@@ -108,6 +108,12 @@ def build_all_packages() -> Dict[str, Dict[str, Any]]:
                             pdata = pf.read()
                         zf.writestr(rel_f, pdata)
                         member_hashes[rel_f] = _sha256_bytes(pdata)
+
+            # Redistributed agent code must carry its MIT notice.
+            for notice in ("LICENSE", "THIRD_PARTY_LICENSES.md"):
+                content = (_BASE_DIR / notice).read_bytes()
+                zf.writestr(notice, content)
+                member_hashes[notice] = _sha256_bytes(content)
 
             # Add README
             readme_text = f"""Chemistry Lab Local Agent ({cfg['display_name']})

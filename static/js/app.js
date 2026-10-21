@@ -20,39 +20,24 @@
     return match ? decodeURIComponent(match[1]) : "";
   }
 
-  // Intercept window.fetch to automatically include CSRF token for mutating requests
+  // Attach the session CSRF token only to requests to this application's origin.
+  // Clone headers: callers can reuse Request/init objects without side effects.
   const _nativeFetch = window.fetch;
   window.fetch = function(resource, init) {
-    let opts = init ? { ...init } : {};
-    let method = "GET";
-    if (opts.method) {
-      method = opts.method.toUpperCase();
-    } else if (typeof Request !== "undefined" && resource instanceof Request) {
-      method = resource.method.toUpperCase();
-    }
-    if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    const opts = init ? { ...init } : {};
+    const isRequest = typeof Request !== "undefined" && resource instanceof Request;
+    const method = String(opts.method || (isRequest ? resource.method : "GET")).toUpperCase();
+    let sameOrigin = false;
+    try {
+      const target = new URL(isRequest ? resource.url : String(resource), window.location.href);
+      sameOrigin = target.origin === window.location.origin;
+    } catch (_) {}
+    if (sameOrigin && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
       const csrf = getCsrfToken();
       if (csrf) {
-        if (typeof Request !== "undefined" && resource instanceof Request) {
-          try {
-            resource.headers.set("X-CSRF-Token", csrf);
-          } catch (_) {}
-        }
-        if (!opts.headers) {
-          opts.headers = { "X-CSRF-Token": csrf };
-        } else if (typeof Headers !== "undefined" && opts.headers instanceof Headers) {
-          if (!opts.headers.has("X-CSRF-Token")) {
-            opts.headers.set("X-CSRF-Token", csrf);
-          }
-        } else if (Array.isArray(opts.headers)) {
-          if (!opts.headers.some(([k]) => k.toLowerCase() === "x-csrf-token")) {
-            opts.headers.push(["X-CSRF-Token", csrf]);
-          }
-        } else {
-          if (!opts.headers["X-CSRF-Token"] && !opts.headers["x-csrf-token"]) {
-            opts.headers["X-CSRF-Token"] = csrf;
-          }
-        }
+        const headers = new Headers(opts.headers || (isRequest ? resource.headers : undefined));
+        if (!headers.has("X-CSRF-Token")) headers.set("X-CSRF-Token", csrf);
+        opts.headers = headers;
       }
     }
     return _nativeFetch.call(this, resource, opts);
@@ -2199,7 +2184,7 @@
           fItem.innerHTML = `
             <div style="display:flex; align-items:center; gap:6px;">
               <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${f.color};"></span>
-              <strong>${f.name}</strong>
+              <strong>${escapeHtml(f.name)}</strong>
             </div>
             <span class="mono small" style="color:var(--text-muted);">${nAtomsInFrag} atoms</span>
           `;
@@ -2282,7 +2267,7 @@
           if (a) {
             const frag = bState.fragments.find(f => f.id === a.molId) || { name: "Compound" };
             atomDetail.innerHTML = `
-              <div><strong>Atom:</strong> ${a.elem}${a.id} (${frag.name})</div>
+              <div><strong>Atom:</strong> ${a.elem}${a.id} (${escapeHtml(frag.name)})</div>
               <div><strong>X:</strong> ${a.x.toFixed(4)} Å</div>
               <div><strong>Y:</strong> ${a.y.toFixed(4)} Å</div>
               <div><strong>Z:</strong> ${a.z.toFixed(4)} Å</div>
@@ -6894,10 +6879,10 @@
         viewer3D.render();
       } catch (err) {
         console.warn("3Dmol initialization failed:", err);
-        viewport.innerHTML = `<div style="padding: 2rem; color: var(--text-muted); text-align: center;">XYZ Structure Loaded (${atomCount} atoms)<br><pre class="mono" style="max-height: 300px; overflow: auto; text-align: left; margin-top: 1rem; font-size: 0.8rem;">${xyzString.slice(0, 1000)}</pre></div>`;
+        viewport.innerHTML = `<div style="padding: 2rem; color: var(--text-muted); text-align: center;">XYZ Structure Loaded (${atomCount} atoms)<br><pre class="mono" style="max-height: 300px; overflow: auto; text-align: left; margin-top: 1rem; font-size: 0.8rem;">${escapeHtml(xyzString.slice(0, 1000))}</pre></div>`;
       }
     } else {
-      viewport.innerHTML = `<div style="padding: 2rem; color: var(--text-muted); text-align: center;">Structure Coordinates Available (${atomCount} atoms)<br><pre class="mono" style="max-height: 300px; overflow: auto; text-align: left; margin-top: 1rem; font-size: 0.8rem;">${(xyzString || '').slice(0, 1000)}</pre></div>`;
+      viewport.innerHTML = `<div style="padding: 2rem; color: var(--text-muted); text-align: center;">Structure Coordinates Available (${atomCount} atoms)<br><pre class="mono" style="max-height: 300px; overflow: auto; text-align: left; margin-top: 1rem; font-size: 0.8rem;">${escapeHtml((xyzString || '').slice(0, 1000))}</pre></div>`;
     }
   }
  
@@ -7537,10 +7522,10 @@
       card.innerHTML = `
         <div class="layer-info-left">
           <input type="checkbox" class="layer-toggle-cb" data-type="theo" data-index="${idx}" ${theo.visible ? 'checked' : ''}>
-          <input type="color" class="layer-color-picker" data-type="theo" data-index="${idx}" value="${theo.color}" title="Change curve color">
+          <input type="color" class="layer-color-picker" data-type="theo" data-index="${idx}" value="${escapeHtml(theo.color)}" title="Change curve color">
           <div class="layer-name-wrap">
-            <span class="layer-name-title" title="${theo.name}">${theo.name}</span>
-            <span class="layer-meta-sub">${theo.transitions.length} transitions • ${theo.method || 'TD-DFT'}</span>
+            <span class="layer-name-title" title="${escapeHtml(theo.name)}">${escapeHtml(theo.name)}</span>
+            <span class="layer-meta-sub">${theo.transitions.length} transitions • ${escapeHtml(theo.method || 'TD-DFT')}</span>
           </div>
         </div>
         <div class="layer-info-actions">
@@ -7559,9 +7544,9 @@
       card.innerHTML = `
         <div class="layer-info-left">
           <input type="checkbox" class="layer-toggle-cb" data-type="exp" data-index="${idx}" ${exp.visible ? 'checked' : ''}>
-          <input type="color" class="layer-color-picker" data-type="exp" data-index="${idx}" value="${exp.color}" title="Change curve color">
+          <input type="color" class="layer-color-picker" data-type="exp" data-index="${idx}" value="${escapeHtml(exp.color)}" title="Change curve color">
           <div class="layer-name-wrap">
-            <span class="layer-name-title" title="${exp.file_name}">${exp.file_name}${exp.sheet_name ? ` (${exp.sheet_name})` : ''}</span>
+            <span class="layer-name-title" title="${escapeHtml(exp.file_name)}">${escapeHtml(exp.file_name)}${exp.sheet_name ? ` (${escapeHtml(exp.sheet_name)})` : ''}</span>
             <span class="layer-meta-sub">${exp.points_count} pts • hash: ${exp.raw_hash.slice(0, 8)}...</span>
           </div>
         </div>
@@ -8539,7 +8524,7 @@
         <div class="layer-header-row">
           <label class="layer-title-label">
             <input type="checkbox" class="layer-toggle-cb" data-ir-type="theo" data-ir-index="${idx}" ${theo.visible ? 'checked' : ''}>
-            <input type="color" class="layer-color-picker" data-ir-type="theo" data-ir-index="${idx}" value="${theo.color}" title="Change IR curve color">
+            <input type="color" class="layer-color-picker" data-ir-type="theo" data-ir-index="${idx}" value="${escapeHtml(theo.color)}" title="Change IR curve color">
             <strong>${escapeHtml(theo.name)}</strong>
           </label>
           <div class="layer-actions">
@@ -8563,8 +8548,8 @@
         <div class="layer-header-row">
           <label class="layer-title-label">
             <input type="checkbox" class="layer-toggle-cb" data-ir-type="exp" data-ir-index="${idx}" ${exp.visible ? 'checked' : ''}>
-            <input type="color" class="layer-color-picker" data-ir-type="exp" data-ir-index="${idx}" value="${exp.color}" title="Change FTIR curve color">
-            <strong>${exp.file_name}${exp.label ? ' : ' + exp.label : ''}</strong>
+            <input type="color" class="layer-color-picker" data-ir-type="exp" data-ir-index="${idx}" value="${escapeHtml(exp.color)}" title="Change FTIR curve color">
+            <strong>${escapeHtml(exp.file_name)}${exp.label ? ' : ' + escapeHtml(exp.label) : ''}</strong>
           </label>
           <div class="layer-actions">
             <span class="layer-type-tag tag-exp">FTIR Ref</span>
@@ -8575,7 +8560,7 @@
         </div>
         <div class="layer-meta-row">
           <span>${exp.points_count} Points</span>
-          ${exp.sheet_name ? `<span>Sheet: ${exp.sheet_name}</span>` : ''}
+          ${exp.sheet_name ? `<span>Sheet: ${escapeHtml(exp.sheet_name)}</span>` : ''}
         </div>
       `;
       listEl.appendChild(card);
@@ -8607,7 +8592,8 @@
           exp.color_manually_set = true;
           userAssignedSeriesColors.set(`${exp.file_name}::${exp.label}`, e.target.value);
           // Sync with multi-file container color pickers
-          document.querySelectorAll(`.ir-series-color-input[data-series-label="${exp.label}"]`).forEach(inp => {
+          document.querySelectorAll(".ir-series-color-input").forEach(inp => {
+            if (inp.dataset.seriesLabel !== exp.label) return;
             inp.value = e.target.value;
           });
         }
@@ -10110,7 +10096,7 @@
             } else {
               valStr = `ε = ${intensity.toFixed(2)} M⁻¹ cm⁻¹`;
             }
-            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${theo.color}; font-size:1.1em;">â-</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${escapeHtml(theo.color)}; font-size:1.1em;">â-</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
@@ -10126,7 +10112,7 @@
             } else {
               valStr = `Abs = ${abs.toFixed(4)} a.u.`;
             }
-            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${exp.color}; font-size:1.1em;">â- </span> <span>${escapeHtml(exp.label || exp.file_name)}:</span> <strong>${valStr}</strong></div>`;
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${escapeHtml(exp.color)}; font-size:1.1em;">â- </span> <span>${escapeHtml(exp.label || exp.file_name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
@@ -10996,7 +10982,7 @@
             } else {
               valStr = `Abs = ${ptAbs.toFixed(4)} a.u.`;
             }
-            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${theo.color}; font-size:1.1em;">â-</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${escapeHtml(theo.color)}; font-size:1.1em;">â-</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
@@ -11014,7 +11000,7 @@
             } else {
               valStr = `Abs = ${ptAbs.toFixed(4)} a.u.`;
             }
-            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${exp.color}; font-size:1.1em;">â- </span> <span>${escapeHtml(exp.label || exp.file_name)}:</span> <strong>${valStr}</strong></div>`;
+            tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${escapeHtml(exp.color)}; font-size:1.1em;">â- </span> <span>${escapeHtml(exp.label || exp.file_name)}:</span> <strong>${valStr}</strong></div>`;
           }
         });
 
@@ -11628,7 +11614,7 @@
 
         let jobsOptions = '<option value="">-- Choose Kaggle job --</option>';
         savedJobs.forEach(j => {
-          jobsOptions += `<option value="${j.jobId || j.id}">${j.name || j.jobId}</option>`;
+          jobsOptions += `<option value="${escapeHtml(j.jobId || j.id)}">${escapeHtml(j.name || j.jobId)}</option>`;
         });
 
         // Determine status badge
@@ -11645,7 +11631,7 @@
           <div class="species-card-header">
             <label class="field-hint" style="margin:0;">Coeff:</label>
             <input type="number" class="species-coeff-input" value="${item.coeff}" min="1" step="1">
-            <input type="text" class="species-name-input" value="${item.name}" placeholder="e.g. ${isReactant ? 'Reactant ' + (index + 1) : 'Product ' + (index + 1)}">
+            <input type="text" class="species-name-input" value="${escapeHtml(item.name)}" placeholder="e.g. ${isReactant ? 'Reactant ' + (index + 1) : 'Product ' + (index + 1)}">
             ${statusBadgeHtml}
             ${list.length > 1 ? `<button type="button" class="species-delete-btn" title="Remove Species">✕</button>` : ''}
           </div>
@@ -11666,10 +11652,10 @@
                 ${item.primaryMode === 'job' ? `
                   <select class="select-small primary-job-select">${jobsOptions}</select>
                 ` : item.primaryMode === 'paste' ? `
-                  <textarea class="mono primary-paste-area" rows="2" placeholder="Paste ORCA Opt/Freq output...">${item.content}</textarea>
+                  <textarea class="mono primary-paste-area" rows="2" placeholder="Paste ORCA Opt/Freq output...">${escapeHtml(item.content)}</textarea>
                 ` : `
                   <div class="species-file-drop primary-drop ${item.content ? 'has-file' : ''}">
-                    <span>${item.content ? `✓ Attached: ${item.primaryName || 'Opt/Freq Output'}` : '📄 Click to attach Opt/Freq .out/.log'}</span>
+                    <span>${item.content ? `✓ Attached: ${escapeHtml(item.primaryName || 'Opt/Freq Output')}` : '📄 Click to attach Opt/Freq .out/.log'}</span>
                     <input type="file" class="primary-file-input hidden" accept=".out,.log,.property.txt,.txt">
                   </div>
                   ${state.archiveEntries && state.archiveEntries.length > 0 ? `
@@ -11703,10 +11689,10 @@
                 ` : item.spMode === 'job' ? `
                   <select class="select-small sp-job-select">${jobsOptions}</select>
                 ` : item.spMode === 'paste' ? `
-                  <textarea class="mono sp-paste-area" rows="2" placeholder="Paste high-level SP output...">${item.sp_content}</textarea>
+                  <textarea class="mono sp-paste-area" rows="2" placeholder="Paste high-level SP output...">${escapeHtml(item.sp_content)}</textarea>
                 ` : `
                   <div class="species-file-drop sp-drop ${item.sp_content ? 'has-file' : ''}">
-                    <span>${item.sp_content ? `⚡ Attached SP: ${item.spName || 'SP Output'}` : '📄 Click to attach High-Level SP .out/.log'}</span>
+                    <span>${item.sp_content ? `⚡ Attached SP: ${escapeHtml(item.spName || 'SP Output')}` : '📄 Click to attach High-Level SP .out/.log'}</span>
                     <input type="file" class="sp-file-input hidden" accept=".out,.log,.property.txt,.txt">
                   </div>
                 `}
@@ -12139,7 +12125,7 @@
         if (entry.latest_job?.job_type) jobTypes.push(entry.latest_job.job_type);
         if (entry.has_freq || (entry.latest_job?.frequencies && entry.latest_job.frequencies.length > 0)) jobTypes.push("FREQ");
         if (entry.has_opt) jobTypes.push("OPT");
-        const jobTag = jobTypes.length > 0 ? `<span class="prop-badge badge-neutral" style="margin-left:0.4rem; font-size:0.7rem;">${jobTypes.join(", ")}</span>` : "";
+        const jobTag = jobTypes.length > 0 ? `<span class="prop-badge badge-neutral" style="margin-left:0.4rem; font-size:0.7rem;">${escapeHtml(jobTypes.join(", "))}</span>` : "";
 
         let energyStr = "-";
         const gEh = entry.latest_job?.free_energy_eh || entry.free_energy_eh;
@@ -12419,7 +12405,7 @@
               const val = info[field];
               if (val == null) return '<span style="color:var(--text-muted); font-size:0.75rem;">-</span>';
               if (info.is_composite && field === 'e_elec_eh') {
-                return `<span class="mono">${val.toFixed(6)} Eh</span><br><span style="color:var(--primary); font-size:0.75rem;">SP: ${info.method_sp || 'High-Level SP'}</span>`;
+                return `<span class="mono">${val.toFixed(6)} Eh</span><br><span style="color:var(--primary); font-size:0.75rem;">SP: ${escapeHtml(info.method_sp || 'High-Level SP')}</span>`;
               }
               if (info.is_composite && field === 'enthalpy_eh') {
                 const corr = info.h_thermal_corr_eh;
@@ -12449,7 +12435,7 @@
               tr.innerHTML = `
                 <td><span class="prop-badge badge-primary">Reactant</span></td>
                 <td class="mono font-bold">${rItem.coeff}</td>
-                <td><strong>${rItem.name}</strong>${renderBadge(info)}</td>
+                <td><strong>${escapeHtml(rItem.name)}</strong>${renderBadge(info)}</td>
                 <td>${renderEnergyCell(info, 'e_elec_eh', 'Electronic')}</td>
                 <td>${renderEnergyCell(info, 'enthalpy_eh', 'Enthalpy')}</td>
                 <td>${renderEnergyCell(info, 'gibbs_eh', 'Gibbs')}</td>
@@ -12463,7 +12449,7 @@
               tr.innerHTML = `
                 <td><span class="prop-badge badge-success">Product</span></td>
                 <td class="mono font-bold">${pItem.coeff}</td>
-                <td><strong>${pItem.name}</strong>${renderBadge(info)}</td>
+                <td><strong>${escapeHtml(pItem.name)}</strong>${renderBadge(info)}</td>
                 <td>${renderEnergyCell(info, 'e_elec_eh', 'Electronic')}</td>
                 <td>${renderEnergyCell(info, 'enthalpy_eh', 'Enthalpy')}</td>
                 <td>${renderEnergyCell(info, 'gibbs_eh', 'Gibbs')}</td>
@@ -12586,10 +12572,10 @@
 
         if (hasMismatch) {
           warning.className = "alert alert-warning";
-          warning.innerHTML = `⚠️ <strong>Level of Theory Warning:</strong> Reference is calibrated for ${found.method}/${found.basis}, but current calculation is ${calcMethod || "Unknown"}${calcBasis ? "/" + calcBasis : ""}. Chemical shifts may contain level-of-theory errors.`;
+          warning.innerHTML = `⚠️ <strong>Level of Theory Warning:</strong> Reference is calibrated for ${escapeHtml(found.method)}/${escapeHtml(found.basis)}, but current calculation is ${escapeHtml(calcMethod || "Unknown")}${calcBasis ? "/" + escapeHtml(calcBasis) : ""}. Chemical shifts may contain level-of-theory errors.`;
         } else {
           warning.className = "alert alert-info";
-          warning.innerHTML = `✅ Chemical shifts (δ = σ<sub>ref</sub> - σ<sub>sample</sub>) calibrated against ${found ? found.name : "reference"}.`;
+          warning.innerHTML = `✅ Chemical shifts (δ = σ<sub>ref</sub> - σ<sub>sample</sub>) calibrated against ${escapeHtml(found ? found.name : "reference")}.`;
         }
       }
     }
@@ -12918,13 +12904,13 @@
 
         tr.innerHTML = `
           <td class="mono font-bold" style="color:var(--primary);">#${pIdx + 1}${peak.atoms.length > 1 ? `.${aIdx + 1}` : ''}</td>
-          <td><strong>${atom.assignment}</strong></td>
-          <td>${atom.element}</td>
-          <td><span class="prop-badge badge-neutral" style="font-size:0.75rem;">${atom.isotope}</span></td>
+          <td><strong>${escapeHtml(atom.assignment)}</strong></td>
+          <td>${escapeHtml(atom.element)}</td>
+          <td><span class="prop-badge badge-neutral" style="font-size:0.75rem;">${escapeHtml(atom.isotope)}</span></td>
           <td class="mono">${atom.isotropic_shielding.toFixed(4)}</td>
           <td class="mono" style="font-weight:600; color:var(--accent);">${deltaStr}</td>
           <td class="mono">${anisoStr}</td>
-          <td><span class="prop-badge badge-primary">${atom.assignment}</span></td>
+          <td><span class="prop-badge badge-primary">${escapeHtml(atom.assignment)}</span></td>
           <td class="mono" style="font-size:0.75rem; color:var(--text-muted);">${coordStr}</td>
         `;
 
@@ -13066,8 +13052,8 @@
           tooltip.style.top = `${mouseY - 10}px`;
 
           const posLabel = isRefApplied ? `Chemical Shift (δ): <strong>${peak.position_ppm.toFixed(4)} ppm</strong>` : `Isotropic Shielding (σ): <strong>${peak.position_ppm.toFixed(4)} ppm</strong>`;
-          const atomNames = peak.assignments.join(", ");
-          const shieldings = peak.atoms.map(a => `${a.assignment}: ${a.isotropic_shielding.toFixed(4)} ppm`).join("<br>");
+          const atomNames = peak.assignments.map(escapeHtml).join(", ");
+          const shieldings = peak.atoms.map(a => `${escapeHtml(a.assignment)}: ${a.isotropic_shielding.toFixed(4)} ppm`).join("<br>");
 
           tooltip.innerHTML = `
             <div style="font-weight:bold; color:var(--primary); margin-bottom:0.25rem;">🔬 Signal #${foundIdx + 1} (${currentNMRNucleus})</div>

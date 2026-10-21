@@ -373,13 +373,13 @@ class LocalCompanionAgent:
         """Return a process only when PID, create-time, command, and cwd match."""
         try:
             process = psutil.Process(int(record["pid"]))
+            if abs(float(process.create_time()) - float(record["process_start_time"])) > 1.0:
+                return None
             try:
                 if process.status() == psutil.STATUS_ZOMBIE:
                     return process
             except (psutil.Error, OSError):
                 pass
-            if abs(float(process.create_time()) - float(record["process_start_time"])) > 1.0:
-                return None
             command = [str(part) for part in process.cmdline()]
             workspace = Path(str(record["workspace"]))
             if LocalCompanionAgent._command_fingerprint(command, workspace) != record["command_fingerprint"]:
@@ -408,7 +408,10 @@ class LocalCompanionAgent:
             chunk = stream.read(min(65536, max(0, size - offset)))
             record["last_read_offset"] = stream.tell()
         self._write_process_registry(record)
-        if chunk and self.runtime_session_secret:
+        # A quiet calculation still needs a heartbeat to receive cancellation.
+        # Otherwise buffered/silent ORCA output can make Stop ineffective for
+        # hours even while this monitor is healthy.
+        if self.runtime_session_secret and (chunk or force):
             url = f"{self.config.server_url.rstrip('/')}/api/v1/local-agent/jobs/{record['job_id']}/progress"
             headers = {
                 "X-Agent-Session-Id": self.agent_session_id,
@@ -452,26 +455,13 @@ class LocalCompanionAgent:
             record = self._load_process_registry()
         except Exception as exc:
             LOGGER.error("Local ORCA recovery is blocked by invalid registry data: %s", exc)
-            return False
+            # Never overwrite the only durable record with a newly polled job
+            # while the old process identity cannot be established.
+            self._recovery_checked = False
+            return True
         if not record:
             return False
         verified = self._verified_process(record)
-        if verified is not None and (not verified.is_running() or verified.status() == psutil.STATUS_ZOMBIE):
-            self._tail_progress(record, force=True)
-            self._finalize_registered_process(record)
-            return True
-        if verified is None and psutil.pid_exists(int(record["pid"])):
-            # Check if PID is actually a dead or zombie process on Linux
-            try:
-                probe = psutil.Process(int(record["pid"]))
-                if probe.status() == psutil.STATUS_ZOMBIE:
-                    verified = probe
-            except (psutil.Error, OSError):
-                pass
-        if verified is not None and (not verified.is_running() or verified.status() == psutil.STATUS_ZOMBIE):
-            self._tail_progress(record, force=True)
-            self._finalize_registered_process(record)
-            return True
         if verified is None and psutil.pid_exists(int(record["pid"])):
             # A live PID with mismatching create-time/command may be PID reuse
             # or tampering. Never adopt it and never infer that ORCA ended.
@@ -486,23 +476,24 @@ class LocalCompanionAgent:
             self._recovery_checked = False
             return True
         LOGGER.info("Recovered Local Agent job %s after companion restart", record["job_id"])
+        # Even a job that finished while the agent was down must be rebound
+        # first.  Completion delivery is authenticated against the new session,
+        # and cannot complete a record still assigned to the old session.
+        if verified is None or not verified.is_running() or verified.status() == psutil.STATUS_ZOMBIE:
+            self._tail_progress(record, force=True)
+            self._finalize_registered_process(record)
+            return True
         interval = max(1, int(self.config.heartbeat_interval_seconds or 15))
         while self.running and not self._stop_event.is_set():
             process = self._verified_process(record)
-            self._tail_progress(record)
             if process is None and psutil.pid_exists(int(record["pid"])):
-                try:
-                    probe = psutil.Process(int(record["pid"]))
-                    if probe.status() == psutil.STATUS_ZOMBIE:
-                        process = probe
-                except (psutil.Error, OSError):
-                    pass
+                LOGGER.error("Recovered PID identity changed for job %s; manual recovery is required", record["job_id"])
+                self._recovery_checked = False
+                return True
+            self._tail_progress(record, force=True)
             if process is None or not process.is_running() or process.status() == psutil.STATUS_ZOMBIE:
                 self._tail_progress(record, force=True)
                 self._finalize_registered_process(record)
-                return True
-            if process is None and psutil.pid_exists(int(record["pid"])):
-                LOGGER.error("Recovered PID identity changed for job %s; manual recovery is required", record["job_id"])
                 return True
             time.sleep(interval)
         return True
@@ -582,6 +573,25 @@ class LocalCompanionAgent:
         input_text = job.get("input_text", "")
         LOGGER.info(f"Received job {job_id} ({job_name}). Preparing local execution...")
 
+        if self.config.backend_kind == "hpc":
+            # Scheduler adapters alone do not provide a durable execution
+            # transport.  Until scheduler submission, cancellation and restart
+            # recovery are wired together, never silently launch ORCA directly
+            # on what may be a cluster login node.
+            error = (
+                "HPC_SCHEDULER_EXECUTION_UNAVAILABLE: automatic scheduler submission "
+                "is not implemented in this companion runtime. Start the agent with "
+                "--backend local inside an allocation obtained from your cluster "
+                "scheduler, or submit the generated ORCA input manually."
+            )
+            LOGGER.error(error)
+            self._queue_completion(job_id, {
+                "_job_id": job_id, "exit_code": 1,
+                "stdout_tail": error, "error_message": error,
+            })
+            self._flush_completion_outbox()
+            return
+
         orca_bin = self.find_orca_executable()
         runs_root = Path(self.config.orca_working_dir or self.config.data_dir) / "runs"
         scratch_dir = _contained_child(runs_root, job_id)
@@ -610,6 +620,7 @@ class LocalCompanionAgent:
         exit_code = 1
         termination_reason: Optional[str] = None
         proc: Optional[subprocess.Popen] = None
+        registry_written = False
         try:
             # stdout goes directly to a durable file.  A PIPE would be owned
             # by this Agent process and could kill/block ORCA when the Agent
@@ -651,6 +662,7 @@ class LocalCompanionAgent:
                     "last_read_offset": 0,
                 }
                 self._write_process_registry(process_record)
+                registry_written = True
                 self._register_process_with_server(process_record, recovering=False)
                 last_progress_t = time.time()
                 started_t = last_progress_t
@@ -698,8 +710,14 @@ class LocalCompanionAgent:
 
         except Exception as exc:
             if proc is not None and proc.poll() is None:
-                LOGGER.exception("Agent monitor failed for %s; ORCA remains detached for recovery", job_id)
-                return
+                if registry_written:
+                    LOGGER.exception("Agent monitor failed for %s; ORCA remains detached for recovery", job_id)
+                    self._recovery_checked = False
+                    return
+                # A child without durable identity cannot be adopted safely.
+                # Stop it before accepting another job instead of orphaning a
+                # potentially expensive calculation after a disk-write failure.
+                self._terminate_process_tree(proc)
             LOGGER.exception("Error running ORCA process for %s", job_id)
             exit_code = 1
             termination_reason = f"Execution error: {exc}"

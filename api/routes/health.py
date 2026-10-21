@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Health (liveness) and ready (readiness) endpoints."""
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from api.dependencies import orca_engine_available, orchestrator_available
 from services import health_service
@@ -17,6 +18,7 @@ def health():
 
 @router.get("/ready")
 def ready():
-    return health_service.build_ready(
+    payload = health_service.build_ready(
         orchestrator_available=orchestrator_available(),
         orca_engine_available=orca_engine_available())
+    return JSONResponse(payload, status_code=200 if payload["ready"] else 503)

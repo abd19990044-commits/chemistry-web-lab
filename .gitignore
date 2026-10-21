@@ -94,3 +94,13 @@ orca_manual_*.pdf
 node_modules/
 .wrangler/
 .dev.vars
+
+# Credentials and durable runtime state
+.env
+.env.*
+!.env.example
+.state/
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*

@@ -9,6 +9,7 @@ Authoritative Principle:
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import secrets
@@ -96,7 +97,7 @@ def browser_csrf_is_valid(request: Any) -> bool:
         or getattr(request, "headers", {}).get("x-csrftoken")
         or ""
     )
-    return bool(expected and supplied and secrets.compare_digest(expected, supplied))
+    return bool(expected and supplied and secrets.compare_digest(expected.encode("utf-8"), supplied.encode("utf-8")))
 
 
 def is_valid_bearer_token(token: str) -> bool:
@@ -125,7 +126,7 @@ def is_valid_bearer_token(token: str) -> bool:
         pass
 
     for st in server_tokens:
-        if secrets.compare_digest(st, token):
+        if secrets.compare_digest(st.encode("utf-8"), token.encode("utf-8")):
             return True
 
     # Test suite / CI authentication tokens (strictly enabled only in test environment)
@@ -148,6 +149,21 @@ def is_valid_bearer_token(token: str) -> bool:
             return True
 
     return False
+
+
+def _owner_for_bearer_token(token: str) -> str:
+    """Derive an opaque identity without persisting any secret prefix.
+
+    Existing installations may explicitly retain the primary API token's old
+    owner ID during a controlled migration. This server-only setting applies
+    exclusively to CHEMISTRY_LAB_API_TOKEN, never to other accepted credentials.
+    """
+    primary = str(os.environ.get("CHEMISTRY_LAB_API_TOKEN") or "").strip()
+    legacy_owner = str(os.environ.get("CHEMISTRY_LAB_API_TOKEN_OWNER_ID") or "").strip()
+    if (primary and legacy_owner
+            and secrets.compare_digest(primary.encode("utf-8"), token.encode("utf-8"))):
+        return legacy_owner
+    return "token_user_" + hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def get_authenticated_owner(
@@ -193,7 +209,7 @@ def get_authenticated_owner(
         if auth_hdr.startswith("Bearer "):
             token = auth_hdr[7:].strip()
             if token and not token.startswith("CLA_") and is_valid_bearer_token(token):
-                return f"token_user_{token[:16]}"
+                return _owner_for_bearer_token(token)
 
         # Test suite / CI authentication bypass (strictly enabled only when test environment variable is active)
         test_mode = os.environ.get("CHEMISTRY_LAB_TEST_MODE") == "1" or os.environ.get("PYTEST_CURRENT_TEST")

@@ -389,7 +389,7 @@ def upload_to_github() -> tuple[bool, str]:
             "- Synchronized official Zenodo DOI (10.5281/zenodo.22119038) across repository metadata\n"
             "- Updated README.md, CITATION.cff, Academic Manual, and Citation Guides\n"
             "- Unified product identity under Chemistry Lab v1.0.3\n"
-            "- Preserved Academic and Non-Commercial License v1.1\n"
+            "- Preserved MIT License\n"
             "- Zero em-dashes and en-dashes invariant maintained across all modules\n"
         )
         subprocess.check_call(["git", "commit", "-m", commit_msg], cwd=GH_DIR)
@@ -482,7 +482,7 @@ def upload_to_huggingface() -> tuple[bool, str]:
     if status:
         commit_msg = (
             "release: deploy ORCA Web Lab v1.0.0 (License v1.1 & ML engine updates)\n\n"
-            "- Consolidated orca_engine under ORCA Web Lab Academic and Non-Commercial License v1.1\n"
+            "- Consolidated orca_engine under MIT License\n"
             "- Production runtime deployment with dual-engine thermochemistry and spectroscopy\n"
             "- Full Cloudflare control plane and Kaggle orchestrator support\n"
         )

@@ -9,41 +9,12 @@ sessions.
 
 ## 1. Files to upload
 
-Upload **everything except `__pycache__`**. That is 37 files, about 836K.
-
-```
-ARCHITECTURE.md          DEPLOY.md            LICENSE.txt
-README.md                .gitignore
-Dockerfile               requirements.txt
-
-app.py                   chem_core.py         kaggle_runner.py
-index.html               app.js               style.css
-
-orca_orchestrator/
-    __init__.py          api.py               checkpoints.py
-    config.py            credentials.py       errors.py
-    hashing.py           kaggle_api.py        ledger.py
-    logging_ext.py       models.py            orca_artifacts.py
-    reconciler.py        retry.py             service.py
-    states.py            store.py             watchdog.py
-    runner/
-        __init__.py      builder.py           kernel_runner.py
-
-tests/
-    test_orchestrator.py test_lifecycle_simulation.py
-```
-
-**Do not delete `kaggle_runner.py`.** `app.py` still imports it to serve the
-legacy `/api/kaggle/*` routes. Any ORCA chain already running on Kaggle right
-now was started by that code and still hands off through it; removing the file
-strands those calculations mid-flight.
-
-**Do not upload `__pycache__/`.** Those `.pyc` files were compiled by a
-different Python version than the container's, and at best they are ignored.
-
-`tests/` is optional for the Space but costs 56 KB and lets you re-run the
-verification suite inside the real container, which is the only place it runs
-against the exact Python and library versions that will serve users.
+Deploy the current repository using the supplied Dockerfile. Keep `api/`,
+`services/`, `orca_orchestrator/`, `local_agent/`, `chem_core/`, `orca_engine/`,
+`templates/`, `static/`, `schema/`, `data/`, `bootstrap/`, the requirements files,
+root Python modules, and license notices together. `.dockerignore` excludes
+credentials, state databases, caches, and build outputs from the image context.
+Do not remove `kaggle_runner.py`; legacy routes still import it.
 
 ### Uploading
 
@@ -61,7 +32,7 @@ git push
 
 ## 2. Required setting
 
-In **Settings → Variables and secrets**, add one secret:
+In **Settings → Variables and secrets**, configure:
 
 | Name | Value | Why |
 |---|---|---|
@@ -75,7 +46,7 @@ Generate one with:
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-Everything else has a working default. `ARCHITECTURE.md §7` lists the full set
+For persistent credentials, also set `KAGGLE_CREDENTIALS_ENCRYPTION_KEY` to an independently generated 32-byte hex secret and keep it stable across restarts. Set `CHEMISTRY_LAB_REQUIRE_AUTH=1` on an internet-facing deployment and configure Google sign-in (or a server API bearer token) and the allowed HTTPS browser origin. `ARCHITECTURE.md §7` lists the full set
 if you want to tune budgets later.
 
 ### Optional: persistent storage
@@ -240,3 +211,15 @@ A job that appears stuck: `POST /api/orca/status` forces a reconciliation, and
 `POST /api/orca/sweep` forces a full watchdog pass over every job whose owner
 has signed in recently. Both are safe to call repeatedly - every operation in
 this system is idempotent.
+
+## Bearer owner migration
+
+Bearer principals now use a SHA256 digest of the entire token instead of its
+first 16 characters. For an existing deployment that used the primary
+`CHEMISTRY_LAB_API_TOKEN`, set `CHEMISTRY_LAB_API_TOKEN_OWNER_ID` to its existing
+owner ID (the former `token_user_` prefix plus the first 16 token characters)
+before upgrading if its jobs and agents must retain ownership. Keep this value
+server-side. The override applies only to the primary configured token;
+other tokens always derive distinct hashed principals. New deployments should
+leave the override unset. This is an explicit compatibility mapping, not an
+automatic database migration.

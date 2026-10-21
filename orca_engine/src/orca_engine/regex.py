@@ -115,6 +115,10 @@ class RegexLibrary:
         rf"Frequency cutoff for the RRHO\s*\.+\s*(?P<value>{FLOAT})\s*cm\*\*-1",
         re.IGNORECASE,
     )
+    THERMOCHEMISTRY_TEMPERATURE = re.compile(
+        rf"^\s*THERMOCHEMISTRY\s+AT\s+(?P<value>{FLOAT})\s*K\b",
+        re.IGNORECASE,
+    )
     TEMPERATURE = re.compile(
         rf"^\s*Temperature\s*\.+\s*(?P<value>{FLOAT})\s*K\b",
         re.IGNORECASE,

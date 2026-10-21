@@ -223,7 +223,7 @@ def create_manual(output_path: str):
         ("Platform Architecture: ", True, NAVY),
         ("Three Unified Studios (Draw Chemistry • ORCA Calculations & Jobs • Quantum Engine & Thermochemistry)\n", False, DARK),
         ("License & Access: ", True, NAVY),
-        ("Academic and Non-Commercial Research Suite (ORCA Web Lab License v1.1) • Zero Server Retention Policy\n", False, DARK),
+        ("MIT-licensed Computational Chemistry Suite\n", False, DARK),
         ("Manual Release: ", True, NAVY),
         ("Version 1.0 (Comprehensive Academic Edition) | Last Updated: August 2026", False, DARK),
     ]
@@ -269,10 +269,9 @@ def create_manual(output_path: str):
         bold_prefix="Studio 3: Quantum Engine & Thermochemistry (Spectroscopy & Scientific Audit):"
     )
     add_callout(
-        "Chemistry Lab operates under a strict Zero-Retention Privacy Policy. All Kaggle API credentials, inputs, coordinates, and "
-        "computation results remain in transient browser storage (localStorage/sessionStorage). No user data or credentials are "
-        "stored or monetized on any server database.",
-        title="PRIVACY & EPHEMERAL ARCHITECTURE"
+        "Chemistry Lab uses server-side job and result stores. The optional credential vault stores encrypted Kaggle credentials. "
+        "Retention depends on deployment settings. Administrators must configure access controls, storage, and backups.",
+        title="DATA STORAGE AND PRIVACY"
     )
 
     # ─────────────────────────────────────────────────────────────
@@ -351,7 +350,7 @@ def create_manual(output_path: str):
     add_heading_2("3.4 Hardware Resource Management & Safety Budgeting")
     add_bullet("Parallel Core Scaling: Configurable `%pal nprocs N end` for multi-threaded execution.")
     add_bullet("MaxCore RAM Clamping: `%maxcore M` dynamically clamped to Kaggle's safe memory threshold (6000 MB per core) to prevent kernel out-of-memory crashes.")
-    add_bullet("Scratch Disk Safety: `%maxdisk` safety guardrails preventing disk saturation.")
+    add_bullet("Scratch Disk Safety: `%scf MaxDisk` safety guardrails preventing disk saturation.")
 
     # ─────────────────────────────────────────────────────────────
     # SECTION 4: MULTI-STAGE WORKFLOWS & CLOUD ORCHESTRATION
@@ -502,7 +501,7 @@ def create_manual(output_path: str):
         "  version      = {1.0.3},\n"
         "  doi          = {10.5281/zenodo.22119038},\n"
         "  url          = {https://doi.org/10.5281/zenodo.22119038},\n"
-        "  note         = {Academic and Non-Commercial Research Platform}\n"
+        "  note         = {MIT-licensed Computational Chemistry Platform}\n"
         "}"
     )
 

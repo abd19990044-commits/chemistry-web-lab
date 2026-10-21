@@ -100,11 +100,13 @@ class OrcaParser:
             (RegexLibrary.VIBRATIONAL_ENTROPY, self._capture_vibrational_entropy),
             (RegexLibrary.ROTATIONAL_ENTROPY, self._capture_rotational_entropy),
             (RegexLibrary.TRANSLATIONAL_ENTROPY, self._capture_translational_entropy),
+            (RegexLibrary.ELECTRONIC_ENTROPY, self._capture_electronic_entropy),
             (RegexLibrary.QUASI_RRHO_BANNER, self._capture_quasi_rrho_banner),
             (RegexLibrary.QUASI_RRHO_CUTOFF, self._capture_quasi_rrho_cutoff),
             (RegexLibrary.SOLVATION, self._capture_solvation),
             (RegexLibrary.CHARGE, self._capture_charge),
             (RegexLibrary.MULTIPLICITY, self._capture_multiplicity),
+            (RegexLibrary.THERMOCHEMISTRY_TEMPERATURE, self._capture_temperature),
             (RegexLibrary.TEMPERATURE, self._capture_temperature),
             (RegexLibrary.PRESSURE, self._capture_pressure),
             (RegexLibrary.ZPE, self._capture_zpe),
@@ -568,6 +570,10 @@ class OrcaParser:
     def _capture_translational_entropy(self, match: re.Match[str], line: str) -> None:
         del line
         self.job.translational_entropy_cal_mol_k = float(match.group("value"))
+
+    def _capture_electronic_entropy(self, match: re.Match[str], line: str) -> None:
+        del line
+        self.job.electronic_entropy_cal_mol_k = float(match.group("value"))
 
     def _capture_quasi_rrho_banner(self, match: re.Match[str], line: str) -> None:
         del line

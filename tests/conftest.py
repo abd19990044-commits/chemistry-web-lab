@@ -12,6 +12,13 @@ if _ORCA_ENGINE_SRC not in sys.path:
 if _BASE_DIR not in sys.path:
     sys.path.insert(0, _BASE_DIR)
 
+# Imports during collection can initialize SQLite and credential vaults before
+# function fixtures run. Always use test-owned storage, even if the shell has
+# production state variables configured. Keep it alive for the pytest process.
+_COLLECTION_STATE = tempfile.TemporaryDirectory(prefix="orca-pytest-collection-")
+os.environ["ORCA_STATE_DIR"] = _COLLECTION_STATE.name
+os.environ["CHEMISTRY_LAB_STATE_DIR"] = _COLLECTION_STATE.name
+
 # Ensure fast deterministic retry & watchdog settings before imports
 os.environ["ORCA_RETRY_BASE_DELAY"] = "0.001"
 os.environ["ORCA_RETRY_MAX_DELAY"] = "0.005"
@@ -27,8 +34,9 @@ import pytest
 def pytest_configure(config):
     """Sets a collision-free portable basetemp inside system temp directory if not explicitly provided."""
     if not getattr(config.option, "basetemp", None):
-        portable_basetemp = os.path.join(tempfile.gettempdir(), f"orca_pytest_{os.getpid()}")
-        os.makedirs(portable_basetemp, exist_ok=True)
+        # Separate executors can report the same PID in container namespaces.
+        # PID-only names let one pytest process delete another's live files.
+        portable_basetemp = tempfile.mkdtemp(prefix="orca_pytest_")
         config.option.basetemp = portable_basetemp
 
 
@@ -71,6 +79,7 @@ def isolated_orchestrator_environment(monkeypatch):
     """
     temp_state_dir = tempfile.mkdtemp(prefix="orca-test-state-")
     monkeypatch.setenv("ORCA_STATE_DIR", temp_state_dir)
+    monkeypatch.setenv("CHEMISTRY_LAB_STATE_DIR", temp_state_dir)
     monkeypatch.setenv("ORCA_WATCHDOG_ENABLED", "0")
     monkeypatch.setenv("ORCA_RETRY_BASE_DELAY", "0.001")
     monkeypatch.setenv("ORCA_RETRY_MAX_DELAY", "0.005")
@@ -157,3 +166,40 @@ def reaction_dir(tmp_path: Path):
             (DATA_DIR / name).read_text(encoding="utf-8"), encoding="utf-8"
         )
     yield tmp_path
+
+
+@pytest.fixture(autouse=True)
+def prevent_live_kaggle_operations(monkeypatch):
+    """Unit/contract tests must mock Kaggle, never inherit live cloud authority.
+
+    Mocked subprocess functions still work: tests replace them after autouse
+    setup. The underlying Popen boundary rejects an accidental real CLI call
+    (except the read-only version probe). HTTP transports to Kaggle are also
+    rejected before credentials can leave this process.
+    """
+    import subprocess
+    from urllib.parse import urlparse
+    import requests
+
+    original_popen = subprocess.Popen
+    original_request = requests.sessions.Session.request
+
+    class GuardedPopen(original_popen):
+        # Preserve Popen's type contract for lifecycle code using isinstance.
+        def __init__(self, args, *positional, **kwargs):
+            tokens = list(args) if isinstance(args, (list, tuple)) else str(args).split()
+            is_kaggle = any(os.path.basename(str(token)).lower() in {"kaggle", "kaggle.exe"}
+                            for token in tokens[:3])
+            is_kaggle = is_kaggle or any("from kaggle.cli import" in str(token) for token in tokens[:3])
+            if is_kaggle and "--version" not in tokens:
+                raise RuntimeError("Live Kaggle CLI disabled in tests; mock the cloud transport")
+            super().__init__(args, *positional, **kwargs)
+
+    def guarded_request(self, method, url, *args, **kwargs):
+        host = (urlparse(str(url)).hostname or "").lower()
+        if host == "kaggle.com" or host.endswith(".kaggle.com"):
+            raise RuntimeError("Live Kaggle HTTP disabled in tests; mock the cloud transport")
+        return original_request(self, method, url, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "Popen", GuardedPopen)
+    monkeypatch.setattr(requests.sessions.Session, "request", guarded_request)

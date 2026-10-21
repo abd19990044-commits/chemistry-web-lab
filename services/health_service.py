@@ -48,11 +48,12 @@ def build_health(*, orchestrator_available: bool, orca_engine_available: bool) -
             payload["orchestrator_error"] = str(exc)
     import tempfile
     try:
-        probe_dir = tempfile.gettempdir()
-        probe_path = os.path.join(probe_dir, ".chemlab_write_probe")
-        with open(probe_path, "w") as fh:
+        # Every worker/probe needs its own file. A shared filename races on
+        # concurrent health requests: the first unlink makes others report a
+        # false storage failure, and a pre-existing symlink could be followed.
+        with tempfile.TemporaryFile(mode="w+", prefix="chemlab-write-probe-") as fh:
             fh.write("ok")
-        os.remove(probe_path)
+            fh.flush()
         payload["storage_writable"] = True
     except OSError:
         payload["storage_writable"] = False

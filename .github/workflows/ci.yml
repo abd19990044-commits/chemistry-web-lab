@@ -53,13 +53,12 @@ jobs:
 
       - name: Run Blocking Python Syntax Check
         run: |
+          ruff check app.py chem_core.py kaggle_runner.py reaction_conditions.py api services local_agent chem_core orca_orchestrator orca_engine/src tools --select F821,F822,F823
           python -m compileall -q \
             app.py \
             chem_core.py \
             kaggle_runner.py \
             reaction_conditions.py \
-            sitecustomize.py \
-            usercustomize.py \
             api \
             services \
             local_agent \
@@ -77,6 +76,19 @@ jobs:
           jsonschema.Draft202012Validator.check_schema(schema)
           print('Schema Draft 2020-12 check passed successfully')
           "
+
+  cloudflare-checks:
+    name: Cloudflare TypeScript and streaming body limits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --ignore-scripts
+        working-directory: cloudflare-control-plane
+      - run: npm run typecheck && npm test
+        working-directory: cloudflare-control-plane
 
   test-matrix:
     name: Test Suite (Python ${{ matrix.python-version }} on ${{ matrix.os }})
@@ -208,6 +220,8 @@ jobs:
           pip install --upgrade pip
           pip install dist/*.whl
           pip install pytest httpx
+          # Probe installed files outside the checkout so source imports cannot mask missing wheel assets.
+          cd /tmp
           python -c "import api.main, orca_engine, services.reaction_diagram_service; print('Imported api.main, orca_engine, and services.reaction_diagram_service successfully from built wheel!')"
           python -c "
           from fastapi.testclient import TestClient
@@ -237,7 +251,7 @@ jobs:
 
   ci-gate:
     name: Release Gate
-    needs: [lint-and-static-check, test-matrix, security-and-secret-audit, clean-install-verification]
+    needs: [lint-and-static-check, test-matrix, security-and-secret-audit, clean-install-verification, cloudflare-checks]
     runs-on: ubuntu-latest
     steps:
       - name: Release Gate Check

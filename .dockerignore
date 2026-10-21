@@ -52,3 +52,16 @@ scratch_*
 .autoclaw/
 .openclaw/
 .openclaw-attachments/
+
+# Never bake credentials or runtime state into a deployment image.
+.env
+.env.*
+!.env.example
+.state/
+.data/
+*.db
+*.db-*
+*.sqlite3
+*.sqlite3-*
+kaggle.json
+.dev.vars

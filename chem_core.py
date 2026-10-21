@@ -628,44 +628,55 @@ def fetch_pubchem_sdf(cid: int | None, name: str = "") -> str | None:
 # Coordinate parsing - from bot2 (mol-block / xyz -> plain xyz body)
 # ─────────────────────────────────────────────────────────────
 def mol_block_to_xyz(mol_block: str) -> str | None:
+    """Read a complete V2000/V3000 structure without altering its geometry."""
     try:
-        lines = mol_block.splitlines()
-        if len(lines) < 4:
+        # RDKit validates the declared atom/bond tables, including V3000. A
+        # hand-split counts line can otherwise silently return a partial molecule.
+        mol = Chem.MolFromMolBlock(mol_block, sanitize=False, removeHs=False, strictParsing=True)
+        if mol is None or mol.GetNumAtoms() == 0 or mol.GetNumConformers() == 0:
             return None
-        count_idx = atom_count = None
-        for idx in range(min(6, len(lines))):
-            m = re.match(r"^\s*(\d+)\s+(\d+)\s+", lines[idx])
-            if m:
-                atom_count = int(m.group(1))
-                count_idx = idx
-                break
-        if atom_count is None or count_idx is None:
-            return None
-        atom_lines = lines[count_idx + 1: count_idx + 1 + atom_count]
+        conf = mol.GetConformer()
         coords = []
-        for line in atom_lines:
-            parts = line.split()
-            if len(parts) < 4:
-                continue
-            x, y, z, symbol = parts[0], parts[1], parts[2], parts[3]
-            coords.append(f"{symbol} {x} {y} {z}")
-        return "\n".join(coords) if coords else None
+        for atom in mol.GetAtoms():
+            point = conf.GetAtomPosition(atom.GetIdx())
+            if not all(math.isfinite(value) for value in (point.x, point.y, point.z)):
+                return None
+            coords.append(f"{atom.GetSymbol()} {point.x:.10g} {point.y:.10g} {point.z:.10g}")
+        return "\n".join(coords)
     except Exception as exc:
         logger.info("MOL->XYZ parse error: %s", exc)
         return None
 
 
 def normalize_xyz_text(text: str) -> str | None:
+    """Validate full XYZ files or bare coordinate bodies without losing atoms."""
     try:
-        lines = [ln.rstrip() for ln in text.splitlines() if ln.strip() != ""]
+        lines = text.strip("\r\n\ufeff").splitlines()
         if not lines:
             return None
-        coords = lines[2:] if (lines[0].strip().isdigit() and len(lines) >= 2) else lines
+        declared_count = None
+        if lines[0].strip().isdigit():
+            declared_count = int(lines[0].strip())
+            if declared_count <= 0 or len(lines) < 3:
+                return None
+            # The second line is always the comment, even when it is empty.
+            lines = lines[2:]
+        coordinate_lines = [line for line in lines if line.strip()]
+        if declared_count is not None and len(coordinate_lines) != declared_count:
+            return None
+        periodic_table = Chem.GetPeriodicTable()
         parsed = []
-        for line in coords:
+        for line in coordinate_lines:
             parts = line.split()
-            if len(parts) >= 4:
-                parsed.append(f"{parts[0]} {parts[1]} {parts[2]} {parts[3]}")
+            if len(parts) < 4:
+                return None
+            symbol = parts[0]
+            if not re.fullmatch(r"[A-Z][a-z]?", symbol) or periodic_table.GetAtomicNumber(symbol) <= 0:
+                return None
+            values = [float(value.replace("D", "E").replace("d", "e")) for value in parts[1:4]]
+            if not all(math.isfinite(value) for value in values):
+                return None
+            parsed.append(f"{symbol} {values[0]:.10g} {values[1]:.10g} {values[2]:.10g}")
         return "\n".join(parsed) if parsed else None
     except Exception:
         return None
