@@ -652,7 +652,7 @@ Products:   12 CO2 + 6 H2O</pre>
       <div class="panel-head">
         <span class="panel-eyebrow">High-Performance Computational Chemistry</span>
         <h2>ORCA 6 Input Generator</h2>
-        <p>A guided wizard with sequential option windows - produces an exact <code>.inp</code> file ready for <strong>instant local execution</strong> with your Local Companion Agent or cluster scheduler.</p>
+        <p>A guided wizard with sequential option windows - produces an exact <code>.inp</code> file ready for <strong>instant local execution</strong> with your Local Companion Agent.</p>
       </div>
 
       <div class="orca-launch-row">
@@ -685,7 +685,7 @@ Products:   12 CO2 + 6 H2O</pre>
         <h2>Execution Servers &amp; Compute Runners</h2>
         <p>
           Configure and manage your quantum execution backends.
-          Direct <strong>Local Workstation &amp; HPC Supercomputer</strong> execution is the primary high-performance and fully private pathway.
+          Direct <strong>Local Workstation</strong> execution runs ORCA on your hardware. Inputs, job metadata, logs, and results pass through this web server.
           An optional <strong>Kaggle Cloud Fallback</strong> is available at the bottom of this page.
         </p>
       </div>
@@ -865,8 +865,8 @@ Products:   12 CO2 + 6 H2O</pre>
 
             <div style="border: 1px solid var(--border-color, #2d3748); border-radius: 6px; padding: 1rem; text-align: center; background: rgba(15, 23, 42, 0.5);">
               <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">⚡</div>
-              <div style="font-weight: bold; margin-bottom: 0.25rem;">HPC Supercomputer</div>
-              <div style="font-size: 0.75rem; color: var(--text-muted, #94a3b8); margin-bottom: 0.75rem;">Slurm, PBS Pro &amp; IBM LSF</div>
+              <div style="font-weight: bold; margin-bottom: 0.25rem;">HPC Compute Allocation</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted, #94a3b8); margin-bottom: 0.75rem;">Manual allocation required; scheduler dispatch unavailable</div>
               <a href="/api/v1/local-agent/packages/hpc-linux" class="btn btn-primary btn-small" download="ChemistryLabAgent-HPC.zip" style="width: 100%;">⬇ Download ZIP</a>
             </div>
           </div>
@@ -2547,7 +2547,7 @@ Products:   12 CO2 + 6 H2O</pre>
 
     <div class="modal-body">
       <p style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 1.25rem;">
-        Execute ORCA quantum chemistry calculations directly on your local workstation, lab server, or university HPC cluster without uploading calculations to third parties.
+        Run ORCA on your workstation, lab server, or an existing HPC compute allocation. The web server transfers inputs, logs, and results between your browser and the agent.
       </p>
 
       <!-- OS Selector Tabs -->
@@ -2555,7 +2555,7 @@ Products:   12 CO2 + 6 H2O</pre>
         <button type="button" class="ws-tab is-active" data-os-target="os-windows">🪟 Windows (x64)</button>
         <button type="button" class="ws-tab" data-os-target="os-linux">🐧 Linux (x64 / Workstation)</button>
         <button type="button" class="ws-tab" data-os-target="os-macos">🍎 macOS (Apple / Intel)</button>
-        <button type="button" class="ws-tab" data-os-target="os-hpc">🏛️ HPC Supercomputer (Slurm/PBS/LSF)</button>
+        <button type="button" class="ws-tab" data-os-target="os-hpc">🏛️ HPC Compute Allocation</button>
       </div>
 
       <!-- Windows Tab -->
@@ -2621,15 +2621,15 @@ Products:   12 CO2 + 6 H2O</pre>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
           <div>
             <h4 style="margin: 0 0 0.25rem 0;">HPC Supercomputer Agent (.zip)</h4>
-            <span class="mono small" style="color: var(--text-muted);">Slurm, PBS Pro, LSF integration</span>
+            <span class="mono small" style="color: var(--text-muted);">Runs inside an existing Slurm, PBS, or LSF allocation</span>
           </div>
           <a href="/api/v1/local-agent/packages/hpc-linux" class="btn btn-primary btn-small" download>⬇ Download HPC Package</a>
         </div>
         <div style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;">
-          <strong>HPC Cluster Launch:</strong>
+          <strong>HPC launch requires a compute allocation:</strong>
           <ol style="margin: 0.35rem 0 0 0; padding-left: 1.2rem;">
-            <li>Extract on your HPC login node or scratch folder.</li>
-            <li>Run <code>bash install_hpc_agent.sh</code> (or submit via <code>sbatch</code>/<code>qsub</code>).</li>
+            <li>Obtain a compute allocation through your institution's scheduler. Automatic scheduler dispatch is unavailable.</li>
+            <li>Inside that allocation, extract the package and run <code>bash install_hpc_agent.sh</code>. The launcher refuses to start without a scheduler allocation ID.</li>
             <li>Copy the ephemeral Connection API and connect your web session to the cluster.</li>
           </ol>
         </div>

@@ -5,6 +5,14 @@ echo "==============================================================="
 echo " Chemistry Lab HPC / Supercomputer Agent Setup"
 echo "==============================================================="
 
+# Scheduler dispatch is not integrated. Never start a local ORCA runner on
+# a login node: require an existing allocation provided by the site scheduler.
+if [ -z "${SLURM_JOB_ID:-${PBS_JOBID:-${LSB_JOBID:-}}}" ]; then
+    echo "[ERROR] Start this launcher inside an existing compute allocation." >&2
+    echo "Use your site's Slurm/PBS/LSF allocation command first; automatic scheduler dispatch is unavailable." >&2
+    exit 2
+fi
+
 # INVARIANT: Supercomputer login nodes DO NOT permit root/sudo.
 # Never execute sudo, apt, yum, or dnf on an HPC cluster.
 
@@ -95,8 +103,8 @@ if [ -f "$REQS_FILE" ]; then
     "$VENV_DIR/bin/python" -m pip install --quiet -r "$REQS_FILE"
 fi
 
-echo "[*] Starting HPC Agent on Login Node..."
-"$VENV_DIR/bin/python" -m local_agent.agent start
+echo "[*] Starting Local Agent inside the current HPC compute allocation..."
+"$VENV_DIR/bin/python" -m local_agent.agent start --backend local
 AGENT_EXIT_CODE=$?
 
 echo ""

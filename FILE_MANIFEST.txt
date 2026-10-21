@@ -1,11 +1,11 @@
 # ORCA Web Lab File Manifest - PRODUCTION-REVIEW-SOURCE-SNAPSHOT
-# Generated: 2026-10-21T22:52:33Z
+# Generated: 2026-10-21T22:58:40Z
 # Package Mode: SNAPSHOT_FROM_WORKTREE
 # Source State: working_tree_snapshot
 # Source Git SHA: N/A (Dirty Working Tree Snapshot)
-# Package Tree Hash: 364c4dca58e57b42293bb2cc78820a13d93a719f220a758b1ed227a771da3765
-# Total Files: 426
-# Total Size: 32,209,921 bytes (30.72 MB)
+# Package Tree Hash: b3d2b2cb3bd1c5bb706f686715b81c5c471eab12b996f7274a40ab49fe8769c7
+# Total Files: 427
+# Total Size: 32,212,484 bytes (30.72 MB)
 #
 # Relative Path                                      |       Size | SHA-256                                                         
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -22,7 +22,7 @@ Dockerfile                                         |      1,293 B | ad86dcdac85b
 LICENSE                                            |      1,076 B | fd6a1650f54541e73d3970051eb4a1f0c8d1c6b9b7ed9530f4dc107b3fea044e
 LICENSE.txt                                        |      1,076 B | fd6a1650f54541e73d3970051eb4a1f0c8d1c6b9b7ed9530f4dc107b3fea044e
 PROJECT_METADATA.json                              |      1,504 B | fcadcca801079f0f82684cb139fb29c8dff6e60a627a8b2d10d2bd3fab3cfd69
-README.md                                          |     30,119 B | c2e1af3fa2786ad7f36a07e6aeb2bd8145ac1332b810881c4769c6ea336f899f
+README.md                                          |     30,216 B | a08a706b671352039c731b99e0606478bcafa422a5d917b6c0f6318145a7d835
 REPRODUCIBILITY.md                                 |      3,865 B | 891bf9662224ed0278904006d0af18724dcde6f0a604d4ed2142e5cbf3a81474
 SECURITY.md                                        |      5,759 B | 195d14642a9299051d202711f328ea7d07b8d9e830a414c093a40c6b7ad3fd99
 THIRD_PARTY_LICENSES.md                            |      9,735 B | e4c966905317d17912e9211122acd1ed3bcf4e1012c455d78279e366ce2af0d0
@@ -44,8 +44,8 @@ api/schemas/local_agent.py                         |      3,941 B | 7e42ae9dca88
 app.py                                             |    206,866 B | f428b279afbb24a8314df5dffade8631ad76ddfdb2569ab0bf47a08c3c0a5a09
 benchmarks/benzene_tddft.out                       |      1,551 B | 2510aaa519c6fe573da8436020801ca8bc2d9040b442f045f12802300a103e7c
 benchmarks/water_sp_freq.out                       |      3,095 B | a8c69da119edc8a2de9a4158a6cc7111ce015380a97e1810e9609ee0d1d9e63e
-bootstrap/hpc/install_hpc_agent.sh                 |      4,398 B | b56aab2dfdaa310f7abb4f3fb12dc391a9250d98d3141bc8be02d0a2727485d5
-bootstrap/hpc/start_hpc_agent.sh                   |      4,398 B | b56aab2dfdaa310f7abb4f3fb12dc391a9250d98d3141bc8be02d0a2727485d5
+bootstrap/hpc/install_hpc_agent.sh                 |      4,875 B | 24f1ab33bf0b22d0f1562a3f6dd34ae09bffb06a90f00db09902b56f8c2e7f0e
+bootstrap/hpc/start_hpc_agent.sh                   |      4,875 B | 24f1ab33bf0b22d0f1562a3f6dd34ae09bffb06a90f00db09902b56f8c2e7f0e
 bootstrap/linux/install_and_run.sh                 |      4,233 B | 6c162aedcde013f39a469893608bd45b844a1f3063b455d8c428564e900b95f3
 bootstrap/linux/start_agent.sh                     |      4,233 B | 6c162aedcde013f39a469893608bd45b844a1f3063b455d8c428564e900b95f3
 bootstrap/macos/install_and_run.command            |      3,796 B | ea6b101d6ac85cb8dd2e516a84b03c08d6dec981906aa7cea6f3414be9a5d48e
@@ -94,7 +94,7 @@ docs/HPC_LOCAL_AGENT.md                            |      1,342 B | fb707ab6f592
 docs/LOCAL_AGENT_PROTOCOL.md                       |        459 B | eaefd8e4be5f4d0a267104a399b0a30cf511e01a13e2590cffcec5b57631b1a0
 docs/LOCAL_AGENT_SETUP.md                          |      6,734 B | a23320b674a3774ae59a8a6313eef7f584589d953e643d603213a84e2efcf8a6
 docs/PHASE2_PRODUCTION_RUNBOOK.md                  |      3,065 B | 397e95fbbf4d1dd73642d556cc8a05cc2bfd4685a0dc7895b7085479f6c9545b
-docs/PRODUCTION_REVIEW_AR.md                       |     10,088 B | b6ebbc046e93f90a5b64e330c80545a8ac25a245c531f9b0ae4b2bd1be5819d9
+docs/PRODUCTION_REVIEW_AR.md                       |     10,376 B | 35a8fd0e5119875869b5a6786f09676b51a4908103f0b7f1482ebbf1ffb979b8
 docs/SCIENTIFIC_JSON_SCHEMA.md                     |     20,598 B | 3a5efcca4e91af8f364de87ac0ff635146d25f6715ad1b32c0d3a28bceaab2d6
 kaggle_runner/__init__.py                          |      1,347 B | 73d30fc6625d564f90a6698b681178df4c4f8a389e7ea1507994c8be03f0de3a
 kaggle_runner.py                                   |    192,260 B | 4ad2ca2e627efd39ff6e1d8f0f5942c218caa695bf27372befc8b89418084522
@@ -320,7 +320,7 @@ static/js/local-agent.js                           |     30,320 B | 87021c1098d2
 static/js/reaction-editor.js                       |      8,455 B | af9ab0e1d8ca4605eaa1c014d345d6d2bf60970077dd335ed81ef9674a480c6b
 static/js/reaction-unified.js                      |     19,758 B | 43b954a3e05b2c399f4fb0d45a2d6152a4651a50502345e05f337f8835690103
 static/js/workers/archive-worker.js                |     20,420 B | 29eff680289ace2a4ee5784419c0a189f5e962a054914a5e6d6f9e2ad66073f8
-templates/index.html                               |    193,537 B | 1ea6d8894eb0a6a8bbce522c9942fe7d28a03ce98db670f00872b97ca8156b7b
+templates/index.html                               |    193,720 B | e6c277e88e16f17fcb82eebfb188e3578c3ea3590bbd053cb48ee8aef042b848
 tests/conftest.py                                  |      7,777 B | bd9932478c86e1b6c6f229e0c688a32f463aeb84a784961f00b2fb312420f2b3
 tests/fake_orca.py                                 |     14,271 B | 61a158fae896194453358856f312794d099fce006443ddffa13e6ca4d112103c
 tests/fixtures/ORCA_Calculation_quantum_analysis_3.json |    882,023 B | bcabb84f75101646810b16e3990c0a8d202e284221036aeab29b6315fa3ecc2b
@@ -360,6 +360,7 @@ tests/test_frontend.py                             |     17,959 B | de20e866b8fe
 tests/test_frontend_production_review.py           |      7,630 B | 70f66fdd62df0de4fc9886bb5f48a85b765bc09249b58438835ead2077259c73
 tests/test_frontend_xss_hardening.py               |      5,975 B | 369e34c712b8858fe18b44786004c2c4e6c97f3c97946f70352eae0e6edc731c
 tests/test_full_system_audit.py                    |      8,490 B | 91b3fded7e14f46e433c3c746d8178f70e4001cabb84e5e4ed30e05f3006c7ac
+tests/test_hpc_launcher_production_review.py       |      1,041 B | 1a862644c41124306a806a0c59b7b0857bd3c6555aa9d709770611e5b56fd439
 tests/test_ir_spectrum.py                          |      3,553 B | db23839e67e9393b7cc3adef1877e3fd67d20b0091e5f52f50e23b5581c2752e
 tests/test_ir_spectrum_orientation.py              |     14,398 B | 79e4bf9f48ff9af3b6af4ea744798291f5e9ab986782f4644c2b60c90ce42edd
 tests/test_kaggle_credential_security.py           |     19,001 B | dbbdc2811b0a7edb6037a73a4a2a67c212114c5049380a7b88fd30762ae54f3c

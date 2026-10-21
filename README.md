@@ -108,7 +108,7 @@ runtime does not integrate scheduler submission, durable scheduler job tracking,
 or cancellation. `--backend hpc` refuses execution with an actionable error so
 ORCA cannot accidentally run on a login node. To use an allocation, start the
 agent with `--backend local` inside a compute allocation obtained through your
-institution's scheduler, following the site's MPI and resource rules.
+institution's scheduler, following the site's MPI and resource rules. The HPC launchers require a Slurm, PBS, or LSF allocation ID and refuse startup on a login node.
 
 ---
 

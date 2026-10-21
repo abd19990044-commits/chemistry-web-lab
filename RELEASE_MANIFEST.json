@@ -8,10 +8,10 @@
   "source_git_state": "working_tree_snapshot",
   "source_git_sha": null,
   "source_git_dirty": true,
-  "package_tree_hash": "364c4dca58e57b42293bb2cc78820a13d93a719f220a758b1ed227a771da3765",
-  "generated_at": "2026-10-21T22:52:33Z",
-  "file_count": 427,
-  "total_size_bytes": 32267279,
+  "package_tree_hash": "b3d2b2cb3bd1c5bb706f686715b81c5c471eab12b996f7274a40ab49fe8769c7",
+  "generated_at": "2026-10-21T22:58:40Z",
+  "file_count": 428,
+  "total_size_bytes": 32269975,
   "runtime_critical_files": {
     ".dockerignore": {
       "sha256": "2a033c5cf97438e283821c42ea5575633a86a01f2f371bde1410867089b25e87",
@@ -79,8 +79,8 @@
       "source_origin": "repo_source"
     },
     "README.md": {
-      "sha256": "c2e1af3fa2786ad7f36a07e6aeb2bd8145ac1332b810881c4769c6ea336f899f",
-      "size_bytes": 30119,
+      "sha256": "a08a706b671352039c731b99e0606478bcafa422a5d917b6c0f6318145a7d835",
+      "size_bytes": 30216,
       "source_origin": "package_metadata"
     },
     "REPRODUCIBILITY.md": {
@@ -189,13 +189,13 @@
       "source_origin": "repo_source"
     },
     "bootstrap/hpc/install_hpc_agent.sh": {
-      "sha256": "b56aab2dfdaa310f7abb4f3fb12dc391a9250d98d3141bc8be02d0a2727485d5",
-      "size_bytes": 4398,
+      "sha256": "24f1ab33bf0b22d0f1562a3f6dd34ae09bffb06a90f00db09902b56f8c2e7f0e",
+      "size_bytes": 4875,
       "source_origin": "repo_source"
     },
     "bootstrap/hpc/start_hpc_agent.sh": {
-      "sha256": "b56aab2dfdaa310f7abb4f3fb12dc391a9250d98d3141bc8be02d0a2727485d5",
-      "size_bytes": 4398,
+      "sha256": "24f1ab33bf0b22d0f1562a3f6dd34ae09bffb06a90f00db09902b56f8c2e7f0e",
+      "size_bytes": 4875,
       "source_origin": "repo_source"
     },
     "bootstrap/linux/install_and_run.sh": {
@@ -439,8 +439,8 @@
       "source_origin": "repo_source"
     },
     "docs/PRODUCTION_REVIEW_AR.md": {
-      "sha256": "b6ebbc046e93f90a5b64e330c80545a8ac25a245c531f9b0ae4b2bd1be5819d9",
-      "size_bytes": 10088,
+      "sha256": "35a8fd0e5119875869b5a6786f09676b51a4908103f0b7f1482ebbf1ffb979b8",
+      "size_bytes": 10376,
       "source_origin": "repo_source"
     },
     "docs/SCIENTIFIC_JSON_SCHEMA.md": {
@@ -1569,8 +1569,8 @@
       "source_origin": "repo_source"
     },
     "templates/index.html": {
-      "sha256": "1ea6d8894eb0a6a8bbce522c9942fe7d28a03ce98db670f00872b97ca8156b7b",
-      "size_bytes": 193537,
+      "sha256": "e6c277e88e16f17fcb82eebfb188e3578c3ea3590bbd053cb48ee8aef042b848",
+      "size_bytes": 193720,
       "source_origin": "repo_source"
     },
     "tests/conftest.py": {
@@ -1766,6 +1766,11 @@
     "tests/test_full_system_audit.py": {
       "sha256": "91b3fded7e14f46e433c3c746d8178f70e4001cabb84e5e4ed30e05f3006c7ac",
       "size_bytes": 8490,
+      "source_origin": "repo_source"
+    },
+    "tests/test_hpc_launcher_production_review.py": {
+      "sha256": "1a862644c41124306a806a0c59b7b0857bd3c6555aa9d709770611e5b56fd439",
+      "size_bytes": 1041,
       "source_origin": "repo_source"
     },
     "tests/test_ir_spectrum.py": {
@@ -2144,8 +2149,8 @@
       "source_origin": "repo_source"
     },
     "FILE_MANIFEST.txt": {
-      "sha256": "88abeb30c6337045e597c5c672358adc096d7a23923540ba74b9b1327a52db2e",
-      "size_bytes": 57358,
+      "sha256": "77b41c0d096654fae8a3c9599da3e146d67ab96414360dab1c0d94f03179db90",
+      "size_bytes": 57491,
       "source_origin": "generated_manifest"
     }
   }
