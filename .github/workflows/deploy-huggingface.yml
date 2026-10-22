@@ -1,6 +1,7 @@
 name: Deploy Hugging Face runtime
 # Includes the Spaces iframe and partitioned-session compatibility fix.
 # Refreshes Kaggle cancellation, remote activity counts, and Cloudflare job versions.
+# Preserves archived Cloudflare history during Kaggle status outages.
 
 on:
   workflow_dispatch:

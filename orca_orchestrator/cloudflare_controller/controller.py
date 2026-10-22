@@ -233,6 +233,19 @@ class CloudflareController:
             except Exception as exc:
                 log.warning("Could not query Kaggle status for job %s: %s", job_ref, exc)
                 # An unavailable observation is not evidence of deletion.
+                # Restore durable history even when Kaggle cannot be reached,
+                # without publishing a guessed remote state back to Cloudflare.
+                manifest = manifest or cf_job.to_job_manifest()
+                manifest._extra["remote_status_unknown"] = True
+                self.store.put_job(manifest, expected_version=manifest._extra.get("_version"))
+                jobs_by_ref[job_ref] = cf_job
+                reconciled_jobs.append({
+                    "job_id": job_ref,
+                    "internal_job_id": cf_job.internal_job_id,
+                    "decision": {"action": "PRESERVE", "remote_state": "UNKNOWN",
+                                 "note": "Kaggle status unavailable; durable history preserved."},
+                    "manifest": manifest.to_dict(),
+                })
                 continue
 
             # Execute deterministic reconciliation decision

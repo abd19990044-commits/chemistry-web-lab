@@ -130,17 +130,21 @@ def test_explicit_cancel_does_not_resume_checkpoint(store):
     assert record.to_job_manifest().state == JobState.CANCELLED
 
 
-def test_cloudflare_connection_failure_does_not_mark_remote_deleted(store):
+@pytest.mark.parametrize("local_cache", [True, False])
+def test_cloudflare_connection_failure_does_not_mark_remote_deleted(store, local_cache):
     backend = InMemoryCloudflareBackend()
     controller = CloudflareController(client=backend, store=store)
     job = running_job()
-    store.put_job(job)
+    if local_cache:
+        store.put_job(job)
     controller.register_job(job)
     class Client:
         def kernel_exists(self, slug):
             raise NetworkError("unavailable")
-    controller.reconcile_user_session(CREDS, Client())
+    result = controller.reconcile_user_session(CREDS, Client())
+    assert result["reconciled_jobs_count"] == 1
     assert store.require_job(job.job_id).state == JobState.RUNNING
+    assert store.require_job(job.job_id)._extra["remote_status_unknown"] is True
     assert not backend.get_job(job.job_id, job.owner).remote_deleted
 
 
