@@ -1,4 +1,5 @@
 name: Deploy Hugging Face runtime
+# Includes the Spaces iframe and partitioned-session compatibility fix.
 
 on:
   workflow_dispatch:

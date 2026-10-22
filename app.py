@@ -273,16 +273,19 @@ def _resolve_secret_key() -> str:
 
 app.secret_key = _resolve_secret_key()
 
+_IS_HF_SPACE = bool(os.environ.get("SPACE_ID") or os.environ.get("HF_SPACE_ID"))
 _IS_PRODUCTION = (
     os.environ.get("CHEMISTRY_LAB_ENV") == "production"
     or os.environ.get("ENVIRONMENT") == "production"
     or os.environ.get("FLASK_ENV") == "production"
-    or bool(os.environ.get("SPACE_ID"))
-    or bool(os.environ.get("HF_SPACE_ID"))
+    or _IS_HF_SPACE
 )
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SAMESITE"] = "None" if _IS_HF_SPACE else "Lax"
 app.config["SESSION_COOKIE_SECURE"] = bool(_IS_PRODUCTION)
+# Spaces renders the app from hf.space inside huggingface.co. Partitioned
+# cookies keep this embedded session usable when third-party cookies are blocked.
+app.config["SESSION_COOKIE_PARTITIONED"] = _IS_HF_SPACE
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 
@@ -436,8 +439,9 @@ def _apply_security_headers_and_csrf(response):
         response.set_cookie(
             "csrf_token",
             session["csrf_token"],
-            samesite="Lax",
+            samesite=app.config["SESSION_COOKIE_SAMESITE"],
             secure=bool(app.config.get("SESSION_COOKIE_SECURE", False)),
+            partitioned=bool(app.config.get("SESSION_COOKIE_PARTITIONED", False)),
             httponly=False,
             path="/"
         )
@@ -445,7 +449,14 @@ def _apply_security_headers_and_csrf(response):
 
     # Strict Security Headers
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
+    # The official Spaces page embeds this origin in an iframe. CSP can name
+    # that exact parent; X-Frame-Options cannot express a cross-origin allowlist.
+    if _IS_HF_SPACE:
+        response.headers.pop("X-Frame-Options", None)
+        frame_ancestors = "'self' https://huggingface.co"
+    else:
+        response.headers["X-Frame-Options"] = "DENY"
+        frame_ancestors = "'none'"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
@@ -457,7 +468,7 @@ def _apply_security_headers_and_csrf(response):
         "worker-src 'self' blob:; "
         "child-src 'self' blob:; "
         "frame-src 'self' https://accounts.google.com; "
-        "frame-ancestors 'none'; "
+        f"frame-ancestors {frame_ancestors}; "
         "base-uri 'self'; "
         "form-action 'self';"
     )
