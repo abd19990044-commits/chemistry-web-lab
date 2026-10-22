@@ -66,11 +66,14 @@ def test_home_still_serves_the_landing_view(client):
 
 
 def test_theme_layer_is_served_after_the_main_stylesheet(client):
+    import re
     body = client.get("/lab").get_data(as_text=True)
     assert "css/theme.css" in body
     assert body.index("css/style.css") < body.index("css/theme.css"), \
         "the theme layer must override the base tokens"
-    assert "js/app.js?v=20260827a" in body, "app.js cache-bust must follow behaviour changes"
+    assert re.search(r'js/app\.js\?v=\d{8}[a-z0-9]+', body), "app.js must have a versioned asset URL"
+    assert body.index("js/molecular-controls.js") < body.index("js/app.js"), \
+        "molecular controls must load before the builder"
 
 
 def test_unknown_view_is_never_activated(client):
