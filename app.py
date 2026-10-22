@@ -406,6 +406,29 @@ def _csrf_protection():
     return None
 
 
+@app.before_request
+def _validate_api_json_body():
+    """All JSON API commands use objects, including legacy Flask routes.
+
+    Reject malformed or scalar JSON before routes call ``.get`` on it. Keep
+    multipart/form uploads on their existing parsing path and preserve CSRF
+    checks by running after _csrf_protection.
+    """
+    if (
+        request.path.startswith("/api/")
+        and request.method in ("POST", "PUT", "PATCH", "DELETE")
+        and request.is_json
+        and request.get_data(cache=True)
+        and not isinstance(request.get_json(silent=True), dict)
+    ):
+        return jsonify({
+            "ok": False,
+            "error": "The request body must be a valid JSON object.",
+            "code": "INVALID_JSON_BODY",
+        }), 400
+    return None
+
+
 @app.after_request
 def _apply_security_headers_and_csrf(response):
     # Set double-submit CSRF cookie & header for frontend clients
