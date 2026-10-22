@@ -3602,3 +3602,5 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
 .builder3d-precision-details { border-top: 1px solid var(--border); padding-top: 0.65rem; }
 .builder3d-precision-details > summary { cursor: pointer; font-size: 0.76rem; font-weight: 600; color: var(--text-muted); padding: 0.25rem 0 0.65rem; }
 .builder3d-precision-details .builder-locked-notice { background: rgba(56,189,248,0.10); color: var(--text); }
+
+.builder3d-forcefield-progress { display:block; white-space:pre-line; font:0.72rem/1.5 var(--font-mono); color:var(--text); padding:0.65rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); overflow-wrap:anywhere; }

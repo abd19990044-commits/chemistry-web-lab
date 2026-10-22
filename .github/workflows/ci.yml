@@ -249,9 +249,25 @@ jobs:
           print('Static asset /static/js/reaction-unified.js verified 200 OK')
           "
 
+  browser-chemistry:
+    name: Browser UFF and MMFF94 WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned browser engine and run real worker checks
+        run: |
+          python fetch_browser_engine.py
+          node tests/browser_chemistry_engine.cjs
+
   ci-gate:
     name: Release Gate
-    needs: [lint-and-static-check, test-matrix, security-and-secret-audit, clean-install-verification, cloudflare-checks]
+    needs: [lint-and-static-check, test-matrix, security-and-secret-audit, clean-install-verification, cloudflare-checks, browser-chemistry]
     runs-on: ubuntu-latest
     steps:
       - name: Release Gate Check

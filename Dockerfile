@@ -12,6 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+RUN python fetch_browser_engine.py
 RUN pip install --no-cache-dir -e ./orca_engine
 
 # Hugging Face Spaces routes external traffic to port 7860 by default.

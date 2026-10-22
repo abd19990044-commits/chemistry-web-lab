@@ -1224,12 +1224,12 @@
         coordsStatus.classList.remove("is-set");
       }
       try {
-        const data = await postJSON("/api/orca/coords", { query: q });
+        const data = await BrowserChemistry.lookup(q);
         wizard.coords = data.coords;
         wizard.name = data.name;
         wizard.formula = data.formula;
         setCoordsStatus(`${data.name} (${data.formula || "-"})`);
-        renderStep("builder3d", { coords: data.coords, name: data.name, formula: data.formula });
+        renderStep("builder3d", { coords: data.coords, name: data.name, formula: data.formula, molecule: data });
       } catch (err) {
         searchStatus.textContent = err.message;
         if (coordsStatus) {
@@ -1257,16 +1257,12 @@
       const file = fileInput.files[0];
       if (!file) return;
       uploadStatus.textContent = "Parsing…";
-      const form = new FormData();
-      form.append("file", file);
       try {
-        const resp = await fetch("/api/orca/coords/file", { method: "POST", body: form });
-        const data = await resp.json();
-        if (!resp.ok || !data.ok) throw new Error(data.error || "Failed to parse the file.");
+        const data = await BrowserChemistry.file(file);
         wizard.coords = data.coords;
         wizard.name = data.name;
         setCoordsStatus(`${data.name} (uploaded file)`);
-        renderStep("builder3d", { coords: data.coords, name: data.name });
+        renderStep("builder3d", { coords: data.coords, name: data.name, molecule: data });
       } catch (err) {
         uploadStatus.textContent = err.message;
       }
@@ -1291,13 +1287,17 @@
     manualBtn.textContent = "Continue to 3D Builder";
     manualPane.append(manualField, manualNameField, manualBtn);
 
-    manualBtn.addEventListener("click", () => {
+    manualBtn.addEventListener("click", async () => {
       const coords = manualTextarea.value.trim();
       if (!coords) return;
-      wizard.coords = coords;
-      wizard.name = manualNameInput.value.trim() || "molecule";
-      setCoordsStatus(`${wizard.name} (manual entry)`);
-      renderStep("builder3d", { coords: coords, name: wizard.name });
+      manualBtn.disabled=true;
+      try{
+        const rows=coords.split(/\r?\n/),text=/^\d+$/.test(rows[0].trim())?coords:`${rows.filter(r=>r.trim()).length}\nManual coordinates\n${coords}`;
+        const data=await BrowserChemistry.parse(text,"xyz",manualNameInput.value.trim()||"molecule");
+        wizard.coords=data.coords;wizard.name=data.name;
+        setCoordsStatus(`${wizard.name} (estimated topology)`);
+        renderStep("builder3d",{coords:data.coords,name:data.name,molecule:data});
+      }catch(e){showToast(e.message,"warning");}finally{manualBtn.disabled=false;}
     });
 
     // ---- Calculation Outputs Selection Pane (Lazy Loaded on Click) ----
@@ -1496,36 +1496,10 @@
           const form = new FormData();
           form.append("file", file);
           try {
-            const resp = await fetch("/api/orca/engine/parse", { method: "POST", body: form });
-            const res = await resp.json();
-            if (!resp.ok || !res.ok) throw new Error(res.error || "Failed to parse output file.");
-            const job = res.latest_job || (res.jobs && res.jobs[0]) || (res.data && (res.data.latest_job || (res.data.jobs && res.data.jobs[0])));
-            if (!job) throw new Error("No calculation data found in file.");
-            let cleanCoords = "";
-            if (job.xyz) {
-              const rawLines = job.xyz.trim().split("\n");
-              const coordLines = (rawLines.length > 2 && /^\d+$/.test(rawLines[0].trim())) ? rawLines.slice(2) : rawLines;
-              cleanCoords = coordLines.map(l => {
-                const parts = l.trim().split(/\s+/);
-                return parts.length >= 4 ? `${parts[0].padEnd(3)} ${parts[1]} ${parts[2]} ${parts[3]}` : l.trim();
-              }).filter(Boolean).join("\n");
-            } else if (job.elements && job.coords && job.elements.length === job.coords.length) {
-              cleanCoords = job.elements.map((elem, idx) => {
-                const c = job.coords[idx];
-                const rc = job.coords_raw ? job.coords_raw[idx] : null;
-                const sx = rc ? rc[0] : String(c[0]);
-                const sy = rc ? rc[1] : String(c[1]);
-                const sz = rc ? rc[2] : String(c[2]);
-                return `${elem.padEnd(3)} ${sx} ${sy} ${sz}`;
-              }).join("\n");
-            }
-            if (!cleanCoords) throw new Error("No 3D Cartesian coordinates found in output file.");
-            const baseName = file.name.replace(/\.[^/.]+$/, "");
-            wizard.coords = cleanCoords;
-            wizard.name = baseName;
-            wizard.formula = job.chemical_formula || job.formula || "";
-            setCoordsStatus(`${wizard.name} (Output File)`);
-            renderStep("builder3d", { coords: cleanCoords, name: wizard.name, formula: wizard.formula });
+            const data=await BrowserChemistry.file(file);
+            wizard.coords=data.coords; wizard.name=data.name; wizard.formula=data.formula;
+            setCoordsStatus(`${data.name} (local output file)`);
+            renderStep("builder3d",{coords:data.coords,name:data.name,molecule:data});
           } catch (err) {
             outFileStatus.textContent = err.message || "Failed to parse output file.";
           }
@@ -1550,117 +1524,13 @@
     tabOutputs.addEventListener("click", () => activateTab(tabOutputs, outputsPane));
   }
 
-  // ---- Avogadro-Standard Chemical Bond Perception Algorithm ----
+  // Compatibility adapter: source topology is authoritative; coordinates alone
+  // receive a conservative, unverified graph, never an Avogadro/VBT claim.
   function reconcileBondsAvogadro(model, options = {}) {
     if (!model) return;
-    const atoms = (typeof model.selectedAtoms === "function") ? model.selectedAtoms({}) : (model.atoms || []);
-    if (!atoms || atoms.length === 0) return;
-
-    const covRadii = {
-      H: 0.31, He: 0.28, Li: 1.28, Be: 0.96, B: 0.84, C: 0.76, N: 0.71, O: 0.66,
-      F: 0.57, Ne: 0.58, Na: 1.66, Mg: 1.41, Al: 1.21, Si: 1.11, P: 1.07, S: 1.05,
-      Cl: 1.02, Ar: 1.06, K: 2.03, Ca: 1.76, Sc: 1.70, Ti: 1.60, V: 1.53, Cr: 1.39,
-      Mn: 1.39, Fe: 1.32, Co: 1.26, Ni: 1.24, Cu: 1.32, Zn: 1.22, Ga: 1.22, Ge: 1.20,
-      As: 1.19, Se: 1.20, Br: 1.20, Kr: 1.16, Rb: 2.20, Sr: 1.95, Y: 1.90, Zr: 1.75,
-      Nb: 1.64, Mo: 1.54, Tc: 1.47, Ru: 1.46, Rh: 1.42, Pd: 1.39, Ag: 1.45, Cd: 1.44,
-      In: 1.42, Sn: 1.39, Sb: 1.39, Te: 1.38, I: 1.39, Xe: 1.40, Cs: 2.44, Ba: 2.15,
-      Pt: 1.36, Au: 1.36, Hg: 1.32
-    };
-
-    const maxValenceMap = {
-      H: 1, He: 0, Li: 1, Be: 2, B: 4, C: 4, N: 4, O: 3, F: 1, Ne: 0,
-      Na: 1, Mg: 2, Al: 3, Si: 4, P: 6, S: 6, Cl: 1, Ar: 0, K: 1, Ca: 2,
-      Br: 1, I: 1, Fe: 6, Cu: 4, Zn: 4, Ru: 6, Rh: 6, Pd: 4, Pt: 4, Au: 4
-    };
-
-    // Reset 3Dmol auto-bonds to build strictly compliant Avogadro bond graph
-    atoms.forEach(a => {
-      a.bonds = [];
-      a.bondOrder = [];
-    });
-
-    // Step 1: Detect candidate bonds within covalent radius tolerance
-    const candidateBonds = [];
-    for (let i = 0; i < atoms.length; i++) {
-      const a1 = atoms[i];
-      const r1 = covRadii[a1.elem] || 1.25;
-      for (let j = i + 1; j < atoms.length; j++) {
-        const a2 = atoms[j];
-        const r2 = covRadii[a2.elem] || 1.25;
-
-        // In Builder: do not auto-bond atoms from different fragments unless explicitly drawn
-        if (options.fragmentCheck && a1.molId && a2.molId && a1.molId !== a2.molId) {
-          if (!options.explicitBonds || !options.explicitBonds.some(b => 
-            (b.a1 === a1.id && b.a2 === a2.id) || (b.a1 === a2.id && b.a2 === a1.id)
-          )) {
-            continue;
-          }
-        }
-
-        const dx = a1.x - a2.x, dy = a1.y - a2.y, dz = a1.z - a2.z;
-        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-        // Disallow overlapping atom artifacts
-        if (d < 0.40) continue;
-
-        const maxCutoff = Math.min(2.95, r1 + r2 + 0.40);
-        if (d <= maxCutoff) {
-          candidateBonds.push({ i, j, dist: d, elem1: a1.elem, elem2: a2.elem });
-        }
-      }
-    }
-
-    // Sort ascending by distance (shortest/strongest bonds established first)
-    candidateBonds.sort((a, b) => a.dist - b.dist);
-
-    // Step 2: Enforce Avogadro valences (Hydrogen <= 1, no H-H if bonded to heavy atom, max valences)
-    const atomBondMap = atoms.map(() => []);
-
-    for (const cb of candidateBonds) {
-      const { i, j, dist, elem1, elem2 } = cb;
-      const bonds_i = atomBondMap[i];
-      const bonds_j = atomBondMap[j];
-
-      // Strict Hydrogen rule: max 1 bond
-      if (elem1 === "H" && bonds_i.length >= 1) continue;
-      if (elem2 === "H" && bonds_j.length >= 1) continue;
-
-      // H-H rule: forbidden if either hydrogen is already bonded to a heavy atom
-      if (elem1 === "H" && elem2 === "H") {
-        if (bonds_i.length > 0 || bonds_j.length > 0) continue;
-      }
-
-      const max1 = maxValenceMap[elem1] || 6;
-      const max2 = maxValenceMap[elem2] || 6;
-      if (bonds_i.length >= max1 || bonds_j.length >= max2) continue;
-
-      bonds_i.push({ partner: j, dist });
-      bonds_j.push({ partner: i, dist });
-    }
-
-    // Step 3: Populate 3Dmol atom structures
-    for (let i = 0; i < atoms.length; i++) {
-      atoms[i].bonds = atomBondMap[i].map(b => b.partner);
-      atoms[i].bondOrder = atomBondMap[i].map(() => 1);
-    }
-
-    // Step 4: Inject explicit user-drawn bonds if provided
-    if (options.explicitBonds && options.explicitBonds.length > 0) {
-      options.explicitBonds.forEach(eb => {
-        const idx1 = atoms.findIndex(a => (a.id !== undefined ? a.id === eb.a1 : false));
-        const idx2 = atoms.findIndex(a => (a.id !== undefined ? a.id === eb.a2 : false));
-        if (idx1 >= 0 && idx2 >= 0) {
-          if (!atoms[idx1].bonds.includes(idx2)) {
-            atoms[idx1].bonds.push(idx2);
-            atoms[idx1].bondOrder.push(eb.order || 1);
-          }
-          if (!atoms[idx2].bonds.includes(idx1)) {
-            atoms[idx2].bonds.push(idx1);
-            atoms[idx2].bondOrder.push(eb.order || 1);
-          }
-        }
-      });
-    }
+    const atoms=model.selectedAtoms({});
+    atoms.forEach((a,i)=>{if(a.id===undefined)a.id=i+1;});
+    MoleculeGraph.apply(model, options.explicitBonds ?? MoleculeGraph.infer(atoms));
   }
   window.reconcileBondsAvogadro = reconcileBondsAvogadro;
 
@@ -1696,6 +1566,12 @@
       }
     }
 
+    const sourceMolecule=opts.molecule || (wizard.molecule?.coords===rawCoords ? wizard.molecule : null);
+    if(sourceMolecule){
+      initialAtoms=sourceMolecule.atoms.map(a=>({...a,molId:1,molName:opts.name||"Compound 1"}));
+      MoleculeGraph.validate(initialAtoms,sourceMolecule.bonds);
+    }
+
     const vdwMap = {
       H: 1.20, He: 1.40, Li: 1.82, Be: 1.53, B: 1.92, C: 1.70,
       N: 1.55, O: 1.52, F: 1.47, Ne: 1.54, Na: 2.27, Mg: 1.73,
@@ -1709,9 +1585,10 @@
         id: 1,
         name: opts.name || wizard.name || "Compound 1",
         color: "#2dd4bf",
+        topology: sourceMolecule?.topology || "unverified",
         initialSnapshot: JSON.parse(JSON.stringify(initialAtoms))
       }],
-      bonds: [],
+      bonds: sourceMolecule ? structuredClone(sourceMolecule.bonds) : MoleculeGraph.infer(initialAtoms),
       selectedAtomId: null,
       bondFirstAtomId: null,
       measurePicks: [],
@@ -1918,6 +1795,20 @@
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
     addMolBox.appendChild(exportXYZBtn);
+    const exportMolBtn=document.createElement("button");
+    exportMolBtn.className="btn btn-ghost btn-small";exportMolBtn.textContent="Export MOL";
+    exportMolBtn.title="Preserve bond orders and formal charges";
+    exportMolBtn.addEventListener("click",()=>{
+      controls.finish();
+      try{const content=MoleculeGraph.mol(bState.atoms,bState.bonds)+"$$$$\n";
+        const url=URL.createObjectURL(new Blob([content],{type:"chemical/x-mdl-sdfile"}));
+        const link=document.createElement("a");link.href=url;link.download="molecular-structure.sdf";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }catch(e){showToast(e.message,"warning");}
+    });
+    addMolBox.appendChild(exportMolBtn);
+    const bondOrderSelect=document.createElement("select");bondOrderSelect.setAttribute("aria-label","Bond order");
+    for(const [value,label] of [[1,"Single bond"],[2,"Double bond"],[3,"Triple bond"],[0,"Remove bond"]]){const o=document.createElement("option");o.value=value;o.textContent=label;bondOrderSelect.appendChild(o);}
+    toolGroup.appendChild(bondOrderSelect);
     topBar.append(toolGroup, addMolBox);
 
     // Main layout
@@ -2160,12 +2051,12 @@
     const cleanBtn = document.createElement("button");
     cleanBtn.type = "button";
     cleanBtn.className = "btn btn-outline btn-small";
-    cleanBtn.innerHTML = "<span>🧹 Clean Geometry (UFF)</span>";
-    cleanBtn.title = "Preliminary force-field relaxation (not quantum-chemical optimization)";
+    cleanBtn.textContent = "Minimize energy (UFF · local)";
+    cleanBtn.title = "Minimize the active molecule locally in your browser (not quantum-chemical optimization)";
     
     const uffHint = document.createElement("div");
     uffHint.style.cssText = "font-size:0.7rem; color:var(--text-faint); line-height:1.2; text-align:center;";
-    uffHint.textContent = "Preliminary force-field relaxation (not final QM opt)";
+    uffHint.textContent = "UFF / MMFF94 run on your device until local convergence. Stop keeps the best geometry. Active molecule only. SDF/MOL bond orders required; XYZ topology is unverified.";
 
     const undoRedoRow = document.createElement("div");
     undoRedoRow.style.cssText = "display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.35rem;";
@@ -2204,7 +2095,14 @@
     });
 
     undoRedoRow.append(undoBtn, redoBtn, clearAllBtn);
-    toolActionsCard.append(cleanBtn, uffHint, undoRedoRow);
+    const ffSelect=document.createElement("select");ffSelect.setAttribute("aria-label","Local force field");
+    for(const name of ["UFF","MMFF94"]){const option=document.createElement("option");option.value=name;option.textContent=name+" · browser";ffSelect.appendChild(option);}
+    const ffProgress=document.createElement("output");ffProgress.className="builder3d-forcefield-progress";ffProgress.setAttribute("aria-live","polite");
+    ffProgress.textContent="Energy and optimization steps will appear here.";
+    ffSelect.addEventListener("change",()=>{if(!uffRunning)cleanBtn.textContent="Minimize energy ("+ffSelect.value+" · local)";});
+    const engineNotice=document.createElement("a");engineNotice.href="/static/licenses/OpenBabel-GPL-2.0.txt";engineNotice.target="_blank";engineNotice.rel="noopener";
+    engineNotice.textContent="Open Babel 3 · GPL-2.0 engine";engineNotice.style.fontSize="0.7rem";
+    toolActionsCard.append(ffSelect, cleanBtn, ffProgress, uffHint, engineNotice, undoRedoRow);
     const preciseTransforms = document.createElement("details");
     preciseTransforms.className = "builder3d-precision-details";
     const preciseTitle = document.createElement("summary");
@@ -2281,7 +2179,7 @@
               <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${f.color};"></span>
               <strong>${escapeHtml(f.name)}</strong>
             </div>
-            <span class="mono small" style="color:var(--text-muted);">${nAtomsInFrag} atoms</span>
+            <span class="mono small" style="color:var(--text-muted);">${nAtomsInFrag} atoms · ${f.topology==="source"?"source bonds":"estimated bonds"}</span>
           `;
           fItem.addEventListener("click", () => {
             bState.selectedFragId = f.id;
@@ -2362,7 +2260,7 @@
           if (a) {
             const frag = bState.fragments.find(f => f.id === a.molId) || { name: "Compound" };
             atomDetail.innerHTML = `
-              <div><strong>Atom:</strong> ${a.elem}${a.id} (${escapeHtml(frag.name)})</div>
+              <div><strong>Atom:</strong> ${a.elem}${a.id} (${escapeHtml(frag.name)})</div><div>Formal charge: ${a.charge||0} · bond order sum: ${bState.bonds.filter(b=>b.a1===a.id||b.a2===a.id).reduce((n,b)=>n+b.order,0)}</div>
               <div><strong>X:</strong> ${a.x.toFixed(4)} Å</div>
               <div><strong>Y:</strong> ${a.y.toFixed(4)} Å</div>
               <div><strong>Z:</strong> ${a.z.toFixed(4)} Å</div>
@@ -2464,7 +2362,7 @@
           neighborHtml = `<div style="margin-top:4px; font-size:0.75rem; color:var(--teal);"><strong>Neighbors:</strong> ${neighborDistances.slice(0, 3).map(n => `${n.elem}${n.id}: ${n.dist.toFixed(3)} Å${n.isBonded ? ' (bonded)' : ''}`).join(', ')}</div>`;
         }
         atomDetail.innerHTML = `
-          <div><strong>Atom:</strong> ${a.elem}${a.id} (${escapeHtml(bState.fragments.find(f => f.id === a.molId)?.name || 'Compound')})</div>
+          <div><strong>Atom:</strong> ${a.elem}${a.id} (${escapeHtml(bState.fragments.find(f => f.id === a.molId)?.name || 'Compound')})</div><div>Formal charge: ${a.charge||0}</div>
           <div><strong>X:</strong> ${a.x.toFixed(4)} Å &nbsp; <strong>Y:</strong> ${a.y.toFixed(4)} Å &nbsp; <strong>Z:</strong> ${a.z.toFixed(4)} Å</div>
           ${neighborHtml}
         `;
@@ -2472,113 +2370,17 @@
     }
 
     async function formIntelligentBond(atom1Id, atom2Id) {
-      const atom1 = bState.atoms.find(a => a.id === atom1Id);
-      const atom2 = bState.atoms.find(a => a.id === atom2Id);
-      if (!atom1 || !atom2 || atom1.id === atom2.id) return;
-
-      // 1. Check if bond already exists
-      const existingBond = bState.bonds.find(b => (b.a1 === atom1.id && b.a2 === atom2.id) || (b.a1 === atom2.id && b.a2 === atom1.id));
-      if (existingBond) {
-        showToast(`Bond already exists between ${atom1.elem}${atom1.id} and ${atom2.elem}${atom2.id}.`, "warning");
-        bState.bondFirstAtomId = null;
-        renderScene();
-        return;
+      if(atom1Id===atom2Id)return;
+      const order=Number(bondOrderSelect.value);
+      const remaining=bState.bonds.filter(b=>!(b.a1===atom1Id&&b.a2===atom2Id||b.a1===atom2Id&&b.a2===atom1Id));
+      if(order&&!MoleculeGraph.canAdd(bState.atoms,remaining,atom1Id,atom2Id,order)){
+        showToast("Bond order exceeds the allowed valence for this element / charge.","warning");
+      }else{
+        saveHistory();bState.bonds=remaining;
+        if(order)bState.bonds.push({a1:atom1Id,a2:atom2Id,order});
+        showToast(order?"Bond updated. Geometry unchanged; run local UFF explicitly if needed.":"Bond removed.");
       }
-
-      // 2. Valence limits check (Avogadro standard)
-      const maxValenceMap = { H: 1, He: 0, Li: 1, Be: 2, B: 4, C: 4, N: 4, O: 3, F: 1, Ne: 0, Na: 1, Mg: 2, Al: 3, Si: 4, P: 6, S: 6, Cl: 1, Br: 1, I: 1 };
-      const count1 = bState.bonds.filter(b => b.a1 === atom1.id || b.a2 === atom1.id).length;
-      const count2 = bState.bonds.filter(b => b.a1 === atom2.id || b.a2 === atom2.id).length;
-      const max1 = maxValenceMap[atom1.elem] || 6;
-      const max2 = maxValenceMap[atom2.elem] || 6;
-
-      if (count1 >= max1) {
-        showToast(`Cannot connect: ${atom1.elem}${atom1.id} has reached its typical maximum valence of ${max1}.`, "warning");
-        bState.bondFirstAtomId = null;
-        renderScene();
-        return;
-      }
-      if (count2 >= max2) {
-        showToast(`Cannot connect: ${atom2.elem}${atom2.id} has reached its typical maximum valence of ${max2}.`, "warning");
-        bState.bondFirstAtomId = null;
-        renderScene();
-        return;
-      }
-
-      saveHistory();
-
-      // 3. Distance & Target Covalent Bond Length
-      const dx = atom2.x - atom1.x;
-      const dy = atom2.y - atom1.y;
-      const dz = atom2.z - atom1.z;
-      const currentDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-      const covRadii = { H: 0.31, C: 0.76, N: 0.71, O: 0.66, F: 0.57, P: 1.07, S: 1.05, Cl: 1.02, Br: 1.20, I: 1.39, B: 0.84, Si: 1.11 };
-      const r1 = covRadii[atom1.elem] || 0.77;
-      const r2 = covRadii[atom2.elem] || 0.77;
-      // Logical bond length: physical range ~1.0 to 2.2 A, strictly <= 3.0 A
-      const targetBondLength = Math.min(2.80, Math.max(0.95, (r1 + r2) * 1.05));
-
-      // Translate molecule or atom so bond length reaches physical distance (<= 3.0 A)
-      if (currentDist > targetBondLength * 1.15 || currentDist > 2.8 || currentDist < 0.7) {
-        const isInterFragment = (atom1.molId !== atom2.molId);
-        const dirX = (currentDist > 0.001) ? (atom1.x - atom2.x) / currentDist : 1.0;
-        const dirY = (currentDist > 0.001) ? (atom1.y - atom2.y) / currentDist : 0.0;
-        const dirZ = (currentDist > 0.001) ? (atom1.z - atom2.z) / currentDist : 0.0;
-
-        const dispDist = currentDist - targetBondLength;
-        const tx = dirX * dispDist;
-        const ty = dirY * dispDist;
-        const tz = dirZ * dispDist;
-
-        if (isInterFragment) {
-          // Rigidly translate entire fragment of atom2 towards atom1
-          const frag2Id = atom2.molId;
-          bState.atoms.forEach(a => {
-            if (a.molId === frag2Id) {
-              a.x += tx;
-              a.y += ty;
-              a.z += tz;
-            }
-          });
-        } else {
-          // Same molecule: translate atom2 to form bond
-          atom2.x += tx;
-          atom2.y += ty;
-          atom2.z += tz;
-        }
-      }
-
-      // 4. Create the bond
-      bState.bonds.push({ a1: atom1.id, a2: atom2.id, order: 1 });
-      bState.bondFirstAtomId = null;
-
-      showToast(`Bond created between ${atom1.elem}${atom1.id} and ${atom2.elem}${atom2.id} (${targetBondLength.toFixed(2)} Å). Running local UFF relaxation…`);
-      renderScene(false);
-
-      // 5. Run preliminary local UFF relaxation
-      try {
-        const currentXYZ = formatXYZ(bState.atoms);
-        const res = await postJSON("/api/orca/builder/clean", { coords: currentXYZ });
-        if (res && res.ok && res.coords) {
-          const optLines = res.coords.trim().split("\n");
-          optLines.forEach((line, idx) => {
-            const p = line.trim().split(/\s+/);
-            if (p.length >= 4 && bState.atoms[idx]) {
-              bState.atoms[idx].x = parseFloat(p[1]);
-              bState.atoms[idx].y = parseFloat(p[2]);
-              bState.atoms[idx].z = parseFloat(p[3]);
-            }
-          });
-          showToast("✔ Bond created and geometry relaxed with UFF.");
-        } else {
-          showToast(`Bond created (${targetBondLength.toFixed(2)} Å). Geometry placed.`, "info");
-        }
-      } catch (err) {
-        showToast(`Bond created (${targetBondLength.toFixed(2)} Å).`, "info");
-      }
-      updateSidebar();
-      renderScene(false);
+      bState.bondFirstAtomId=null;updateSidebar();renderScene();
     }
     bState.formIntelligentBond = formIntelligentBond;
 
@@ -2691,7 +2493,7 @@
       const ids=new Set([bState.selectedAtomId,bState.bondFirstAtomId,...bState.measurePicks.map(a=>a.id)]);
       bState.atoms.forEach(a=>{
         if (bState.showLabels === "none" || (bState.showLabels === "selected" && !ids.has(a.id))) return;
-        bState.viewer.addLabel(`${a.elem}${a.id}`,{position:{x:a.x,y:a.y,z:a.z},backgroundColor:"#0f172a",backgroundOpacity:0.8,fontColor:"#f8fafc",fontSize:11,showBackground:true,inFront:true});
+        bState.viewer.addLabel(`${a.elem}${a.id}${a.charge?` (${a.charge>0?"+":""}${a.charge})`:""}`,{position:{x:a.x,y:a.y,z:a.z},backgroundColor:"#0f172a",backgroundOpacity:0.8,fontColor:"#f8fafc",fontSize:11,showBackground:true,inFront:true});
       });
     }
     function renderSceneFast() {
@@ -2773,9 +2575,9 @@
         const fullXyz = `${bState.atoms.length}\nORCA 3D Builder Model\n${xyzStr}`;
         const m = v.addModel(fullXyz, "xyz");
         bState.model = m;
-        m.selectedAtoms({}).forEach((a,i)=>{a.id=bState.atoms[i].id;a.molId=bState.atoms[i].molId;});
+        m.selectedAtoms({}).forEach((a,i)=>{a.id=bState.atoms[i].id;a.molId=bState.atoms[i].molId;a.charge=bState.atoms[i].charge||0;});
 
-        // Avogadro-standard bond perception
+        // Apply the stable chemical graph exactly, including double/triple bonds.
         reconcileBondsAvogadro(m, {
           explicitBonds: bState.bonds,
           fragmentCheck: true
@@ -2836,7 +2638,7 @@
     const resizeObserver=new ResizeObserver(()=>{if(bState.viewer){bState.viewer.resize();bState.viewer.render();updateOrientation();}});
     resizeObserver.observe(canvasEl);
     builderCleanup=()=>{
-      controls.destroy();shortcutEvents.abort();resizeObserver.disconnect();
+      BrowserChemistry.cancel();controls.destroy();shortcutEvents.abort();resizeObserver.disconnect();
       if(renderRetryTimer){clearInterval(renderRetryTimer);renderRetryTimer=null;}
       if(bState.viewer){bState.viewer.clear();bState.viewer.getRenderer()?.domElement?.remove();}
       bState.viewer=null;bState.model=null;
@@ -2856,7 +2658,7 @@
     }
 
     // Helper to add extra molecule into scene with collision avoidance
-    function importExtraMoleculeToScene(coords, molName) {
+    function importExtraMoleculeToScene(coords, molName, molecule=null) {
       const newLines = coords.trim().split("\n");
       let newAtoms = [];
       let nIdx = 0;
@@ -2876,6 +2678,7 @@
           }
         }
       }
+      if(molecule)newAtoms=molecule.atoms.map(a=>({...a}));
       if (newAtoms.length === 0) throw new Error("No atom coordinates found in structure.");
 
       let offsetX = 5.0;
@@ -2907,14 +2710,14 @@
         }
       }
 
-      const newMolId = bState.fragments.length + 1;
+      const newMolId = Math.max(0,...bState.fragments.map(f=>f.id)) + 1;
       const colors = ["#2dd4bf", "#f59e0b", "#a855f7", "#ec4899", "#3b82f6", "#10b981", "#ef4444"];
       const fragColor = colors[(newMolId - 1) % colors.length];
       const fragName = molName || `Compound ${newMolId}`;
 
       const shiftedSnapshot = newAtoms.map((na, idx) => ({
         id: Math.max(0, ...bState.atoms.map(a => a.id)) + idx + 1,
-        elem: na.elem,
+        elem: na.elem, charge:na.charge||0,
         x: na.x + offsetX,
         y: na.y,
         z: na.z,
@@ -2925,11 +2728,15 @@
       bState.fragments.push({
         id: newMolId,
         name: fragName,
+        topology:molecule?.topology || "unverified",
         color: fragColor,
         initialSnapshot: JSON.parse(JSON.stringify(shiftedSnapshot))
       });
       bState.selectedFragId = newMolId;
 
+      const importBonds=molecule?.bonds || MoleculeGraph.infer(newAtoms.map((a,i)=>({...a,id:i+1})));
+      const ids=new Map(newAtoms.map((a,i)=>[a.id??i+1,shiftedSnapshot[i].id]));
+      bState.bonds.push(...importBonds.map(b=>({...b,a1:ids.get(b.a1),a2:ids.get(b.a2)})));
       shiftedSnapshot.forEach(atom => bState.atoms.push(atom));
 
       showToast(`Imported ${fragName} with safe clearance (+${offsetX.toFixed(1)} Å).`);
@@ -2945,9 +2752,9 @@
       addMolBtn.textContent = "Fetching…";
       try {
         saveHistory();
-        const data = await postJSON("/api/orca/coords", { query: q });
+        const data = await BrowserChemistry.lookup(q);
         if (!data || !data.coords) throw new Error("Could not resolve coordinates for " + q);
-        importExtraMoleculeToScene(data.coords, data.name || q);
+        importExtraMoleculeToScene(data.coords, data.name || q, data);
         addMolInput.value = "";
       } catch (err) {
         showToast(err.message || "Failed to import compound.", "error");
@@ -3124,38 +2931,8 @@
           const form = new FormData();
           form.append("file", file);
           try {
-            const isOut = file.name.endsWith(".out") || file.name.endsWith(".log") || file.name.endsWith(".txt");
-            const url = isOut ? "/api/orca/engine/parse" : "/api/orca/coords/file";
-            const resp = await fetch(url, { method: "POST", body: form });
-            const res = await resp.json();
-            if (!resp.ok || !res.ok) throw new Error(res.error || "Failed to parse file.");
-            let cleanCoords = "";
-            const job = res.latest_job || (res.jobs && res.jobs[0]) || (res.data && (res.data.latest_job || (res.data.jobs && res.data.jobs[0])));
-            if (job) {
-              if (job.xyz) {
-                const rawLines = job.xyz.trim().split("\n");
-                const coordLines = (rawLines.length > 2 && /^\d+$/.test(rawLines[0].trim())) ? rawLines.slice(2) : rawLines;
-                cleanCoords = coordLines.map(l => {
-                  const parts = l.trim().split(/\s+/);
-                  return parts.length >= 4 ? `${parts[0].padEnd(3)} ${parts[1]} ${parts[2]} ${parts[3]}` : l.trim();
-                }).filter(Boolean).join("\n");
-              } else if (job.elements && job.coords) {
-                cleanCoords = job.elements.map((elem, idx) => {
-                  const c = job.coords[idx];
-                  const rc = job.coords_raw ? job.coords_raw[idx] : null;
-                  const sx = rc ? rc[0] : String(c[0]);
-                  const sy = rc ? rc[1] : String(c[1]);
-                  const sz = rc ? rc[2] : String(c[2]);
-                  return `${elem.padEnd(3)} ${sx} ${sy} ${sz}`;
-                }).join("\n");
-              }
-            } else if (res.coords) {
-              cleanCoords = res.coords;
-            }
-            if (!cleanCoords) throw new Error("No 3D coordinates found in file.");
-            saveHistory();
-            const baseName = file.name.replace(/\.[^/.]+$/, "");
-            importExtraMoleculeToScene(cleanCoords, baseName);
+            const data=await BrowserChemistry.file(file);
+            saveHistory();importExtraMoleculeToScene(data.coords,data.name,data);
             modalOut.remove();
           } catch (err) {
             extraFileStatus.textContent = err.message || "Failed to parse file.";
@@ -3319,36 +3096,36 @@
       });
     }
 
-    // Clean Geometry (UFF Force Field)
+    // Real UFF/WASM in the user's browser, isolated from the UI thread.
+    let uffRunning=false;
     cleanBtn.addEventListener("click", async () => {
-      if (bState.atoms.length === 0) return;
-      cleanBtn.disabled = true;
-      cleanBtn.textContent = "Relaxing geometry…";
-      try {
-        saveHistory();
-        const currentXYZ = formatXYZ(bState.atoms);
-        const res = await postJSON("/api/orca/builder/clean", { coords: currentXYZ });
-        if (res && res.ok && res.coords) {
-          const optLines = res.coords.trim().split("\n");
-          optLines.forEach((line, idx) => {
-            const p = line.trim().split(/\s+/);
-            if (p.length >= 4 && bState.atoms[idx]) {
-              bState.atoms[idx].x = parseFloat(p[1]);
-              bState.atoms[idx].y = parseFloat(p[2]);
-              bState.atoms[idx].z = parseFloat(p[3]);
-            }
-          });
-          showToast("Geometry relaxed with Universal Force Field (UFF).");
-          renderScene(true);
-        } else if (res && !res.ok) {
-          showToast(res.error || "UFF relaxation could not converge. Original geometry preserved.", "warning");
-        }
-      } catch (err) {
-        showToast(err.message || "Geometry relaxation request failed. Original geometry preserved.", "warning");
-      } finally {
-        cleanBtn.disabled = false;
-        cleanBtn.innerHTML = "<span>🧹 Clean Geometry (UFF)</span>";
+      if(uffRunning){BrowserChemistry.stop();cleanBtn.textContent="Stopping…";return;}
+      controls.finish();
+      const ids=new Set(bState.atoms.filter(a=>a.molId===bState.selectedFragId).map(a=>a.id));
+      let changed=true;
+      while(changed){changed=false;for(const b of bState.bonds)if(ids.has(b.a1)!==ids.has(b.a2)){ids.add(b.a1);ids.add(b.a2);changed=true;}}
+      const atoms=bState.atoms.filter(a=>ids.has(a.id)),bonds=bState.bonds.filter(b=>ids.has(b.a1)&&ids.has(b.a2));
+      if(!atoms.length)return;
+      if(bState.fragments.some(f=>f.topology!=="source"&&atoms.some(a=>a.molId===f.id))){
+        showToast("XYZ/output coordinates do not define bond orders or formal charges. Import SDF/MOL or fetch from PubChem before UFF.","warning");return;
       }
+      const signature=JSON.stringify({atoms:bState.atoms,bonds:bState.bonds});
+      const forceField=ffSelect.value;
+      uffRunning=true;ffSelect.disabled=true;cleanBtn.textContent="Stop "+forceField+" · keep best";
+      ffProgress.textContent="Loading local "+forceField+" engine…";
+      try {
+        const res=await BrowserChemistry.optimize({atoms,bonds,forceField},p=>{
+          ffProgress.textContent=`${p.forceField} · ${p.atomCount} atoms\nStep ~${p.steps} · E = ${p.energy.toFixed(6)} ${p.unit}\nBest = ${p.bestEnergy.toFixed(6)} · ΔE = ${p.delta.toFixed(6)} ${p.unit}`;
+        });
+        if(!container.isConnected||JSON.stringify({atoms:bState.atoms,bonds:bState.bonds})!==signature)throw Error("Structure changed during UFF. Result discarded; run again.");
+        saveHistory();
+        const optimized=new Map(res.atoms.map(a=>[a.id,a]));
+        bState.atoms.forEach(a=>{const p=optimized.get(a.id);if(p){a.x=p.x;a.y=p.y;a.z=p.z;}});
+        ffProgress.textContent=`${res.forceField} · ${res.stopped?"stopped; best geometry kept":res.converged?"converged to local minimum":"iteration limit; best geometry kept"}\nSteps ~${res.totalSteps} · ${res.components} optimized component(s)\nE initial = ${res.before.toFixed(6)} ${res.unit}\nE best = ${res.after.toFixed(6)} ${res.unit}\nΔE = ${(res.after-res.before).toFixed(6)} ${res.unit}`;
+        showToast(`${res.forceField} completed locally. ${res.stopped?"Best geometry kept.":res.converged?"Local convergence reached.":"Iteration limit reached."}`);
+        updateSidebar();renderScene();
+      }catch(err){ffProgress.textContent=err.message;showToast(err.message,"warning");}
+      finally{uffRunning=false;ffSelect.disabled=false;cleanBtn.textContent="Minimize energy ("+ffSelect.value+" · local)";}
     });
 
     // Undo action
@@ -3405,8 +3182,10 @@
       }
       const finalXYZ = formatXYZ(bState.atoms);
       wizard.coords = finalXYZ;
+      wizard.molecule={coords:finalXYZ,atoms:structuredClone(bState.atoms),bonds:structuredClone(bState.bonds),topology:bState.fragments.every(f=>f.topology==="source")?"source":"unverified"};
       wizard.name = bState.fragments.map(f => f.name).join("_") || "molecule";
       wizard.formula = computeFormula(bState.atoms);
+      if(bState.fragments.every(f=>f.topology==="source"))wizard.charge=bState.atoms.reduce((n,a)=>n+(a.charge||0),0);
       setCoordsStatus(`${wizard.name} (${wizard.formula}, ${bState.atoms.length} atoms)`);
       renderStep("calc");
     });

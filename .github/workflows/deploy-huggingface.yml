@@ -87,3 +87,5 @@ jobs:
               summary.write(f"Deployed **{len(actual)} runtime files** to https://huggingface.co/spaces/{repo_id}\n\n")
               summary.write(f"Source: `{os.environ['GITHUB_SHA']}`\n\nSpace commit: {commit.commit_url}\n")
           PY
+
+# Runtime update: stable chemical graphs and browser-side Open Babel UFF.

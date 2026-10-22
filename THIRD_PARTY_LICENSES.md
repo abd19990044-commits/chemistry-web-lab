@@ -153,3 +153,22 @@ The contact details below apply to Chemistry Lab project questions. Third-party 
 - **Email:** abd.19990044@gmail.com
 - **WhatsApp:** +9647715541279
 - **Repository:** https://github.com/abd19990044-commits/chemistry-web-lab
+
+## Browser chemistry engine (Open Babel)
+
+The application source remains MIT. The separately compiled Open Babel 3 browser
+engine is GPL-2.0 and retains its own license; MIT does not relicense this engine.
+The image build downloads the unmodified distribution at commit
+`4ccb195c2916e99905abf264bf6212f2b4f9a10d`, verifies SHA-256 checksums,
+and serves it as static files for execution in a browser Web Worker.
+
+- Distribution, bindings and build instructions: https://github.com/partridgejiang/cheminfo-to-web/tree/4ccb195c2916e99905abf264bf6212f2b4f9a10d/OpenBabel3/OpenBabel-js
+- Open Babel source and GPL license: https://github.com/openbabel/openbabel
+- Upstream data files retain their embedded copyright and parameter citations.
+- UFF: Rappé et al., J. Am. Chem. Soc. 1992, 114, 10024–10035.
+
+Search by name contacts PubChem directly from the browser. Local file parsing,
+3D generation and UFF never upload the molecular structure to the application server.
+XYZ and calculation output coordinates have no authoritative bond orders or
+formal charges; their estimated topology is marked unverified and cannot be used
+for UFF until a topology-bearing SDF/MOL structure is supplied.

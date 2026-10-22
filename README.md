@@ -419,3 +419,32 @@ If you use Chemistry Lab in your academic research, teaching, or computational m
   note    = {MIT-licensed Computational Chemistry Platform}
 }
 ```
+
+### Browser molecular editing
+
+The editor imports SDF/MOL bond orders and formal charges intact, and keeps its
+bond graph unchanged when atoms or molecules move. Search contacts PubChem from
+the browser; 2D records are converted to 3D locally. Opening supported molecular
+files, camera controls, editing, UFF and MMFF94 run on the user's device.
+
+For a non-Docker installation run `python fetch_browser_engine.py` once before
+starting the app. Docker performs this pinned, SHA-256-verified installation
+during its build. No molecular structures are sent to the server by these editor
+operations. The legacy chemistry HTTP API remains available for API clients.
+
+Select UFF or MMFF94 and **Minimize energy**. The Web Worker reports current and
+best energy, ΔE, steps and units, yielding between native optimization batches.
+It stops at local convergence (gradient tolerance 1e-6), at a 200,000-step safety
+limit per connected component, or when **Stop · keep best** is clicked. The best
+geometry is committed as one undoable edit; concurrent structure changes discard
+the result. Disconnected components are minimized separately with their centroids
+fixed, so these energies exclude interactions between separately staged molecules.
+UFF energies are reported in kJ/mol, MMFF94 in kcal/mol; values from different
+force fields must not be compared as if they used the same potential.
+
+Limits: 5 MB per file, 1,000 atoms per import, 500 atoms per force-field operation.
+XYZ/output coordinates do not specify bond orders/charges. They display a clearly
+marked conservative estimated graph; import SDF/MOL or fetch PubChem before
+minimization. Neither force field guarantees a global minimum or replaces QM.
+MMFF94 rejects molecules for which parameters are unavailable instead of silently
+substituting UFF. See `THIRD_PARTY_LICENSES.md` for Open Babel's separate GPL license.

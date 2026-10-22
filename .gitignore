@@ -104,3 +104,6 @@ node_modules/
 *.sqlite3-*
 *.db
 *.db-*
+
+# Verified browser engine binaries are installed during image build.
+static/vendor/openbabel/

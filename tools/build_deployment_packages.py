@@ -113,6 +113,10 @@ def is_global_excluded(p: Path) -> bool:
         relative = p.resolve().relative_to(REPO_ROOT.resolve())
     except ValueError:
         relative = Path(p.name)
+    # Browser binaries are installed from pinned checksums in the Docker build,
+    # never copied from an untracked developer cache into source packages.
+    if relative.parts[:3] == ('static', 'vendor', 'openbabel'):
+        return True
     if any(part in EXCLUDE_DIRS or part.startswith(('_tmp_', '_diag_')) for part in relative.parts):
         return True
     if p.suffix in EXCLUDE_EXTS or any(p.name.endswith(suffix) for suffix in (".db-wal", ".db-shm", ".sqlite3-wal", ".sqlite3-shm")):
@@ -232,6 +236,7 @@ def build_huggingface_package(dest_dir: Path, provenance: dict) -> dict:
     hf_root_files = [
         'app.py',
         'chem_core.py',
+        'fetch_browser_engine.py',
         'kaggle_runner.py',
         'reaction_conditions.py',
         'requirements.txt',

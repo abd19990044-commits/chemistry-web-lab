@@ -19,6 +19,7 @@ def node(script):
 
 
 BASE = f"require({str(MODULE)!r}); const C=globalThis.MolecularControls; const assert=require('node:assert/strict');\n"
+BASE += f"require({str(ROOT / 'static/js/molecule-graph.js')!r});\n"
 BASE += r'''
 const close=(a,b,t=1e-8)=>assert.ok(Math.abs(a-b)<t, `${a} != ${b}`);
 const position=(a)=>({x:a.x,y:a.y,z:a.z});
