@@ -52,4 +52,4 @@ def test_huggingface_package_includes_live_helpers_without_development_artifacts
                     'from tools.build_local_agent_packages import get_package_manifests; '
                     'assert len(get_package_manifests()) == 4'],
                    cwd=target, check=True, capture_output=True, text=True)
-    assert 'license: mit' in (target / 'README.md').read_text()
+    assert 'license: mit' in (target / 'README.md').read_text(encoding='utf-8')
