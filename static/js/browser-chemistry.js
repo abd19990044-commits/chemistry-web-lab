@@ -1,13 +1,14 @@
 /* Single lazy worker per browser tab; bounded jobs, cancellation, no server UFF. */
 (function(root){
   'use strict';
-  const base=new URL('.',document.currentScript.src);
+  const scriptURL=new URL(document.currentScript.src),base=new URL('.',scriptURL);
+  const workerURL=new URL('chemistry-worker.js',base);workerURL.search=scriptURL.search;
   let worker=null,pending=null,sequence=0;
   function cancel(){if(worker)worker.terminate();worker=null;if(pending){clearTimeout(pending.timer);pending.reject(Error('Local chemistry operation cancelled.'));pending=null;}}
   function run(type,payload,onProgress){
     if(pending)return Promise.reject(Error('Another local chemistry operation is running.'));
     if(!root.Worker||!root.WebAssembly)return Promise.reject(Error('This browser requires Web Workers and WebAssembly for local chemistry.'));
-    if(!worker){worker=new Worker(new URL('chemistry-worker.js',base));worker.onmessage=({data})=>{if(!pending||pending.id!==data.id)return;const job=pending;
+    if(!worker){worker=new Worker(workerURL);worker.onmessage=({data})=>{if(!pending||pending.id!==data.id)return;const job=pending;
       if(data.progress){clearTimeout(job.timer);job.timer=setTimeout(cancel,90000);job.onProgress?.(data.progress);return;}
       pending=null;clearTimeout(job.timer);data.error?job.reject(Error(data.error)):job.resolve(data.result);};worker.onerror=()=>{cancel();};}
     return new Promise((resolve,reject)=>{const id=++sequence;pending={id,resolve,reject,onProgress,timer:setTimeout(cancel,90000)};worker.postMessage({id,type,payload});});

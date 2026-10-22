@@ -6488,6 +6488,7 @@
     if (resultEl) resultEl.classList.remove("hidden");
 
     const job = data.latest_job || (data.jobs && data.jobs[0]) || {};
+    if(resultEl)resultEl.classList.toggle("is-geometry-only",Boolean(job.geometry_only));
     const name = data.name || job.name || "ORCA Calculation";
     
     // Header & Badges
@@ -6512,7 +6513,7 @@
 
     const methodBadge = document.getElementById("engine-method-badge");
     if (methodBadge) {
-      methodBadge.textContent = job.functional || job.method || "DFT";
+      methodBadge.textContent = job.functional || job.method || "—";
     }
 
     const basisBadge = document.getElementById("engine-basis-badge");
@@ -6522,7 +6523,7 @@
 
     const solvBadge = document.getElementById("engine-solv-badge");
     if (solvBadge) {
-      solvBadge.textContent = job.solvation_model ? `${job.solvation_model} (${job.solvent || ''})` : (job.solvent || "Gas Phase");
+      solvBadge.textContent = job.geometry_only ? "—" : job.solvation_model ? `${job.solvation_model} (${job.solvent || ''})` : (job.solvent || "Gas Phase");
     }
 
     const statusBadge = document.getElementById("engine-status-badge");

@@ -3615,3 +3615,11 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
 #engine-3d-viewport:focus-visible { outline:2px solid var(--teal); }
 #engine-3d-viewport.is-dragging { cursor:grabbing; }
 @media (max-width:700px) { .analysis-view-toolbar { align-items:stretch; } #engine-3d-viewport { min-height:340px; height:50vh; } }
+
+/* Local structure files contain geometry; show quantum panels when results exist. */
+.engine-result-grid.is-geometry-only .metric-tiles-grid,
+.engine-result-grid.is-geometry-only .engine-dual-grid,
+.engine-result-grid.is-geometry-only #engine-method-badge,
+.engine-result-grid.is-geometry-only #engine-basis-badge,
+.engine-result-grid.is-geometry-only #engine-solv-badge,
+.engine-result-grid.is-geometry-only #engine-btn-export-json { display:none; }
