@@ -1340,7 +1340,7 @@
               formula: job.chemical_formula || job.formula || "-",
               atomsCount: (job.elements && job.elements.length) || (job.coords && job.coords.length) || "-",
               calcType: job.calculation_type || "Geometry Optimization (OPT)",
-              method: job.functional || job.method || "—",
+              method: job.functional || job.method || "-",
               basis: job.basis_set || "",
               coords: cleanCoords,
               badge: "Active in Analyzer (OPT)"
@@ -6513,17 +6513,17 @@
 
     const methodBadge = document.getElementById("engine-method-badge");
     if (methodBadge) {
-      methodBadge.textContent = job.functional || job.method || "—";
+      methodBadge.textContent = job.functional || job.method || "-";
     }
 
     const basisBadge = document.getElementById("engine-basis-badge");
     if (basisBadge) {
-      basisBadge.textContent = job.basis_set || "—";
+      basisBadge.textContent = job.basis_set || "-";
     }
 
     const solvBadge = document.getElementById("engine-solv-badge");
     if (solvBadge) {
-      solvBadge.textContent = job.geometry_only ? "—" : job.solvation_model ? `${job.solvation_model} (${job.solvent || ''})` : (job.solvent || "Gas Phase");
+      solvBadge.textContent = job.geometry_only ? "-" : job.solvation_model ? `${job.solvation_model} (${job.solvent || ''})` : (job.solvent || "Gas Phase");
     }
 
     const statusBadge = document.getElementById("engine-status-badge");
