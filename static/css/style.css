@@ -3604,3 +3604,14 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
 .builder3d-precision-details .builder-locked-notice { background: rgba(56,189,248,0.10); color: var(--text); }
 
 .builder3d-forcefield-progress { display:block; white-space:pre-line; font:0.72rem/1.5 var(--font-mono); color:var(--text); padding:0.65rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); overflow-wrap:anywhere; }
+
+/* Calculated geometry inspector: camera controls and readouts stay outside the canvas. */
+.analysis-view-toolbar,.analysis-camera-controls,.analysis-local-open { display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; }
+.analysis-view-toolbar { justify-content:space-between; padding:.75rem 0; border-top:1px solid var(--border); }
+.analysis-local-open { margin:0 0 1rem; }
+.analysis-view-status { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.5rem; font-size:.73rem; color:var(--text-muted); padding:.65rem 0; }
+.analysis-atom-inspector { display:block; white-space:pre-line; min-height:3.5rem; font:.8rem/1.6 var(--font-mono); padding:.8rem 1rem; margin-bottom:1rem; background:var(--ink-2); border:1px solid var(--border); border-radius:8px; color:var(--text); overflow-wrap:anywhere; }
+#engine-3d-viewport { touch-action:none; outline-offset:3px; }
+#engine-3d-viewport:focus-visible { outline:2px solid var(--teal); }
+#engine-3d-viewport.is-dragging { cursor:grabbing; }
+@media (max-width:700px) { .analysis-view-toolbar { align-items:stretch; } #engine-3d-viewport { min-height:340px; height:50vh; } }

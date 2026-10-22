@@ -89,3 +89,5 @@ jobs:
           PY
 
 # Runtime update: stable chemical graphs and browser-side Open Babel UFF.
+
+# Runtime update: calculated-geometry viewer, browser fallback, inspection and PNG.

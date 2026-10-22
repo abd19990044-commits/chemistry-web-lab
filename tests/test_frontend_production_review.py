@@ -27,8 +27,9 @@ def node(script):
 DOM = r'''
 const assert = require('node:assert/strict');
 class Element {
-  constructor() { this.children = []; this.style = {}; this.dataset = {}; this.value = ''; this.classList = { add() {}, remove() {} }; }
+  constructor() { this.children = []; this.style = {}; this.dataset = {}; this.value = ''; this.innerHTML = ''; this.classList = { add() {}, remove() {} }; }
   appendChild(el) { this.children.push(el); }
+  replaceChildren() { this.children = []; this.innerHTML = ""; }
   addEventListener() {}
   querySelector() { return new Element(); }
   querySelectorAll() { return []; }
@@ -108,7 +109,8 @@ def test_xyz_fallback_and_nmr_metadata_are_escaped():
     node(DOM + function(APP, "escapeHtml") + function(APP, "init3DViewer")
          + function(APP, "normLevelStr") + function(APP, "updateNMRRefCustomVisibility") + r'''
 const window = {};
-let currentViewportBg;
+let currentViewportBg,analysisStudio=null,viewer3D=null,isSpinning=false;
+const MolecularControls={createSoftwareViewer(){throw Error(payload);}};
 init3DViewer(payload, 1);
 assert.equal(document.getElementById('engine-3d-viewport').innerHTML.includes('<img'), false);
 let currentNMRNucleus = '1H';

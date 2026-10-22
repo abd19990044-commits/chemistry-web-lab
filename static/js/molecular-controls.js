@@ -211,7 +211,7 @@
     if (!context) throw new Error('A canvas context is required for molecular rendering');
     canvas.style.cssText='display:block;width:100%;height:100%;';
     canvas.setAttribute('aria-label','Interactive three-dimensional molecular model');
-    let container=element, models=[], labels=[], view=[0,0,0,6,0,0,0,1], orthographic=false, width=1,height=1, pan={x:0,y:0};
+    let container=element, models=[], labels=[], shapes=[], background='#090e17', alpha=1, exportScale=1, view=[0,0,0,6,0,0,0,1], orthographic=false, width=1,height=1, pan={x:0,y:0};
     const colors={H:'#edf2f7',C:'#687b91',N:'#6875ed',O:'#ef505a',S:'#f6cf44',P:'#f49a46',F:'#65d780',Cl:'#50d879',Br:'#c66b4c',I:'#a77ade',Na:'#a68be6',Fe:'#d78b56',Cu:'#c69260',Zn:'#a4b7c9'};
     const radii={H:1.2,C:1.7,N:1.55,O:1.52,S:1.8,P:1.8,F:1.47,Cl:1.75,Br:1.85,I:1.98};
     const matches=(a,sel)=>Object.entries(sel||{}).every(([k,v])=>Array.isArray(v)?v.includes(a[k]):a[k]===v);
@@ -225,9 +225,9 @@
       return a.style?.sphere ? Math.max(2,(a.style.sphere.scale||0.27)*(radii[a.elem]||1.7)*p.ratio) : Math.max(4,(a.style?.stick?.radius||0.06)*p.ratio);
     }
     function paint() {
-      const dpr=Math.min(2,window.devicePixelRatio||1);
+      const dpr=Math.min(2,window.devicePixelRatio||1)*exportScale;
       context.setTransform(dpr,0,0,dpr,0,0);
-      context.fillStyle='#090e17';context.fillRect(0,0,width,height);
+      context.clearRect(0,0,width,height);if(alpha){context.fillStyle=background;context.fillRect(0,0,width,height);}
       const entries=[];
       models.forEach(model=>{
         const projected=model.atoms.map(project);
@@ -267,21 +267,35 @@
           context.strokeStyle='rgba(226,232,240,0.25)';context.lineWidth=1;context.stroke();
         }
       }
-      context.font='600 12px sans-serif';context.textAlign='center';context.textBaseline='middle';
+      shapes.forEach(shape=>{
+        const a=project(shape.start),b=project(shape.end);if(a.depth<=.25||b.depth<=.25)return;
+        context.strokeStyle=shape.color||'#f6c85f';context.fillStyle=context.strokeStyle;context.lineWidth=shape.linewidth||3;
+        context.setLineDash(shape.dashed?[6,4]:[]);context.beginPath();context.moveTo(a.x,a.y);context.lineTo(b.x,b.y);context.stroke();context.setLineDash([]);
+        if(shape.arrow){const angle=Math.atan2(b.y-a.y,b.x-a.x),size=12;context.beginPath();context.moveTo(b.x,b.y);context.lineTo(b.x-size*Math.cos(angle-.4),b.y-size*Math.sin(angle-.4));context.lineTo(b.x-size*Math.cos(angle+.4),b.y-size*Math.sin(angle+.4));context.closePath();context.fill();}
+      });
+      context.textAlign='center';context.textBaseline='middle';
       labels.forEach(label=>{
         const p=project(label.spec.position), text=label.text;
+        const spec=label.spec,size=spec.fontSize||12;context.font=`${spec.bold===false?'400':'600'} ${size}px sans-serif`;
         const box=context.measureText(text).width+12;
-        context.fillStyle='rgba(15,23,42,.88)';context.fillRect(p.x-box/2,p.y-10,box,20);
-        context.fillStyle='#f8fafc';context.fillText(text,p.x,p.y);
+        if(spec.showBackground!==false){context.fillStyle=spec.backgroundColor||'rgba(15,23,42,.88)';context.fillRect(p.x-box/2,p.y-size*.75,box,size*1.5);}
+        context.fillStyle=spec.fontColor||'#f8fafc';context.fillText(text,p.x,p.y);
       });
       return viewer;
     }
     const viewer={
       rendererType:'canvas',
-      clear(){models=[];labels=[];return viewer;},
+      clear(){models=[];labels=[];shapes=[];return viewer;},
+      getModel:()=>models[models.length-1],
+      removeAllSurfaces(){return viewer;},
+      removeAllShapes(){shapes=[];return viewer;},
+      addLine(spec){shapes.push({...spec});return viewer;},
+      addArrow(spec){shapes.push({...spec,arrow:true});return viewer;},
+      setBackgroundColor(color,opacity=1){background=typeof color==='number'?'#'+color.toString(16).padStart(6,'0'):color;alpha=opacity;return viewer;},
+      pngURI(scale=2){try{exportScale=scale;viewer.resize();paint();return canvas.toDataURL('image/png');}finally{exportScale=1;viewer.resize();paint();}},
       getRenderer:()=>({domElement:canvas}),
       setContainer(el){container=el;container.appendChild(canvas);viewer.resize();return viewer;},
-      resize(){const rect=container.getBoundingClientRect();width=Math.max(1,rect.width);height=Math.max(1,rect.height);const dpr=Math.min(2,window.devicePixelRatio||1);canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);return viewer;},
+      resize(){const rect=container.getBoundingClientRect();width=Math.max(1,rect.width);height=Math.max(1,rect.height);const dpr=Math.min(2,window.devicePixelRatio||1)*exportScale;canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);return viewer;},
       getView:()=>view.slice(),
       setView(v){view=v.slice();return paint();},
       modelToScreen(a){const p=project(a),rect=container.getBoundingClientRect();return{x:rect.left+window.scrollX+p.x,y:rect.top+window.scrollY+p.y};},

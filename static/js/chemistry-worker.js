@@ -37,6 +37,7 @@ async function parse({text,format,name,generate3D=false}){
     const generated3D=generate3D||(authoritative&&m.GetDimension()===2);
     if(generated3D){const g=new ob.OB3DGenWrapper();try{if(g.generate3DStructure(m,'UFF')<0)throw Error('Cannot generate 3D geometry for this structure.');}finally{g.delete();}}
     const result=extract(m);
+    if(generated3D){MoleculeGraph.packGeneratedComponents(result.atoms,result.bonds);result.coords=MoleculeGraph.xyz(result.atoms);}
     // Never guess higher bond orders from XYZ. Its connectivity is unverified.
     if(!authoritative){result.bonds=MoleculeGraph.infer(result.atoms);}
     return {...result,name:name||'Molecule',generated3D,topology:authoritative?'source':'unverified'};

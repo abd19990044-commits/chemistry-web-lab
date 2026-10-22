@@ -9,7 +9,7 @@
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261022d">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261023a">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" defer></script>
 {% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
@@ -1124,6 +1124,11 @@ Products:   12 CO2 + 6 H2O</pre>
           </div>
         </div>
 
+        <div class="analysis-local-open">
+          <button type="button" id="engine-local-structure-open" class="btn btn-secondary btn-small">Open molecular structure locally</button>
+          <span class="field-hint">SDF / MOL / XYZ / PDB · processed in your browser</span>
+          <input type="file" id="engine-local-structure-input" accept=".sdf,.mol,.xyz,.pdb" class="hidden">
+        </div>
         <form id="engine-form" class="engine-form">
           <div class="engine-dropzone" id="engine-dropzone">
             <span class="dropzone-icon">📁</span>
@@ -1349,12 +1354,33 @@ Products:   12 CO2 + 6 H2O</pre>
             </div>
           </div>
 
+          <div class="analysis-view-toolbar" aria-label="Molecular view controls">
+            <div class="analysis-camera-controls">
+              <button type="button" id="engine-3d-view-front" class="btn btn-ghost btn-small">Front</button>
+              <button type="button" id="engine-3d-view-right" class="btn btn-ghost btn-small">Right</button>
+              <button type="button" id="engine-3d-view-top" class="btn btn-ghost btn-small">Top</button>
+              <button type="button" id="engine-3d-projection" class="btn btn-ghost btn-small" aria-pressed="false">Perspective</button>
+            </div>
+            <div class="analysis-camera-controls">
+              <select id="engine-3d-measure-mode" class="select-small" aria-label="Geometry measurement">
+                <option value="0">Inspect atom</option><option value="2">Distance · 2 atoms</option><option value="3">Angle · 3 atoms</option><option value="4">Dihedral · 4 atoms</option>
+              </select>
+              <button type="button" id="engine-3d-clear-selection" class="btn btn-ghost btn-small">Clear selection</button>
+              <button type="button" id="engine-3d-topology-open" class="btn btn-ghost btn-small" title="Load bond orders from an SDF/MOL with matching atom order; calculated coordinates remain fixed">Load bond orders</button>
+              <input type="file" id="engine-3d-topology-file" accept=".sdf,.mol" class="hidden">
+            </div>
+          </div>
           <div id="engine-3d-viewport" class="viewport-3d"></div>
+          <div class="analysis-view-status">
+            <span id="engine-3d-topology-status">Coordinates only</span>
+            <span>Drag: orbit · Right drag / Shift: pan · Wheel: zoom · Double-click / F: fit</span>
+          </div>
+          <output id="engine-3d-inspector" class="analysis-atom-inspector" aria-live="polite">Click an atom to inspect coordinates and available partial charges.</output>
           <div class="viewer-footer">
             <span id="engine-3d-atomcount" class="field-hint">0 atoms</span>
             <div class="viewer-footer-actions">
               <button type="button" id="engine-3d-new-calc-btn" class="btn btn-primary btn-small" title="Feed these 3D coordinates into the 3D Builder to start a new ORCA calculation">🚀 New Calculation from Geometry</button>
-              <button type="button" id="engine-3d-download-png" class="btn btn-ghost btn-small" title="Export high-resolution publication PNG">📸 High-Res 3D (PNG)</button>
+              <button type="button" id="engine-3d-download-png" class="btn btn-ghost btn-small" title="Render and export molecular geometry as a PNG at twice the viewport resolution">📸 High-Res 3D (PNG)</button>
               <a id="engine-download-xyz-btn" class="btn btn-ghost btn-small" download="structure.xyz">⬇ Download XYZ</a>
               <button type="button" id="engine-download-chg-btn" class="btn btn-ghost btn-small" title="Export atomic charges in standard Multiwfn .chg format">⬇ Download .chg</button>
             </div>
@@ -2867,10 +2893,11 @@ Products:   12 CO2 + 6 H2O</pre>
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='js/molecule-graph.js') }}?v=20261022a"></script>
+  <script src="{{ url_for('static', filename='js/molecule-graph.js') }}?v=20261023a"></script>
   <script src="{{ url_for('static', filename='js/browser-chemistry.js') }}?v=20261022a"></script>
-  <script src="{{ url_for('static', filename='js/molecular-controls.js') }}?v=20261022b"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261022d"></script>
+  <script src="{{ url_for('static', filename='js/molecular-controls.js') }}?v=20261023a"></script>
+  <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261023a"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261023a"></script>
   <script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>

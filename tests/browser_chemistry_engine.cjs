@@ -10,6 +10,7 @@ const mb=await run('parse',{text:fs.readFileSync('tests/fixtures/browser_chemist
 console.log('Methylene blue',mb.atoms.length,mb.bonds.length,mb.formula,mb.atoms.filter(a=>a.charge).map(a=>[a.elem,a.charge]));
 assert.equal(mb.generated3D,true);assert.equal(mb.atoms.length,39);assert.equal(mb.bonds.length,40);assert.equal(mb.bonds.filter(b=>b.order===2).length,7);
 assert.equal(mb.bonds.filter(b=>b.a1===1||b.a2===1).length,0);
+assert.ok(mb.atoms.find(a=>a.elem==='Cl').x-Math.max(...mb.atoms.filter(a=>a.elem!=='Cl').map(a=>a.x))>=2.999);
 for(const ff of ['UFF','MMFF94']){
  progress=[];const res=await run('optimize',{atoms:mb.atoms,bonds:mb.bonds,forceField:ff});
  console.log(ff,res.before,res.after,res.unit,res.converged,progress.length,progress.at(-1)?.steps);

@@ -448,3 +448,22 @@ marked conservative estimated graph; import SDF/MOL or fetch PubChem before
 minimization. Neither force field guarantees a global minimum or replaces QM.
 MMFF94 rejects molecules for which parameters are unavailable instead of silently
 substituting UFF. See `THIRD_PARTY_LICENSES.md` for Open Babel's separate GPL license.
+
+### Analysis geometry viewer
+
+The analyser uses the same browser camera controls and Canvas fallback as the
+editor. Inspect atoms and partial charges, measure distances, angles and signed
+dihedrals, switch standard views/projections, and export a PNG rendered at twice
+the viewport resolution. These interactions do not edit the calculated geometry.
+
+**Open molecular structure locally** loads SDF/MOL/XYZ/PDB without submitting a
+server analysis request; it is labelled **Geometry only**. ORCA output analysis
+continues through the scientific parser. Coordinate-only results show estimated
+connectivity. **Load bond orders** accepts an SDF/MOL with identical atom count
+and element order, keeps the calculated coordinates, and rejects mismatches.
+Styles, labels and camera changes preserve the loaded graph. Dipole arrows need
+a reported vector; charge uploads must match the atom count.
+
+Disconnected components of a newly generated 3D structure are placed with viewing
+clearance. This placement is for display, not an optimized ion-pair geometry;
+existing imported 3D and quantum-calculated coordinates are preserved.

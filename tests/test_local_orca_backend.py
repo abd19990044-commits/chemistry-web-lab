@@ -859,7 +859,13 @@ def test_cancel_after_restart_requires_identity_match(test_env, monkeypatch):
         kwargs={"stage_kind": "OPT", "state_dir": state_dir}
     )
     t.start()
-    time.sleep(0.3)
+    deadline = time.monotonic() + 5.0
+    active = None
+    while time.monotonic() < deadline:
+        active = local_orca._read_active_process_file(state_dir)
+        if active and active.get("state") == "RUNNING":
+            break
+        time.sleep(0.02)
 
     active = local_orca._read_active_process_file(state_dir)
     assert active is not None

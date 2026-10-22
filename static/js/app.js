@@ -1340,7 +1340,7 @@
               formula: job.chemical_formula || job.formula || "-",
               atomsCount: (job.elements && job.elements.length) || (job.coords && job.coords.length) || "-",
               calcType: job.calculation_type || "Geometry Optimization (OPT)",
-              method: job.functional || job.method || "DFT",
+              method: job.functional || job.method || "—",
               basis: job.basis_set || "",
               coords: cleanCoords,
               badge: "Active in Analyzer (OPT)"
@@ -6125,6 +6125,7 @@
   // ──────────────────────────────────────────
   let currentEngineData = null;
   let viewer3D = null;
+  let analysisStudio = null;
   let isSpinning = false;
   let showLabels = false;
   let isLabelBold = true;
@@ -6250,10 +6251,6 @@
 
   function applyViewer3DStyle() {
     if (!viewer3D || !currentEngineData) return;
-    const model = viewer3D.getModel();
-    if (model) {
-      reconcileBondsAvogadro(model);
-    }
     const styleSelect = document.getElementById("engine-3d-style");
     const styleVal = styleSelect ? styleSelect.value : "ballAndStick";
     viewer3D.removeAllLabels();
@@ -6262,8 +6259,9 @@
     viewer3D.setStyle({}, {});
 
     const job = currentEngineData.latest_job || (currentEngineData.jobs && currentEngineData.jobs[currentEngineData.jobs.length - 1]) || (currentEngineData.jobs && currentEngineData.jobs[0]) || currentEngineData || {};
-    const elements = job.elements || [];
-    const coords = job.coords || [];
+    const displayedAtoms=viewer3D.getModel()?.selectedAtoms({})||[];
+    const elements = job.elements?.length ? job.elements : displayedAtoms.map(a=>a.elem);
+    const coords = job.coords?.length ? job.coords : displayedAtoms.map(a=>[a.x,a.y,a.z]);
 
     // Base Rendering Style
     if (styleVal === "ballAndStick") {
@@ -6325,12 +6323,13 @@
       }
     }
 
+    if(charges.length!==elements.length)charges=[];
     if (currentMode !== "off" && elements.length) {
       elements.forEach((el, idx) => {
         const c = coords[idx];
         if (c) {
           let text = `${el}${idx + 1}`;
-          const q = (Array.isArray(charges) && typeof charges[idx] === "number") ? charges[idx] : null;
+          const q = (Array.isArray(charges) && Number.isFinite(charges[idx])) ? charges[idx] : null;
 
           if ((currentMode === "mulliken" || currentMode === "hirshfeld") && q !== null) {
             text = `${q >= 0 ? '+' : ''}${q.toFixed(3)}`;
@@ -6362,14 +6361,14 @@
 
 
     // 3D Dipole Vector
-    if (showDipole && job.dipole_moment_debye && coords.length) {
+    if (showDipole && Number.isFinite(job.dipole_moment_debye) && Array.isArray(job.dipole_moment_vector) && job.dipole_moment_vector.length===3 && job.dipole_moment_vector.every(Number.isFinite) && Math.hypot(...job.dipole_moment_vector)>1e-10 && coords.length) {
       // Centroid
       let cx = 0, cy = 0, cz = 0;
       coords.forEach(c => { cx += c[0]; cy += c[1]; cz += c[2]; });
       cx /= coords.length; cy /= coords.length; cz /= coords.length;
 
-      const vec = job.dipole_moment_vector || [0, 1, 0];
-      const scale = 0.8;
+      const vec = job.dipole_moment_vector;
+      const scale = 2.4 / Math.hypot(...vec);
       const endX = cx + (vec[0] || 0) * scale;
       const endY = cy + (vec[1] || 0) * scale;
       const endZ = cz + (vec[2] || 0) * scale;
@@ -6392,42 +6391,31 @@
       });
     }
 
+    analysisStudio?.draw();
     viewer3D.render();
   }
 
   function init3DViewer(xyzString, atomCount) {
-    const viewport = document.getElementById("engine-3d-viewport");
-    if (!viewport) return;
-    viewport.innerHTML = "";
-
-    const bgSelect = document.getElementById("engine-3d-bg");
-    currentViewportBg = bgSelect ? bgSelect.value : "#0B0F19";
-    viewport.style.backgroundColor = currentViewportBg === "transparent" ? "transparent" : currentViewportBg;
-
-    if (window.$3Dmol && xyzString && xyzString.trim().length > 0) {
-      try {
-        viewer3D = $3Dmol.createViewer(viewport, {
-          backgroundColor: currentViewportBg === "transparent" ? 0x000000 : currentViewportBg,
-          defaultcolors: $3Dmol.elementColors.rasmol,
-        });
-        if (currentViewportBg === "transparent") {
-          viewer3D.setBackgroundColor(0x000000, 0); // alpha 0
-        } else {
-          viewer3D.setBackgroundColor(currentViewportBg, 1);
-        }
-        viewer3D.addModel(xyzString, "xyz");
-        applyViewer3DStyle();
-        viewer3D.zoomTo();
-        viewer3D.render();
-      } catch (err) {
-        console.warn("3Dmol initialization failed:", err);
-        viewport.innerHTML = `<div style="padding: 2rem; color: var(--text-muted); text-align: center;">XYZ Structure Loaded (${atomCount} atoms)<br><pre class="mono" style="max-height: 300px; overflow: auto; text-align: left; margin-top: 1rem; font-size: 0.8rem;">${escapeHtml(xyzString.slice(0, 1000))}</pre></div>`;
-      }
-    } else {
-      viewport.innerHTML = `<div style="padding: 2rem; color: var(--text-muted); text-align: center;">Structure Coordinates Available (${atomCount} atoms)<br><pre class="mono" style="max-height: 300px; overflow: auto; text-align: left; margin-top: 1rem; font-size: 0.8rem;">${escapeHtml((xyzString || '').slice(0, 1000))}</pre></div>`;
-    }
+    const viewport=document.getElementById("engine-3d-viewport");if(!viewport)return;
+    analysisStudio?.destroy();analysisStudio=null;isSpinning=false;
+    viewport.replaceChildren();
+    if(!xyzString?.trim()){viewport.textContent="No Cartesian geometry available in this calculation.";return;}
+    try{
+      if(!viewer3D){
+        try{if(!window.$3Dmol)throw Error("WebGL viewer unavailable");viewer3D=$3Dmol.createViewer(viewport,{nomouse:true,backgroundColor:currentViewportBg,defaultcolors:$3Dmol.elementColors.rasmol});}
+        catch(_){viewport.replaceChildren();viewer3D=MolecularControls.createSoftwareViewer(viewport);}
+      }else{viewer3D.setContainer(viewport);const canvas=viewer3D.getRenderer()?.domElement;if(canvas&&!viewport.contains(canvas))viewport.appendChild(canvas);}
+      viewer3D.clear();
+      currentViewportBg=document.getElementById("engine-3d-bg")?.value||"#0B0F19";
+      viewer3D.setBackgroundColor(currentViewportBg==="transparent"?0:currentViewportBg,currentViewportBg==="transparent"?0:1);
+      const lines=xyzString.trim().split(/\r?\n/),full=/^\d+$/.test(lines[0].trim())?xyzString:`${lines.filter(l=>l.trim()).length}\nCalculated geometry\n${xyzString}`;
+      viewer3D.addModel(full,"xyz");
+      const job=currentEngineData.latest_job||currentEngineData.jobs?.at(-1)||currentEngineData;
+      analysisStudio=AnalysisViewer.create({viewer:viewer3D,viewport,job,restyle:applyViewer3DStyle,warn:message=>showToast(message,"warning")});
+      applyViewer3DStyle();viewer3D.resize();analysisStudio.fit();
+    }catch(err){viewport.textContent="Could not display molecular geometry: "+err.message;}
   }
- 
+
   function downloadCanonicalAiDataset(engineData, defaultName) {
     const payload = engineData || (typeof currentEngineData !== "undefined" ? currentEngineData : null);
     if (!payload) return;
@@ -6519,7 +6507,7 @@
         const vMatch = raw.match(/Program\s+Version\s+([\d.]+)/i) || raw.match(/ORCA[^\d\n]*([\d.]+)/i);
         if (vMatch) orcaVer = vMatch[1];
       }
-      versionBadge.textContent = orcaVer && orcaVer !== "Unknown" ? (orcaVer.toLowerCase().startsWith("orca") ? orcaVer : `ORCA ${orcaVer}`) : "ORCA";
+      versionBadge.textContent = orcaVer && orcaVer !== "Unknown" ? (orcaVer.toLowerCase().startsWith("orca") ? orcaVer : `ORCA ${orcaVer}`) : (job.geometry_only?"Structure file":"ORCA");
     }
 
     const methodBadge = document.getElementById("engine-method-badge");
@@ -6529,7 +6517,7 @@
 
     const basisBadge = document.getElementById("engine-basis-badge");
     if (basisBadge) {
-      basisBadge.textContent = job.basis_set || "Def2-SVP";
+      basisBadge.textContent = job.basis_set || "—";
     }
 
     const solvBadge = document.getElementById("engine-solv-badge");
@@ -6539,8 +6527,8 @@
 
     const statusBadge = document.getElementById("engine-status-badge");
     if (statusBadge) {
-      const isOk = job.termination_status === "NORMAL" || job.converged !== false;
-      statusBadge.textContent = isOk ? "Normal Termination" : (job.termination_status || "Calculation Finished");
+      const isOk = !job.geometry_only && job.termination_status === "NORMAL";
+      statusBadge.textContent = job.geometry_only?"Geometry only":isOk?"Normal Termination":(job.termination_status || "Termination not reported");
       statusBadge.className = `prop-badge ${isOk ? 'badge-success' : 'badge-neutral'}`;
     }
 
@@ -6628,6 +6616,8 @@
 
     const atomCountEl = document.getElementById("engine-3d-atomcount");
     if (atomCountEl) atomCountEl.textContent = `${atomCount} atoms`;
+    const dipoleControl=document.getElementById("engine-3d-dipole");
+    if(dipoleControl){const hasVector=Array.isArray(job.dipole_moment_vector)&&job.dipole_moment_vector.length===3&&job.dipole_moment_vector.every(Number.isFinite)&&Math.hypot(...job.dipole_moment_vector)>1e-10;dipoleControl.disabled=!hasVector;dipoleControl.title=hasVector?"Dipole direction (display scale)":"No dipole vector reported for this geometry";if(!hasVector){showDipole=false;dipoleControl.classList.remove("btn-primary");}}
     init3DViewer(xyz, atomCount);
 
     // Helper to extract clean Cartesian lines (Element X Y Z) taking coordinates to the last decimal place without padding zeroes
@@ -6715,7 +6705,8 @@
         step: "builder3d",
         coords: cleanCartesian,
         name: cleanName,
-        formula: formula
+        formula: formula,
+        molecule: analysisStudio ? {...analysisStudio.topology(),coords:cleanCartesian} : undefined
       });
 
       showToast(`🚀 ${isOpt ? "Optimized geometry" : "3D coordinates"} loaded into 3D Builder for new calculation.`);
@@ -8656,6 +8647,19 @@
     const errorEl = document.getElementById("engine-error");
     const loadJobBtn = document.getElementById("engine-load-job-btn");
 
+    const localStructureInput=document.getElementById("engine-local-structure-input");
+    document.getElementById("engine-local-structure-open")?.addEventListener("click",()=>localStructureInput.click());
+    localStructureInput?.addEventListener("change",async()=>{
+      const file=localStructureInput.files?.[0];if(!file)return;
+      if(loadingEl)loadingEl.classList.remove("hidden");
+      try{
+        const molecule=await BrowserChemistry.file(file),job={name:molecule.name,elements:molecule.atoms.map(a=>a.elem),coords:molecule.atoms.map(a=>[a.x,a.y,a.z]),xyz:`${molecule.atoms.length}\n${molecule.name}\n${molecule.coords}`,formula:molecule.formula,molecular_topology:molecule,geometry_only:true};
+        renderEngineResults({ok:true,name:molecule.name,latest_job:job,jobs:[job],jobs_count:1,geometry_only:true});
+        if(errorEl)errorEl.classList.add("hidden");
+        showToast("Structure opened locally. No quantum calculation results are implied.");
+      }catch(e){if(errorEl)showError(errorEl,e.message);}finally{localStructureInput.value="";loadingEl?.classList.add("hidden");}
+    });
+
     // Load from completed Kaggle jobs
     if (loadJobBtn) {
       loadJobBtn.addEventListener("click", () => {
@@ -9090,6 +9094,8 @@
           }
           const job = currentEngineData ? (currentEngineData.latest_job || (currentEngineData.jobs && currentEngineData.jobs[currentEngineData.jobs.length - 1]) || (currentEngineData.jobs && currentEngineData.jobs[0]) || currentEngineData) : null;
           if (job) {
+            const expected=viewer3D?.getModel()?.selectedAtoms({}).length || job.elements?.length || 0;
+            if(parsed.length!==expected){showToast(`Charge count (${parsed.length}) does not match the geometry (${expected} atoms). No charges changed.`,"warning");return;}
             job.hirshfeld_charges = parsed;
             job.chg_charges = parsed;
             job.crg_charges = parsed;
@@ -9171,8 +9177,7 @@
       spinBtn.addEventListener("click", () => {
         if (!viewer3D) return;
         isSpinning = !isSpinning;
-        viewer3D.spin(isSpinning);
-        spinBtn.classList.toggle("btn-primary", isSpinning);
+        analysisStudio?.toggleSpin();
       });
     }
 
@@ -9191,8 +9196,7 @@
     if (resetBtn) {
       resetBtn.addEventListener("click", () => {
         if (!viewer3D) return;
-        viewer3D.zoomTo();
-        viewer3D.render();
+        analysisStudio?.fit();
       });
     }
 

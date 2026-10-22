@@ -49,5 +49,15 @@
     for(let i=0;i<charged.length;i+=8){const group=charged.slice(i,i+8);lines.push('M  CHG'+pad(group.length,3)+group.map(a=>pad(index.get(a.id),4)+pad(a.charge,4)).join(''));}
     lines.push('M  END');return lines.join('\n')+'\n';
   }
-  root.MoleculeGraph={validate,infer,apply,canAdd,maxValence,xyz,mol};
+  // Synthetic 3D generation has no meaningful placement for disconnected ions.
+  // Pack their bounding boxes for viewing; never move imported 3D/QM geometry.
+  function packGeneratedComponents(atoms,bonds){
+    const remaining=new Set(atoms.map(a=>a.id)),groups=[];
+    while(remaining.size){const ids=new Set([remaining.values().next().value]);let changed=true;while(changed){changed=false;for(const b of bonds)if(ids.has(b.a1)!==ids.has(b.a2)){ids.add(b.a1);ids.add(b.a2);changed=true;}}ids.forEach(id=>remaining.delete(id));groups.push(atoms.filter(a=>ids.has(a.id)));}
+    groups.sort((a,b)=>b.length-a.length);
+    if(groups.length<2)return;
+    let edge=Math.max(...groups[0].map(a=>a.x));
+    for(const group of groups.slice(1)){const shift=edge+3-Math.min(...group.map(a=>a.x));group.forEach(a=>a.x+=shift);edge=Math.max(...group.map(a=>a.x));}
+  }
+  root.MoleculeGraph={validate,infer,apply,canAdd,maxValence,xyz,mol,packGeneratedComponents};
 })(globalThis);
