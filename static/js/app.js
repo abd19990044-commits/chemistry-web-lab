@@ -1056,6 +1056,8 @@
 
   let wizard = {};
   let stepStack = [];
+  let builderCleanup = null;
+  let builderViewer = null;
 
   function openWizard(opts = {}) {
     wizard = {};
@@ -1094,6 +1096,7 @@
     openWizard({ step: "builder3d", coords: coords, name: name, ...meta });
   };
   function closeWizard() {
+    if (builderCleanup) { builderCleanup(); builderCleanup = null; }
     const win = modal.querySelector(".modal-window");
     if (win) win.classList.remove("is-builder-mode");
     hide(modal);
@@ -1141,6 +1144,7 @@
   }
 
   function renderStep(name, opts = {}) {
+    if (builderCleanup) { builderCleanup(); builderCleanup = null; }
     stepStack.push({ name, opts });
     const win = modal.querySelector(".modal-window");
     if (win) {
@@ -1662,7 +1666,7 @@
 
   // ---- Step: 3D Molecular Builder & Multi-Molecule Staging ----
   function stepBuilder3D(opts = {}) {
-    setModalChrome(2, "3D Molecular Builder & Multi-Molecule Staging");
+    setModalChrome(2, "Molecular Studio · 3D Structure Editor");
     
     // Parse input coordinates into atom objects
     const rawCoords = opts.coords || wizard.coords || "";
@@ -1712,10 +1716,12 @@
       bondFirstAtomId: null,
       measurePicks: [],
       selectedFragId: 1,
-      activeTool: "select",
+      activeTool: "navigate",
+      transformAxis: "free",
       renderStyle: "stick_ball",
-      showLabels: true,
+      showLabels: "selected",
       viewer: null,
+      model: null,
       history: [],
       redoStack: []
     };
@@ -1764,9 +1770,11 @@
     toolGroup.className = "builder3d-toolgroup";
 
     const tools = [
-      { id: "select", icon: "🔍", label: "Select / Inspect" },
-      { id: "moveAtom", icon: "📍", label: "Move Single Atom" },
-      { id: "move", icon: "✋", label: "Move Fragment (Others Fixed)" },
+      { id: "navigate", icon: "⤧", label: "Navigate", key: "N" },
+      { id: "select", icon: "↖", label: "Select / Inspect", key: "V" },
+      { id: "moveAtom", icon: "•", label: "Move Atom", key: "A" },
+      { id: "move", icon: "✥", label: "Move Molecule", key: "G" },
+      { id: "rotate", icon: "⟳", label: "Rotate Molecule", key: "R" },
       { id: "bond", icon: "🔗", label: "Draw / Connect Bond" },
       { id: "delete", icon: "🗑️", label: "Delete Atom" },
       { id: "measure", icon: "📏", label: "Measure (Dist/Angle)" }
@@ -1777,12 +1785,17 @@
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = `builder3d-toolbtn ${t.id === bState.activeTool ? "is-active" : ""}`;
-      btn.innerHTML = `<span>${t.icon}</span> <span>${t.label}</span>`;
+      btn.innerHTML = `<span aria-hidden="true">${t.icon}</span> <span>${t.label}</span>`;
+      btn.dataset.tool = t.id;
+      btn.title = `${t.label}${t.key ? ` (${t.key})` : ""}`;
+      btn.setAttribute("aria-pressed", String(t.id === bState.activeTool));
       btn.addEventListener("click", () => {
+        controls.finish();
         bState.activeTool = t.id;
         bState.bondFirstAtomId = null;
         bState.measurePicks = [];
-        Object.values(toolBtns).forEach(b => b.classList.remove("is-active"));
+        Object.values(toolBtns).forEach(b => { b.classList.remove("is-active"); b.setAttribute("aria-pressed", "false"); });
+        btn.setAttribute("aria-pressed", "true");
         btn.classList.add("is-active");
         updateHint();
         updateSidebar();
@@ -1856,7 +1869,7 @@
           targetY = 0.0;
           targetZ = 0.0;
         }
-        const newAtomId = bState.atoms.length + 1;
+        const newAtomId = Math.max(0, ...bState.atoms.map(a => a.id)) + 1;
         bState.atoms.push({
           id: newAtomId,
           elem: cleanSym,
@@ -1891,6 +1904,20 @@
     addFromOutBtn.title = "Import fragment from calculation outputs";
 
     addMolBox.append(addMolInput, addMolBtn, addAtomBtn, addFromOutBtn);
+    const exportXYZBtn = document.createElement("button");
+    exportXYZBtn.type = "button";
+    exportXYZBtn.className = "btn btn-ghost btn-small";
+    exportXYZBtn.textContent = "Export XYZ";
+    exportXYZBtn.title = "Download the current geometry in angstroms";
+    exportXYZBtn.addEventListener("click", () => {
+      controls.finish();
+      const content = `${bState.atoms.length}\nMolecular Studio · coordinates in angstroms\n${formatXYZ(bState.atoms)}\n`;
+      const url = URL.createObjectURL(new Blob([content], {type:"text/plain;charset=utf-8"}));
+      const link = document.createElement("a");
+      link.href = url; link.download = "molecular-geometry.xyz"; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+    addMolBox.appendChild(exportXYZBtn);
     topBar.append(toolGroup, addMolBox);
 
     // Main layout
@@ -1903,6 +1930,8 @@
     const canvasEl = document.createElement("div");
     canvasEl.className = "builder3d-canvas-el";
     canvasEl.id = "builder3d-viewport";
+    canvasEl.tabIndex = 0;
+    canvasEl.setAttribute("aria-label", "3D molecular editor. Left drag rotates view, right or middle drag pans, wheel zooms. Choose Move Molecule to edit geometry.");
 
     const overlay = document.createElement("div");
     overlay.className = "builder3d-viewport-overlay";
@@ -1912,7 +1941,7 @@
     hintBadge.innerHTML = "<span>💡</span> <span>Select mode: click any atom to inspect coordinates.</span>";
 
     const styleBar = document.createElement("div");
-    styleBar.style.cssText = "display:flex; gap:4px; pointer-events:auto; margin-top:4px;";
+    styleBar.className = "builder3d-stylebar";
     
     const styleOptions = [
       { id: "stick_ball", label: "Ball & Stick" },
@@ -1925,10 +1954,12 @@
       sbtn.type = "button";
       sbtn.className = "builder3d-nudge-btn";
       sbtn.style.fontSize = "0.72rem";
+      sbtn.setAttribute("aria-pressed", String(s.id === bState.renderStyle));
       sbtn.textContent = s.label;
       sbtn.addEventListener("click", (e) => {
         e.stopPropagation();
         bState.renderStyle = s.id;
+        styleBar.querySelectorAll("[aria-pressed]").forEach(b => b.setAttribute("aria-pressed", String(b === sbtn)));
         renderScene();
       });
       styleBar.appendChild(sbtn);
@@ -1938,11 +1969,12 @@
     labelToggleBtn.type = "button";
     labelToggleBtn.className = "builder3d-nudge-btn";
     labelToggleBtn.style.fontSize = "0.72rem";
-    labelToggleBtn.textContent = "🏷️ Labels: ON";
+    labelToggleBtn.textContent = "Labels: Selected";
     labelToggleBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      bState.showLabels = !bState.showLabels;
-      labelToggleBtn.textContent = bState.showLabels ? "🏷️ Labels: ON" : "🏷️ Labels: OFF";
+      const modes = ["selected", "all", "none"];
+      bState.showLabels = modes[(modes.indexOf(bState.showLabels) + 1) % modes.length];
+      labelToggleBtn.textContent = `Labels: ${bState.showLabels === "selected" ? "Selected" : bState.showLabels === "all" ? "All" : "Off"}`;
       renderScene();
     });
 
@@ -1962,7 +1994,63 @@
 
     styleBar.append(labelToggleBtn, recenterBtn);
 
+    const viewBar = document.createElement("div");
+    viewBar.className = "builder3d-viewbar";
+    function viewButton(label, title, action) {
+      const button = document.createElement("button");
+      button.type = "button"; button.className = "builder3d-nudge-btn";
+      button.textContent = label; button.title = title;
+      button.addEventListener("click", () => { controls.finish(); action(); updateOrientation(); });
+      viewBar.appendChild(button); return button;
+    }
+    function presetView(axis) {
+      if (!bState.viewer) return;
+      const view = bState.viewer.getView().slice();
+      const q = axis === "front" ? [0,0,0,1] : MolecularControls.rotation(axis === "right" ? {x:0,y:1,z:0} : {x:1,y:0,z:0}, Math.PI/2);
+      view.splice(4,4,...q); bState.viewer.setView(view);
+    }
+    viewButton("Front", "Front view (1)", () => presetView("front"));
+    viewButton("Right", "Right view (2)", () => presetView("right"));
+    viewButton("Top", "Top view (3)", () => presetView("top"));
+    let orthographic = false;
+    const projectionButton = viewButton("Perspective", "Switch perspective / orthographic projection", () => {
+      orthographic = !orthographic;
+      bState.viewer?.setProjection(orthographic ? "orthographic" : "perspective");
+      bState.viewer?.render();
+      projectionButton.textContent = orthographic ? "Orthographic" : "Perspective";
+    });
+    const axisBar = document.createElement("div");
+    axisBar.className = "builder3d-axisbar";
+    const axisLabel = document.createElement("span"); axisLabel.textContent = "Edit axis"; axisBar.appendChild(axisLabel);
+    const axisButtons = {};
+    ["free", "x", "y", "z"].forEach(axis => {
+      const button = document.createElement("button"); button.type = "button";
+      button.textContent = axis === "free" ? "Free" : axis.toUpperCase();
+      button.className = "builder3d-nudge-btn"; button.dataset.constraint = axis;
+      button.setAttribute("aria-pressed", String(axis === "free"));
+      button.addEventListener("click", () => {
+        controls.finish(); bState.transformAxis = axis;
+        Object.entries(axisButtons).forEach(([a,b]) => b.setAttribute("aria-pressed", String(a === axis)));
+      });
+      axisButtons[axis] = button; axisBar.appendChild(button);
+    });
+    viewBar.appendChild(axisBar);
+    const orientation = document.createElement("div");
+    orientation.className = "builder3d-orientation"; orientation.setAttribute("aria-hidden", "true");
+    function updateOrientation() {
+      if (!bState.viewer) return;
+      const q = bState.viewer.getView().slice(4,8);
+      orientation.innerHTML = `<svg viewBox="0 0 92 92">${[["X","#f87171",{x:1,y:0,z:0}],["Y","#4ade80",{x:0,y:1,z:0}],["Z","#60a5fa",{x:0,y:0,z:1}]].map(([name,color,axis]) => {
+        const p = MolecularControls.rotate(axis,q), x=46+p.x*28, y=46-p.y*28;
+        return `<line x1="46" y1="46" x2="${x}" y2="${y}" stroke="${color}" stroke-width="2"/><text x="${x+p.x*9}" y="${y-p.y*9+4}" fill="${color}" text-anchor="middle" font-size="11">${name}</text>`;
+      }).join("")}<circle cx="46" cy="46" r="3" fill="#cbd5e1"/></svg>`;
+    }
+    const interactionStatus = document.createElement("div");
+    interactionStatus.className = "builder3d-interaction-status";
+    interactionStatus.setAttribute("aria-live", "polite");
+    interactionStatus.textContent = "Left drag: orbit · Right / middle drag: pan · Wheel: zoom · Double-click: fit";
     overlay.append(hintBadge, styleBar);
+    viewportWrap.append(viewBar, orientation, interactionStatus);
     viewportWrap.append(canvasEl, overlay);
 
     // Sidebar
@@ -2151,6 +2239,8 @@
     }
 
     function updateSidebar() {
+      undoBtn.disabled = bState.history.length === 0;
+      redoBtn.disabled = bState.redoStack.length === 0;
       const fList = document.getElementById("builder3d-frag-list");
       const fCount = document.getElementById("builder3d-frag-count");
       const fragSelect = document.getElementById("builder3d-active-frag-select");
@@ -2288,12 +2378,16 @@
         hintEl.innerHTML = `<span>💡</span> <span>${customText}</span>`;
         return;
       }
-      if (bState.activeTool === "select") {
-        hintEl.innerHTML = "<span>💡</span> <span>Select / Direct Move: click an atom to inspect, or click and drag it directly in 3D.</span>";
+      if (bState.activeTool === "navigate") {
+        hintEl.textContent = "Navigate · Drag to orbit the view. Geometry stays fixed. Click an atom to inspect.";
+      } else if (bState.activeTool === "select") {
+        hintEl.textContent = "Inspect · Click an atom for coordinates. Choose a Move tool to edit geometry.";
       } else if (bState.activeTool === "moveAtom") {
-        hintEl.innerHTML = "<span>📍</span> <span style='color:#f59e0b;'>Move Single Atom: click and drag atom with mouse. (Shift: axis snap, Alt / Shift+Wheel: depth).</span>";
+        hintEl.innerHTML = "<span>📍</span> <span style='color:#f59e0b;'>Move Atom · Drag one atom. Shift: fine movement · Alt-drag: depth · X/Y/Z: axis lock.</span>";
       } else if (bState.activeTool === "move") {
-        hintEl.innerHTML = "<span>✋</span> <span style='color:#38bdf8;'>Move Fragment: click and drag any atom to translate active fragment rigidly (others stay fixed).</span>";
+        hintEl.innerHTML = "<span>✋</span> <span style='color:#38bdf8;'>Move Molecule · Drag an atom to translate its molecule. Other molecules stay fixed. Shift: fine · Alt: depth.</span>";
+      } else if (bState.activeTool === "rotate") {
+        hintEl.textContent = "Rotate Molecule · Drag an atom to rotate its molecule around its center. Shift: fine · X/Y/Z: axis lock.";
       } else if (bState.activeTool === "delete") {
         hintEl.innerHTML = "<span>🗑️</span> <span style='color:#ef4444;'>Delete mode: click any atom to remove it from structure.</span>";
       } else if (bState.activeTool === "bond") {
@@ -2304,106 +2398,36 @@
     }
 
     // =========================================================================
-    // Mathematical 3D-to-Screen Projection & Direct Manipulation Helpers
+    // Projection uses the viewer camera and page-coordinate convention.
     // =========================================================================
     function screenDeltaToWorld(dxPix, dyPix, refPos, viewer, modifierKeys = {}) {
-      if (!viewer) return { dx: 0, dy: 0, dz: 0, pixPerAng: 35.0 };
-      const view = viewer.getView(); // [cx, cy, cz, dist, qx, qy, qz, qw]
-      const qx = view[4] || 0, qy = view[5] || 0, qz = view[6] || 0, qw = (view[7] !== undefined ? view[7] : 1);
-
-      // Camera rotation matrix
-      const r00 = 1 - 2 * (qy * qy + qz * qz);
-      const r01 = 2 * (qx * qy - qz * qw);
-      const r02 = 2 * (qx * qz + qy * qw);
-
-      const r10 = 2 * (qx * qy + qz * qw);
-      const r11 = 1 - 2 * (qx * qx + qz * qz);
-      const r12 = 2 * (qy * qz - qx * qw);
-
-      const r20 = 2 * (qx * qz - qy * qw);
-      const r21 = 2 * (qy * qz + qx * qw);
-      const r22 = 1 - 2 * (qx * qx + qy * qy);
-
-      // Measure pixels per Angstrom at refPos
-      const s0 = viewer.modelToScreen(refPos);
-      const testStep = 0.5;
-      const pRight = {
-        x: refPos.x + r00 * testStep,
-        y: refPos.y + r01 * testStep,
-        z: refPos.z + r02 * testStep
-      };
-      const sRight = viewer.modelToScreen(pRight);
-      const pixPerAng = (s0 && sRight) ? (Math.hypot(sRight.x - s0.x, sRight.y - s0.y) / testStep || 35.0) : 35.0;
-
-      let effectiveDxPix = dxPix;
-      let effectiveDyPix = dyPix;
-
-      // Shift key: constrain to dominant screen axis
-      if (modifierKeys.shiftKey) {
-        if (Math.abs(dxPix) > Math.abs(dyPix)) {
-          effectiveDyPix = 0;
-        } else {
-          effectiveDxPix = 0;
-        }
-      }
-
-      const angX = effectiveDxPix / pixPerAng;
-      const angY = -effectiveDyPix / pixPerAng; // Invert because screen Y is downwards
-
-      let wDx = r00 * angX + r10 * angY;
-      let wDy = r01 * angX + r11 * angY;
-      let wDz = r02 * angX + r12 * angY;
-
-      // Ctrl key: constrain to closest world Cartesian axis (X, Y, or Z)
-      if (modifierKeys.ctrlKey) {
-        const absX = Math.abs(wDx), absY = Math.abs(wDy), absZ = Math.abs(wDz);
-        if (absX >= absY && absX >= absZ) {
-          wDy = 0; wDz = 0;
-        } else if (absY >= absX && absY >= absZ) {
-          wDx = 0; wDz = 0;
-        } else {
-          wDx = 0; wDy = 0;
-        }
-      }
-
-      // Alt key: depth displacement along camera normal vector
-      if (modifierKeys.altKey) {
-        const depthAng = -effectiveDyPix / pixPerAng;
-        wDx = r20 * depthAng;
-        wDy = r21 * depthAng;
-        wDz = r22 * depthAng;
-      }
-
-      return { dx: wDx, dy: wDy, dz: wDz, pixPerAng, r20, r21, r22 };
+      if (!viewer) return {dx:0,dy:0,dz:0};
+      const d = MolecularControls.screenDelta(viewer,refPos,dxPix,dyPix,modifierKeys);
+      return {dx:d.x,dy:d.y,dz:d.z};
     }
-
-    function findAtomUnderCursor(clientX, clientY, maxDistPix = 26) {
-      if (!bState.viewer || bState.atoms.length === 0) return null;
-      let bestAtom = null;
-      let bestScreenDist = maxDistPix;
-      let bestDepth = -Infinity;
-
-      const view = bState.viewer.getView();
-      const qx = view[4] || 0, qy = view[5] || 0, qz = view[6] || 0, qw = (view[7] !== undefined ? view[7] : 1);
-      const r20 = 2 * (qx * qz - qy * qw);
-      const r21 = 2 * (qy * qz + qx * qw);
-      const r22 = 1 - 2 * (qx * qx + qy * qy);
-
+    function findAtomUnderCursor(clientX, clientY, maxDistPix = 18) {
+      const v=bState.viewer;
+      if (!v || !bState.atoms.length) return null;
+      const rect=canvasEl.getBoundingClientRect();
+      if (clientX<rect.left || clientX>rect.right || clientY<rect.top || clientY>rect.bottom) return null;
+      // 3Dmol raycasting resolves front-most spheres/bonds, including overlapping atoms.
+      try {
+        const hits=v.targetedObjects(2*(clientX-rect.left)/rect.width-1,1-2*(clientY-rect.top)/rect.height,{});
+        const hit=hits.find(h=>h.clickable && h.clickable.id !== undefined);
+        if (hit) return bState.atoms.find(a=>a.id===hit.clickable.id) || null;
+      } catch (_) { /* Projected-center picking also supports wireframe and older viewers. */ }
+      let best=null, distance=maxDistPix, depth=-Infinity;
+      const normal=MolecularControls.basis(v.getView()).normal;
       for (const atom of bState.atoms) {
-        const s = bState.viewer.modelToScreen({ x: atom.x, y: atom.y, z: atom.z });
-        if (!s || isNaN(s.x) || isNaN(s.y)) continue;
-        const dPix = Math.hypot(s.x - clientX, s.y - clientY);
-        if (dPix <= bestScreenDist) {
-          // Camera depth calculation (higher depth = closer to camera in 3Dmol)
-          const camDepth = -(r20 * atom.x + r21 * atom.y + r22 * atom.z);
-          if (dPix < bestScreenDist - 3 || camDepth > bestDepth) {
-            bestScreenDist = dPix;
-            bestDepth = camDepth;
-            bestAtom = atom;
-          }
+        const p=v.modelToScreen(atom);
+        if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+        const d=Math.hypot(p.x-(clientX+window.scrollX),p.y-(clientY+window.scrollY));
+        const z=MolecularControls.dot(atom,normal);
+        if (d<=maxDistPix && (d<distance-3 || (Math.abs(d-distance)<=3 && z>depth))) {
+          best=atom;distance=d;depth=z;
         }
       }
-      return bestAtom;
+      return best;
     }
 
     function updateLiveGeometryInfo(atomId) {
@@ -2435,7 +2459,7 @@
           neighborHtml = `<div style="margin-top:4px; font-size:0.75rem; color:var(--teal);"><strong>Neighbors:</strong> ${neighborDistances.slice(0, 3).map(n => `${n.elem}${n.id}: ${n.dist.toFixed(3)} Å${n.isBonded ? ' (bonded)' : ''}`).join(', ')}</div>`;
         }
         atomDetail.innerHTML = `
-          <div><strong>Atom:</strong> ${a.elem}${a.id} (${bState.fragments.find(f => f.id === a.molId)?.name || 'Compound'})</div>
+          <div><strong>Atom:</strong> ${a.elem}${a.id} (${escapeHtml(bState.fragments.find(f => f.id === a.molId)?.name || 'Compound')})</div>
           <div><strong>X:</strong> ${a.x.toFixed(4)} Å &nbsp; <strong>Y:</strong> ${a.y.toFixed(4)} Å &nbsp; <strong>Z:</strong> ${a.z.toFixed(4)} Å</div>
           ${neighborHtml}
         `;
@@ -2574,14 +2598,14 @@
       bState.selectedAtomId = targetAtom.id;
       bState.selectedFragId = targetAtom.molId;
 
-      if (bState.activeTool === "select" || bState.activeTool === "moveAtom" || bState.activeTool === "move") {
+      if (["navigate", "select", "moveAtom", "move", "rotate"].includes(bState.activeTool)) {
         updateSidebar();
         renderScene();
       } else if (bState.activeTool === "delete") {
         saveHistory();
         bState.atoms.splice(clickedIdx, 1);
         bState.bonds = bState.bonds.filter(b => b.a1 !== targetAtom.id && b.a2 !== targetAtom.id);
-        bState.atoms.forEach((a, idx) => { a.id = idx + 1; });
+        // Atom identifiers remain stable: bonds and reset snapshots refer to them.
         showToast(`Deleted atom ${targetAtom.elem}${targetAtom.id}.`);
         bState.selectedAtomId = null;
         updateSidebar();
@@ -2642,58 +2666,39 @@
       updateSummary();
     }
 
+    function modelStyle() {
+      if (bState.renderStyle === "stick") return {stick:{radius:0.18}};
+      if (bState.renderStyle === "sphere") return {sphere:{scale:0.8}};
+      if (bState.renderStyle === "wire") return {line:{linewidth:2}};
+      return {stick:{radius:0.13},sphere:{scale:0.27}};
+    }
+    function styleSelection() {
+      const v=bState.viewer;
+      v.setStyle({},modelStyle());
+      if (["move", "rotate"].includes(bState.activeTool)) {
+        v.addStyle({molId:bState.selectedFragId},{stick:{radius:0.16,color:"#38bdf8"}});
+      }
+      const ids = bState.activeTool === "measure" ? bState.measurePicks.map(a=>a.id) : [bState.selectedAtomId,bState.bondFirstAtomId].filter(Boolean);
+      ids.forEach(id=>v.addStyle({id},{sphere:{scale:0.34,color:"#fbbf24"}}));
+    }
+    function drawAtomLabels() {
+      bState.viewer.removeAllLabels();
+      const ids=new Set([bState.selectedAtomId,bState.bondFirstAtomId,...bState.measurePicks.map(a=>a.id)]);
+      bState.atoms.forEach(a=>{
+        if (bState.showLabels === "none" || (bState.showLabels === "selected" && !ids.has(a.id))) return;
+        bState.viewer.addLabel(`${a.elem}${a.id}`,{position:{x:a.x,y:a.y,z:a.z},backgroundColor:"#0f172a",backgroundOpacity:0.8,fontColor:"#f8fafc",fontSize:11,showBackground:true,inFront:true});
+      });
+    }
     function renderSceneFast() {
-      if (!bState.viewer || bState.atoms.length === 0) return;
-      try {
-        const v = bState.viewer;
-        if (typeof v.resize === "function") v.resize();
-        v.clear();
-        const xyzStr = formatXYZ(bState.atoms);
-        const fullXyz = `${bState.atoms.length}\nORCA 3D Builder Model\n${xyzStr}`;
-        const m = v.addModel(fullXyz, "xyz");
-
-        // Avogadro-standard bond perception
-        reconcileBondsAvogadro(m, {
-          explicitBonds: bState.bonds,
-          fragmentCheck: true
-        });
-
-        if (bState.renderStyle === "stick_ball") {
-          v.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.28 } });
-        } else if (bState.renderStyle === "stick") {
-          v.setStyle({}, { stick: { radius: 0.2 } });
-        } else if (bState.renderStyle === "sphere") {
-          v.setStyle({}, { sphere: { scale: 0.8 } });
-        } else if (bState.renderStyle === "wire") {
-          v.setStyle({}, { line: { linewidth: 2 } });
-        }
-
-        // Render explicit solid cylinders for all bonds in bState.bonds so they are always visible
-        if (bState.bonds && bState.bonds.length > 0) {
-          bState.bonds.forEach(b => {
-            const a1 = bState.atoms.find(a => a.id === b.a1);
-            const a2 = bState.atoms.find(a => a.id === b.a2);
-            if (a1 && a2) {
-              v.addCylinder({
-                start: { x: a1.x, y: a1.y, z: a1.z },
-                end: { x: a2.x, y: a2.y, z: a2.z },
-                radius: 0.14,
-                color: "#94a3b8",
-                fromCap: 1,
-                toCap: 1
-              });
-            }
-          });
-        }
-
-        if (bState.selectedAtomId) {
-          const aIdx = bState.atoms.findIndex(a => a.id === bState.selectedAtomId);
-          if (aIdx >= 0) {
-            v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#f59e0b" }, stick: { radius: 0.25, color: "#f59e0b" } });
-          }
-        }
-        v.render();
-      } catch (_) {}
+      const v=bState.viewer, m=bState.model;
+      if (!v || !m) return;
+      const modelAtoms=m.selectedAtoms({});
+      if (modelAtoms.length !== bState.atoms.length) {renderScene();return;}
+      modelAtoms.forEach((a,i)=>{const p=bState.atoms[i];a.x=p.x;a.y=p.y;a.z=p.z;});
+      // setStyle invalidates the cached GPU geometry without re-parsing XYZ or
+      // re-perceiving bonds on every pointer event.
+      styleSelection(); drawAtomLabels(); v.render();
+      if (bState.selectedAtomId) updateLiveGeometryInfo(bState.selectedAtomId);
     }
 
     let renderRetryTimer = null;
@@ -2724,10 +2729,14 @@
       try {
         if (!bState.viewer) {
           vEl.innerHTML = "";
-          bState.viewer = $3Dmol.createViewer(vEl, {
+          bState.viewer = builderViewer ? builderViewer.setContainer(vEl) : $3Dmol.createViewer(vEl, {
             defaultcolors: $3Dmol.elementColors.rasmol,
-            backgroundColor: "#090e17"
+            backgroundColor: "#090e17",
+            nomouse: true,
+            antialias: true
           });
+          builderViewer = bState.viewer;
+          bState.viewer.setProjection("perspective");
         }
         const v = bState.viewer;
         if (!v) {
@@ -2748,6 +2757,8 @@
         const xyzStr = formatXYZ(bState.atoms);
         const fullXyz = `${bState.atoms.length}\nORCA 3D Builder Model\n${xyzStr}`;
         const m = v.addModel(fullXyz, "xyz");
+        bState.model = m;
+        m.selectedAtoms({}).forEach((a,i)=>{a.id=bState.atoms[i].id;a.molId=bState.atoms[i].molId;});
 
         // Avogadro-standard bond perception
         reconcileBondsAvogadro(m, {
@@ -2755,75 +2766,15 @@
           fragmentCheck: true
         });
 
-        if (bState.renderStyle === "stick_ball") {
-          v.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.28 } });
-        } else if (bState.renderStyle === "stick") {
-          v.setStyle({}, { stick: { radius: 0.2 } });
-        } else if (bState.renderStyle === "sphere") {
-          v.setStyle({}, { sphere: { scale: 0.8 } });
-        } else if (bState.renderStyle === "wire") {
-          v.setStyle({}, { line: { linewidth: 2 } });
-        }
-
-        // Render explicit solid cylinders for all bonds in bState.bonds so they are always visible
-        if (bState.bonds && bState.bonds.length > 0) {
-          bState.bonds.forEach(b => {
-            const a1 = bState.atoms.find(a => a.id === b.a1);
-            const a2 = bState.atoms.find(a => a.id === b.a2);
-            if (a1 && a2) {
-              v.addCylinder({
-                start: { x: a1.x, y: a1.y, z: a1.z },
-                end: { x: a2.x, y: a2.y, z: a2.z },
-                radius: 0.14,
-                color: "#94a3b8",
-                fromCap: 1,
-                toCap: 1
-              });
-            }
-          });
-        }
-
-        if (bState.bondFirstAtomId) {
-          const aIdx = bState.atoms.findIndex(a => a.id === bState.bondFirstAtomId);
-          if (aIdx >= 0) {
-            v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#eab308" }, stick: { radius: 0.24, color: "#eab308" } });
-          }
-        } else if (bState.measurePicks.length > 0) {
-          bState.measurePicks.forEach(pa => {
-            const aIdx = bState.atoms.findIndex(a => a.id === pa.id);
-            if (aIdx >= 0) {
-              v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#a855f7" }, stick: { radius: 0.24, color: "#a855f7" } });
-            }
-          });
-        } else if (bState.selectedAtomId) {
-          const aIdx = bState.atoms.findIndex(a => a.id === bState.selectedAtomId);
-          if (aIdx >= 0) {
-            v.setStyle({ index: aIdx }, { sphere: { scale: 0.48, color: "#f59e0b" }, stick: { radius: 0.25, color: "#f59e0b" } });
-          }
-        }
-
-        if (typeof m.setClickable === "function") {
-          m.setClickable({}, true, function(atom3d) {
-            handleAtomClick(atom3d);
-          });
-        }
-
-        if (bState.showLabels) {
-          bState.atoms.forEach((a, idx) => {
-            v.addLabel(`${a.elem}${idx + 1}`, {
-              position: { x: a.x, y: a.y, z: a.z },
-              backgroundColor: "rgba(15,23,42,0.75)",
-              fontColor: "#ffffff",
-              fontSize: 10,
-              showBackground: true
-            });
-          });
-        }
+        m.setClickable({},true,()=>{});
+        styleSelection();
+        drawAtomLabels();
 
         if (zoomToFit) {
           v.zoomTo();
         }
         v.render();
+        updateOrientation();
         updateSummary();
       } catch (renderErr) {
         console.warn("3Dmol renderScene fallback engaged:", renderErr);
@@ -2831,303 +2782,53 @@
       }
     }
 
-    // =========================================================================
-    // Direct Manipulation Mouse Event Handlers (Avogadro-Style)
-    // =========================================================================
-    let dragState = null;
-    let preDragSnapshot = null;
-
-    canvasEl.addEventListener("contextmenu", (e) => {
-      // Prevent browser context menu when manipulating atoms/fragments
-      const picked = findAtomUnderCursor(e.clientX, e.clientY, 26);
-      if (picked || dragState) {
-        e.preventDefault();
-      }
+    // Pointer events capture a single editing transaction and clean up on exit.
+    let editSnapshot = null;
+    const controls = MolecularControls.createController({
+      element:canvasEl, getViewer:()=>bState.viewer, getState:()=>bState,
+      pick:findAtomUnderCursor,
+      select(atom) {
+        bState.selectedAtomId=atom.id; bState.selectedFragId=atom.molId;
+        updateSidebar(); renderScene();
+      },
+      click:handleAtomClick,
+      clearSelection() {bState.selectedAtomId=null;bState.bondFirstAtomId=null;updateSidebar();renderScene();},
+      begin() { editSnapshot={atoms:structuredClone(bState.atoms),fragments:structuredClone(bState.fragments),bonds:structuredClone(bState.bonds)}; },
+      commit() {
+        if (editSnapshot) {bState.history.push(editSnapshot);bState.redoStack=[];if(bState.history.length>30)bState.history.shift();}
+        editSnapshot=null;
+      },
+      cancel() {editSnapshot=null;},
+      redraw(fast) {if(fast)renderSceneFast();else {updateSidebar();renderScene();}},
+      status(text) {interactionStatus.textContent=text || "Left drag: orbit · Right / middle drag: pan · Wheel: zoom · Double-click: fit";},
+      viewChanged:updateOrientation,
+      fit() {bState.viewer?.zoomTo();bState.viewer?.render();updateOrientation();},
     });
-
-    canvasEl.addEventListener("mousedown", (e) => {
-      if (e.button !== 0 && e.button !== 2) return; // Left or Right click
-      const pickedAtom = findAtomUnderCursor(e.clientX, e.clientY, 26);
-      if (!pickedAtom) {
-        // Click on empty space: allow 3Dmol camera rotation/pan/zoom
-        if (bState.viewer) bState.viewer.nomouse = false;
-        return;
-      }
-
-      // If active tool is delete:
-      if (bState.activeTool === "delete") {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        e.preventDefault();
-        saveHistory();
-        const clickedIdx = bState.atoms.findIndex(a => a.id === pickedAtom.id);
-        if (clickedIdx >= 0) {
-          bState.atoms.splice(clickedIdx, 1);
-          bState.bonds = bState.bonds.filter(b => b.a1 !== pickedAtom.id && b.a2 !== pickedAtom.id);
-          bState.atoms.forEach((a, idx) => { a.id = idx + 1; });
-          showToast(`Deleted atom ${pickedAtom.elem}${pickedAtom.id}.`);
-          bState.selectedAtomId = null;
-          updateSidebar();
-          renderScene(true);
-        }
-        return;
-      }
-
-      // If active tool is measure:
-      if (bState.activeTool === "measure") {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        e.preventDefault();
-        if (bState.measurePicks.length >= 4) bState.measurePicks = [];
-        bState.measurePicks.push(pickedAtom);
-        bState.selectedAtomId = pickedAtom.id;
-        updateSidebar();
-        renderScene();
-        return;
-      }
-
-      // If active tool is bond:
-      if (bState.activeTool === "bond") {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        e.preventDefault();
-        if (!bState.bondFirstAtomId) {
-          bState.bondFirstAtomId = pickedAtom.id;
-          bState.selectedAtomId = pickedAtom.id;
-          updateHint(`First atom selected: ${pickedAtom.elem}${pickedAtom.id}. Click second atom to form bond.`);
-          renderScene();
-        } else if (bState.bondFirstAtomId === pickedAtom.id) {
-          bState.bondFirstAtomId = null;
-          updateHint();
-          renderScene();
-        } else {
-          formIntelligentBond(bState.bondFirstAtomId, pickedAtom.id);
-        }
-        return;
-      }
-
-      // Direct Manipulation Dragging (select, moveAtom, move):
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      e.preventDefault();
-
-      // Temporarily lock 3Dmol camera controls so camera does not rotate while dragging
-      if (bState.viewer) {
-        bState.viewer.nomouse = true;
-      }
-
-      bState.selectedAtomId = pickedAtom.id;
-      bState.selectedFragId = pickedAtom.molId;
-
-      // Determine whether moving whole fragment or single atom
-      const isFragMove = (bState.activeTool === "move" || e.shiftKey || e.button === 2);
-      preDragSnapshot = {
-        atoms: JSON.parse(JSON.stringify(bState.atoms)),
-        fragments: JSON.parse(JSON.stringify(bState.fragments)),
-        bonds: JSON.parse(JSON.stringify(bState.bonds))
-      };
-
-      const startPositions = new Map();
-      bState.atoms.forEach(a => {
-        startPositions.set(a.id, { x: a.x, y: a.y, z: a.z });
-      });
-
-      // Calculate centroid of fragment for rotation if right-click or Alt key
-      let fragCenter = { x: 0, y: 0, z: 0 };
-      let fragAtomCount = 0;
-      bState.atoms.forEach(a => {
-        if (a.molId === pickedAtom.molId) {
-          fragCenter.x += a.x;
-          fragCenter.y += a.y;
-          fragCenter.z += a.z;
-          fragAtomCount++;
-        }
-      });
-      if (fragAtomCount > 0) {
-        fragCenter.x /= fragAtomCount;
-        fragCenter.y /= fragAtomCount;
-        fragCenter.z /= fragAtomCount;
-      }
-
-      dragState = {
-        isDragging: true,
-        hasMoved: false,
-        dragType: isFragMove ? "fragment" : "atom",
-        isRotate: (isFragMove && (e.altKey || (e.button === 2 && !e.shiftKey))),
-        atomId: pickedAtom.id,
-        fragId: pickedAtom.molId,
-        fragCenter: fragCenter,
-        startClientX: e.clientX,
-        startClientY: e.clientY,
-        refPos: { x: pickedAtom.x, y: pickedAtom.y, z: pickedAtom.z },
-        startPositions: startPositions
-      };
-
-      canvasEl.style.cursor = "grabbing";
-      updateSidebar();
-      renderScene(false);
-    }, { capture: true });
-
-    window.addEventListener("mousemove", (e) => {
-      if (dragState && dragState.isDragging) {
-        dragState.hasMoved = true;
-        const dxPix = e.clientX - dragState.startClientX;
-        const dyPix = e.clientY - dragState.startClientY;
-
-        if (dragState.isRotate && dragState.dragType === "fragment") {
-          // Rigid rotation of fragment around its centroid
-          const angleX = (dyPix * 0.015);
-          const angleY = (dxPix * 0.015);
-          const cx = dragState.fragCenter.x;
-          const cy = dragState.fragCenter.y;
-          const cz = dragState.fragCenter.z;
-
-          bState.atoms.forEach(a => {
-            if (a.molId === dragState.fragId) {
-              const s0 = dragState.startPositions.get(a.id);
-              if (s0) {
-                const rx = s0.x - cx;
-                const ry = s0.y - cy;
-                const rz = s0.z - cz;
-                // Rotate around Y
-                const cosY = Math.cos(angleY), sinY = Math.sin(angleY);
-                const x1 = rx * cosY + rz * sinY;
-                const z1 = -rx * sinY + rz * cosY;
-                // Rotate around X
-                const cosX = Math.cos(angleX), sinX = Math.sin(angleX);
-                const y2 = ry * cosX - z1 * sinX;
-                const z2 = ry * sinX + z1 * cosX;
-                a.x = x1 + cx;
-                a.y = y2 + cy;
-                a.z = z2 + cz;
-              }
-            }
-          });
-        } else {
-          // Translation in camera plane
-          const delta = screenDeltaToWorld(dxPix, dyPix, dragState.refPos, bState.viewer, e);
-
-          if (dragState.dragType === "atom") {
-            const a = bState.atoms.find(at => at.id === dragState.atomId);
-            const s0 = dragState.startPositions.get(dragState.atomId);
-            if (a && s0) {
-              a.x = s0.x + delta.dx;
-              a.y = s0.y + delta.dy;
-              a.z = s0.z + delta.dz;
-            }
-          } else if (dragState.dragType === "fragment") {
-            bState.atoms.forEach(a => {
-              if (a.molId === dragState.fragId) {
-                const s0 = dragState.startPositions.get(a.id);
-                if (s0) {
-                  a.x = s0.x + delta.dx;
-                  a.y = s0.y + delta.dy;
-                  a.z = s0.z + delta.dz;
-                }
-              }
-            });
-          }
-        }
-
-        // Live smooth 60 FPS update
-        renderSceneFast();
-        updateLiveGeometryInfo(dragState.atomId);
-        return;
-      }
-
-      // Hover feedback when mouse is moving over viewport without dragging
-      const rect = canvasEl.getBoundingClientRect();
-      if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
-        const hoverAtom = findAtomUnderCursor(e.clientX, e.clientY, 20);
-        if (hoverAtom) {
-          if (bState.activeTool === "bond" || bState.activeTool === "measure") {
-            canvasEl.style.cursor = "crosshair";
-          } else if (bState.activeTool === "delete") {
-            canvasEl.style.cursor = "not-allowed";
-          } else {
-            canvasEl.style.cursor = "grab";
-          }
-        } else {
-          canvasEl.style.cursor = "default";
-        }
-      }
-    });
-
-    window.addEventListener("mouseup", (e) => {
-      if (dragState && dragState.isDragging) {
-        if (bState.viewer) {
-          bState.viewer.nomouse = false; // Re-enable 3Dmol camera controls
-        }
-        if (dragState.hasMoved && preDragSnapshot) {
-          // Validate numerical coordinates
-          const hasInvalid = bState.atoms.some(a => isNaN(a.x) || isNaN(a.y) || isNaN(a.z) || !isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z));
-          if (hasInvalid) {
-            bState.atoms = preDragSnapshot.atoms;
-            showToast("Invalid numerical coordinates detected. Restored previous position.", "warning");
-          } else {
-            bState.history.push(preDragSnapshot);
-            bState.redoStack = [];
-            if (bState.history.length > 30) bState.history.shift();
-          }
-        }
-        dragState = null;
-        canvasEl.style.cursor = "default";
-        updateSidebar();
-        renderScene(false);
-      }
-    });
-
-    window.addEventListener("blur", () => {
-      if (dragState) {
-        if (bState.viewer) bState.viewer.nomouse = false;
-        dragState = null;
-      }
-    });
-
-    // Shift/Alt + MouseWheel depth adjustment
-    canvasEl.addEventListener("wheel", (e) => {
-      if ((e.shiftKey || e.altKey) && bState.selectedAtomId) {
-        e.preventDefault();
-        e.stopPropagation();
-        const a = bState.atoms.find(at => at.id === bState.selectedAtomId);
-        if (!a || !bState.viewer) return;
-        saveHistory();
-
-        const view = bState.viewer.getView();
-        const qx = view[4] || 0, qy = view[5] || 0, qz = view[6] || 0, qw = (view[7] !== undefined ? view[7] : 1);
-        const r20 = 2 * (qx * qz - qy * qw);
-        const r21 = 2 * (qy * qz + qx * qw);
-        const r22 = 1 - 2 * (qx * qx + qy * qy);
-
-        const step = (e.deltaY < 0 ? 0.25 : -0.25);
-        if (bState.activeTool === "move") {
-          // Move fragment depth
-          bState.atoms.forEach(at => {
-            if (at.molId === a.molId) {
-              at.x += r20 * step;
-              at.y += r21 * step;
-              at.z += r22 * step;
-            }
-          });
-        } else {
-          // Move single atom depth
-          a.x += r20 * step;
-          a.y += r21 * step;
-          a.z += r22 * step;
-        }
-        updateSidebar();
-        renderScene(false);
-        showToast(`Adjusted depth (${step > 0 ? '+0.25' : '-0.25'} Å along camera view).`);
-      }
-    }, { passive: false });
-
-    // Expose for verification and testing
-    window._builder3DState = bState;
-    window._builder3DTools = {
-      screenDeltaToWorld,
-      findAtomUnderCursor,
-      formIntelligentBond
+    const shortcutEvents=new AbortController();
+    container.addEventListener("keydown",e=>{
+      if (e.target.closest("input,textarea,select,[contenteditable=true]")) return;
+      const key=e.key.toLowerCase();
+      if (key === "escape") {e.preventDefault();e.stopPropagation();controls.finish(true);return;}
+      if ((e.ctrlKey||e.metaKey) && key==="z") {e.preventDefault();controls.finish();(e.shiftKey?redoBtn:undoBtn).click();return;}
+      if ((e.ctrlKey||e.metaKey) && key==="y") {e.preventDefault();controls.finish();redoBtn.click();return;}
+      if (e.ctrlKey||e.metaKey||e.altKey) return;
+      const tool={n:"navigate",v:"select",g:"move",r:"rotate",a:"moveAtom",b:"bond",m:"measure"}[key];
+      if(tool){e.preventDefault();toolBtns[tool].click();}
+      else if(["x","y","z"].includes(key)){e.preventDefault();axisButtons[bState.transformAxis===key?"free":key].click();}
+      else if(key==="f"){e.preventDefault();controls.finish();recenterBtn.click();}
+      else if(["1","2","3"].includes(key)){e.preventDefault();presetView({1:"front",2:"right",3:"top"}[key]);updateOrientation();}
+    },{signal:shortcutEvents.signal});
+    const resizeObserver=new ResizeObserver(()=>{if(bState.viewer){bState.viewer.resize();bState.viewer.render();updateOrientation();}});
+    resizeObserver.observe(canvasEl);
+    builderCleanup=()=>{
+      controls.destroy();shortcutEvents.abort();resizeObserver.disconnect();
+      if(renderRetryTimer){clearInterval(renderRetryTimer);renderRetryTimer=null;}
+      if(bState.viewer){bState.viewer.clear();bState.viewer.getRenderer()?.domElement?.remove();}
+      bState.viewer=null;bState.model=null;
+      delete window._builder3DState;delete window._builder3DTools;delete window._debugBState;
     };
+    window._builder3DState=bState;
+    window._builder3DTools={screenDeltaToWorld,findAtomUnderCursor,formIntelligentBond};
 
     // Fragment selector change handler
     const fragSelectEl = document.getElementById("builder3d-active-frag-select");
@@ -3152,7 +2853,7 @@
           const x = parseFloat(parts[1]);
           const y = parseFloat(parts[2]);
           const z = parseFloat(parts[3]);
-          if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+        if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
             newAtoms.push({
               elem: elem.charAt(0).toUpperCase() + elem.slice(1).toLowerCase(),
               x: x, y: y, z: z
@@ -3197,7 +2898,7 @@
       const fragName = molName || `Compound ${newMolId}`;
 
       const shiftedSnapshot = newAtoms.map((na, idx) => ({
-        id: bState.atoms.length + idx + 1,
+        id: Math.max(0, ...bState.atoms.map(a => a.id)) + idx + 1,
         elem: na.elem,
         x: na.x + offsetX,
         y: na.y,
@@ -3530,12 +3231,13 @@
     ["x", "y", "z"].forEach(axis => {
       const inEl = document.getElementById(`builder-atom-in-${axis}`);
       if (inEl) {
+        inEl.addEventListener("focus", () => {if(bState.selectedAtomId)saveHistory();});
         inEl.addEventListener("input", () => {
           if (!bState.selectedAtomId) return;
           const targetA = bState.atoms.find(a => a.id === bState.selectedAtomId);
           if (!targetA) return;
           const val = parseFloat(inEl.value);
-          if (!isNaN(val)) {
+          if (Number.isFinite(val)) {
             targetA[axis] = val;
             renderScene();
             updateSummary();
@@ -3654,7 +3356,7 @@
       bState.measurePicks = [];
       showToast("Undid last action.");
       updateSidebar();
-      renderScene(true);
+      renderScene(false);
     });
 
     // Redo action
@@ -3677,7 +3379,7 @@
       bState.measurePicks = [];
       showToast("Redid action.");
       updateSidebar();
-      renderScene(true);
+      renderScene(false);
     });
 
     // Proceed to calculation setup
@@ -3696,11 +3398,12 @@
 
     // Initial render & resize trigger
     setTimeout(() => {
-      updateSidebar();
+      if (!container.isConnected || modal.classList.contains("hidden")) return;
+      updateSidebar(); updateHint();
       renderScene(true);
     }, 60);
     setTimeout(() => {
-      if (bState.viewer && typeof bState.viewer.resize === "function") {
+      if (container.isConnected && bState.viewer && typeof bState.viewer.resize === "function") {
         try {
           bState.viewer.resize();
           bState.viewer.render();

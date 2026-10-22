@@ -3537,3 +3537,59 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
   color: #c084fc;
   border: 1px solid rgba(168, 85, 247, 0.4);
 }
+
+/* Molecular Studio: a bounded workspace with independent camera/edit tools. */
+.modal-window.is-builder-mode {
+  width: min(1480px, 98vw);
+  max-height: 96dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.is-builder-mode .modal-header { padding: 0.9rem 1.1rem; flex: 0 0 auto; }
+.is-builder-mode .modal-body { padding: 0.8rem; overflow: auto; min-height: 0; }
+.builder3d-container { gap: 0.65rem; }
+.builder3d-topbar { padding: 0.65rem; gap: 0.65rem; }
+.builder3d-toolgroup { gap: 0.3rem; }
+.builder3d-toolbtn { padding: 0.5rem 0.65rem; font-size: 0.76rem; }
+.builder3d-add-mol-box { max-width: none; min-width: 0; flex-wrap: wrap; }
+.builder3d-add-mol-input { min-width: 130px; }
+.builder3d-main-layout { grid-template-columns: minmax(0, 1fr) 300px; gap: 0.65rem; min-height: 390px; }
+.builder3d-viewport-wrap { height: clamp(410px, 60dvh, 760px); min-width: 0; }
+.builder3d-sidebar { max-height: clamp(410px, 60dvh, 760px); padding: 0.75rem; gap: 0.7rem; }
+.builder3d-viewport-overlay { top: 0.65rem; left: 0.65rem; right: 0.65rem; gap: 0.4rem; }
+.builder3d-hint-badge { font-size: 0.73rem; line-height: 1.4; padding: 0.45rem 0.65rem; max-width: fit-content; }
+.builder3d-stylebar { display: flex; flex-wrap: wrap; gap: 4px; pointer-events: auto; align-self: flex-start; }
+.builder3d-viewbar { position: absolute; bottom: 44px; left: 12px; right: 92px; display: flex; gap: 4px; flex-wrap: wrap; z-index: 6; pointer-events: auto; }
+.builder3d-viewbar > button, .builder3d-axisbar { background: rgba(15,23,42,0.92); font-size: 0.71rem; }
+.builder3d-axisbar { display: inline-flex; gap: 3px; align-items: center; padding: 3px 5px; border: 1px solid var(--border); border-radius: 8px; color: #cbd5e1; }
+.builder3d-axisbar > span { padding: 0 4px; font-size: 0.68rem; }
+.builder3d-axisbar button { min-width: 29px; padding: 4px 6px; }
+.builder3d-axisbar [data-constraint=x] { color: #f87171; }
+.builder3d-axisbar [data-constraint=y] { color: #4ade80; }
+.builder3d-axisbar [data-constraint=z] { color: #60a5fa; }
+.builder3d-axisbar [aria-pressed=true], .builder3d-stylebar [aria-pressed=true] { border-color: var(--teal); background: rgba(45,212,191,0.16); }
+.builder3d-orientation { position: absolute; bottom: 40px; right: 6px; width: 80px; height: 80px; pointer-events: none; z-index: 5; }
+.builder3d-orientation svg { width: 100%; height: 100%; overflow: visible; }
+.builder3d-interaction-status { position: absolute; bottom: 0; left: 0; right: 0; min-height: 30px; display: flex; align-items: center; padding: 7px 12px; background: rgba(15,23,42,0.94); color: #cbd5e1; font-size: 0.69rem; pointer-events: none; z-index: 7; border-top: 1px solid rgba(148,163,184,0.2); }
+.builder3d-canvas-el { touch-action: none; user-select: none; -webkit-user-select: none; }
+.builder3d-canvas-el:focus-visible { outline: 2px solid var(--teal); outline-offset: -3px; }
+.builder3d-canvas-el.is-dragging, .builder3d-canvas-el.is-dragging canvas { cursor: grabbing !important; }
+.builder3d-toolbtn:focus-visible, .builder3d-nudge-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.builder3d-summary-bar { font-size: 0.76rem; padding: 0.65rem; }
+.builder3d-container > .modal-actions { margin-top: 0; }
+@media (max-width: 960px) {
+  .builder3d-main-layout { grid-template-columns: minmax(0,1fr); }
+  .builder3d-viewport-wrap { height: max(390px, 52dvh); }
+  .builder3d-sidebar { max-height: 330px; }
+  .builder3d-add-mol-box { flex-basis: 100%; }
+}
+@media (max-width: 540px) {
+  .is-builder-mode .modal-header h3 { font-size: 0.88rem; }
+  .is-builder-mode .modal-body { padding: 0.45rem; }
+  .builder3d-toolbtn { font-size: 0.7rem; padding: 0.45rem; }
+  .builder3d-hint-badge { font-size: 0.65rem; }
+  .builder3d-viewbar { right: 65px; }
+  .builder3d-orientation { width: 56px; height: 56px; }
+  .builder3d-interaction-status { font-size: 0.63rem; }
+}
