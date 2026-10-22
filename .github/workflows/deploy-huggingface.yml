@@ -1,0 +1,83 @@
+name: Deploy Hugging Face runtime
+
+on:
+  workflow_dispatch:
+  # Bootstrap this deployment when the workflow is added to main. Later
+  # application changes are deployed explicitly with "Run workflow".
+  push:
+    branches: [main]
+    paths: [.github/workflows/deploy-huggingface.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-huggingface-orcaweb
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and verify minimal runtime package
+        run: |
+          python tools/build_deployment_packages.py --mode release --target huggingface
+          python -m compileall -q HuggingFace
+          # Bytecode is not part of the verified deployment package.
+          find HuggingFace -type d -name __pycache__ -prune -exec rm -rf {} +
+      - name: Install upload client
+        run: python -m pip install huggingface_hub==2.2.0
+      - name: Publish verified runtime to the existing Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          HF_HUB_DISABLE_PROGRESS_BARS: '1'
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from huggingface_hub import HfApi
+
+          token = os.environ.get("HF_TOKEN", "").strip()
+          if not token:
+              raise SystemExit("Missing repository Actions secret HF_TOKEN.")
+          folder = Path("HuggingFace")
+          manifest = json.loads((folder / "RELEASE_MANIFEST.json").read_text())
+          if manifest["source_git_sha"] != os.environ["GITHUB_SHA"]:
+              raise SystemExit("Package source does not match the checked-out commit.")
+          expected = manifest["runtime_critical_files"]
+          actual = {p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()}
+          if actual != set(expected) | {"RELEASE_MANIFEST.json"}:
+              raise SystemExit("Package inventory changed after verification.")
+          for relative, metadata in expected.items():
+              if hashlib.sha256((folder / relative).read_bytes()).hexdigest() != metadata["sha256"]:
+                  raise SystemExit(f"Package checksum mismatch: {relative}")
+
+          repo_id = "mc2hf1999/orcaweb"
+          api = HfApi(token=token)
+          space = api.space_info(repo_id)
+          if space.sdk != "docker":
+              raise SystemExit("The existing Space must use the Docker SDK.")
+          commit = api.upload_folder(
+              repo_id=repo_id,
+              repo_type="space",
+              folder_path=folder,
+              delete_patterns="*",
+              parent_commit=space.sha,
+              commit_message=f"Deploy minimal runtime from GitHub {os.environ['GITHUB_SHA'][:12]}",
+          )
+          print(f"Published {len(actual)} runtime files: {commit.commit_url}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"Deployed **{len(actual)} runtime files** to https://huggingface.co/spaces/{repo_id}\n\n")
+              summary.write(f"Source: `{os.environ['GITHUB_SHA']}`\n\nSpace commit: {commit.commit_url}\n")
+          PY

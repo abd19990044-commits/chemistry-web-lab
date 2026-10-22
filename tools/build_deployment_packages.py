@@ -262,7 +262,10 @@ def build_huggingface_package(dest_dir: Path, provenance: dict) -> dict:
     copy_tree_filtered(REPO_ROOT / 'schema', dest_dir / 'schema')
     copy_tree_filtered(REPO_ROOT / 'local_agent', dest_dir / 'local_agent')
     copy_tree_filtered(REPO_ROOT / 'bootstrap', dest_dir / 'bootstrap')
-    copy_tree_filtered(REPO_ROOT / 'dist', dest_dir / 'dist')
+    # These helpers are imported by live API routes despite living in tools/.
+    # Do not ship the remaining development tools or local build artifacts.
+    for helper in ('normalize_scientific_json.py', 'build_local_agent_packages.py'):
+        copy_file_safe(REPO_ROOT / 'tools' / helper, dest_dir / 'tools' / helper)
 
     # 3. Data runtime assets
     if (REPO_ROOT / 'data' / 'ir_peak_database.json').exists():
@@ -312,6 +315,7 @@ colorFrom: blue
 colorTo: indigo
 sdk: docker
 app_port: 7860
+license: mit
 pinned: false
 ---
 
