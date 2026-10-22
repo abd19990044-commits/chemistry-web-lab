@@ -3593,3 +3593,12 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
   .builder3d-orientation { width: 56px; height: 56px; }
   .builder3d-interaction-status { font-size: 0.63rem; }
 }
+.builder3d-topbar { display: grid; grid-template-columns: minmax(0,1fr); }
+.builder3d-add-mol-box { width: 100%; }
+.builder3d-add-mol-input { max-width: 420px; }
+.builder3d-viewport-wrap .builder3d-nudge-btn { background: #172236; color: #e2e8f0; border-color: rgba(148,163,184,0.35); }
+.builder3d-viewport-wrap [aria-pressed=true] { background: #134e4a; color: #99f6e4; border-color: #2dd4bf; }
+.builder3d-viewport-wrap .builder3d-hint-badge { color: #5eead4; }
+.builder3d-precision-details { border-top: 1px solid var(--border); padding-top: 0.65rem; }
+.builder3d-precision-details > summary { cursor: pointer; font-size: 0.76rem; font-weight: 600; color: var(--text-muted); padding: 0.25rem 0 0.65rem; }
+.builder3d-precision-details .builder-locked-notice { background: rgba(56,189,248,0.10); color: var(--text); }

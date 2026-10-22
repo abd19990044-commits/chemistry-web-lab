@@ -3,6 +3,7 @@ name: Deploy Hugging Face runtime
 # Refreshes Kaggle cancellation, remote activity counts, and Cloudflare job versions.
 # Preserves archived Cloudflare history during Kaggle status outages.
 # Ships Molecular Studio pointer controls, rigid transforms, and camera tools.
+# Adds an interactive canvas renderer for browsers without WebGL.
 
 on:
   workflow_dispatch:

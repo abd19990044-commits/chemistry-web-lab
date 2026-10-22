@@ -171,3 +171,30 @@ assert.deepEqual(atoms.map(a=>a.bonds),[[],[]]);
 reconcileBondsAvogadro(model,{fragmentCheck:true,explicitBonds:[{a1:10,a2:20,order:1}]});
 assert.deepEqual(atoms.map(a=>a.bonds),[[1],[0]]);
 ''')
+
+
+def test_software_renderer_projects_picks_and_preserves_view_without_webgl():
+    node(BASE + r'''
+global.window={scrollX:40,scrollY:500,devicePixelRatio:1};
+let spheres=0,segments=0;
+const ctx=new Proxy({createLinearGradient:()=>({addColorStop(){}}),createRadialGradient:()=>({addColorStop(){}}),measureText:()=>({width:20}),arc(){spheres++;},lineTo(){segments++;}}, {get:(obj,key)=>key in obj?obj[key]:(()=>{})});
+const canvas={style:{},setAttribute(){},getContext:type=>{assert.equal(type,'2d');return ctx;}};
+global.document={createElement:()=>canvas};
+const element={getBoundingClientRect:()=>({left:10,top:20,width:800,height:500}),appendChild(){}};
+const viewer=C.createSoftwareViewer(element), model=viewer.addModel('2\ntest\nO 0 0 0\nH 1 0 0');
+const atoms=model.selectedAtoms({});
+atoms[0].bonds=[1];atoms[0].bondOrder=[1];atoms[1].bonds=[0];atoms[1].bondOrder=[1];
+viewer.setStyle({},{sphere:{scale:.27},stick:{radius:.13}});viewer.zoomTo();viewer.render();
+assert.ok(spheres>=2);assert.ok(segments>=1);
+const before=structuredClone(atoms.map(position)), origin=viewer.modelToScreen(atoms[0]);
+viewer.translate(20,40);
+const after=viewer.modelToScreen(atoms[0]);close(after.x-origin.x,20);close(after.y-origin.y,40);
+viewer.setView([0,0,0,6,...C.rotation({x:0,y:1,z:0},Math.PI/3)]);
+viewer.zoom(1.2);viewer.setProjection('orthographic');
+assert.deepEqual(atoms.map(position),before);
+const p=viewer.modelToScreen(atoms[0]);
+const localX=p.x-40-10,localY=p.y-500-20;
+assert.equal(viewer.targetedObjects(localX*2/800-1,1-localY*2/500)[0].clickable.id,1);
+const delta=C.screenDelta(viewer,atoms[0],60,20);
+assert.ok(Object.values(delta).every(Number.isFinite));
+''')

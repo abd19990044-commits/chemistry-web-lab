@@ -202,5 +202,117 @@
     listen(window,'blur',()=>{touches.clear();pinch=null;finish(true);});
     return {finish, destroy() {finish(true);disposed=true;events.abort();touches.clear();}, isDragging:()=>Boolean(gesture?.moved)};
   }
-  root.MolecularControls={basis,screenDelta,centroid,rotate,rotation,multiply,applyTransform,createController,dot};
+
+  // Canvas painter fallback keeps real XYZ coordinates and the same interaction
+  // contract on machines/browsers without a WebGL context.
+  function createSoftwareViewer(element) {
+    const canvas=document.createElement('canvas');
+    const context=canvas.getContext('2d');
+    if (!context) throw new Error('A canvas context is required for molecular rendering');
+    canvas.style.cssText='display:block;width:100%;height:100%;';
+    canvas.setAttribute('aria-label','Interactive three-dimensional molecular model');
+    let container=element, models=[], labels=[], view=[0,0,0,6,0,0,0,1], orthographic=false, width=1,height=1, pan={x:0,y:0};
+    const colors={H:'#edf2f7',C:'#687b91',N:'#6875ed',O:'#ef505a',S:'#f6cf44',P:'#f49a46',F:'#65d780',Cl:'#50d879',Br:'#c66b4c',I:'#a77ade',Na:'#a68be6',Fe:'#d78b56',Cu:'#c69260',Zn:'#a4b7c9'};
+    const radii={H:1.2,C:1.7,N:1.55,O:1.52,S:1.8,P:1.8,F:1.47,Cl:1.75,Br:1.85,I:1.98};
+    const matches=(a,sel)=>Object.entries(sel||{}).every(([k,v])=>Array.isArray(v)?v.includes(a[k]):a[k]===v);
+    const all=()=>models.flatMap(m=>m.atoms);
+    function project(atom) {
+      const r=rotate({x:atom.x+view[0],y:atom.y+view[1],z:atom.z+view[2]},view.slice(4,8));
+      const depth=view[3]-r.z, ratio=height*1.2/(orthographic?view[3]:Math.max(.25,depth));
+      return {x:width/2+pan.x+r.x*ratio,y:height/2+pan.y-r.y*ratio,z:r.z,depth,ratio};
+    }
+    function atomRadius(a,p) {
+      return a.style?.sphere ? Math.max(2,(a.style.sphere.scale||0.27)*(radii[a.elem]||1.7)*p.ratio) : Math.max(4,(a.style?.stick?.radius||0.06)*p.ratio);
+    }
+    function paint() {
+      const dpr=Math.min(2,window.devicePixelRatio||1);
+      context.setTransform(dpr,0,0,dpr,0,0);
+      context.fillStyle='#090e17';context.fillRect(0,0,width,height);
+      const entries=[];
+      models.forEach(model=>{
+        const projected=model.atoms.map(project);
+        model.atoms.forEach((a,i)=>{
+          const p=projected[i];
+          if (p.depth<=.25) return;
+          if (a.style?.sphere || !a.bonds.length) entries.push({type:'atom',a,p,z:p.z});
+          (a.bonds||[]).forEach((j,k)=>{
+            if(j<=i || !projected[j] || projected[j].depth<=.25) return;
+            const b=model.atoms[j], end=projected[j], style=a.style||{};
+            if (!style.stick && !style.line) return;
+            entries.push({type:'bond',a,b,p,end,z:(p.z+end.z)/2,order:a.bondOrder?.[k]||1});
+          });
+        });
+      });
+      entries.sort((a,b)=>a.z-b.z);
+      for(const item of entries) {
+        const {a,p}=item;
+        if(item.type==='bond') {
+          const {b,end}=item, dx=end.x-p.x,dy=end.y-p.y,length=Math.hypot(dx,dy)||1;
+          const radius=a.style.stick?Math.max(1,a.style.stick.radius*(p.ratio+end.ratio)/2):1;
+          const c1=a.style.stick?.color||colors[a.elem]||'#a1aab8', c2=b.style.stick?.color||colors[b.elem]||'#a1aab8';
+          const gradient=context.createLinearGradient(p.x,p.y,end.x,end.y);
+          gradient.addColorStop(0,c1);gradient.addColorStop(.48,c1);gradient.addColorStop(.52,c2);gradient.addColorStop(1,c2);
+          context.strokeStyle=gradient;context.lineWidth=radius*2;context.lineCap='round';
+          const count=Math.max(1,Math.min(3,item.order));
+          for(let j=0;j<count;j++) {
+            const offset=(j-(count-1)/2)*radius*2.5;
+            context.beginPath();context.moveTo(p.x-dy/length*offset,p.y+dx/length*offset);
+            context.lineTo(end.x-dy/length*offset,end.y+dx/length*offset);context.stroke();
+          }
+        } else {
+          const radius=atomRadius(a,p), color=a.style.sphere?.color||colors[a.elem]||'#bd86d0';
+          const gradient=context.createRadialGradient(p.x-radius*.3,p.y-radius*.35,radius*.06,p.x,p.y,radius);
+          gradient.addColorStop(0,'#ffffff');gradient.addColorStop(.25,color);gradient.addColorStop(1,'#182333');
+          context.beginPath();context.arc(p.x,p.y,radius,0,Math.PI*2);context.fillStyle=gradient;context.fill();
+          context.strokeStyle='rgba(226,232,240,0.25)';context.lineWidth=1;context.stroke();
+        }
+      }
+      context.font='600 12px sans-serif';context.textAlign='center';context.textBaseline='middle';
+      labels.forEach(label=>{
+        const p=project(label.spec.position), text=label.text;
+        const box=context.measureText(text).width+12;
+        context.fillStyle='rgba(15,23,42,.88)';context.fillRect(p.x-box/2,p.y-10,box,20);
+        context.fillStyle='#f8fafc';context.fillText(text,p.x,p.y);
+      });
+      return viewer;
+    }
+    const viewer={
+      rendererType:'canvas',
+      clear(){models=[];labels=[];return viewer;},
+      getRenderer:()=>({domElement:canvas}),
+      setContainer(el){container=el;container.appendChild(canvas);viewer.resize();return viewer;},
+      resize(){const rect=container.getBoundingClientRect();width=Math.max(1,rect.width);height=Math.max(1,rect.height);const dpr=Math.min(2,window.devicePixelRatio||1);canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);return viewer;},
+      getView:()=>view.slice(),
+      setView(v){view=v.slice();return paint();},
+      modelToScreen(a){const p=project(a),rect=container.getBoundingClientRect();return{x:rect.left+window.scrollX+p.x,y:rect.top+window.scrollY+p.y};},
+      translate(dx,dy){pan.x+=dx;pan.y+=dy;return paint();},
+      zoom(factor){view[3]=Math.max(.5,Math.min(1e5,view[3]/factor));return paint();},
+      zoomTo(){const atoms=all(),c=centroid(atoms);view[0]=-c.x;view[1]=-c.y;view[2]=-c.z;view[3]=Math.max(5,...atoms.map(a=>Math.hypot(a.x-c.x,a.y-c.y,a.z-c.z)*3));pan={x:0,y:0};return paint();},
+      setProjection(proj){orthographic=proj==='orthographic';return paint();},
+      render:paint,
+      removeAllLabels(){labels=[];return viewer;},
+      addLabel(text,spec){labels.push({text,spec});return viewer;},
+      setStyle(sel,spec){models.forEach(m=>m.setStyle(sel,spec,false));return viewer;},
+      addStyle(sel,spec){models.forEach(m=>m.setStyle(sel,spec,true));return viewer;},
+      targetedObjects(x,y){
+        const sx=(x+1)*width/2,sy=(1-y)*height/2;
+        return all().map(a=>({a,p:project(a)})).filter(({a,p})=>p.depth>.25 && Math.hypot(p.x-sx,p.y-sy)<atomRadius(a,p)+5)
+          .sort((a,b)=>b.p.z-a.p.z).map(({a,p})=>({clickable:a,distance:p.depth}));
+      },
+      addModel(xyz){
+        const atoms=xyz.trim().split('\n').slice(2).filter(Boolean).map((line,index)=>{
+          const [elem,x,y,z]=line.trim().split(/\s+/);
+          return {elem,x:Number(x),y:Number(y),z:Number(z),index,id:index+1,bonds:[],bondOrder:[],style:{}};
+        });
+        const model={atoms,selectedAtoms:(sel)=>atoms.filter(a=>matches(a,sel)),
+          setClickable(sel,value){atoms.filter(a=>matches(a,sel)).forEach(a=>a.clickable=value);},
+          setStyle(sel,spec,append){atoms.filter(a=>matches(a,sel)).forEach(a=>{if(!append)a.style={};Object.entries(spec).forEach(([key,value])=>a.style[key]={...(a.style[key]||{}),...value});});}
+        };
+        models.push(model);return model;
+      }
+    };
+    viewer.setContainer(element);return viewer;
+  }
+
+  root.MolecularControls={createSoftwareViewer,basis,screenDelta,centroid,rotate,rotation,multiply,applyTransform,createController,dot};
 })(typeof window==='undefined'?globalThis:window);

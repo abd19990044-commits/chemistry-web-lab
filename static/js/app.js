@@ -2205,7 +2205,12 @@
 
     undoRedoRow.append(undoBtn, redoBtn, clearAllBtn);
     toolActionsCard.append(cleanBtn, uffHint, undoRedoRow);
-    sidebar.append(fragCard, transformCard, infoCard, toolActionsCard);
+    const preciseTransforms = document.createElement("details");
+    preciseTransforms.className = "builder3d-precision-details";
+    const preciseTitle = document.createElement("summary");
+    preciseTitle.textContent = "Precision transforms & atom coordinates";
+    preciseTransforms.append(preciseTitle, transformCard);
+    sidebar.append(fragCard, infoCard, toolActionsCard, preciseTransforms);
     mainLayout.append(viewportWrap, sidebar);
 
     const summaryBar = document.createElement("div");
@@ -2706,7 +2711,7 @@
       const vEl = document.getElementById("builder3d-viewport");
       if (!vEl) return;
 
-      if (!window.$3Dmol) {
+      if (!window.$3Dmol && !bState.viewer) {
         if (!renderRetryTimer) {
           let attempts = 0;
           renderRetryTimer = setInterval(() => {
@@ -2718,7 +2723,10 @@
             } else if (attempts >= 25) {
               clearInterval(renderRetryTimer);
               renderRetryTimer = null;
-              renderFallbackTable(vEl, bState.atoms);
+              vEl.replaceChildren();
+              bState.viewer = MolecularControls.createSoftwareViewer(vEl);
+              builderViewer = bState.viewer;
+              renderScene(true);
             }
           }, 120);
         }
@@ -2729,12 +2737,19 @@
       try {
         if (!bState.viewer) {
           vEl.innerHTML = "";
-          bState.viewer = builderViewer ? builderViewer.setContainer(vEl) : $3Dmol.createViewer(vEl, {
-            defaultcolors: $3Dmol.elementColors.rasmol,
-            backgroundColor: "#090e17",
-            nomouse: true,
-            antialias: true
-          });
+          if (builderViewer) bState.viewer = builderViewer.setContainer(vEl);
+          else {
+            try {
+              bState.viewer = $3Dmol.createViewer(vEl, {
+                defaultcolors: $3Dmol.elementColors.rasmol, backgroundColor: "#090e17",
+                nomouse: true, antialias: true
+              });
+            } catch (error) {
+              console.info("WebGL unavailable; using compatible molecular canvas renderer.");
+              vEl.replaceChildren();
+              bState.viewer = MolecularControls.createSoftwareViewer(vEl);
+            }
+          }
           builderViewer = bState.viewer;
           bState.viewer.setProjection("perspective");
         }
