@@ -156,3 +156,48 @@ const USER_KEY='username', KEY_KEY='key';
   assert.equal(remember.checked, true);
 })();
 ''')
+
+
+def test_kaggle_sync_applies_remote_stop_to_existing_job_and_active_count():
+    node(function(APP, "kaggleRemotePatch") + function(APP, "isActiveOnKaggle")
+         + function(APP, "mergeRemoteJobs") + r'''
+const assert = require('node:assert/strict');
+const TERMINAL_STATUSES = ['complete', 'error', 'cancelled'];
+let jobs = [{jobId:'chem-tools-test', kaggleUsername:'user', status:'running', submittedAt:1}];
+const loadJobs = () => jobs;
+const saveJobs = value => { jobs = value; };
+const loadRemovedIds = () => [];
+const isRemovedId = () => false;
+const renderJobs = () => {};
+for (const status of ['cancelled', 'error']) {
+  jobs[0].status = 'running';
+  mergeRemoteJobs('user', '', [{job_id:'chem-tools-test', owner:'user', status,
+    remote_state:status.toUpperCase(), remote_active:false, cf_sync_status:'SYNCED'}]);
+  assert.equal(jobs[0].status, status);
+  assert.equal(jobs.filter(isActiveOnKaggle).length, 0);
+  assert.equal(jobs[0].cfSyncStatus, 'SYNCED');
+}
+mergeRemoteJobs('user', '', [{job_id:'chem-tools-running', status:'running', remote_active:true}]);
+assert.equal(jobs.filter(isActiveOnKaggle).length, 1);
+const running = jobs.find(j => j.jobId === 'chem-tools-running');
+mergeRemoteJobs('user', '', [{job_id:running.jobId, status:'error', remote_status_unknown:true}]);
+assert.equal(running.status, 'running');
+assert.equal(isActiveOnKaggle(running), false);
+assert.equal(isActiveOnKaggle({status:'running', backend:'server_local'}), false);
+assert.equal(isActiveOnKaggle({status:'running', backend:'local_agent'}), false);
+assert.equal(isActiveOnKaggle({status:'restarting', remoteActive:false}), false);
+assert.equal(isActiveOnKaggle({status:'queued', remoteActive:true}), true);
+''')
+
+
+def test_queue_reserves_remote_queued_and_uncertain_slots_without_counting_local_jobs():
+    node(function(APP, "reservesKaggleSlot") + r'''
+const assert = require('node:assert/strict');
+const TERMINAL_STATUSES = ['complete', 'error', 'cancelled'];
+assert.equal(reservesKaggleSlot({jobId:'chem-tools-queued', status:'queued', remoteActive:true}), true);
+assert.equal(reservesKaggleSlot({jobId:'job_pending', status:'queued'}), false);
+assert.equal(reservesKaggleSlot({jobId:'chem-tools-old', status:'running', remoteStatusUnknown:true}), true);
+assert.equal(reservesKaggleSlot({status:'restarting', remoteActive:false}), false);
+assert.equal(reservesKaggleSlot({status:'cancelled', remoteActive:true}), false);
+assert.equal(reservesKaggleSlot({status:'running', backend:'server_local'}), false);
+''')

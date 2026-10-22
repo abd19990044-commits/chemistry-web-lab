@@ -315,6 +315,7 @@ class OrchestratorService:
                         step_count=step_count,
                         step_name=step_name,
                     )
+                    self.store.put_job(job, expected_version=job._extra.get("_version"))
                 except Exception as exc:
                     log.warning("Could not register job in Cloudflare control plane: %s", exc)
 
@@ -474,12 +475,14 @@ class OrchestratorService:
                 log.warning("remote status unknown for %s: %s", job_id, exc)
             try:
                 self.cf_controller.sync_job_state(job)
+                self.store.put_job(job, expected_version=job._extra.get("_version"))
             except Exception:
                 pass
 
         described = self.describe(job)
         if remote_status_unknown:
             described["remote_status_unknown"] = True
+            described["remote_active"] = None
             described["remote_status_error"] = remote_status_error
             described["note"] = "Remote status is temporarily unavailable; showing the last persisted state."
         return described
@@ -508,6 +511,10 @@ class OrchestratorService:
             "state": job.state.value,
             "local_state": extra.get("local_state", job.state.value),
             "remote_state": extra.get("last_seen_remote_state", "UNKNOWN"),
+            "remote_status_unknown": bool(extra.get("remote_status_unknown", False)),
+            "remote_active": (None if extra.get("remote_status_unknown") or
+                              extra.get("last_seen_remote_state", "UNKNOWN").upper() == "UNKNOWN"
+                              else extra.get("last_seen_remote_state", "").upper() in ("RUNNING", "QUEUED")),
             "phase": _phase_label(job.state),
             "epoch": job.epoch,
             "window": job.epoch + 1,
@@ -610,6 +617,7 @@ class OrchestratorService:
                 # Sync state to Cloudflare
                 try:
                     self.cf_controller.sync_job_state(job)
+                    self.store.put_job(job, expected_version=job._extra.get("_version"))
                 except Exception:
                     pass
                 described = self.describe(job)
@@ -627,6 +635,7 @@ class OrchestratorService:
                     "kaggle_url": entry.get("kaggle_url"),
                     "chain_slugs": entry.get("chain_slugs", []),
                     "is_terminal": False, "needs_reconcile": True,
+                    "remote_status_unknown": True, "remote_active": None,
                     "last_run": entry.get("last_run"),
                     "note": f"Status check will retry: {type(exc).__name__}",
                 })
@@ -637,10 +646,19 @@ class OrchestratorService:
                 continue
             if job.job_id not in seen:
                 seen.add(job.job_id)
+                if remote_known and not job.is_terminal:
+                    try:
+                        job = self.reconciler.reconcile(job.job_id, creds, actor="list-missing")
+                        self.cf_controller.sync_job_state(job)
+                        self.store.put_job(job, expected_version=job._extra.get("_version"))
+                    except Exception as exc:
+                        job._extra["remote_status_unknown"] = True
+                        log.warning("Could not verify unlisted Kaggle job %s: %s", job.job_id, type(exc).__name__)
                 described = self.describe(job)
-                described["deleted_on_kaggle"] = bool(remote_known)
+                described["deleted_on_kaggle"] = bool(remote_known and described["remote_state"] == "NOT_FOUND")
                 if not remote_known:
                     described["remote_status_unknown"] = True
+                    described["remote_active"] = None
                     described["note"] = "Kaggle listing is temporarily unavailable; local state was preserved."
                 merged.append(described)
 

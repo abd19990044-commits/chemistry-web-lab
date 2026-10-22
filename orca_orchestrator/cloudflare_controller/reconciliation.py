@@ -152,7 +152,16 @@ def decide_reconciliation(
             note="Remote Kaggle calculation errored." + (" Checkpoint available for recovery." if can_resume else ""),
         )
 
-    # 5. Remote is Stopped / Canceled / Expired (e.g. Kaggle 12-hour limit reached)
+    # Explicit user cancellation must not be treated as an expired runtime.
+    if status_str in ("cancelled", "canceled"):
+        return ReconciliationDecision(
+            case=ReconciliationCase.CASE_D_STOPPED, action="STOPPED",
+            local_state=LocalWorkflowState.REMOTE_STOPPED.value,
+            remote_state=RemoteExecutionState.STOPPED.value,
+            note="Kaggle acknowledged cancellation; automatic recovery is disabled.",
+        )
+
+    # 5. Remote is Stopped / Expired (e.g. Kaggle 12-hour limit reached)
     if status_str in ("stopped", "cancelled", "canceled", "expired") or remote_status.is_stopped:
         has_ckpt = bool(cf_record.checkpoint_id or (manifest and manifest.verified_checkpoint_id))
         can_resume = has_ckpt and (cf_record.epoch + 1 < max_epochs)

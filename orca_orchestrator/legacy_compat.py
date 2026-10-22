@@ -102,6 +102,8 @@ def _legacy_job(job):
         "resume_reason": job.get("resume_reason"),
         "local_state": job.get("local_state"),
         "remote_state": job.get("remote_state"),
+        "remote_active": job.get("remote_active"),
+        "remote_status_unknown": job.get("remote_status_unknown", False),
         "deleted_on_kaggle": job.get("deleted_on_kaggle", False),
         "result_state": job.get("result_state", "REMOTE_ONLY"),
         "storage_durability": job.get("storage_durability", "ephemeral_local"),

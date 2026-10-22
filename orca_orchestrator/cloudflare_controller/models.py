@@ -43,6 +43,7 @@ class LocalWorkflowState(str, Enum):
             LocalWorkflowState.FAILED,
             LocalWorkflowState.ARCHIVED,
             LocalWorkflowState.REMOTE_DELETED,
+            LocalWorkflowState.REMOTE_STOPPED,
         )
 
     @property
@@ -162,6 +163,8 @@ class CloudflareJobRecord:
             local_state = LocalWorkflowState.COMPLETED.value
         elif manifest.state == JobState.FAILED:
             local_state = LocalWorkflowState.FAILED.value
+        elif manifest.state == JobState.CANCELLED:
+            local_state = LocalWorkflowState.REMOTE_STOPPED.value
         elif manifest.state == JobState.CREATED:
             local_state = LocalWorkflowState.CREATED.value
         elif manifest.state == JobState.QUEUED:
@@ -178,7 +181,8 @@ class CloudflareJobRecord:
             created_at=manifest.created_at,
             updated_at=manifest.updated_at,
             last_reconciliation_at=now(),
-            last_seen_remote_state=last_seen_remote_state,
+            last_seen_remote_state=(last_seen_remote_state if last_seen_remote_state != "UNKNOWN"
+                                    else manifest._extra.get("last_seen_remote_state", "UNKNOWN")),
             local_state=local_state,
             workflow_id=workflow_id or manifest._extra.get("workflow_id"),
             parent_job_id=parent_job_id or manifest._extra.get("parent_job_id"),
@@ -202,6 +206,7 @@ class CloudflareJobRecord:
             result_provenance=dict(getattr(manifest, "result_provenance", {}) or {}),
             chain_slugs=list(manifest.chain_slugs),
             schema_version=1,
+            version=manifest._extra.get("cf_version", 1),
             metadata={"job_id_prefix": manifest.job_id},
         )
 
@@ -213,7 +218,6 @@ class CloudflareJobRecord:
         elif self.local_state in (
             LocalWorkflowState.FAILED.value,
             LocalWorkflowState.REMOTE_FAILED.value,
-            LocalWorkflowState.REMOTE_STOPPED.value,
             LocalWorkflowState.REMOTE_DELETED.value,
             LocalWorkflowState.RECOVERY_PENDING.value,
         ):
@@ -222,6 +226,8 @@ class CloudflareJobRecord:
             state = JobState.CREATED
         elif self.local_state == LocalWorkflowState.RUNNING.value:
             state = JobState.RUNNING
+        elif self.local_state == LocalWorkflowState.REMOTE_STOPPED.value:
+            state = JobState.CANCELLED
 
         manifest = JobManifest(
             job_id=self.kaggle_job_ref,
@@ -250,12 +256,15 @@ class CloudflareJobRecord:
             result_provenance=dict(self.result_provenance or {}),
             _extra={
                 "internal_job_id": self.internal_job_id,
+                "cf_version": self.version,
                 "workflow_id": self.workflow_id,
                 "parent_job_id": self.parent_job_id,
                 "step_index": self.step_index,
                 "step_count": self.step_count,
                 "step_name": self.step_name,
                 "local_state": self.local_state,
+                "resume_required": self.resume_required,
+                "resume_reason": self.resume_reason,
                 "last_seen_remote_state": self.last_seen_remote_state,
             },
         )

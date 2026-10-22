@@ -61,6 +61,8 @@ _STRUCTURED_STATUS_MAP = {
     "ERROR": "error",
     "CANCELLED": "cancelled",
     "CANCELED": "cancelled",
+    "CANCEL_REQUESTED": "running",  # Still consumes a slot until acknowledged.
+    "CANCEL_ACKNOWLEDGED": "cancelled",
 }
 
 KERNEL_ACTIVE_STATUSES = frozenset({"running", "queued"})

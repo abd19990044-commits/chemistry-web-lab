@@ -4818,6 +4818,42 @@
   // Merges jobs Kaggle reports for this account into the locally cached
   // list, without clobbering jobs already tracked locally (which carry
   // live status/timing info this merge can't reconstruct).
+  function kaggleRemotePatch(job, remote) {
+    const patch = {
+      remoteStatusUnknown: Boolean(remote.remote_status_unknown),
+      remoteActive: typeof remote.remote_active === "boolean" ? remote.remote_active : null,
+      remoteState: remote.remote_state || "UNKNOWN",
+      cfSyncStatus: remote.cf_sync_status || "DEGRADED_UNSYNCED",
+    };
+    if (patch.remoteStatusUnknown) {
+      patch.warning = remote.note || "Kaggle status is temporarily unavailable; retrying verification.";
+    } else if (remote.status && remote.status !== "unknown") {
+      patch.status = remote.status;
+      patch.warning = remote.warning || remote.note || null;
+      patch.finishedAt = TERMINAL_STATUSES.includes(remote.status) ? (job.finishedAt || Date.now()) : null;
+    }
+    return patch;
+  }
+
+  function isActiveOnKaggle(job) {
+    if (job.backend === "server_local" || job.backend === "local_agent" || job.localJobId) return false;
+    if (TERMINAL_STATUSES.includes(job.status) || job.remoteStatusUnknown) return false;
+    if (typeof job.remoteActive === "boolean") return job.remoteActive;
+    return ["running", "restarting", "submitting"].includes(job.status);
+  }
+
+  function reservesKaggleSlot(job) {
+    if (job.backend === "server_local" || job.backend === "local_agent" || job.localJobId) return false;
+    if (TERMINAL_STATUSES.includes(job.status)) return false;
+    // Keep an uncertain observation reserved until verified, while the banner
+    // only counts executions that are known to be active.
+    if (job.remoteStatusUnknown || typeof job.remoteActive !== "boolean") {
+      return ["running", "restarting", "submitting"].includes(job.status) ||
+        (job.status === "queued" && Boolean(job.jobId && job.jobId.startsWith("chem-tools-")));
+    }
+    return job.remoteActive;
+  }
+
   function mergeRemoteJobs(username, key, remoteJobs) {
     const jobs = loadJobs();
     const removedIds = loadRemovedIds();
@@ -4825,13 +4861,13 @@
     remoteJobs.forEach(rj => {
       if (isRemovedId(rj.job_id, removedIds)) return;
       const remoteIds = new Set((rj.chain_ids && rj.chain_ids.length) ? rj.chain_ids : [rj.job_id]);
-      // Same job, already tracked here? Then only catch it up: the chain may
+      // Catch up both state and chain: the job may have stopped or the chain may
       // have auto-restarted into a newer kernel while this browser was closed,
       // and the local entry would otherwise keep polling a finished window.
       const local = jobs.find(j => remoteIds.has(j.jobId) ||
         (j.chainIds || []).some(id => remoteIds.has(id)));
       if (local) {
-        if (local.jobId !== rj.job_id || local.kaggleUsername !== rj.owner) {
+        if (local.jobId !== rj.job_id || local.kaggleUsername !== (rj.owner || username)) {
           const known = new Set((local.chain || []).map(w => w.id));
           local.jobId = rj.job_id;
           local.kaggleUrl = rj.kaggle_url || local.kaggleUrl;
@@ -4848,6 +4884,8 @@
           local.finishedAt = null;
           added++;
         }
+        Object.assign(local, kaggleRemotePatch(local, rj));
+        added++;
         return;
       }
       const submittedAt = rj.last_run ? Date.parse(rj.last_run) || Date.now() : Date.now();
@@ -4863,6 +4901,7 @@
         kaggleUrl: rj.kaggle_url,
         kaggleUsername: rj.owner || username,
         status: "unknown",
+        ...kaggleRemotePatch({}, rj),
         submittedAt,
       });
       added++;
@@ -5162,7 +5201,7 @@
 
     // Check active jobs capacity before dispatching
     const currentJobs = loadJobs();
-    const activeJobs = currentJobs.filter(j => ["running", "restarting", "submitting"].includes(j.status));
+    const activeJobs = currentJobs.filter(reservesKaggleSlot);
     
     // If active jobs already at or above max (5), queue the job safely
     if (activeJobs.length >= MAX_ACTIVE_KAGGLE_JOBS) {
@@ -5564,7 +5603,7 @@
     }
 
     // Update queue governor statistics banner
-    const activeJobs = jobs.filter(j => ["running", "restarting", "submitting", "downloading", "verifying"].includes(j.status));
+    const activeJobs = jobs.filter(isActiveOnKaggle);
     const queuedJobs = jobs.filter(j => j.status === "queued");
     const waitingDepJobs = jobs.filter(j => j.status === "waiting_dependency");
     const completedJobs = jobs.filter(j => j.status === "complete");
@@ -6013,7 +6052,7 @@
       }
 
       // 2. Dispatch runnable queued jobs up to MAX_ACTIVE_KAGGLE_JOBS (5)
-      let currentActive = jobs.filter(j => ["running", "restarting", "submitting"].includes(j.status)).length;
+      let currentActive = jobs.filter(reservesKaggleSlot).length;
       if (currentActive < MAX_ACTIVE_KAGGLE_JOBS) {
         const runnable = jobs
           .filter(j => j.status === "queued" && !(j.jobId && j.jobId.startsWith("chem-tools-")))
@@ -6352,8 +6391,12 @@
         const chain = (job.chain && job.chain.length)
           ? job.chain : [{ id: job.jobId, url: job.kaggleUrl }];
         const nextUrl = data.next_kaggle_url || job.kaggleUrl;
-        if (chainIds.includes(data.next_job_id)) return;
+        if (chainIds.includes(data.next_job_id)) {
+          updateJob(job.jobId, kaggleRemotePatch(job, data));
+          return;
+        }
         updateJob(job.jobId, {
+          ...kaggleRemotePatch(job, data),
           jobId: data.next_job_id,
           rootId: job.rootId || job.jobId,
           status: "running",
@@ -6366,7 +6409,7 @@
         return;
       }
       if (data.status === "complete" && job.status !== "complete") {
-        updateJob(job.jobId, { status: "complete", finishedAt: Date.now(), warning: data.warning || null, notifiedComplete: true });
+        updateJob(job.jobId, { ...kaggleRemotePatch(job, data), status: "complete", finishedAt: Date.now(), warning: data.warning || null, notifiedComplete: true });
         if (!job.notifiedComplete) {
           if (data.warning) {
             showToast(`<strong>${job.name}</strong> stopped early - only partial results are available. Open the Jobs tab for details.`);
@@ -6383,14 +6426,16 @@
         return;
       }
       if (data.status && data.status !== "unknown") {
-        const patch = { status: data.status };
+        const patch = kaggleRemotePatch(job, data);
         if (TERMINAL_STATUSES.includes(data.status)) {
           patch.finishedAt = job.finishedAt || Date.now();
-          processKaggleQueue();
         }
         if (data.warning) patch.warning = data.warning;
         else if (data.status === "error" && data.note) patch.warning = data.note;
         updateJob(job.jobId, patch);
+        if (TERMINAL_STATUSES.includes(data.status)) await processKaggleQueue();
+      } else {
+        updateJob(job.jobId, kaggleRemotePatch(job, data));
       }
     } catch (err) {
       console.warn(`Status check failed for ${job.jobId}:`, err.message);

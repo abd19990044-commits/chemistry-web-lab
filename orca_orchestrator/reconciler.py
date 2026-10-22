@@ -188,7 +188,15 @@ def decide(job: JobManifest, obs: Observation, *, config=CONFIG) -> Decision:
                         "the successor kernel already exists on Kaggle",
                         {"next_slug": next_slug}, action="adopt_ledger")
 
+    if obs.kaggle_state == "cancelled":
+        return Decision(Trigger.CANCEL, "Kaggle acknowledged cancellation of this window",
+                        {"kaggle_state": "cancelled"})
+
     if obs.error is not None:
+        if obs.kaggle_state == "error":
+            return Decision(Trigger.ORCA_FATAL, "Kaggle reports an error; output retrieval failed",
+                            {"error": obs.kernel_status.raw or "kernel failed on Kaggle"},
+                            action="adopt_ledger")
         note = "Kaggle output files rate-limited; will retry on next poll." if isinstance(obs.error, RateLimitError) else None
         return _noop("observation failed; the job's state is unchanged because a "
                      "failure to *look* is not a failure of the job",
@@ -534,8 +542,15 @@ class Reconciler:
                             obs = observe(client, job)
                     except OrchestratorError:
                         pass
+                # Keep the observed execution state separate from workflow recovery.
+                # A restoring/restarting workflow does not prove Kaggle is running.
+                observed_state = "not_found" if obs.kernel_missing else obs.kaggle_state
+                job._extra["remote_status_unknown"] = observed_state in (None, "unknown")
+                if observed_state and observed_state != "unknown":
+                    job._extra["last_seen_remote_state"] = observed_state.upper()
                 if obs.error is not None and isinstance(obs.error, (AuthenticationError, KaggleUnavailableError)):
-                    raise obs.error
+                    if obs.kernel_status is None:
+                        raise obs.error
                 decision = decide(job, obs, config=self.config)
 
                 # decision.detail is nested rather than splatted: it is
@@ -591,6 +606,8 @@ class Reconciler:
                     if next_slug not in job.chain_slugs:
                         job.chain_slugs.append(next_slug)
                     job.current_slug = next_slug
+                    job._extra["last_seen_remote_state"] = obs.successor_status.status.upper() if obs.successor_status else "UNKNOWN"
+                    job._extra["remote_status_unknown"] = obs.successor_status is None
                     job.epoch = max(job.epoch + 1, job.epoch)
                     if job.state is not JobState.QUEUED:
                         # This is an external-ledger adoption, so the normal
@@ -731,6 +748,8 @@ class Reconciler:
             return job
         job.current_slug = result.slug
         job.current_url = result.url
+        job._extra["last_seen_remote_state"] = "QUEUED"
+        job._extra["remote_status_unknown"] = False
         if result.slug not in job.chain_slugs:
             job.chain_slugs.append(result.slug)
         return self.transition(
@@ -770,6 +789,16 @@ class Reconciler:
                 ledger_job.last_heartbeat_at = record.heartbeat.get("at")
                 ledger_job.heartbeat_detail = record.heartbeat.get("detail", {})
             ledger_job._extra["_version"] = job._extra.get("_version")
+            for key in ("internal_job_id", "cf_version", "application_owner"):
+                if key in job._extra:
+                    ledger_job._extra[key] = job._extra[key]
+            if ledger_job.current_slug == job.current_slug:
+                for key in ("last_seen_remote_state", "remote_status_unknown"):
+                    if key in job._extra:
+                        ledger_job._extra[key] = job._extra[key]
+            else:
+                ledger_job._extra["last_seen_remote_state"] = "UNKNOWN"
+                ledger_job._extra["remote_status_unknown"] = True
             job = ledger_job
 
             event = Event.create(
@@ -1009,6 +1038,8 @@ class Reconciler:
                               slug=result.slug, url=result.url,
                               checkpoint_id=checkpoint.checkpoint_id if checkpoint else None,
                               slug_diverged=not result.slug_matches_request)
+        job._extra["last_seen_remote_state"] = "QUEUED"
+        job._extra["remote_status_unknown"] = False
         if result.slug != target_slug:
             # Kaggle placed the notebook somewhere other than requested. Follow
             # it, or every subsequent poll addresses a kernel that is not there.

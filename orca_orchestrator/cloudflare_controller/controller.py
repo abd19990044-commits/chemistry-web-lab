@@ -72,6 +72,9 @@ class CloudflareController:
             step_name=step_name,
         )
         saved = self.client.put_job(record)
+        manifest.cf_sync_status = saved.cf_sync_status
+        manifest._extra["internal_job_id"] = saved.internal_job_id
+        manifest._extra["cf_version"] = saved.version
         is_durable = getattr(self.client, "is_durable", False) and getattr(saved, "cf_sync_status", "") == "SYNCED"
         if is_durable:
             log.info(
@@ -128,8 +131,12 @@ class CloudflareController:
             internal_job_id=internal_id,
             last_seen_remote_state=remote_state,
         )
+        if existing:
+            record.version = existing.version
         saved = self.client.put_job(record)
         manifest.cf_sync_status = getattr(saved, "cf_sync_status", "DEGRADED_UNSYNCED")
+        manifest._extra["internal_job_id"] = saved.internal_job_id
+        manifest._extra["cf_version"] = saved.version
         return saved
 
     def record_checkpoint(self, ckpt: CheckpointManifest, owner: str) -> bool:
@@ -225,6 +232,8 @@ class CloudflareController:
                 remote_status = client.kernel_exists(slug_to_check)
             except Exception as exc:
                 log.warning("Could not query Kaggle status for job %s: %s", job_ref, exc)
+                # An unavailable observation is not evidence of deletion.
+                continue
 
             # Execute deterministic reconciliation decision
             decision: ReconciliationDecision = decide_reconciliation(
@@ -257,6 +266,16 @@ class CloudflareController:
                     manifest.enter_state(JobState.FAILED)
                 elif decision.action == "RECOVERY_PENDING":
                     manifest.enter_state(JobState.FAILED)
+                elif decision.action == "STOPPED":
+                    manifest.enter_state(JobState.CANCELLED)
+                elif decision.action == "MARK_DELETED":
+                    manifest.enter_state(JobState.CANCELLED)
+
+                manifest._extra["last_seen_remote_state"] = decision.remote_state
+                manifest._extra["remote_status_unknown"] = decision.remote_state == "UNKNOWN"
+                manifest._extra["local_state"] = decision.local_state
+                manifest._extra["resume_required"] = decision.resume_required
+                manifest._extra["resume_reason"] = decision.resume_reason
 
                 if cf_job.result_state:
                     manifest.result_state = cf_job.result_state
@@ -271,8 +290,11 @@ class CloudflareController:
                 if cf_job.result_archived_at:
                     manifest.result_archived_at = cf_job.result_archived_at
 
+            saved = self.client.put_job(cf_job)
+            manifest.cf_sync_status = saved.cf_sync_status
+            manifest._extra["internal_job_id"] = saved.internal_job_id
+            manifest._extra["cf_version"] = saved.version
             self.store.put_job(manifest)
-            self.client.put_job(cf_job)
 
             jobs_by_ref[job_ref] = cf_job
             reconciled_jobs.append({
