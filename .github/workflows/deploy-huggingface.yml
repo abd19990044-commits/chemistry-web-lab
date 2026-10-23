@@ -95,3 +95,5 @@ jobs:
 # Refresh worker dependencies together and keep geometry-only views free of inferred QM labels.
 
 # Runtime source alignment: normalize missing-value placeholder punctuation.
+
+# Runtime update: export rendered molecular PNGs as downloadable binary blobs.

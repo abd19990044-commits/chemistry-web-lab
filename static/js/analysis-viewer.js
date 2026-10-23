@@ -73,7 +73,10 @@
         let uri;const oldView=viewer.getView().slice(),r=viewport.getBoundingClientRect(),scale=Math.min(2,4096/Math.max(r.width,r.height));
         if(viewer.rendererType==='canvas')uri=viewer.pngURI(scale);
         else{try{viewer.setWidth(Math.round(r.width*scale));viewer.setHeight(Math.round(r.height*scale));viewer.render();uri=viewer.pngURI();}finally{viewer.resize();viewer.setView(oldView);viewer.render();}}
-        const a=document.createElement('a');a.href=uri;a.download='calculated-molecular-geometry.png';a.click();
+        if(!uri?.startsWith('data:image/png;base64,'))throw Error('The renderer returned an invalid PNG.');
+        const decoded=atob(uri.split(',')[1]),bytes=Uint8Array.from(decoded,c=>c.charCodeAt(0));
+        const url=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
+        const a=document.createElement('a');a.href=url;a.download='calculated-molecular-geometry.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
       }catch(e){options.warn?.('Could not export molecular PNG: '+e.message);}
     });
     return {draw,fit,toggleSpin,topology:()=>({atoms:atoms.map(a=>({id:a.id,elem:a.elem,x:a.x,y:a.y,z:a.z,charge:job.molecular_topology?.atoms?.[a.id-1]?.charge||0})),bonds:structuredClone(bonds),topology:source?'source':'unverified'}),destroy(){disposed=true;spinning=false;cancelAnimationFrame(spinFrame);controls.destroy();observer.disconnect();events.abort();el('engine-3d-spin')?.classList.remove('btn-primary');}};
