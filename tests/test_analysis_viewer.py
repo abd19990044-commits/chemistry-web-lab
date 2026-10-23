@@ -87,3 +87,36 @@ event('pointerdown');event('pointermove',{clientX:150,clientY:130});event('point
 assert.equal(JSON.stringify(atoms.map(a=>[a.x,a.y,a.z])),snapshot);assert.notDeepEqual(view.slice(4),[0,0,0,1]);
 scene.destroy();const before=renders;event('wheel');assert.equal(renders,before);assert(disconnected);
 ''')
+
+
+def test_publication_preview_discards_old_renders_and_exports_manual_label_positions():
+    node(r'''
+(async()=>{
+global.window=new EventTarget();global.requestAnimationFrame=()=>1;global.cancelAnimationFrame=()=>{};
+global.ResizeObserver=class{observe(){}disconnect(){}};
+class El extends EventTarget{
+ constructor(){super();this.value='off';this.hidden=false;this.disabled=false;this.children=[];this.attributes={};this.style={};this.classList={add(){},remove(){},toggle(){}};}
+ setAttribute(k,v){this.attributes[k]=v;}replaceChildren(...children){this.children=children;}
+ getBoundingClientRect(){return {left:0,top:0,width:800,height:500};}getClientRects(){return [1];}
+}
+const els=new Map();global.document={hidden:false,getElementById:id=>{if(!els.has(id))els.set(id,new El());return els.get(id);}};
+const el=id=>document.getElementById(id),atoms=[{id:1,index:0,elem:'C',x:0,y:0,z:0,bonds:[],bondOrder:[]},{id:2,index:1,elem:'N',x:1.3,y:0,z:0,bonds:[],bondOrder:[]}];
+let view=[0,0,0,5,0,0,0,1];const before=JSON.stringify(atoms.map(a=>[a.x,a.y,a.z]));
+const viewer={getModel:()=>({selectedAtoms:()=>atoms,setClickable(){}}),getView:()=>view,setView:v=>{view=v;},setProjection(){},render(){},addStyle(){},addLabel(){},addLine(){}};
+const pending=[];let exported,moveLabel,destroyed=0;
+global.PublicationFigures={renderMolecule:()=>new Promise(resolve=>pending.push(resolve)),saveMolecule:async(v,p,o)=>{exported=o;}};
+global.PublicationMolecule={createLabelController(options){moveLabel=options.move;return {destroy(){destroyed++;}};}};
+const studio=V.create({viewer,viewport:new El(),job:{},restyle(){}}),button=el('engine-3d-figure-preview-btn'),preview=el('engine-3d-figure-preview');
+const click=id=>el(id).dispatchEvent(new Event('click')),tick=()=>new Promise(resolve=>setImmediate(resolve));
+const result=()=>({canvas:Object.assign(new El(),{width:800,height:500}),labelBoxes:[],redrawLabels:()=>[]});
+click('engine-3d-figure-preview-btn');assert.equal(button.disabled,true);
+el('engine-3d-label-color').dispatchEvent(new Event('input'));const obsolete=result();pending.shift()(obsolete);await tick();
+assert.equal(obsolete.canvas.width,1);assert.equal(preview.hidden,true,'Outdated async result must not replace the preview');
+click('engine-3d-figure-preview-btn');pending.shift()(result());await tick();assert.equal(preview.hidden,false);assert.equal(preview.attributes['data-stale'],'false');
+moveLabel(0,{x:.4,y:.2});click('engine-3d-download-png');await tick();assert.deepEqual(exported.labelPositions,{0:{x:.4,y:.2}});
+el('engine-3d-label-color').dispatchEvent(new Event('change'));assert.equal(preview.attributes['data-stale'],'true');assert.equal(destroyed,1);
+click('engine-3d-figure-preview-btn');pending.shift()(result());await tick();click('engine-3d-download-png');await tick();assert.deepEqual(exported.labelPositions,{0:{x:.4,y:.2}},'Changing color must preserve manual positions');
+click('engine-3d-view-right');click('engine-3d-download-png');await tick();assert.deepEqual(exported.labelPositions,{},'New camera orientation invalidates old page positions');
+assert.equal(JSON.stringify(atoms.map(a=>[a.x,a.y,a.z])),before);studio.destroy();
+})().catch(e=>{console.error(e);process.exit(1);});
+''')

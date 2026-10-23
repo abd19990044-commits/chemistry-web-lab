@@ -30,7 +30,25 @@
     const events=new AbortController(),signal=events.signal;
     const el=id=>document.getElementById(id),listen=(node,type,fn)=>node?.addEventListener(type,fn,{signal});
     const mode=el('engine-3d-measure-mode'),details=el('engine-3d-inspector'),topology=el('engine-3d-topology-status');
-    const oldPreview=el('engine-3d-figure-preview');if(oldPreview){oldPreview.replaceChildren();oldPreview.hidden=true;}
+    let previewRevision=0,previewController=null,labelPositions={},lastOrientation=viewer.getView().slice(4,8).join(',');
+    const preview=el('engine-3d-figure-preview'),previewStatus=el('engine-3d-figure-preview-status');
+    if(preview){preview.replaceChildren();preview.hidden=true;preview.setAttribute('data-stale','false');}
+    if(previewStatus)previewStatus.textContent='Preview the figure, then drag labels to refine their positions. Atom coordinates remain fixed.';
+    if(el('engine-3d-figure-preview-btn'))el('engine-3d-figure-preview-btn').disabled=false;
+    if(el('engine-3d-label-reset'))el('engine-3d-label-reset').disabled=false;
+    function invalidate(reset=false){
+      previewRevision++;previewController?.destroy();previewController=null;
+      if(reset)labelPositions={};
+      if(preview&&!preview.hidden){preview.setAttribute('data-stale','true');if(previewStatus)previewStatus.textContent='Preview outdated. Refresh it to show the current settings and orientation.';}
+    }
+    function watchOrientation(){const next=viewer.getView().slice(4,8).join(',');if(next!==lastOrientation){lastOrientation=next;invalidate(true);}}
+    for(const id of ['engine-3d-style','engine-3d-bg','engine-3d-bg-color','engine-3d-label-mode','engine-3d-label-color','engine-3d-label-badge','engine-3d-label-size','engine-3d-atom-size','engine-3d-bond-radius','engine-3d-bond-spacing','engine-3d-label-layout','engine-3d-label-hydrogens','figure-width-mm','figure-height-mm','figure-preset','figure-dpi','figure-panel']){
+      const reset=['engine-3d-label-mode','engine-3d-label-layout','engine-3d-label-hydrogens','figure-width-mm','figure-height-mm','figure-preset'].includes(id);
+      for(const type of ['input','change'])listen(el(id),type,()=>invalidate(reset));
+    }
+    listen(el('engine-3d-label-bold'),'click',()=>invalidate());
+    listen(el('engine-3d-chg-input'),'change',()=>invalidate());
+    listen(el('engine-3d-crg-input'),'change',()=>invalidate());
     const notice=()=>{if(topology)topology.textContent=source?`${bonds.length} source bonds · bond orders preserved`:(bonds.length?`${bonds.length} estimated single bonds · .out / XYZ has no bond orders. Load matching SDF/MOL to show double and triple bonds.`:'No verified bonds · coordinates only');};
     notice();if(details)details.textContent='Click an atom to inspect its coordinates and available partial charges.';
     viewer.setProjection('perspective');const projection=el('engine-3d-projection');if(projection){projection.textContent='Perspective';projection.setAttribute('aria-pressed','false');}
@@ -56,19 +74,19 @@
     function fit(){viewer.zoomTo();viewer.render();}
     viewport.tabIndex=0;viewport.setAttribute('aria-label','Calculated molecular geometry. Drag to orbit, right drag to pan, scroll to zoom. F fits; 1, 2, 3 select views.');
     const controls=MolecularControls.createController({element:viewport,getViewer:()=>viewer,getState:()=>({activeTool:'navigate',atoms}),pick,
-      select:inspect,click(atom){inspect(atom);const needed=Number(mode?.value)||0;if(needed){if(picks.length>=needed)picks=[];if(!picks.some(a=>a.id===atom.id))picks.push(atom);}restyle();},clearSelection:clear,redraw:()=>viewer.render(),fit,viewChanged:()=>viewer.render()});
+      select:inspect,click(atom){inspect(atom);const needed=Number(mode?.value)||0;if(needed){if(picks.length>=needed)picks=[];if(!picks.some(a=>a.id===atom.id))picks.push(atom);}restyle();},clearSelection:clear,redraw:()=>viewer.render(),fit,viewChanged:()=>{watchOrientation();viewer.render();}});
     const observer=new ResizeObserver(()=>{if(!disposed&&viewport.clientWidth&&viewport.clientHeight){viewer.resize();viewer.render();}});observer.observe(viewport);
-    function preset(name){const v=viewer.getView().slice(),q=name==='right'?MolecularControls.rotation({x:0,y:1,z:0},Math.PI/2):name==='top'?MolecularControls.rotation({x:1,y:0,z:0},Math.PI/2):[0,0,0,1];v.splice(4,4,...q);viewer.setView(v);viewer.render();}
+    function preset(name){const v=viewer.getView().slice(),q=name==='right'?MolecularControls.rotation({x:0,y:1,z:0},Math.PI/2):name==='top'?MolecularControls.rotation({x:1,y:0,z:0},Math.PI/2):[0,0,0,1];v.splice(4,4,...q);viewer.setView(v);watchOrientation();viewer.render();}
     for(const name of ['front','right','top'])listen(el('engine-3d-view-'+name),'click',()=>preset(name));
     listen(el('engine-3d-projection'),'click',e=>{orthographic=!orthographic;viewer.setProjection(orthographic?'orthographic':'perspective');e.currentTarget.textContent=orthographic?'Orthographic':'Perspective';e.currentTarget.setAttribute('aria-pressed',String(orthographic));viewer.render();});
     listen(el('engine-3d-clear-selection'),'click',clear);listen(mode,'change',clear);
     listen(viewport,'keydown',e=>{if(e.key.toLowerCase()==='f'){e.preventDefault();fit();}else if(e.key==='Escape'){e.preventDefault();clear();}else if(['1','2','3'].includes(e.key)){e.preventDefault();preset({1:'front',2:'right',3:'top'}[e.key]);}});
     function spin(){if(!spinning||disposed)return;if(document.hidden||!viewport.getClientRects().length){spinning=false;el('engine-3d-spin')?.classList.remove('btn-primary');return;}if(!document.hidden&&viewport.getBoundingClientRect().width&&viewport.getClientRects().length){const now=performance.now(),dt=lastFrame?Math.min(40,now-lastFrame):16;const v=viewer.getView().slice();v.splice(4,4,...MolecularControls.multiply(MolecularControls.rotation({x:0,y:1,z:0},dt*.00035),v.slice(4,8)));viewer.setView(v);viewer.render();lastFrame=now;}else lastFrame=0;spinFrame=requestAnimationFrame(spin);}
-    function toggleSpin(){spinning=!spinning;el('engine-3d-spin')?.classList.toggle('btn-primary',spinning);if(spinning){lastFrame=0;spin();}else cancelAnimationFrame(spinFrame);}
+    function toggleSpin(){spinning=!spinning;if(spinning)invalidate(true);el('engine-3d-spin')?.classList.toggle('btn-primary',spinning);if(spinning){lastFrame=0;spin();}else cancelAnimationFrame(spinFrame);}
     listen(viewport,'pointerdown',()=>{if(spinning)toggleSpin();});
     const topologyInput=el('engine-3d-topology-file');
     listen(el('engine-3d-topology-open'),'click',()=>topologyInput.click());
-    listen(topologyInput,'change',async()=>{const file=topologyInput.files?.[0];if(!file)return;try{const molecule=await BrowserChemistry.file(file);if(disposed)return;if(molecule.topology!=='source')throw Error('Use SDF/MOL to supply bond orders.');const next=attachTopology(atoms,molecule);bonds=next;source=true;job.molecular_topology={...molecule,atoms:atoms.map(a=>({id:a.id,elem:a.elem,x:a.x,y:a.y,z:a.z,charge:molecule.atoms[a.id-1].charge||0})),bonds};MoleculeGraph.apply(model,bonds);notice();restyle();}catch(e){options.warn?.(e.message);}finally{topologyInput.value='';}});
+    listen(topologyInput,'change',async()=>{const file=topologyInput.files?.[0];if(!file)return;try{const molecule=await BrowserChemistry.file(file);if(disposed)return;if(molecule.topology!=='source')throw Error('Use SDF/MOL to supply bond orders.');const next=attachTopology(atoms,molecule);bonds=next;source=true;job.molecular_topology={...molecule,atoms:atoms.map(a=>({id:a.id,elem:a.elem,x:a.x,y:a.y,z:a.z,charge:molecule.atoms[a.id-1].charge||0})),bonds};MoleculeGraph.apply(model,bonds);invalidate(true);notice();restyle();}catch(e){options.warn?.(e.message);}finally{topologyInput.value='';}});
     function figureOptions(){
       const mode=el('engine-3d-label-mode')?.value||'off';
       const charge=mode.includes('hirshfeld')?(job.hirshfeld_charges||job.chg_charges||job.crg_charges||[]):(job.mulliken_charges||job.charges||[]);
@@ -79,19 +97,31 @@
         if(q===null)return mode.startsWith('both_')?atom:'';
         const text=`${q>=0?'+':''}${q.toFixed(3)}`;return mode.startsWith('both_')?`${atom} (${text})`:text;
       });
-      return {labels,metadata:{source_name:job.molecule||job.name||null,orca_version:job.orca_version||null,method:job.method||null,basis_set:job.basis_set||null,atoms:atoms.length,topology:source?'source':'estimated / unverified',geometry_coordinates:'unchanged',label_mode:mode}};
+      return {labels,labelPositions:structuredClone(labelPositions),metadata:{source_name:job.molecule||job.name||null,orca_version:job.orca_version||null,method:job.method||null,basis_set:job.basis_set||null,atoms:atoms.length,topology:source?'source':'estimated / unverified',geometry_coordinates:'unchanged',label_mode:mode}};
     }
-    listen(el('engine-3d-figure-preview-btn'),'click',async event=>{
-      const button=event.currentTarget,container=el('engine-3d-figure-preview');button.disabled=true;
-      try{const result=await PublicationFigures.renderMolecule(viewer,figureOptions(),true);if(disposed)return;container.replaceChildren(result.canvas);container.hidden=false;result.canvas.setAttribute('aria-label','Molecular publication preview. Export uses the selected physical size and resolution.');}
-      catch(e){options.warn?.('Could not preview molecular figure: '+e.message);}finally{button.disabled=false;}
-    });
+    async function updatePreview(button){
+      if(spinning)toggleSpin();watchOrientation();
+      const revision=previewRevision;button.disabled=true;if(el('engine-3d-label-reset'))el('engine-3d-label-reset').disabled=true;
+      try{
+        const result=await PublicationFigures.renderMolecule(viewer,figureOptions(),true);
+        if(disposed||revision!==previewRevision){result.canvas.width=result.canvas.height=1;return;}
+        previewController?.destroy();preview.replaceChildren(result.canvas);preview.hidden=false;preview.setAttribute('data-stale','false');
+        let boxes=result.labelBoxes;
+        result.canvas.setAttribute('aria-label','Molecular publication preview. Drag labels to move them; arrow keys fine-tune the selected label; Escape cancels a drag.');
+        if(previewStatus)previewStatus.textContent='Preview current. Drag labels to position them; arrow keys fine-tune. The exported figure keeps these positions.';
+        previewController=PublicationMolecule.createLabelController({canvas:result.canvas,getBoxes:()=>boxes,signal,
+          move(atom,position){labelPositions[atom]=position;boxes=result.redrawLabels(labelPositions);},
+          status(message){if(previewStatus)previewStatus.textContent=message;}});
+      }catch(e){options.warn?.('Could not preview molecular figure: '+e.message);}finally{if(!disposed){button.disabled=false;if(el('engine-3d-label-reset'))el('engine-3d-label-reset').disabled=false;}}
+    }
+    listen(el('engine-3d-figure-preview-btn'),'click',event=>updatePreview(event.currentTarget));
+    listen(el('engine-3d-label-reset'),'click',()=>{invalidate(true);const button=el('engine-3d-figure-preview-btn');if(!button.disabled)updatePreview(button);});
     listen(el('engine-3d-download-png'),'click',async event=>{
       const button=event.currentTarget;button.disabled=true;
       try{await PublicationFigures.saveMolecule(viewer,viewport,figureOptions());}
       catch(e){options.warn?.('Could not export molecular figure: '+e.message);}finally{button.disabled=false;}
     });
-    return {draw,fit,toggleSpin,topology:()=>({atoms:atoms.map(a=>({id:a.id,elem:a.elem,x:a.x,y:a.y,z:a.z,charge:job.molecular_topology?.atoms?.[a.id-1]?.charge||0})),bonds:structuredClone(bonds),topology:source?'source':'unverified'}),destroy(){disposed=true;spinning=false;cancelAnimationFrame(spinFrame);controls.destroy();observer.disconnect();events.abort();el('engine-3d-spin')?.classList.remove('btn-primary');}};
+    return {draw,fit,toggleSpin,topology:()=>({atoms:atoms.map(a=>({id:a.id,elem:a.elem,x:a.x,y:a.y,z:a.z,charge:job.molecular_topology?.atoms?.[a.id-1]?.charge||0})),bonds:structuredClone(bonds),topology:source?'source':'unverified'}),destroy(){disposed=true;previewRevision++;previewController?.destroy();spinning=false;cancelAnimationFrame(spinFrame);controls.destroy();observer.disconnect();events.abort();el('engine-3d-spin')?.classList.remove('btn-primary');}};
   }
   root.AnalysisViewer={create,measure,attachTopology};
 })(globalThis);

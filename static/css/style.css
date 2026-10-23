@@ -3641,3 +3641,8 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
 .molecular-figure-preview { margin-top: 1rem; overflow: auto; background: repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 50% / 16px 16px; }
 .molecular-figure-preview[hidden] { display: none; }
 .molecular-figure-preview canvas { display: block; width: 100%; height: auto; }
+
+.molecular-preview-status { display: block; margin-top: .65rem; }
+.molecular-figure-preview[data-stale="true"] { opacity: .55; }
+.molecular-figure-preview[data-stale="true"] canvas { pointer-events: none; }
+.molecular-figure-preview canvas:focus-visible { outline: 2px solid #0072b2; outline-offset: -2px; }

@@ -10,6 +10,7 @@ name: Deploy Hugging Face runtime
 # Labels oscillator-strength-weighted UV-Vis intensity without uncalibrated epsilon units.
 
 # Renders molecular figures with depth-correct multiple bonds and configurable print labels.
+# Keeps print label placement consistent and supports manual label positioning in preview.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later

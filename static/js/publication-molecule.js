@@ -86,6 +86,7 @@
     for(let i=0;i<s.points.length;i++){
       if(!labels[i])continue;
       const p=s.points[i],x=f.x+p.x*f.scale,y=f.y-p.y*f.scale,r=p.r*f.scale,w=measure(labels[i])+fontSize*.6,h=fontSize*1.3;
+      if(w>width-2*margin||h>height-2*margin)throw Error('Labels do not fit the print area. Reduce the label size or increase the figure dimensions.');
       const candidates=[];
       if(placement==='center')candidates.push({x:x-w/2,y:y-h/2});
       for(const distance of [1,1.7,2.5,3.5,5])for(let k=0;k<16;k++){const a=-Math.PI/2+k*Math.PI/8;candidates.push({x:x+Math.cos(a)*(r+fontSize*.65)*distance-w/2,y:y+Math.sin(a)*(r+fontSize*.65)*distance-h/2});}
@@ -101,6 +102,40 @@
     }
     return boxes;
   }
+  function positionLabels(boxes,width,height,positions={}){
+    return boxes.map(box=>{
+      const target=positions[box.atom];if(!target)return {...box,anchor:{...box.anchor}};
+      if(!Number.isFinite(target.x)||!Number.isFinite(target.y))throw Error('Invalid label position.');
+      const margin=2,x=Math.max(margin,Math.min(width-margin-box.w,target.x*width-box.w/2)),y=Math.max(margin,Math.min(height-margin-box.h,target.y*height-box.h/2));
+      return {...box,x,y,anchor:{...box.anchor}};
+    });
+  }
+  function scaleLabels(boxes,sx,sy){return boxes.map(b=>({...b,x:b.x*sx,y:b.y*sy,w:b.w*sx,h:b.h*sy,anchor:{x:b.anchor.x*sx,y:b.anchor.y*sy,r:b.anchor.r*Math.min(sx,sy)}}));}
+  function createLabelController({canvas,getBoxes,move,status,signal}){
+    const events=new AbortController();let drag=null,selected=null;
+    const listen=(type,fn)=>canvas.addEventListener(type,fn,{signal:events.signal});
+    const point=e=>{const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};};
+    function finish(cancel=false){if(!drag)return;const old=drag;drag=null;if(cancel)move(old.atom,old.original);try{if(canvas.hasPointerCapture(old.pointerId))canvas.releasePointerCapture(old.pointerId);}catch(_){}canvas.style.cursor='grab';}
+    canvas.style.touchAction='none';canvas.style.cursor='grab';canvas.tabIndex=0;
+    listen('pointerdown',e=>{
+      if(e.button!==0||drag)return;const p=point(e),b=[...getBoxes()].reverse().find(b=>p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h);if(!b)return;
+      e.preventDefault();e.stopPropagation();canvas.focus({preventScroll:true});selected=b.atom;
+      drag={atom:b.atom,pointerId:e.pointerId,start:p,original:{x:b.x+b.w/2,y:b.y+b.h/2}};
+      try{canvas.setPointerCapture(e.pointerId);}catch(_){}canvas.style.cursor='grabbing';status?.('Move label only. Esc cancels; arrow keys fine-tune.');
+    });
+    listen('pointermove',e=>{if(!drag||e.pointerId!==drag.pointerId)return;e.preventDefault();const p=point(e);move(drag.atom,{x:drag.original.x+p.x-drag.start.x,y:drag.original.y+p.y-drag.start.y});});
+    listen('pointerup',e=>{if(drag?.pointerId===e.pointerId){finish();status?.('Label position saved for export. Arrow keys fine-tune; Reset labels restores automatic placement.');}});
+    listen('pointercancel',()=>finish(true));listen('lostpointercapture',()=>finish());
+    listen('keydown',e=>{
+      if(e.key==='Escape'){e.preventDefault();finish(true);return;}
+      if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)||selected===null)return;
+      const b=getBoxes().find(b=>b.atom===selected);if(!b)return;e.preventDefault();const r=canvas.getBoundingClientRect(),step=e.shiftKey?10:1;
+      move(selected,{x:b.x+b.w/2+(e.key==='ArrowRight'?step:e.key==='ArrowLeft'?-step:0)/r.width,y:b.y+b.h/2+(e.key==='ArrowDown'?step:e.key==='ArrowUp'?-step:0)/r.height});
+    });
+    function destroy(){finish();events.abort();signal?.removeEventListener('abort',destroy);}
+    if(signal?.aborted)destroy();else signal?.addEventListener('abort',destroy,{once:true});
+    return {destroy};
+  }
   function drawLabels(ctx,boxes,options){
     const {fontSize,color='#111111',badge='transparent',bold=false,background='#ffffff'}=options;
     ctx.font=`${bold?'600':'400'} ${fontSize}px Arial, Helvetica, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
@@ -111,5 +146,5 @@
       ctx.fillStyle=color;ctx.fillText(b.text,cx,cy);
     }
   }
-  root.PublicationMolecule={scene,frame,raster,layoutLabels,drawLabels,cylinderHit};
+  root.PublicationMolecule={scene,frame,raster,layoutLabels,positionLabels,scaleLabels,createLabelController,drawLabels,cylinderHit};
 })(typeof window==='undefined'?globalThis:window);

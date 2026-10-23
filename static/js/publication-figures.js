@@ -178,18 +178,29 @@
     const selectedBackground=value('engine-3d-bg','#ffffff'),background=selectedBackground==='custom'?value('engine-3d-bg-color','#ffffff'):selectedBackground,labelSize=Number(value('engine-3d-label-size',8)),labelColor=value('engine-3d-label-color','#111111');
     if(!finite(labelSize)||labelSize<5||labelSize>20)throw Error('Choose a label size of 5-20 pt.');
     const drawing={style:value('engine-3d-style','ballAndStick'),atomScale:Number(value('engine-3d-atom-size',.24)),bondRadius:Number(value('engine-3d-bond-radius',.085)),bondSpacing:Number(value('engine-3d-bond-spacing',3.2))};
+    const bold=el('engine-3d-label-bold')?.classList.contains('btn-primary')||false,placement=value('engine-3d-label-layout','outside'),badge=value('engine-3d-label-badge','transparent');
     const scene=root.PublicationMolecule.scene(atoms,viewer.getView().slice(),drawing);
     const scale=preview?Math.min(1,1100/width,800/height):1,w=Math.round(width*scale),h=Math.round(height*scale);
     const raster=await root.PublicationMolecule.raster(scene,w,h,{background,padding:options.labels?.some(Boolean)?.13:.075,yield:()=>new Promise(resolve=>setTimeout(resolve,0))});
     const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d');
     const image=ctx.createImageData(w,h);image.data.set(raster.data);ctx.putImageData(image,0,0);
-    const fontSize=labelSize*s.dpi/72*scale,bold=el('engine-3d-label-bold')?.classList.contains('btn-primary')||false;
-    ctx.font=`${bold?'600':'400'} ${fontSize}px Arial, Helvetica, sans-serif`;
-    const boxes=root.PublicationMolecule.layoutLabels(scene,raster.frame,w,h,options.labels||[],fontSize,text=>ctx.measureText(text).width,value('engine-3d-label-layout','outside'));
-    root.PublicationMolecule.drawLabels(ctx,boxes,{fontSize,color:labelColor,badge:value('engine-3d-label-badge','transparent'),bold,background});
-    if(s.panel){ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.font=`bold ${9*s.dpi/72*scale}px Arial`;ctx.fillStyle=labelColor;ctx.fillText(s.panel,8*s.dpi/72*scale,12*s.dpi/72*scale);}
-    return {canvas,settings:s,metadata:{kind:'molecular_geometry',...options.metadata,renderer:'analytic spheres and cylinders; depth buffered; diffuse lighting',projection:'orthographic; current orientation; automatic framing',coordinates:'unchanged',source_bonds:scene.bonds.map(b=>({atom_1:b.i+1,atom_2:b.j+1,order:b.order})),drawing,background,label_size_pt:labelSize,label_color:labelColor,label_layout:value('engine-3d-label-layout','outside')}};
+    // Lay out once in physical points: dpi and preview resolution cannot change composition.
+    const physical=dimensions(s,false),sx=w/physical.w,sy=h/physical.h;
+    ctx.font=`${bold?'600':'400'} ${labelSize}px Arial, Helvetica, sans-serif`;
+    const baseBoxes=root.PublicationMolecule.layoutLabels(scene,root.PublicationMolecule.frame(scene,physical.w,physical.h,options.labels?.some(Boolean)?.13:.075),physical.w,physical.h,options.labels||[],labelSize,text=>ctx.measureText(text).width,placement);
+    const labelStyle={fontSize:labelSize*sx,color:labelColor,badge,bold,background},panel=s.panel;
+    let boxes=[];
+    function redrawLabels(positions={}){
+      const physicalBoxes=root.PublicationMolecule.positionLabels(baseBoxes,physical.w,physical.h,positions);
+      boxes=root.PublicationMolecule.scaleLabels(physicalBoxes,sx,sy);
+      ctx.putImageData(image,0,0);root.PublicationMolecule.drawLabels(ctx,boxes,labelStyle);
+      if(panel){ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.font=`bold ${9*sx}px Arial`;ctx.fillStyle=labelColor;ctx.fillText(panel,8*sx,12*sy);}
+      return boxes.map(b=>({...b,x:b.x/w,y:b.y/h,w:b.w/w,h:b.h/h}));
+    }
+    const labelBoxes=redrawLabels(options.labelPositions);
+    return {canvas,settings:s,labelBoxes,redrawLabels,metadata:{kind:'molecular_geometry',...options.metadata,renderer:'analytic spheres and cylinders; depth buffered; diffuse lighting',projection:'orthographic; current orientation; automatic framing',coordinates:'unchanged',source_bonds:scene.bonds.map(b=>({atom_1:b.i+1,atom_2:b.j+1,order:b.order})),drawing,background,label_size_pt:labelSize,label_color:labelColor,label_layout:placement,label_positions:labelBoxes.map(b=>({atom:b.atom+1,text:b.text,x:b.x+b.w/2,y:b.y+b.h/2,manual:!!options.labelPositions?.[b.atom]}))}};
   }
+
   function saveMolecule(viewer,viewport,options={}){return exclusive(async()=>{
     if(settings().format==='svg')throw Error('Choose PNG or TIFF for 3D geometry. SVG is available for plots.');
     const result=await renderMolecule(viewer,options);

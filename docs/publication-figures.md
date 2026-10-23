@@ -35,3 +35,10 @@ The analyzer now renders source geometry with an independent client-side orthogr
 Label content is chosen in the viewer. Text color, 5-20 pt print size, bold, badge and background are respected in the export; hydrogen labels can be hidden. Outside placement searches for free positions and adds fine leader lines. It reduces overlap but dense structures can still need a different camera, fewer labels, or a larger print area. Refresh the molecular preview to inspect the exact composition before exporting PNG/TIFF. Transparent PNG retains alpha; TIFF composites transparency onto white.
 
 Atom scale, bond radius and multiple-bond spacing change appearance only. They never move atoms or create bonds. `.out`/XYZ coordinates alone do not determine authoritative multiple bond orders; load an SDF/MOL with matching atom order using **Load bond orders**. Estimated single bonds remain explicitly marked. The metadata records source bond orders, rendering settings and unchanged coordinates.
+
+
+### Fine-tuning labels
+
+Preview and export now calculate label layout in physical points, independent of DPI. In a current preview, drag a label to move it without changing the molecule; click it then use arrow keys for fine adjustment (Shift moves farther). Escape cancels a drag. **Reset label positions** restores automatic layout. Saved label centers use normalized page coordinates and are included in export metadata.
+
+Appearance or camera changes mark the preview as outdated and disable label dragging until refreshed. Rotating the molecule, changing label content or print dimensions clears manual positions because those positions referred to the previous composition. Color/background/DPI changes preserve them. An in-progress preview from older settings is discarded instead of replacing the current view.
