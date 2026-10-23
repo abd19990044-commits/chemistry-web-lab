@@ -6268,7 +6268,6 @@
 
   function applyViewer3DStyle() {
     if (!viewer3D || !currentEngineData) return;
-    const forPublication=arguments[0]===true;
     const styleSelect = document.getElementById("engine-3d-style");
     const styleVal = styleSelect ? styleSelect.value : "ballAndStick";
     viewer3D.removeAllLabels();
@@ -6281,11 +6280,15 @@
     const elements = job.elements?.length ? job.elements : displayedAtoms.map(a=>a.elem);
     const coords = job.coords?.length ? job.coords : displayedAtoms.map(a=>[a.x,a.y,a.z]);
 
+    const atomScale=Number(document.getElementById("engine-3d-atom-size")?.value||.24);
+    const bondRadius=Number(document.getElementById("engine-3d-bond-radius")?.value||.085);
+    const bondSpacing=Number(document.getElementById("engine-3d-bond-spacing")?.value||3.2);
+    // Explicit multiple bonds stay separate; never replace source topology.
     // Base Rendering Style
     if (styleVal === "ballAndStick") {
-      viewer3D.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.28 } });
+      viewer3D.setStyle({}, { stick: { radius: bondRadius, singleBonds: false, bondSpacing }, sphere: { scale: atomScale } });
     } else if (styleVal === "stick") {
-      viewer3D.setStyle({}, { stick: { radius: 0.22 } });
+      viewer3D.setStyle({}, { stick: { radius: bondRadius, singleBonds: false, bondSpacing } });
     } else if (styleVal === "sphere") {
       viewer3D.setStyle({}, { sphere: { scale: 0.85 } });
     } else if (styleVal === "wireframe") {
@@ -6297,15 +6300,15 @@
     const labelColorSelect = document.getElementById("engine-3d-label-color");
     const labelBadgeSelect = document.getElementById("engine-3d-label-badge");
     const currentMode = labelModeSelect ? labelModeSelect.value : "off";
-    const fontColor = forPublication ? "#111111" : labelColorSelect ? labelColorSelect.value : "#FFFFFF";
-    const badgeStyle = forPublication ? "transparent" : labelBadgeSelect ? labelBadgeSelect.value : "dark";
+    const fontColor = labelColorSelect ? labelColorSelect.value : "#111111";
+    const badgeStyle = labelBadgeSelect ? labelBadgeSelect.value : "transparent";
 
     let showBackground = true;
     let backgroundColor = "#0B0F19";
     let backgroundOpacity = 0.92;
     let borderColor = "#64748B";
     let borderThickness = 1.0;
-    let fontSize = 15;
+    const fontSize = Number(document.getElementById("engine-3d-label-size")?.value||8)*1.6;
 
     if (badgeStyle === "dark") {
       showBackground = true;
@@ -6344,17 +6347,19 @@
     if(charges.length!==elements.length)charges=[];
     if (currentMode !== "off" && elements.length) {
       elements.forEach((el, idx) => {
+        if(el==="H"&&document.getElementById("engine-3d-label-hydrogens")?.value==="hide")return;
         const c = coords[idx];
         if (c) {
-          let text = `${el}${idx + 1}`;
+          let text = currentMode === "symbols" ? el : `${el}${idx + 1}`;
           const q = (Array.isArray(charges) && Number.isFinite(charges[idx])) ? charges[idx] : null;
+          if((currentMode === "mulliken" || currentMode === "hirshfeld") && q === null)return;
 
           if ((currentMode === "mulliken" || currentMode === "hirshfeld") && q !== null) {
             text = `${q >= 0 ? '+' : ''}${q.toFixed(3)}`;
           } else if ((currentMode === "both_mulliken" || currentMode === "both_hirshfeld") && q !== null) {
             text = `${el}${idx + 1} (${q >= 0 ? '+' : ''}${q.toFixed(3)})`;
           } else {
-            text = `${el}${idx + 1}`;
+            text = currentMode === "symbols" ? el : `${el}${idx + 1}`;
           }
 
           viewer3D.addLabel(text, {
@@ -6424,7 +6429,8 @@
         catch(_){viewport.replaceChildren();viewer3D=MolecularControls.createSoftwareViewer(viewport);}
       }else{viewer3D.setContainer(viewport);const canvas=viewer3D.getRenderer()?.domElement;if(canvas&&!viewport.contains(canvas))viewport.appendChild(canvas);}
       viewer3D.clear();
-      currentViewportBg=document.getElementById("engine-3d-bg")?.value||"#0B0F19";
+      currentViewportBg=document.getElementById("engine-3d-bg")?.value||"#ffffff";
+      if(currentViewportBg==="custom")currentViewportBg=document.getElementById("engine-3d-bg-color")?.value||"#ffffff";
       viewer3D.setBackgroundColor(currentViewportBg==="transparent"?0:currentViewportBg,currentViewportBg==="transparent"?0:1);
       const lines=xyzString.trim().split(/\r?\n/),full=/^\d+$/.test(lines[0].trim())?xyzString:`${lines.filter(l=>l.trim()).length}\nCalculated geometry\n${xyzString}`;
       viewer3D.addModel(full,"xyz");
@@ -9164,6 +9170,9 @@
     const labelBadgeSelect = document.getElementById("engine-3d-label-badge");
     if (labelBadgeSelect) labelBadgeSelect.addEventListener("change", applyViewer3DStyle);
 
+    for(const id of ["engine-3d-label-size","engine-3d-atom-size","engine-3d-bond-radius","engine-3d-bond-spacing","engine-3d-label-hydrogens"]){
+      document.getElementById(id)?.addEventListener("change",applyViewer3DStyle);
+    }
     const labelBoldBtn = document.getElementById("engine-3d-label-bold");
     if (labelBoldBtn) {
       labelBoldBtn.addEventListener("click", () => {
@@ -9252,6 +9261,7 @@
     if (bgSelect) {
       bgSelect.addEventListener("change", () => {
         currentViewportBg = bgSelect.value;
+        if(currentViewportBg==="custom")currentViewportBg=document.getElementById("engine-3d-bg-color")?.value||"#ffffff";
         const viewport = document.getElementById("engine-3d-viewport");
         if (viewport) {
           viewport.style.backgroundColor = currentViewportBg === "transparent" ? "transparent" : currentViewportBg;
@@ -9271,6 +9281,9 @@
     }
 
 
+    document.getElementById("engine-3d-bg-color")?.addEventListener("input",()=>{
+      if(bgSelect){bgSelect.value="custom";bgSelect.dispatchEvent(new Event("change"));}
+    });
     const spinBtn = document.getElementById("engine-3d-spin");
     if (spinBtn) {
       spinBtn.addEventListener("click", () => {

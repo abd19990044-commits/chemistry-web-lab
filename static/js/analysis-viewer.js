@@ -30,7 +30,8 @@
     const events=new AbortController(),signal=events.signal;
     const el=id=>document.getElementById(id),listen=(node,type,fn)=>node?.addEventListener(type,fn,{signal});
     const mode=el('engine-3d-measure-mode'),details=el('engine-3d-inspector'),topology=el('engine-3d-topology-status');
-    const notice=()=>{if(topology)topology.textContent=source?`${bonds.length} source bonds · bond orders preserved`:(bonds.length?`${bonds.length} estimated bonds · XYZ has no bond orders / formal charges`:'No verified bonds · coordinates only');};
+    const oldPreview=el('engine-3d-figure-preview');if(oldPreview){oldPreview.replaceChildren();oldPreview.hidden=true;}
+    const notice=()=>{if(topology)topology.textContent=source?`${bonds.length} source bonds · bond orders preserved`:(bonds.length?`${bonds.length} estimated single bonds · .out / XYZ has no bond orders. Load matching SDF/MOL to show double and triple bonds.`:'No verified bonds · coordinates only');};
     notice();if(details)details.textContent='Click an atom to inspect its coordinates and available partial charges.';
     viewer.setProjection('perspective');const projection=el('engine-3d-projection');if(projection){projection.textContent='Perspective';projection.setAttribute('aria-pressed','false');}
     function inspect(atom){
@@ -68,16 +69,27 @@
     const topologyInput=el('engine-3d-topology-file');
     listen(el('engine-3d-topology-open'),'click',()=>topologyInput.click());
     listen(topologyInput,'change',async()=>{const file=topologyInput.files?.[0];if(!file)return;try{const molecule=await BrowserChemistry.file(file);if(disposed)return;if(molecule.topology!=='source')throw Error('Use SDF/MOL to supply bond orders.');const next=attachTopology(atoms,molecule);bonds=next;source=true;job.molecular_topology={...molecule,atoms:atoms.map(a=>({id:a.id,elem:a.elem,x:a.x,y:a.y,z:a.z,charge:molecule.atoms[a.id-1].charge||0})),bonds};MoleculeGraph.apply(model,bonds);notice();restyle();}catch(e){options.warn?.(e.message);}finally{topologyInput.value='';}});
+    function figureOptions(){
+      const mode=el('engine-3d-label-mode')?.value||'off';
+      const charge=mode.includes('hirshfeld')?(job.hirshfeld_charges||job.chg_charges||job.crg_charges||[]):(job.mulliken_charges||job.charges||[]);
+      const labels=atoms.map((a,i)=>{
+        if(mode==='off'||(el('engine-3d-label-hydrogens')?.value==='hide'&&a.elem==='H'))return '';
+        const atom=mode==='symbols'?a.elem:`${a.elem}${i+1}`,q=charge.length===atoms.length&&Number.isFinite(charge[i])?charge[i]:null;
+        if(!mode.includes('mulliken')&&!mode.includes('hirshfeld'))return atom;
+        if(q===null)return mode.startsWith('both_')?atom:'';
+        const text=`${q>=0?'+':''}${q.toFixed(3)}`;return mode.startsWith('both_')?`${atom} (${text})`:text;
+      });
+      return {labels,metadata:{source_name:job.molecule||job.name||null,orca_version:job.orca_version||null,method:job.method||null,basis_set:job.basis_set||null,atoms:atoms.length,topology:source?'source':'estimated / unverified',geometry_coordinates:'unchanged',label_mode:mode}};
+    }
+    listen(el('engine-3d-figure-preview-btn'),'click',async event=>{
+      const button=event.currentTarget,container=el('engine-3d-figure-preview');button.disabled=true;
+      try{const result=await PublicationFigures.renderMolecule(viewer,figureOptions(),true);if(disposed)return;container.replaceChildren(result.canvas);container.hidden=false;result.canvas.setAttribute('aria-label','Molecular publication preview. Export uses the selected physical size and resolution.');}
+      catch(e){options.warn?.('Could not preview molecular figure: '+e.message);}finally{button.disabled=false;}
+    });
     listen(el('engine-3d-download-png'),'click',async event=>{
-      const button=event.currentTarget,wasSpinning=spinning;button.disabled=true;if(wasSpinning)toggleSpin();
-      try{
-        await PublicationFigures.saveMolecule(viewer,viewport,{
-          prepare:()=>restyle(true),
-          restore:()=>{const bg=el('engine-3d-bg')?.value||'#090e17';viewer.setBackgroundColor(bg==='transparent'?0:bg,bg==='transparent'?0:1);restyle();},
-          metadata:{source_name:job.molecule||job.name||null,orca_version:job.orca_version||null,method:job.method||null,basis_set:job.basis_set||null,atoms:atoms.length,topology:source?'source':'estimated / unverified',geometry_coordinates:'unchanged'}
-        });
-      }catch(e){options.warn?.('Could not export molecular figure: '+e.message);}
-      finally{button.disabled=false;if(wasSpinning&&!disposed)toggleSpin();}
+      const button=event.currentTarget;button.disabled=true;
+      try{await PublicationFigures.saveMolecule(viewer,viewport,figureOptions());}
+      catch(e){options.warn?.('Could not export molecular figure: '+e.message);}finally{button.disabled=false;}
     });
     return {draw,fit,toggleSpin,topology:()=>({atoms:atoms.map(a=>({id:a.id,elem:a.elem,x:a.x,y:a.y,z:a.z,charge:job.molecular_topology?.atoms?.[a.id-1]?.charge||0})),bonds:structuredClone(bonds),topology:source?'source':'unverified'}),destroy(){disposed=true;spinning=false;cancelAnimationFrame(spinFrame);controls.destroy();observer.disconnect();events.abort();el('engine-3d-spin')?.classList.remove('btn-primary');}};
   }

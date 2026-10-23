@@ -170,23 +170,33 @@
   async function exclusive(action){if(busy)throw Error('A figure export is already being prepared.');busy=true;try{return await action();}finally{busy=false;}}
   function savePlot(spec,name){return exclusive(()=>{const s=settings();return saveSVG(plot(spec,s),name,s,{kind:'spectrum',x_label:spec.xLabel,y_label:spec.yLabel,x_min:spec.xMin,x_max:spec.xMax,reverse_x:!!spec.reverseX,y_min:spec.yMin??0,y_max:spec.yMax,y2_label:spec.y2Label||null,layers:spec.series.map(v=>v.name),...spec.metadata});});}
   function saveOrbitals(job,name){return exclusive(()=>{const s=settings();return saveSVG(orbitals(job,s),name,s,{kind:'frontier_orbital_eigenvalues',job});});}
+  async function renderMolecule(viewer,options={},preview=false){
+    if(!root.PublicationMolecule)throw Error('Reload the page to load the molecular figure renderer.');
+    const s=settings(),{width,height}=dimensions(s),atoms=viewer.getModel()?.selectedAtoms({});
+    if(!atoms?.length)throw Error('Open a molecular geometry before exporting.');
+    const value=(id,fallback)=>el(id)?.value||fallback;
+    const selectedBackground=value('engine-3d-bg','#ffffff'),background=selectedBackground==='custom'?value('engine-3d-bg-color','#ffffff'):selectedBackground,labelSize=Number(value('engine-3d-label-size',8)),labelColor=value('engine-3d-label-color','#111111');
+    if(!finite(labelSize)||labelSize<5||labelSize>20)throw Error('Choose a label size of 5-20 pt.');
+    const drawing={style:value('engine-3d-style','ballAndStick'),atomScale:Number(value('engine-3d-atom-size',.24)),bondRadius:Number(value('engine-3d-bond-radius',.085)),bondSpacing:Number(value('engine-3d-bond-spacing',3.2))};
+    const scene=root.PublicationMolecule.scene(atoms,viewer.getView().slice(),drawing);
+    const scale=preview?Math.min(1,1100/width,800/height):1,w=Math.round(width*scale),h=Math.round(height*scale);
+    const raster=await root.PublicationMolecule.raster(scene,w,h,{background,padding:options.labels?.some(Boolean)?.13:.075,yield:()=>new Promise(resolve=>setTimeout(resolve,0))});
+    const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d');
+    const image=ctx.createImageData(w,h);image.data.set(raster.data);ctx.putImageData(image,0,0);
+    const fontSize=labelSize*s.dpi/72*scale,bold=el('engine-3d-label-bold')?.classList.contains('btn-primary')||false;
+    ctx.font=`${bold?'600':'400'} ${fontSize}px Arial, Helvetica, sans-serif`;
+    const boxes=root.PublicationMolecule.layoutLabels(scene,raster.frame,w,h,options.labels||[],fontSize,text=>ctx.measureText(text).width,value('engine-3d-label-layout','outside'));
+    root.PublicationMolecule.drawLabels(ctx,boxes,{fontSize,color:labelColor,badge:value('engine-3d-label-badge','transparent'),bold,background});
+    if(s.panel){ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.font=`bold ${9*s.dpi/72*scale}px Arial`;ctx.fillStyle=labelColor;ctx.fillText(s.panel,8*s.dpi/72*scale,12*s.dpi/72*scale);}
+    return {canvas,settings:s,metadata:{kind:'molecular_geometry',...options.metadata,renderer:'analytic spheres and cylinders; depth buffered; diffuse lighting',projection:'orthographic; current orientation; automatic framing',coordinates:'unchanged',source_bonds:scene.bonds.map(b=>({atom_1:b.i+1,atom_2:b.j+1,order:b.order})),drawing,background,label_size_pt:labelSize,label_color:labelColor,label_layout:value('engine-3d-label-layout','outside')}};
+  }
   function saveMolecule(viewer,viewport,options={}){return exclusive(async()=>{
-    const s=settings();if(s.format==='svg')throw Error('Choose PNG or TIFF for 3D geometry. SVG is available for plots.');
-    const {width,height}=dimensions(s),r=viewport.getBoundingClientRect();if(!r.width||!r.height)throw Error('Open the 3D viewer before exporting.');
-    const original=viewer.getView().slice(),canvasElement=viewer.getRenderer()?.domElement||viewport.querySelector('canvas');
-    const ratio=Math.max(1,(canvasElement?.width||r.width)/r.width),factor=Math.min(width/(r.width*ratio),height/(r.height*ratio));let uri;
-    try{options.prepare?.();viewer.setBackgroundColor('#ffffff',1);if(viewer.rendererType==='canvas')uri=viewer.pngURI(factor);
-      else{viewer.setWidth(Math.round(r.width*factor));viewer.setHeight(Math.round(r.height*factor));viewer.render();uri=viewer.pngURI();}}
-    finally{viewer.resize();viewer.setView(original);options.restore?.();viewer.render();}
-    if(!uri?.startsWith('data:image/png;base64,'))throw Error('The renderer returned an invalid PNG.');
-    const bytes=Uint8Array.from(atob(uri.split(',')[1]),c=>c.charCodeAt(0)),image=await imageOf(new Blob([bytes],{type:'image/png'}));
-    const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);
-    const f=Math.min(width/image.width,height/image.height);ctx.drawImage(image,(width-image.width*f)/2,(height-image.height*f)/2,image.width*f,image.height*f);
-    if(s.panel){ctx.font=`bold ${9*s.dpi/72}px Arial`;ctx.fillStyle='#111';ctx.fillText(s.panel,8*s.dpi/72,12*s.dpi/72);}
-    await saveRaster(canvas,s,'molecular-geometry-publication',{kind:'molecular_geometry',...options.metadata});canvas.width=canvas.height=1;
+    if(settings().format==='svg')throw Error('Choose PNG or TIFF for 3D geometry. SVG is available for plots.');
+    const result=await renderMolecule(viewer,options);
+    try{await saveRaster(result.canvas,result.settings,'molecular-geometry-publication',result.metadata);}finally{result.canvas.width=result.canvas.height=1;}
   });}
   function init(){
     el('figure-preset')?.addEventListener('change',e=>{const [w,h]=e.target.value.split(',');el('figure-width-mm').value=w;el('figure-height-mm').value=h;});
   }
-  root.PublicationFigures={settings,dimensions,ticks,plot,orbitals,pngMetadata,tiff,savePlot,saveOrbitals,saveMolecule,init};
+  root.PublicationFigures={settings,dimensions,ticks,plot,orbitals,pngMetadata,tiff,savePlot,saveOrbitals,saveMolecule,renderMolecule,init};
 })(typeof window==='undefined'?globalThis:window);

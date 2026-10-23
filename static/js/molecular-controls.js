@@ -253,16 +253,17 @@
           const gradient=context.createLinearGradient(p.x,p.y,end.x,end.y);
           gradient.addColorStop(0,c1);gradient.addColorStop(.48,c1);gradient.addColorStop(.52,c2);gradient.addColorStop(1,c2);
           context.strokeStyle=gradient;context.lineWidth=radius*2;context.lineCap='round';
-          const count=Math.max(1,Math.min(3,item.order));
+          const count=item.order===1.5?2:Math.max(1,Math.min(3,item.order));
           for(let j=0;j<count;j++) {
-            const offset=(j-(count-1)/2)*radius*2.5;
+            const offset=(j-(count-1)/2)*radius*(a.style.stick?.bondSpacing||3.2);
+            context.setLineDash(item.order===1.5&&j===1?[radius*2,radius*2]:[]);
             context.beginPath();context.moveTo(p.x-dy/length*offset,p.y+dx/length*offset);
-            context.lineTo(end.x-dy/length*offset,end.y+dx/length*offset);context.stroke();
+            context.lineTo(end.x-dy/length*offset,end.y+dx/length*offset);context.stroke();context.setLineDash([]);
           }
         } else {
           const radius=atomRadius(a,p), color=a.style.sphere?.color||colors[a.elem]||'#bd86d0';
           const gradient=context.createRadialGradient(p.x-radius*.3,p.y-radius*.35,radius*.06,p.x,p.y,radius);
-          gradient.addColorStop(0,'#ffffff');gradient.addColorStop(.25,color);gradient.addColorStop(1,'#182333');
+          gradient.addColorStop(0,color);gradient.addColorStop(.55,color);gradient.addColorStop(1,'#59606b');
           context.beginPath();context.arc(p.x,p.y,radius,0,Math.PI*2);context.fillStyle=gradient;context.fill();
           context.strokeStyle='rgba(226,232,240,0.25)';context.lineWidth=1;context.stroke();
         }

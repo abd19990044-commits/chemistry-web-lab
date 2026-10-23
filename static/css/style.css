@@ -3633,3 +3633,11 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
 .figure-export-controls input, .figure-export-controls select { width: 100%; min-width: 0; }
 .figure-export-controls .figure-export-check { flex-direction: row; align-items: center; min-width: 145px; padding-bottom: .5rem; }
 .figure-export-check input { width: auto; }
+
+.molecular-field { display: inline-flex; flex-direction: column; gap: .2rem; font-size: .75rem; }
+.molecular-field input { width: 85px; min-height: 32px; }
+.molecular-figure-controls { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border-color, #334155); border-radius: 8px; }
+.molecular-figure-controls summary { cursor: pointer; font-weight: 600; }
+.molecular-figure-preview { margin-top: 1rem; overflow: auto; background: repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 50% / 16px 16px; }
+.molecular-figure-preview[hidden] { display: none; }
+.molecular-figure-preview canvas { display: block; width: 100%; height: auto; }

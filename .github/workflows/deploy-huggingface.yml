@@ -9,6 +9,7 @@ name: Deploy Hugging Face runtime
 # Publishes sized scientific PNG/TIFF/SVG figures with explicit print resolution.
 # Labels oscillator-strength-weighted UV-Vis intensity without uncalibrated epsilon units.
 
+# Renders molecular figures with depth-correct multiple bonds and configurable print labels.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later

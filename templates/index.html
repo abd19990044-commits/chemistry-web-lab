@@ -9,7 +9,7 @@
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261023pub1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261023mol1">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" defer></script>
 {% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
@@ -1331,31 +1331,26 @@ Products:   12 CO2 + 6 H2O</pre>
                 <option value="wireframe">Wireframe</option>
               </select>
               <select id="engine-3d-bg" class="select-small" title="Viewport Background">
-                <option value="#0B0F19" selected>🌙 Dark Viewport</option>
-                <option value="#ffffff">☀️ Pure White</option>
+                <option value="#0B0F19">🌙 Dark Viewport</option>
+                <option value="#ffffff" selected>☀️ Pure White</option>
                 <option value="transparent">📄 Transparent</option>
+                <option value="custom">Custom background</option>
               </select>
+              <label class="molecular-field">Custom background <input id="engine-3d-bg-color" type="color" value="#ffffff" title="Choose a custom viewport and figure background"></label>
               <select id="engine-3d-label-mode" class="select-small" title="Atom Labels & Partial Charges">
                 <option value="off" selected>Labels: Off</option>
-                <option value="elements">🏷 Atom Symbols (C1, H2)</option>
+                <option value="elements">🏷 Atom numbers (C1, H2)</option>
+                <option value="symbols">Atom symbols (C, H)</option>
                 <option value="mulliken">⚡ Mulliken Charges</option>
                 <option value="both_mulliken">🏷+⚡ Atom &amp; Mulliken</option>
               </select>
 
-              <select id="engine-3d-label-color" class="select-small" title="Label Text Color">
-                <option value="#ffffff" selected>⚪ White Text</option>
-                <option value="#000000">⚫ Black Text</option>
-                <option value="#FFD600">🟡 Gold Text</option>
-                <option value="#00E5FF">🔵 Cyan Text</option>
-                <option value="#00E676">🟢 Mint Text</option>
-                <option value="#FF3D00">🔴 Red Text</option>
-                <option value="#FF9100">🟠 Orange Text</option>
-                <option value="#E040FB">🟣 Magenta Text</option>
-              </select>
+              <label class="molecular-field">Label color <input type="color" id="engine-3d-label-color" value="#111111" title="Label text color"></label>
+              <label class="molecular-field">Label size (pt) <input type="number" id="engine-3d-label-size" min="5" max="20" step="0.5" value="8" title="Label size at final print size"></label>
               <select id="engine-3d-label-badge" class="select-small" title="Label Background & Capsule Badge">
-                <option value="dark" selected>⬛ Dark Capsule</option>
+                <option value="dark">⬛ Dark Capsule</option>
                 <option value="light">⬜ Light Capsule</option>
-                <option value="transparent">🚫 Transparent</option>
+                <option value="transparent" selected>🚫 Transparent</option>
               </select>
               <button type="button" id="engine-3d-label-bold" class="btn btn-primary btn-small" title="Toggle Bold Font"><strong>𝗕 Bold</strong></button>
 
@@ -1391,11 +1386,24 @@ Products:   12 CO2 + 6 H2O</pre>
             <span>Drag: orbit · Right drag / Shift: pan · Wheel: zoom · Double-click / F: fit</span>
           </div>
           <output id="engine-3d-inspector" class="analysis-atom-inspector" aria-live="polite">Click an atom to inspect coordinates and available partial charges.</output>
+          <details class="molecular-figure-controls" open>
+            <summary>Molecular figure appearance</summary>
+            <div class="figure-export-controls">
+              <label>Atom scale <input id="engine-3d-atom-size" type="number" min="0.12" max="0.5" step="0.01" value="0.24"></label>
+              <label>Bond radius (Å) <input id="engine-3d-bond-radius" type="number" min="0.025" max="0.2" step="0.005" value="0.085"></label>
+              <label>Multiple bond spacing <input id="engine-3d-bond-spacing" type="number" min="2.4" max="5" step="0.2" value="3.2"></label>
+              <label>Label placement (figure) <select id="engine-3d-label-layout"><option value="outside" selected>Outside atoms, avoid overlap</option><option value="center">On atoms</option></select></label>
+              <label>Hydrogen labels <select id="engine-3d-label-hydrogens"><option value="hide" selected>Hide H labels</option><option value="show">Show all labels</option></select></label>
+            </div>
+            <p class="field-hint">Figure uses your label color, size, badge and background. Orthographic rendering fits the current orientation automatically; atom coordinates stay unchanged. Set print dimensions and PNG/TIFF above. Refresh the preview after editing.</p>
+            <button type="button" id="engine-3d-figure-preview-btn" class="btn btn-secondary btn-small">Preview molecular figure</button>
+            <div id="engine-3d-figure-preview" class="molecular-figure-preview" hidden></div>
+          </details>
           <div class="viewer-footer">
             <span id="engine-3d-atomcount" class="field-hint">0 atoms</span>
             <div class="viewer-footer-actions">
               <button type="button" id="engine-3d-new-calc-btn" class="btn btn-primary btn-small" title="Feed these 3D coordinates into the 3D Builder to start a new ORCA calculation">🚀 New Calculation from Geometry</button>
-              <button type="button" id="engine-3d-download-png" class="btn btn-ghost btn-small" title="Export a white-background molecular figure at the selected print size and resolution">Export 3D figure</button>
+              <button type="button" id="engine-3d-download-png" class="btn btn-ghost btn-small" title="Render source bonds, labels and selected background at the chosen print size and resolution">Export 3D figure</button>
               <a id="engine-download-xyz-btn" class="btn btn-ghost btn-small" download="structure.xyz">⬇ Download XYZ</a>
               <button type="button" id="engine-download-chg-btn" class="btn btn-ghost btn-small" title="Export atomic charges in standard Multiwfn .chg format">⬇ Download .chg</button>
             </div>
@@ -2910,10 +2918,11 @@ Products:   12 CO2 + 6 H2O</pre>
 
   <script src="{{ url_for('static', filename='js/molecule-graph.js') }}?v=20261023d"></script>
   <script src="{{ url_for('static', filename='js/browser-chemistry.js') }}?v=20261023d"></script>
-  <script src="{{ url_for('static', filename='js/molecular-controls.js') }}?v=20261023png1"></script>
-  <script src="{{ url_for('static', filename='js/publication-figures.js') }}?v=20261023pub1"></script>
-  <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261023pub1"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261023pub2"></script>
+  <script src="{{ url_for('static', filename='js/molecular-controls.js') }}?v=20261023mol1"></script>
+  <script src="{{ url_for('static', filename='js/publication-molecule.js') }}?v=20261023mol1"></script>
+  <script src="{{ url_for('static', filename='js/publication-figures.js') }}?v=20261023mol1"></script>
+  <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261023mol1"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261023mol1"></script>
   <script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>

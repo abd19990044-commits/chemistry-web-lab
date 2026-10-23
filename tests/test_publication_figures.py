@@ -98,19 +98,12 @@ fs.writeFileSync(process.argv[1],P.pngMetadata(bytes,600,{axis:'δ (ppm)',source
         assert json.loads(im.info['Description']) == {'axis': 'δ (ppm)', 'source': 'ORCA'}
 
 
-def test_geometry_capture_restores_camera_and_styles_on_gpu_failure():
+def test_geometry_export_reports_missing_renderer_and_releases_busy_guard():
     node(r'''
-const original=[1,2,3,4,0,0,0,1];let view=original.slice(),restores=0,background,width;
-const viewer={getView:()=>view,getRenderer:()=>({domElement:{width:800}}),
- setView:v=>{view=v;},setBackgroundColor:c=>{background=c;},setWidth:w=>{width=w;view=[9];},setHeight(){},resize(){},render(){},
- pngURI(){assert.equal(background,'#ffffff');assert.ok(width>4000);throw Error('GPU failure');}};
-const viewport={getBoundingClientRect:()=>({width:800,height:400})};
+const original=[1,2,3,4,0,0,0,1];const viewer={getView:()=>original};
 (async()=>{
- for(let i=0;i<2;i++){
-  await assert.rejects(P.saveMolecule(viewer,viewport,{restore(){restores++;background='#000000';}}),/GPU failure/);
-  assert.deepEqual(view,original);assert.equal(background,'#000000');
- }
- assert.equal(restores,2);
+ for(let i=0;i<2;i++)await assert.rejects(P.saveMolecule(viewer,{}),/Reload the page/);
+ assert.deepEqual(viewer.getView(),original);
 })().catch(e=>{console.error(e);process.exit(1);});
 ''')
 

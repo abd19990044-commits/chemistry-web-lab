@@ -26,3 +26,12 @@ The 3D exporter renders at the requested resolution, preserves the current camer
 - [Elsevier artwork types](https://www.elsevier.com/about/policies-and-standards/author/artwork-and-media-instructions/artwork-types) and [file formats](https://www.elsevier.com/about/policies-and-standards/author/artwork-and-media-instructions/artwork-overview): vector and raster formats and resolution guidance.
 
 Visual formatting does not validate the chemical model, convergence, assignments, reference choice or interpretation. Review these against the original calculation and the journal's requirements before submission.
+
+
+## Molecular figures
+
+The analyzer now renders source geometry with an independent client-side orthographic renderer, analytic spheres/cylinders, a depth buffer and broad diffuse lighting. It fits the current orientation to the print area instead of enlarging a screenshot. Coordinates, disconnected fragments and source bond orders are preserved. Double/triple bonds have two/three separated cylinders; aromatic bonds have a solid and dashed lane. Spacefill intentionally covers bonds.
+
+Label content is chosen in the viewer. Text color, 5-20 pt print size, bold, badge and background are respected in the export; hydrogen labels can be hidden. Outside placement searches for free positions and adds fine leader lines. It reduces overlap but dense structures can still need a different camera, fewer labels, or a larger print area. Refresh the molecular preview to inspect the exact composition before exporting PNG/TIFF. Transparent PNG retains alpha; TIFF composites transparency onto white.
+
+Atom scale, bond radius and multiple-bond spacing change appearance only. They never move atoms or create bonds. `.out`/XYZ coordinates alone do not determine authoritative multiple bond orders; load an SDF/MOL with matching atom order using **Load bond orders**. Estimated single bonds remain explicitly marked. The metadata records source bond orders, rendering settings and unchanged coordinates.

@@ -71,7 +71,7 @@ def test_readonly_inspector_camera_measurements_and_cleanup():
     node('''
 global.window=new EventTarget();global.requestAnimationFrame=()=>1;global.cancelAnimationFrame=()=>{};
 let disconnected=false;global.ResizeObserver=class {observe(){}disconnect(){disconnected=true;}};
-class El extends EventTarget {constructor(){super();this.value='0';this.clientWidth=800;this.clientHeight=500;this.textContent='';this.style={};this.classList={add(){},remove(){},toggle(){}};}setAttribute(){}focus(){}setPointerCapture(){}hasPointerCapture(){return false;}getBoundingClientRect(){return {left:0,top:0,right:800,bottom:500,width:800,height:500};}getClientRects(){return [this.getBoundingClientRect()];}}
+class El extends EventTarget {constructor(){super();this.value='0';this.clientWidth=800;this.clientHeight=500;this.textContent='';this.style={};this.classList={add(){},remove(){},toggle(){}};}setAttribute(){}replaceChildren(){}focus(){}setPointerCapture(){}hasPointerCapture(){return false;}getBoundingClientRect(){return {left:0,top:0,right:800,bottom:500,width:800,height:500};}getClientRects(){return [this.getBoundingClientRect()];}}
 const els=new Map();global.document={hidden:false,getElementById:id=>{if(!els.has(id))els.set(id,new El());return els.get(id);}};
 const atoms=[{id:1,index:0,elem:'C',x:0,y:0,z:0,bonds:[],bondOrder:[]},{id:2,index:1,elem:'O',x:1.2,y:0,z:0,bonds:[],bondOrder:[]}];
 const snapshot=JSON.stringify(atoms.map(a=>[a.x,a.y,a.z]));let hit=atoms[0],view=[0,0,0,5,0,0,0,1],renders=0;
