@@ -128,6 +128,9 @@ def run_checks():
                        js[:decls[name]].count("\n") + 1))
     check("REGRESSION: no page-load IIFE assigns a binding declared later",
           not problems, "\n        ".join(problems))
+    check("publication figure dependency is loaded before app.js",
+          "filename='js/publication-figures.js'" in html and
+          html.index("filename='js/publication-figures.js'") < html.index("filename='js/app.js'"))
 
     # ===========================================================================
     section("3. Credentials are not written where the privacy text says they are not")
@@ -284,6 +287,9 @@ global.navigator = { clipboard: { writeText: () => Promise.resolve() }, userAgen
 global.URL = { createObjectURL: () => '', revokeObjectURL() {} };
 global.Blob = class {};
 global.FormData = class { append() {} };
+// Match the real HTML dependency order and browser Window global binding.
+require(require('node:path').join(require('node:path').dirname(process.argv[3]), 'publication-figures.js'));
+global.PublicationFigures = global.window.PublicationFigures;
 require(process.argv[3]);
 console.log('EVALUATED-OK');
 """

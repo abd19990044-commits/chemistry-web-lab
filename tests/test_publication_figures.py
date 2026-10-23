@@ -124,7 +124,7 @@ const currentEngineData={name:'fixture'},uvViewAllows=()=>true,irViewAllows=()=>
 const loadedTheoreticalSpectra=[{name:'TD-DFT',visible:true,transitions:[]}];
 const loadedExperimentalSpectra=[{label:'Measured',visible:true,raw_data:[{wavelength_nm:200,absorbance:1},{wavelength_nm:300,absorbance:8}]}];
 const getUVVisBounds=()=>({minX:180,maxX:800}),computeUvvisConvolution=()=>[{wavelength_nm:200,intensity:2},{wavelength_nm:300,intensity:4}];
-const spectrumNormalizeMode='all',uvvisManualRangeEnabled=false,uvvisManualMinY=null,uvvisManualMaxY=null,uvCustomTitles={},showUVVisLegend=true;
+let spectrumNormalizeMode='all';const uvvisManualRangeEnabled=false,uvvisManualMinY=null,uvvisManualMaxY=null,uvCustomTitles={},showUVVisLegend=true;
 const loadedTheoreticalIRSpectra=[{name:'DFT',visible:true,modes:[{frequency_cm:1000,intensity_km_mol:100}]}];
 let loadedExperimentalIRSpectra=[{label:'FTIR',visible:true,raw_data:[{wavenumber_cm:1000,transmittance_pct:50,absorbance:.5}]}];
 const getIRBounds=()=>({minWn:400,maxWn:4000}),getIRSharedNormMax=()=>1,computeIRConvolution=()=>[{wavenumber_cm:1105,transmittance_pct:40,absorbance:.4}];
@@ -134,6 +134,7 @@ const currentNMRData={h1_spectrum:{min_ppm:0,max_ppm:10,is_reference_applied:fal
 ''' + function + r'''
 const before=JSON.stringify([loadedExperimentalSpectra,loadedExperimentalIRSpectra,currentNMRData]);
 const uv=publicationSpectrumSpec('uvvis');assert.equal(uv.series[0].points[0].y,.5);assert.equal(uv.series[1].points[0].y,.125);assert.equal(uv.series[1].axis,2);assert.equal(uv.metadata.theoretical_shift_nm,5);
+spectrumNormalizeMode='none';const rawUv=publicationSpectrumSpec('uvvis');assert.equal(rawUv.yLabel,'Calculated intensity (a.u.)');assert.equal(rawUv.series[0].points[0].y,2);assert.ok(rawUv.metadata.theoretical_intensity.includes('not calibrated'));
 const ir=publicationSpectrumSpec('ir');assert.equal(ir.series[0].points[0].x,1105);assert.equal(ir.series[1].points[0].x,1000);assert.equal(ir.series[1].points[0].y,50);assert.equal(ir.reverseX,true);assert.ok(ir.yLabel.includes('pseudo'));
 const nmr=publicationSpectrumSpec('nmr');assert.equal(nmr.reverseX,false);assert.ok(nmr.xLabel.includes('shielding'));assert.equal(nmr.series[0].points[0].x,3);
 assert.equal(JSON.stringify([loadedExperimentalSpectra,loadedExperimentalIRSpectra,currentNMRData]),before);

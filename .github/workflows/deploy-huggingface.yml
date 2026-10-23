@@ -7,6 +7,7 @@ name: Deploy Hugging Face runtime
 # Keeps only .out members when importing archives in analysis and thermochemistry.
 # Adds high-resolution PNG export to the input geometry editor.
 # Publishes sized scientific PNG/TIFF/SVG figures with explicit print resolution.
+# Labels oscillator-strength-weighted UV-Vis intensity without uncalibrated epsilon units.
 
 on:
   workflow_dispatch:

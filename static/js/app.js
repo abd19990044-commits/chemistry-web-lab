@@ -7557,7 +7557,7 @@
     ctx.fillStyle = isLight ? "#4338ca" : "#818cf8";
     const uvLeftYTitle = uvCustomTitles.y || (spectrumNormalizeMode in { "all": 1, "theoretical_only": 1 }
         ? "Normalized Intensity (a.u.)"
-        : "Molar Absorption Coefficient, ε (M⁻¹ cm⁻¹)"
+        : "Calculated Intensity (a.u.)"
     );
     ctx.fillText(uvLeftYTitle, -(padding.top + plotH / 2), 16);
     if (activeExps.length > 0) {
@@ -8674,9 +8674,9 @@
       const minY=uvvisManualRangeEnabled&&Number.isFinite(uvvisManualMinY)?uvvisManualMinY:0;
       const manual=uvvisManualRangeEnabled&&Number.isFinite(uvvisManualMaxY)&&uvvisManualMaxY>minY?uvvisManualMaxY:null;
       return {title:uvCustomTitles.title||"UV-Vis absorption",xMin:minX,xMax:maxX,yMin:minY,yMax:manual??(theories.length?maxTheo:maxExp)*1.15,
-        xLabel:uvCustomTitles.x||"Wavelength (nm)",yLabel:uvCustomTitles.y||(theories.length?(normTheo?"Normalized intensity (a.u.)":"ε (L mol⁻¹ cm⁻¹)"):(normExp?"Normalized absorbance (a.u.)":"Absorbance")),
+        xLabel:uvCustomTitles.x||"Wavelength (nm)",yLabel:uvCustomTitles.y||(theories.length?(normTheo?"Normalized intensity (a.u.)":"Calculated intensity (a.u.)"):(normExp?"Normalized absorbance (a.u.)":"Absorbance")),
         y2Label:theories.length&&experiments.length?(normExp?"Normalized absorbance (a.u.)":"Absorbance"):null,y2Min:minY,y2Max:manual??maxExp*1.15,
-        showLegend:showUVVisLegend,series,metadata:{...source,spectrum:"UV-Vis",sigma_nm:sigma,theoretical_shift_nm:shift,normalization:spectrumNormalizeMode,experimental_data:"Raw samples; no smoothing or theoretical shift applied"}};
+        showLegend:showUVVisLegend,series,metadata:{...source,spectrum:"UV-Vis",sigma_nm:sigma,theoretical_shift_nm:shift,normalization:spectrumNormalizeMode,theoretical_intensity:"1000 times oscillator-strength-weighted Gaussian density in wavelength; arbitrary scale, not calibrated molar absorptivity",experimental_data:"Raw samples; no smoothing or theoretical shift applied"}};
     }
     if(kind==="ir"){
       const theories=loadedTheoreticalIRSpectra.filter(t=>t.visible&&irViewAllows("theo"));
@@ -9739,7 +9739,7 @@
               const maxI = Math.max(...curve.map(p => p.intensity), 1.0);
               valStr = `Norm = ${(intensity / maxI).toFixed(3)}`;
             } else {
-              valStr = `ε = ${intensity.toFixed(2)} M⁻¹ cm⁻¹`;
+              valStr = `Intensity = ${intensity.toFixed(2)} a.u.`;
             }
             tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${escapeHtml(theo.color)}; font-size:1.1em;">â-</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
           }
