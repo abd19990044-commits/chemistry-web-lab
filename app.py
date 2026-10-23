@@ -1870,7 +1870,7 @@ def decode_text_bytes(raw_bytes: bytes) -> str:
 
 
 def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, target_dir: str) -> list[dict]:
-    """Extract ORCA output files (.out, .log, .property.txt, .xyz, .molden) from ZIP, RAR, or TAR archives.
+    """Extract only .out files from ZIP, RAR, or TAR archives.
     
     Hardened against Zip Slip, Tar Slip, symlink traversal, and decompression bomb attacks.
     """
@@ -1880,7 +1880,6 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
     target_real = os.path.realpath(target_dir)
     os.makedirs(target_real, exist_ok=True)
     
-    analyzable_extensions = (".out", ".log", ".property.txt", ".xyz", ".molden", ".dat", ".output", ".txt")
     ignored_patterns = ("__macosx", "desktop.ini", "thumbs.db", ".tmp", ".bin", ".densities")
 
     def _is_valid_member(m_name: str) -> bool:
@@ -1893,9 +1892,9 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
         if any(p == ".." or ":" in p for p in parts):
             return False
         base = parts[-1].lower() if parts else ""
-        if not base or any(ig in base for ig in ignored_patterns):
+        if not base or any(ig in base for ig in ignored_patterns) or "__macosx" in (p.lower() for p in parts):
             return False
-        return any(base.endswith(ext) for ext in analyzable_extensions) or base.endswith(".molden.input")
+        return base.endswith(".out")
 
     def _safe_write_member(m_name: str, data: bytes) -> str | None:
         base_name = os.path.basename(m_name.replace("\\", "/"))
@@ -1941,7 +1940,7 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
                             text = decode_text_bytes(content_bytes)
                             extracted_files.append({
                                 "filename": item.filename,
-                                "basename": os.path.basename(item.filename),
+                                "basename": os.path.basename(item.filename.replace("\\", "/")),
                                 "content": text,
                                 "size_bytes": len(content_bytes),
                             })
@@ -1976,7 +1975,7 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
                                 text = decode_text_bytes(content_bytes)
                                 extracted_files.append({
                                     "filename": member.name,
-                                    "basename": os.path.basename(member.name),
+                                    "basename": os.path.basename(member.name.replace("\\", "/")),
                                     "content": text,
                                     "size_bytes": len(content_bytes),
                                 })
@@ -2007,7 +2006,7 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
                                 text = decode_text_bytes(content_bytes)
                                 extracted_files.append({
                                     "filename": item.filename,
-                                    "basename": os.path.basename(item.filename),
+                                    "basename": os.path.basename(item.filename.replace("\\", "/")),
                                     "content": text,
                                     "size_bytes": len(content_bytes),
                                 })
@@ -2016,8 +2015,9 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
             except Exception as exc:
                 log.info("rarfile extraction failed: %s", exc)
 
-    # 4. Universal fallback: if single file was sent or raw text contains ORCA calculations
-    if not extracted_files and raw_bytes and len(raw_bytes) <= MAX_ARCHIVE_TOTAL_SIZE:
+    # A standalone output may use this helper, but archive bytes must never be
+    # decoded as output: stored ZIP members can contain recognizable ORCA text.
+    if not extracted_files and ext in (".out", ".log") and raw_bytes and len(raw_bytes) <= MAX_ARCHIVE_TOTAL_SIZE:
         try:
             text = decode_text_bytes(raw_bytes)
             if "ORCA" in text or "FINAL SINGLE POINT ENERGY" in text or "Program Version" in text:
@@ -2080,7 +2080,7 @@ def api_orca_engine_parse():
                 extracted = extract_calculation_files_from_archive(raw_bytes, f.filename, session_dir)
                 if not extracted:
                     return error_response(
-                        f"Archive '{f.filename}' was uploaded, but no recognized calculation output files (.out, .log, .property.txt) were found inside.",
+                        f"Archive '{f.filename}' contains no usable .out files. Only .out files are extracted; all other files are skipped.",
                         422
                     )
 
@@ -3737,7 +3737,7 @@ def api_orca_engine_import_orca_output():
             extracted = extract_calculation_files_from_archive(content, raw_name, session_dir)
             if not extracted:
                 results.append({"file_name": raw_name, "status": "rejected",
-                                "reason": f"archive '{raw_name}' contained no recognized calculation output files (.out, .log, .property.txt)"})
+                                "reason": f"archive '{raw_name}' contained no usable .out files; all other files are skipped"})
                 continue
             for item in extracted:
                 item_text = item["content"]
@@ -3973,19 +3973,8 @@ def api_orca_engine_thermochemistry():
     if archive_file and archive_file.filename:
         raw_b = archive_file.read()
         extracted = extract_calculation_files_from_archive(raw_b, archive_file.filename, session_dir)
-        # Fallback if a single .out/.log file was uploaded to the archive parameter
-        if not extracted and raw_b:
-            try:
-                text = decode_text_bytes(raw_b)
-                single_jobs = OrcaParser(io.StringIO(text), source_name=archive_file.filename).parse()
-                if single_jobs:
-                    extracted = [{
-                        "filename": archive_file.filename,
-                        "basename": os.path.basename(archive_file.filename),
-                        "content": text
-                    }]
-            except Exception:
-                pass
+        if not extracted:
+            return error_response("No usable .out files found in the archive. Only .out files are extracted; all other files are skipped.", 422)
 
         for item in extracted:
             clean_name = core.safe_filename(os.path.splitext(item["basename"])[0])

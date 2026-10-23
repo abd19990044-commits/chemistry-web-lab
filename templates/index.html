@@ -1133,7 +1133,7 @@ Products:   12 CO2 + 6 H2O</pre>
           <div class="engine-dropzone" id="engine-dropzone">
             <span class="dropzone-icon">📁</span>
             <div class="dropzone-text">
-              <strong>Drag &amp; drop ORCA output files (.out, .log, .property.txt) or archive (.zip, .rar) here</strong>
+              <strong>Drag &amp; drop ORCA output files or an archive here (only .out files are extracted from archives)</strong>
               <span>or click to browse your computer</span>
             </div>
             <input type="file" id="engine-file-input" accept=".out,.log,.property.txt,.txt,.xyz,.zip,.rar,.tar.gz,.tgz,.tar" multiple class="hidden">
@@ -2072,7 +2072,7 @@ Products:   12 CO2 + 6 H2O</pre>
             <span class="archive-drop-icon">📦</span>
             <div class="archive-drop-info">
               <strong>Quick Batch Upload (ZIP / RAR Archive):</strong>
-              <span>Drop an archive containing all species ORCA output files - we'll auto-extract and match them to your reaction.</span>
+              <span>Drop an archive containing species outputs - only .out files are extracted and matched to your reaction; all other files are skipped.</span>
             </div>
             <input type="file" id="thermo-archive-file-input" accept=".zip,.rar,.tar.gz,.tgz,.tar" class="hidden">
             <button type="button" id="thermo-archive-browse-btn" class="btn btn-outline btn-small">Select Archive File</button>
@@ -2897,7 +2897,7 @@ Products:   12 CO2 + 6 H2O</pre>
   <script src="{{ url_for('static', filename='js/browser-chemistry.js') }}?v=20261023d"></script>
   <script src="{{ url_for('static', filename='js/molecular-controls.js') }}?v=20261023b"></script>
   <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261023c"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261023b"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261023out1"></script>
   <script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>

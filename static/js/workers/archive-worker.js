@@ -10,7 +10,7 @@
  * - Decompression bomb ratio protection.
  * - Web Crypto SHA-256 deduplication.
  * - 6-tier classification: ANALYZE, KEEP, IGNORE, DUPLICATE, UNKNOWN, UNSUPPORTED.
- * - UNKNOWN never means delete (it is preserved for user inspection).
+ * - Archives retain only .out members; plain file uploads keep their classification.
  */
 
 const DEFAULT_CONFIG = {
@@ -48,21 +48,24 @@ function sanitizePath(rawPath) {
     if (!rawPath) return '';
     // Normalize slashes
     let p = rawPath.replace(/\\/g, '/');
-    // Remove drive letters (e.g. C:)
-    p = p.replace(/^[a-zA-Z]:/, '');
+    if (p.startsWith('/') || p.includes('\0') || /^[a-zA-Z]:/.test(p)) return '';
     // Split and filter parts
     const parts = p.split('/').filter(Boolean);
     const safeParts = [];
     for (const part of parts) {
         if (part === '.' || part === '') continue;
         if (part === '..') {
-            // Prevent traversal outside root
-            if (safeParts.length > 0) safeParts.pop();
+            return '';
         } else {
+            if (part.includes(':')) return '';
             safeParts.push(part);
         }
     }
     return safeParts.join('/');
+}
+
+function isArchiveOutput(path) {
+    return /\.out$/i.test(path) && !path.split('/').some(part => part.toLowerCase() === '__macosx');
 }
 
 /**
@@ -196,6 +199,7 @@ async function processZipBuffer(arrayBuffer, config, reportProgress) {
         const nameLen = view.getUint16(offset + 28, true);
         const extraLen = view.getUint16(offset + 30, true);
         const commentLen = view.getUint16(offset + 32, true);
+        const unixMode = view.getUint32(offset + 38, true) >>> 16;
         const localHeaderOffset = view.getUint32(offset + 42, true);
 
         const nameBytes = uint8.subarray(offset + 46, offset + 46 + nameLen);
@@ -205,7 +209,8 @@ async function processZipBuffer(arrayBuffer, config, reportProgress) {
         offset += 46 + nameLen + extraLen + commentLen;
 
         // Skip directory entries
-        if (rawFilename.endsWith('/') || rawFilename.endsWith('\\') || !cleanFilename) {
+        if (rawFilename.endsWith('/') || rawFilename.endsWith('\\') || !cleanFilename ||
+            !isArchiveOutput(cleanFilename) || (unixMode & 0o170000) === 0o120000) {
             continue;
         }
 
@@ -276,7 +281,7 @@ async function processZipBuffer(arrayBuffer, config, reportProgress) {
             seenHashes.set(sha256, cleanFilename);
         }
 
-        const classification = classifyFile(cleanFilename, uncompSize, isDuplicate);
+        const classification = {tier: isDuplicate ? 'DUPLICATE' : 'ANALYZE', reason: 'ORCA .out archive member retained for analysis.'};
         
         let textContent = null;
         if (classification.tier === 'ANALYZE' || classification.tier === 'KEEP' || classification.tier === 'UNKNOWN') {
@@ -360,7 +365,7 @@ async function processTarBuffer(arrayBuffer, config, reportProgress) {
         const cleanName = sanitizePath(rawName);
 
         if (typeFlag === '0' || typeFlag === '\0') {
-            if (cleanName && !cleanName.endsWith('/')) {
+            if (cleanName && isArchiveOutput(cleanName)) {
                 if (size > config.maxIndividualFileSizeBytes) {
                     throw new Error(`File "${cleanName}" (${(size / 1024 / 1024).toFixed(1)} MB) exceeds size limit.`);
                 }
@@ -374,7 +379,7 @@ async function processTarBuffer(arrayBuffer, config, reportProgress) {
                 const isDuplicate = seenHashes.has(sha256);
                 if (!isDuplicate) seenHashes.set(sha256, cleanName);
 
-                const classification = classifyFile(cleanName, size, isDuplicate);
+                const classification = {tier: isDuplicate ? 'DUPLICATE' : 'ANALYZE', reason: 'ORCA .out archive member retained for analysis.'};
                 let textContent = null;
                 if (classification.tier === 'ANALYZE' || classification.tier === 'KEEP' || classification.tier === 'UNKNOWN') {
                     try { textContent = decoder.decode(fileData); } catch (e) {}

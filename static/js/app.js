@@ -8868,7 +8868,7 @@
       if (archiveWorkerInstance) {
         archiveWorkerInstance.terminate();
       }
-      archiveWorkerInstance = new Worker("/static/js/workers/archive-worker.js");
+      archiveWorkerInstance = new Worker("/static/js/workers/archive-worker.js?v=20261023out1");
 
       archiveWorkerInstance.onmessage = function(e) {
         const msg = e.data || {};
@@ -8900,8 +8900,9 @@
           const archiveBar = document.getElementById("engine-archive-bar");
           const archiveSelect = document.getElementById("engine-archive-select");
           const analyzeFiles = extractedPipelineFiles.filter(f => f.tier === "ANALYZE" || f.tier === "UNKNOWN");
+          if (archiveBar) archiveBar.classList.add("hidden");
+          if (archiveSelect) archiveSelect.innerHTML = "";
           if (archiveSelect && analyzeFiles.length > 0) {
-            archiveSelect.innerHTML = "";
             analyzeFiles.forEach(f => {
               const opt = document.createElement("option");
               opt.value = f.name;
@@ -8929,6 +8930,8 @@
             loadExtractedFileIntoEngine(primary);
           } else if (extractedPipelineFiles.length > 0) {
             showToast(`Archive unpacked: ${extractedPipelineFiles.length} file(s) classified.`);
+          } else if (errorEl) {
+            showError(errorEl, "No .out files found. Archives retain only .out files; all other members are skipped.");
           }
         } else if (msg.type === "ERROR") {
           if (pipelineProgressBox) pipelineProgressBox.classList.add("hidden");
@@ -8953,6 +8956,26 @@
         const rawFiles = [];
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
+          // RAR and XZ/BZIP2 use the same .out-only server extractor as the
+          // thermochemistry uploader; the browser worker handles ZIP/TAR/GZIP.
+          if (/\.(rar|xz|bz2)$/i.test(file.name)) {
+            try {
+              const formData = new FormData();
+              formData.append("file", file);
+              const resp = await fetch("/api/orca/engine/parse", {method: "POST", body: formData});
+              const data = await resp.json();
+              if (!resp.ok || !data.ok) throw new Error(data.error || "Could not extract .out files.");
+              for (const entry of data.archive_entries || []) {
+                const buf = new TextEncoder().encode(entry.raw_text).buffer;
+                rawFiles.push({name: `${file.name}/${entry.filename}`, size: buf.byteLength, buffer: buf});
+              }
+            } catch (err) {
+              if (pipelineProgressBox) pipelineProgressBox.classList.add("hidden");
+              if (errorEl) showError(errorEl, err.message);
+              return true;
+            }
+            continue;
+          }
           const buf = await file.arrayBuffer();
           rawFiles.push({ name: file.name, size: file.size, buffer: buf });
         }

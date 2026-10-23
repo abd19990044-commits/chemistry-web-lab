@@ -1,15 +1,16 @@
 # Chemistry Tools - always-on web app for Hugging Face Spaces (Docker SDK)
 FROM python:3.11-slim
 
-# RDKit's Cairo drawer needs these system libs.
+# RDKit's Cairo drawer needs these system libs; rarfile uses unar for RAR outputs.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libxrender1 libxext6 libsm6 libexpat1 \
+    libxrender1 libxext6 libsm6 libexpat1 unar \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN python -c "import rarfile; rarfile.tool_setup()"
 
 COPY . .
 RUN python fetch_browser_engine.py
