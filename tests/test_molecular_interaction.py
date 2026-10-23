@@ -26,6 +26,37 @@ const position=(a)=>({x:a.x,y:a.y,z:a.z});
 '''
 
 
+def test_high_resolution_png_restores_camera_after_success_and_render_failure():
+    node(BASE + r'''
+const original=[1,2,3,4,0,0,0,1];let view=original.slice(),width,height,restored=0;
+const viewport={getBoundingClientRect:()=>({width:2000,height:1000})};
+const renderer={domElement:{width:4000}};
+const viewer={getRenderer:()=>renderer,getView:()=>view,setView:v=>{view=v;},
+ setWidth:w=>{width=w;view=[9];},setHeight:h=>{height=h;},render(){},resize(){restored++;},
+ pngURI:()=> 'data:image/png;base64,iVBORw0KGgo='};
+const blob=C.pngBlob(viewer,viewport);
+assert.equal(blob.type,'image/png');assert.equal(blob.size,8);
+assert.equal(width*2,4096);assert.equal(height*2,2048);
+assert.deepEqual(view,original);assert.equal(restored,1);
+viewer.pngURI=()=>{throw Error('GPU export failed');};
+assert.throws(()=>C.pngBlob(viewer,viewport),/GPU export failed/);
+assert.deepEqual(view,original);assert.equal(restored,2);
+''')
+
+
+def test_high_resolution_png_uses_canvas_renderer_without_mutating_geometry():
+    node(BASE + r'''
+let factor,view=[0,0,0,5,0,0,0,1];const atoms=[{x:1,y:2,z:3}];
+const before=JSON.stringify(atoms);
+const viewer={rendererType:'canvas',getRenderer:()=>({domElement:{width:800}}),
+ getView:()=>view,setView:v=>{view=v;},resize(){},render(){},
+ pngURI:s=>{factor=s;return 'data:image/png;base64,iVBORw0KGgo=';}};
+const blob=C.pngBlob(viewer,{getBoundingClientRect:()=>({width:800,height:400})});
+assert.equal(factor,3);assert.equal(blob.size,8);assert.equal(JSON.stringify(atoms),before);
+assert.throws(()=>C.pngBlob(viewer,{getBoundingClientRect:()=>({width:0,height:0})}),/Open the molecular viewer/);
+''')
+
+
 def test_projection_and_rigid_geometry_at_arbitrary_camera_rotation_and_zoom():
     node(BASE + r'''
 for (let i=0; i<80; i++) {

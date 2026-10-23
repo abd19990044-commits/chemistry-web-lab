@@ -328,5 +328,29 @@
     viewer.setContainer(element);return viewer;
   }
 
-  root.MolecularControls={createSoftwareViewer,basis,screenDelta,centroid,rotate,rotation,multiply,applyTransform,createController,dot};
+  function pngBlob(viewer, viewport, scale=3) {
+    const rect=viewport.getBoundingClientRect();
+    if (!rect.width || !rect.height) throw Error('Open the molecular viewer before exporting.');
+    const canvas=viewer.getRenderer()?.domElement;
+    const pixelRatio=Math.max(1,(canvas?.width||rect.width)/rect.width);
+    const factor=Math.min(scale,4096/(Math.max(rect.width,rect.height)*pixelRatio));
+    const originalView=viewer.getView().slice();
+    let uri;
+    try {
+      if (viewer.rendererType==='canvas') uri=viewer.pngURI(factor);
+      else {
+        viewer.setWidth(Math.max(1,Math.round(rect.width*factor)));
+        viewer.setHeight(Math.max(1,Math.round(rect.height*factor)));
+        viewer.render();
+        uri=viewer.pngURI();
+      }
+    } finally {
+      viewer.resize();viewer.setView(originalView);viewer.render();
+    }
+    if (!uri?.startsWith('data:image/png;base64,')) throw Error('The renderer returned an invalid PNG.');
+    const bytes=Uint8Array.from(atob(uri.split(',')[1]),c=>c.charCodeAt(0));
+    return new Blob([bytes],{type:'image/png'});
+  }
+
+  root.MolecularControls={pngBlob,createSoftwareViewer,basis,screenDelta,centroid,rotate,rotation,multiply,applyTransform,createController,dot};
 })(typeof window==='undefined'?globalThis:window);

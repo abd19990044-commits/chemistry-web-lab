@@ -208,7 +208,7 @@ def test_engine_analyze_job_mock(client, monkeypatch):
 
 
 def test_engine_parse_zip_archive(client):
-    """Test uploading a ZIP archive containing multiple calculation files."""
+    """Only .out calculations survive a mixed ZIP upload."""
     calc1 = "Program Version 6.0.0\nFINAL SINGLE POINT ENERGY -50.123456\n****ORCA TERMINATED NORMALLY****\n"
     calc2 = "Program Version 6.0.0\nFINAL SINGLE POINT ENERGY -80.654321\n****ORCA TERMINATED NORMALLY****\n"
 
@@ -228,7 +228,7 @@ def test_engine_parse_zip_archive(client):
     res_data = res.get_json()
     assert res_data["ok"] is True
     assert res_data["is_archive"] is True
-    assert len(res_data["archive_entries"]) == 2
+    assert [entry["filename"] for entry in res_data["archive_entries"]] == ["calc_a.out"]
     assert "cleanup_note" in res_data
 
 

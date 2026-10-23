@@ -1806,6 +1806,23 @@
       }catch(e){showToast(e.message,"warning");}
     });
     addMolBox.appendChild(exportMolBtn);
+    const exportPngBtn=document.createElement("button");
+    exportPngBtn.type="button";exportPngBtn.id="builder3d-download-png";
+    exportPngBtn.className="btn btn-ghost btn-small";exportPngBtn.textContent="High-Res PNG";
+    exportPngBtn.title="Save the current molecular view at 3x resolution, up to 4096 pixels";
+    exportPngBtn.addEventListener("click",()=>{
+      controls.finish();
+      if(!bState.viewer || !bState.atoms.length){showToast("Load or build a molecule before exporting PNG.","warning");return;}
+      try{
+        renderSceneFast();
+        const blob=MolecularControls.pngBlob(bState.viewer,canvasEl);
+        const url=URL.createObjectURL(blob),link=document.createElement("a");
+        link.href=url;link.download="molecular-structure-high-res.png";
+        document.body.appendChild(link);link.click();link.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }catch(e){showToast("Could not export molecular PNG: "+e.message,"warning");}
+    });
+    addMolBox.appendChild(exportPngBtn);
     const bondOrderSelect=document.createElement("select");bondOrderSelect.setAttribute("aria-label","Bond order");
     for(const [value,label] of [[1,"Single bond"],[2,"Double bond"],[3,"Triple bond"],[0,"Remove bond"]]){const o=document.createElement("option");o.value=value;o.textContent=label;bondOrderSelect.appendChild(o);}
     toolGroup.appendChild(bondOrderSelect);
