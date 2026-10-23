@@ -9,7 +9,7 @@
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261023d">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261023pub1">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" defer></script>
 {% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
@@ -1234,6 +1234,21 @@ Products:   12 CO2 + 6 H2O</pre>
       </div>
 
       <div id="engine-result" class="engine-result-grid hidden">
+        <details class="engine-full-card figure-export-settings" id="figure-export-settings">
+          <summary>Publication figure export: print size, resolution &amp; format</summary>
+          <div class="figure-export-controls">
+            <label>Layout<select id="figure-preset"><option value="180,110">Double column</option><option value="85,65">Single column</option></select></label>
+            <label>Width (mm)<input id="figure-width-mm" type="number" min="50" max="190" value="180"></label>
+            <label>Height (mm)<input id="figure-height-mm" type="number" min="40" max="240" value="110"></label>
+            <label>Resolution<select id="figure-dpi"><option value="300">300 dpi</option><option value="600" selected>600 dpi</option><option value="1200">1200 dpi</option></select></label>
+            <label>Format<select id="figure-format"><option value="png">PNG</option><option value="tiff">TIFF (RGB)</option><option value="svg">SVG (vector plots)</option></select></label>
+            <label>Panel label<input id="figure-panel" type="text" maxlength="12" placeholder="e.g. (a)"></label>
+            <label class="figure-export-check"><input id="figure-monochrome" type="checkbox">Monochrome plots</label>
+            <label class="figure-export-check"><input id="figure-title" type="checkbox">Include plot title</label>
+          </div>
+          <p class="field-hint">Figures use a white background and the selected final print size. SVG is available for plots; 3D geometry uses PNG or TIFF. IR intensity exports use integrated band sticks. Check the target journal's artwork requirements.</p>
+        </details>
+
         <!-- Archive calculation switcher bar (visible when an archive is loaded) -->
         <div id="engine-archive-bar" class="engine-archive-bar hidden">
           <div class="archive-bar-content">
@@ -1380,7 +1395,7 @@ Products:   12 CO2 + 6 H2O</pre>
             <span id="engine-3d-atomcount" class="field-hint">0 atoms</span>
             <div class="viewer-footer-actions">
               <button type="button" id="engine-3d-new-calc-btn" class="btn btn-primary btn-small" title="Feed these 3D coordinates into the 3D Builder to start a new ORCA calculation">🚀 New Calculation from Geometry</button>
-              <button type="button" id="engine-3d-download-png" class="btn btn-ghost btn-small" title="Render and export molecular geometry as a PNG at twice the viewport resolution">📸 High-Res 3D (PNG)</button>
+              <button type="button" id="engine-3d-download-png" class="btn btn-ghost btn-small" title="Export a white-background molecular figure at the selected print size and resolution">Export 3D figure</button>
               <a id="engine-download-xyz-btn" class="btn btn-ghost btn-small" download="structure.xyz">⬇ Download XYZ</a>
               <button type="button" id="engine-download-chg-btn" class="btn btn-ghost btn-small" title="Export atomic charges in standard Multiwfn .chg format">⬇ Download .chg</button>
             </div>
@@ -1409,7 +1424,7 @@ Products:   12 CO2 + 6 H2O</pre>
           <div class="engine-col-card">
             <div class="card-title-row">
               <h4>Frontier Molecular Orbitals &amp; Gap</h4>
-              <button type="button" id="engine-orbitals-download-png" class="btn btn-ghost btn-small" title="Export orbital ladder diagram as high-res image">📸 High-Res Diagram</button>
+              <button type="button" id="engine-orbitals-download-png" class="btn btn-ghost btn-small" title="Export orbital eigenvalues with an automatic energy scale">Export orbital figure</button>
             </div>
             <div class="orbital-diagram-wrap">
               <div class="orbital-levels" id="engine-orbital-levels-ladder">
@@ -1489,7 +1504,7 @@ Products:   12 CO2 + 6 H2O</pre>
               <button type="button" id="uv-remove-imported" class="btn btn-ghost btn-small" title="Remove all imported ORCA spectra (keeps the current calculation)">Remove Imported</button>
               <button type="button" id="engine-uvvis-legend-toggle" class="btn btn-ghost btn-small" title="Toggle Legend Labels in Top-Left Corner">🏷️ Hide Legend</button>
               <button type="button" id="engine-uvvis-theme-toggle" class="btn btn-ghost btn-small">☀️ White Theme</button>
-              <button type="button" id="engine-uvvis-download-png" class="btn btn-ghost btn-small" title="Export high-resolution publication spectrum PNG">📸 High-Res PNG</button>
+              <button type="button" id="engine-uvvis-download-png" class="btn btn-ghost btn-small" title="Export visible spectrum curves using the publication settings">Export figure</button>
               <button type="button" id="engine-uvvis-export-csv" class="btn btn-ghost btn-small" title="Export all active spectra to CSV">⬇ Export CSV</button>
               <select id="uv-view-mode" class="form-select" style="max-width:220px;" title="Choose which spectral categories are displayed">
                 <option value="all" selected>View: All spectra</option>
@@ -1721,7 +1736,7 @@ Products:   12 CO2 + 6 H2O</pre>
               </button>
               <button type="button" id="engine-ir-legend-toggle" class="btn btn-ghost btn-small" title="Toggle Legend Labels in Top-Left Corner">🏷️ Hide Legend</button>
               <button type="button" id="engine-ir-theme-toggle" class="btn btn-ghost btn-small">☀️ White Theme</button>
-              <button type="button" id="engine-ir-download-png" class="btn btn-ghost btn-small" title="Export high-resolution publication IR spectrum PNG">📸 High-Res PNG</button>
+              <button type="button" id="engine-ir-download-png" class="btn btn-ghost btn-small" title="Export visible IR curves using the publication settings">Export figure</button>
               <button type="button" id="engine-ir-export-csv" class="btn btn-ghost btn-small" title="Export all active IR spectra to CSV">⬇ Export CSV</button>
               <span class="field-hint" id="engine-ir-import-status" style="flex-basis:100%;"></span>
             </div>
@@ -1943,7 +1958,7 @@ Products:   12 CO2 + 6 H2O</pre>
             <div class="uvvis-top-actions">
               <button type="button" id="engine-nmr-export-csv" class="btn btn-secondary btn-small" title="Download calculated NMR peak data as CSV">📊 Download CSV</button>
               <button type="button" id="engine-nmr-export-json" class="btn btn-secondary btn-small" title="Download complete NMR results as JSON">📋 Download JSON</button>
-              <button type="button" id="engine-nmr-download-png" class="btn btn-ghost btn-small" title="Export high-resolution spectrum image">📸 High-Res PNG</button>
+              <button type="button" id="engine-nmr-download-png" class="btn btn-ghost btn-small" title="Export calculated NMR sticks using the publication settings">Export figure</button>
             </div>
           </div>
 
@@ -2896,8 +2911,9 @@ Products:   12 CO2 + 6 H2O</pre>
   <script src="{{ url_for('static', filename='js/molecule-graph.js') }}?v=20261023d"></script>
   <script src="{{ url_for('static', filename='js/browser-chemistry.js') }}?v=20261023d"></script>
   <script src="{{ url_for('static', filename='js/molecular-controls.js') }}?v=20261023png1"></script>
-  <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261023c"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261023png1"></script>
+  <script src="{{ url_for('static', filename='js/publication-figures.js') }}?v=20261023pub1"></script>
+  <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261023pub1"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261023pub1"></script>
   <script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>

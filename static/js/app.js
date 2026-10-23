@@ -6268,6 +6268,7 @@
 
   function applyViewer3DStyle() {
     if (!viewer3D || !currentEngineData) return;
+    const forPublication=arguments[0]===true;
     const styleSelect = document.getElementById("engine-3d-style");
     const styleVal = styleSelect ? styleSelect.value : "ballAndStick";
     viewer3D.removeAllLabels();
@@ -6296,8 +6297,8 @@
     const labelColorSelect = document.getElementById("engine-3d-label-color");
     const labelBadgeSelect = document.getElementById("engine-3d-label-badge");
     const currentMode = labelModeSelect ? labelModeSelect.value : "off";
-    const fontColor = labelColorSelect ? labelColorSelect.value : "#FFFFFF";
-    const badgeStyle = labelBadgeSelect ? labelBadgeSelect.value : "dark";
+    const fontColor = forPublication ? "#111111" : labelColorSelect ? labelColorSelect.value : "#FFFFFF";
+    const badgeStyle = forPublication ? "transparent" : labelBadgeSelect ? labelBadgeSelect.value : "dark";
 
     let showBackground = true;
     let backgroundColor = "#0B0F19";
@@ -8655,7 +8656,64 @@
     drawIRMultiSpectrum();
   }
 
+  function publicationSpectrumSpec(kind) {
+    const peak=(points,key)=>points.reduce((n,p)=>Number.isFinite(p[key])?Math.max(n,p[key]):n,0)||1;
+    const source={source_name:currentEngineData?.name||null,source_type:"ORCA / imported spectrum"};
+    if(kind==="uvvis"){
+      const theories=loadedTheoreticalSpectra.filter(t=>t.visible&&uvViewAllows("theo"));
+      const experiments=loadedExperimentalSpectra.filter(t=>t.visible&&uvViewAllows("exp"));
+      const {minX,maxX}=getUVVisBounds(theories,experiments);
+      const sigma=Number(document.getElementById("engine-sigma-slider")?.value||20),shift=Number(document.getElementById("engine-shift-slider")?.value||0);
+      const normTheo=["all","theoretical_only"].includes(spectrumNormalizeMode),normExp=["all","experimental_only"].includes(spectrumNormalizeMode);
+      let maxTheo=0,maxExp=0;
+      const series=theories.map(t=>{
+        const curve=computeUvvisConvolution(t.transitions,sigma,shift,minX,maxX,1),maximum=peak(curve,"intensity");maxTheo=Math.max(maxTheo,normTheo?1:maximum);
+        return {name:`Calculated: ${t.name}`,points:curve.map(p=>({x:p.wavelength_nm,y:p.intensity/(normTheo?maximum:1)}))};
+      });
+      for(const e of experiments){const maximum=peak(e.raw_data,"absorbance");maxExp=Math.max(maxExp,normExp?1:maximum);series.push({name:`Experimental: ${e.label||e.file_name}`,axis:theories.length?2:1,points:e.raw_data.map(p=>({x:p.wavelength_nm,y:p.absorbance/(normExp?maximum:1)}))});}
+      const minY=uvvisManualRangeEnabled&&Number.isFinite(uvvisManualMinY)?uvvisManualMinY:0;
+      const manual=uvvisManualRangeEnabled&&Number.isFinite(uvvisManualMaxY)&&uvvisManualMaxY>minY?uvvisManualMaxY:null;
+      return {title:uvCustomTitles.title||"UV-Vis absorption",xMin:minX,xMax:maxX,yMin:minY,yMax:manual??(theories.length?maxTheo:maxExp)*1.15,
+        xLabel:uvCustomTitles.x||"Wavelength (nm)",yLabel:uvCustomTitles.y||(theories.length?(normTheo?"Normalized intensity (a.u.)":"ε (L mol⁻¹ cm⁻¹)"):(normExp?"Normalized absorbance (a.u.)":"Absorbance")),
+        y2Label:theories.length&&experiments.length?(normExp?"Normalized absorbance (a.u.)":"Absorbance"):null,y2Min:minY,y2Max:manual??maxExp*1.15,
+        showLegend:showUVVisLegend,series,metadata:{...source,spectrum:"UV-Vis",sigma_nm:sigma,theoretical_shift_nm:shift,normalization:spectrumNormalizeMode,experimental_data:"Raw samples; no smoothing or theoretical shift applied"}};
+    }
+    if(kind==="ir"){
+      const theories=loadedTheoreticalIRSpectra.filter(t=>t.visible&&irViewAllows("theo"));
+      const experiments=loadedExperimentalIRSpectra.filter(t=>t.visible&&irViewAllows("exp"));
+      const {minWn,maxWn}=getIRBounds(theories,experiments);
+      const scale=Number(document.getElementById("engine-ir-scale-slider")?.value||1),fwhm=Number(document.getElementById("engine-ir-fwhm-slider")?.value||15),shift=Number(document.getElementById("engine-ir-shift-slider")?.value||0);
+      const norm=getIRSharedNormMax(scale,fwhm,shift,minWn,maxWn),trans=irYAxisMode==="transmittance",intensity=irYAxisMode==="theory_intensity";
+      if(intensity&&experiments.length)throw Error("Use absorbance or transmittance to compare experimental and calculated IR. Integrated band intensities are available for calculated modes only.");
+      let maximum=0;
+      const series=theories.map(t=>{
+        const curve=intensity?(t.modes||[]).map(m=>({x:m.frequency_cm*scale+shift,y:m.intensity_km_mol})):
+          computeIRConvolution(t.modes,scale,fwhm,shift,minWn,maxWn,2,norm).map(p=>({x:p.wavenumber_cm,y:trans?p.transmittance_pct:p.absorbance}));
+        maximum=Math.max(maximum,peak(curve,"y"));return {name:`Calculated${trans?" pseudo-%T":""}: ${t.name}`,points:curve,sticks:intensity};
+      });
+      for(const e of experiments){const points=e.raw_data.map(p=>({x:p.wavenumber_cm,y:trans?(Number.isFinite(p.transmittance_pct)?p.transmittance_pct:100*10**(-p.absorbance)):(Number.isFinite(p.absorbance)?p.absorbance:-Math.log10(Math.max(.0001,p.transmittance_pct/100)))}));maximum=Math.max(maximum,peak(points,"y"));series.push({name:`Experimental: ${e.label||e.file_name}`,points});}
+      const minY=irManualRangeEnabled&&Number.isFinite(irManualMinY)?irManualMinY:0;
+      const maxY=irManualRangeEnabled&&Number.isFinite(irManualMaxY)&&irManualMaxY>minY?irManualMaxY:trans?100:Math.max(maximum,.1)*1.15;
+      return {title:irCustomTitles.title||"Infrared spectrum",xMin:minWn,xMax:maxWn,reverseX:true,yMin:minY,yMax:maxY,
+        xLabel:irCustomTitles.x||"Wavenumber (cm⁻¹)",yLabel:irCustomTitles.y||(intensity?"IR intensity (km mol⁻¹)":trans?(theories.length?"Transmittance / pseudo-%T (%)":"Transmittance (%)"):"Absorbance (a.u.)"),
+        series,showLegend:showIRLegend,metadata:{...source,spectrum:"IR",frequency_scale:scale,theoretical_shift_cm_1:shift,fwhm_cm_1:fwhm,y_mode:irYAxisMode,
+          representation:intensity?"Integrated calculated bands (sticks)":"Displayed broadened curves",experimental_data:"Raw samples; no frequency scaling, shift or smoothing applied",theoretical_transmittance:trans?"Pseudo-transmittance; not a measured transmittance":null}};
+    }
+    const spectrum=currentNMRNucleus==="1H"?currentNMRData?.h1_spectrum:currentNMRData?.c13_spectrum;
+    if(!spectrum?.peaks?.length)throw Error("No calculated NMR signals are available for the selected nucleus.");
+    return {title:spectrum.title||`Calculated ${currentNMRNucleus} NMR`,xMin:spectrum.min_ppm,xMax:spectrum.max_ppm,reverseX:!!spectrum.is_reference_applied,
+      yMin:0,yMax:Math.max(1,...spectrum.peaks.map(p=>p.intensity))*1.15,xLabel:spectrum.is_reference_applied?"Chemical shift, δ (ppm)":"Isotropic shielding, σ (ppm)",yLabel:"Relative intensity (a.u.)",
+      series:[{name:`Calculated ${currentNMRNucleus} NMR${spectrum.is_reference_applied?" (referenced)":" (unreferenced shielding)"}`,sticks:true,points:spectrum.peaks.map(p=>({x:p.position_ppm,y:p.intensity}))}],
+      metadata:{...source,spectrum:"NMR",nucleus:currentNMRNucleus,reference_applied:!!spectrum.is_reference_applied,reference_selection:currentNMRReference,reference:spectrum.reference_info||null,provenance:currentNMRData.provenance||null}};
+  }
+  async function exportPublicationSpectrum(kind,button){
+    if(button)button.disabled=true;
+    try{await PublicationFigures.savePlot(publicationSpectrumSpec(kind),`${currentEngineData?.name||"spectrum"}_${kind}_publication`);showToast("Publication figure exported at the selected size and resolution.");}
+    catch(e){showToast(e.message,"warning");}finally{if(button)button.disabled=false;}
+  }
+
   function initQuantumEngine() {
+    PublicationFigures.init();
     const form = document.getElementById("engine-form");
     const fileInput = document.getElementById("engine-file-input");
     const dropzone = document.getElementById("engine-dropzone");
@@ -9779,40 +9837,7 @@
       });
     }
 
-    // 📸 High-Resolution Multi-Spectrum Snapshot Download (PNG / Publication Quality)
-    const dlUvvisPngBtn = document.getElementById("engine-uvvis-download-png");
-    if (dlUvvisPngBtn) {
-      dlUvvisPngBtn.addEventListener("click", () => {
-        const activeTheos = loadedTheoreticalSpectra.filter(t => t.visible && uvViewAllows("theo"));
-        const activeExps = loadedExperimentalSpectra.filter(e => e.visible && uvViewAllows("exp"));
-
-        if (!activeTheos.length && !activeExps.length) {
-          showToast("No spectrum data available to export.");
-          return;
-        }
-
-        const scale = 2.5; // High-resolution scale
-        const offCanvas = document.createElement("canvas");
-        offCanvas.width = 1000 * scale;
-        offCanvas.height = 380 * scale;
-
-        renderSpectrumToCanvas(offCanvas, scale, true);
-
-        offCanvas.toBlob((blob) => {
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          const name = currentEngineData?.name || "spectrum";
-          a.download = `${name.replace(/\.[^/.]+$/, "")}_publication_uvvis.png`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-          showToast("High-resolution publication spectrum PNG saved.");
-        }, "image/png");
-      });
-    }
+    document.getElementById("engine-uvvis-download-png")?.addEventListener("click",e=>exportPublicationSpectrum("uvvis",e.currentTarget));
 
     // =========================================================================
     // IR Spectrum Studio Event Listeners
@@ -10609,38 +10634,7 @@
       });
     }
 
-    // High-Res IR PNG Download
-    if (irDownloadPngBtn) {
-      irDownloadPngBtn.addEventListener("click", () => {
-        const activeTheos = loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo"));
-        const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp"));
-        if (!activeTheos.length && !activeExps.length) {
-          showToast("No IR spectrum data available to export.");
-          return;
-        }
-
-        const scale = 2.5;
-        const offCanvas = document.createElement("canvas");
-        offCanvas.width = 1000 * scale;
-        offCanvas.height = 380 * scale;
-
-        renderIRSpectrumToCanvas(offCanvas, scale, true);
-
-        offCanvas.toBlob((blob) => {
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          const name = currentEngineData?.name || "ir_spectrum";
-          a.download = `${name.replace(/\.[^/.]+$/, "")}_publication_ir.png`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-          showToast("High-resolution publication IR spectrum PNG saved.");
-        }, "image/png");
-      });
-    }
+    irDownloadPngBtn?.addEventListener("click",e=>exportPublicationSpectrum("ir",e.currentTarget));
 
     // IR CSV Export
     if (irExportCsvBtn) {
@@ -10693,404 +10687,11 @@
       });
     }
 
-    const dlOrbPngBtn = document.getElementById("engine-orbitals-download-png");
-    if (dlOrbPngBtn) {
-      dlOrbPngBtn.addEventListener("click", () => {
-        if (!currentEngineData) {
-          showToast("No calculation loaded.");
-          return;
-        }
-        const job = currentEngineData.latest_job || {};
-        const molName = currentEngineData.name || "Molecule";
-
-        // Extract and calculate physical values
-        const homoVal = job.homo_ev !== undefined ? job.homo_ev : (job.homo_energy_ev !== undefined ? job.homo_energy_ev : null);
-        const lumoVal = job.lumo_ev !== undefined ? job.lumo_ev : (job.lumo_energy_ev !== undefined ? job.lumo_energy_ev : null);
-        const gapVal = job.homo_lumo_gap_ev !== undefined ? job.homo_lumo_gap_ev : (homoVal !== null && lumoVal !== null ? Math.abs(lumoVal - homoVal) : null);
-
-        const ipVal = job.ionization_potential_ev !== undefined ? job.ionization_potential_ev : (homoVal !== null ? -homoVal : null);
-        const eaVal = job.electron_affinity_ev !== undefined ? job.electron_affinity_ev : (lumoVal !== null ? -lumoVal : null);
-        const hardnessVal = job.chemical_hardness_ev !== undefined ? job.chemical_hardness_ev : (ipVal !== null && eaVal !== null ? (ipVal - eaVal) / 2 : null);
-        const softnessVal = job.chemical_softness_ev !== undefined ? job.chemical_softness_ev : (hardnessVal !== null && hardnessVal > 0 ? 1 / (2 * hardnessVal) : null);
-        const electronegativityVal = job.electronegativity_ev !== undefined ? job.electronegativity_ev : (ipVal !== null && eaVal !== null ? (ipVal + eaVal) / 2 : null);
-        const potentialVal = job.chemical_potential_ev !== undefined ? job.chemical_potential_ev : (electronegativityVal !== null ? -electronegativityVal : null);
-        const electrophilicityVal = job.electrophilicity_index_ev !== undefined ? job.electrophilicity_index_ev : (potentialVal !== null && hardnessVal !== null && hardnessVal > 0 ? (potentialVal * potentialVal) / (2 * hardnessVal) : null);
-
-        // High-DPI Canvas for 300+ DPI publication printing
-        const canvas = document.createElement("canvas");
-        canvas.width = 2400;
-        canvas.height = 1450;
-        const ctx = canvas.getContext("2d");
-
-        // Helper: Rounded Rectangles
-        function drawRoundedRect(c, x, y, width, height, radius, fillStyle, strokeStyle, lineWidth = 1) {
-          c.beginPath();
-          c.moveTo(x + radius, y);
-          c.lineTo(x + width - radius, y);
-          c.quadraticCurveTo(x + width, y, x + width, y + radius);
-          c.lineTo(x + width, y + height - radius);
-          c.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-          c.lineTo(x + radius, y + height);
-          c.quadraticCurveTo(x, y + height, x, y + height - radius);
-          c.lineTo(x, y + radius);
-          c.quadraticCurveTo(x, y, x + radius, y);
-          c.closePath();
-          if (fillStyle) {
-            c.fillStyle = fillStyle;
-            c.fill();
-          }
-          if (strokeStyle) {
-            c.strokeStyle = strokeStyle;
-            c.lineWidth = lineWidth;
-            c.stroke();
-          }
-        }
-
-        // Helper: Arrow
-        function drawDoubleArrow(c, x, y1, y2, headLen = 10, color = "#dc2626", lineWidth = 2) {
-          c.save();
-          c.strokeStyle = color;
-          c.fillStyle = color;
-          c.lineWidth = lineWidth;
-          c.beginPath();
-          c.moveTo(x, y1);
-          c.lineTo(x, y2);
-          c.stroke();
-
-          // Top arrowhead
-          c.beginPath();
-          c.moveTo(x, y1);
-          c.lineTo(x - headLen, y1 + headLen * 1.4);
-          c.lineTo(x + headLen, y1 + headLen * 1.4);
-          c.closePath();
-          c.fill();
-
-          // Bottom arrowhead
-          c.beginPath();
-          c.moveTo(x, y2);
-          c.lineTo(x - headLen, y2 - headLen * 1.4);
-          c.lineTo(x + headLen, y2 - headLen * 1.4);
-          c.closePath();
-          c.fill();
-          c.restore();
-        }
-
-        // 1. Clean White Background
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, 2400, 1450);
-
-        // Outer publication frame
-        drawRoundedRect(ctx, 40, 40, 2320, 1370, 16, "#ffffff", "#e2e8f0", 2);
-
-        // 2. Publication Header
-        ctx.textAlign = "left";
-        ctx.fillStyle = "#0f172a";
-        ctx.font = "bold 36px 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-        ctx.fillText(`Frontier Molecular Orbitals & Conceptual DFT Descriptors - ${molName}`, 80, 105);
-
-        // Dynamic engine version extraction from parsed calculation output file
-        let orcaVer = job.orca_version || currentEngineData?.orca_version || (currentEngineData?.latest_job && currentEngineData?.latest_job?.orca_version);
-        if (!orcaVer || orcaVer === "Unknown" || orcaVer === "undefined") {
-          const raw = currentEngineData?.raw_text || currentEngineData?.content || currentEngineData?.output || "";
-          const vMatch = raw.match(/Program\s+Version\s+([\d.]+)/i) || raw.match(/ORCA[^\d\n]*([\d.]+)/i);
-          if (vMatch) orcaVer = vMatch[1];
-        }
-        let engineLabel = "ORCA";
-        if (orcaVer && orcaVer !== "Unknown") {
-          engineLabel = orcaVer.toLowerCase().startsWith("orca") ? orcaVer : `ORCA ${orcaVer}`;
-        } else {
-          engineLabel = "ORCA";
-        }
-
-        // Metadata chips
-        const metaChips = [
-          `Formula: ${job.formula || job.chemical_formula || currentEngineData?.formula || "-"}`,
-          `Theory: ${job.method || job.functional || 'DFT'} / ${job.basis_set || 'Def2-TZVP'}`,
-          `Solvation: ${job.solvation || (job.solvation_model ? `${job.solvation_model} (${job.solvent || ''})` : job.solvent) || 'Gas Phase'}`,
-          `Engine: ${engineLabel}`
-        ];
-
-        let chipX = 80;
-        metaChips.forEach(chip => {
-          ctx.font = "500 16px 'Inter', sans-serif";
-          const tw = ctx.measureText(chip).width;
-          drawRoundedRect(ctx, chipX, 125, tw + 28, 36, 18, "#f1f5f9", "#cbd5e1", 1);
-          ctx.fillStyle = "#475569";
-          ctx.fillText(chip, chipX + 14, 149);
-          chipX += tw + 40;
-        });
-
-        // ──────────────────────────────────────────
-        // LEFT PANEL: Frontier Orbitals Energy Ladder
-        // ──────────────────────────────────────────
-        const leftPanelX = 80;
-        const leftPanelY = 190;
-        const leftPanelW = 1070;
-        const leftPanelH = 1150;
-
-        drawRoundedRect(ctx, leftPanelX, leftPanelY, leftPanelW, leftPanelH, 12, "#ffffff", "#e2e8f0", 1.5);
-        drawRoundedRect(ctx, leftPanelX, leftPanelY, leftPanelW, 68, 12, "#f8fafc", "#e2e8f0", 1.5);
-
-        ctx.fillStyle = "#0f172a";
-        ctx.font = "bold 22px 'Inter', sans-serif";
-        ctx.fillText("Frontier Molecular Orbital Energy Ladder", leftPanelX + 30, leftPanelY + 42);
-
-        ctx.fillStyle = "#64748b";
-        ctx.font = "500 15px 'Inter', sans-serif";
-        ctx.textAlign = "right";
-        ctx.fillText("Eigenvalues in eV", leftPanelX + leftPanelW - 30, leftPanelY + 42);
-        ctx.textAlign = "left";
-
-        // Vertical Energy Axis
-        const axisX = leftPanelX + 110;
-        const axisTopY = leftPanelY + 140;
-        const axisBottomY = leftPanelY + 1020;
-
-        ctx.strokeStyle = "#94a3b8";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(axisX, axisBottomY);
-        ctx.lineTo(axisX, axisTopY);
-        ctx.stroke();
-
-        // Axis Top Arrow
-        ctx.fillStyle = "#475569";
-        ctx.beginPath();
-        ctx.moveTo(axisX, axisTopY - 10);
-        ctx.lineTo(axisX - 6, axisTopY + 4);
-        ctx.lineTo(axisX + 6, axisTopY + 4);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = "#334155";
-        ctx.font = "bold 16px 'Inter', sans-serif";
-        ctx.fillText("Energy (eV)", axisX - 35, axisTopY - 22);
-
-        // Energy axis tick marks
-        const ticks = [4, 2, 0, -2, -4, -6, -8, -10];
-        const minScaleE = -10, maxScaleE = 4;
-        ticks.forEach(tVal => {
-          const normY = axisBottomY - ((tVal - minScaleE) / (maxScaleE - minScaleE)) * (axisBottomY - axisTopY);
-          ctx.strokeStyle = "#cbd5e1";
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(axisX - 8, normY);
-          ctx.lineTo(axisX + 8, normY);
-          ctx.stroke();
-
-          ctx.fillStyle = tVal === 0 ? "#0f172a" : "#64748b";
-          ctx.font = tVal === 0 ? "bold 14px 'Inter', monospace" : "13px 'Inter', monospace";
-          ctx.textAlign = "right";
-          ctx.fillText(`${tVal > 0 ? '+' : ''}${tVal}.0`, axisX - 14, normY + 5);
-
-          // Vacuum Zero reference line
-          if (tVal === 0) {
-            ctx.save();
-            ctx.setLineDash([6, 6]);
-            ctx.strokeStyle = "#94a3b8";
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(axisX + 15, normY);
-            ctx.lineTo(leftPanelX + leftPanelW - 40, normY);
-            ctx.stroke();
-
-            ctx.fillStyle = "#64748b";
-            ctx.font = "italic 13px 'Inter', sans-serif";
-            ctx.textAlign = "right";
-            ctx.fillText("Vacuum Level (0.00 eV)", leftPanelX + leftPanelW - 45, normY - 8);
-            ctx.restore();
-          }
-        });
-        ctx.textAlign = "left";
-
-        // Orbital Level Positions
-        const lumoY = leftPanelY + 310;
-        const homoY = leftPanelY + 770;
-        const barX = axisX + 45;
-        const barW = leftPanelW - (barX - leftPanelX) - 50;
-        const barH = 76;
-
-        // 1. LUMO Level (Virtual Orbital - Sapphire / Cobalt)
-        drawRoundedRect(ctx, barX, lumoY, barW, barH, 10, "#0284c7", "#0369a1", 1.5);
-
-        // LUMO Title & Value (Strictly "LUMO", no "(Virtual)")
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 26px 'Inter', sans-serif";
-        ctx.fillText("LUMO", barX + 30, lumoY + 47);
-
-        ctx.font = "bold 24px 'JetBrains Mono', Consolas, monospace";
-        ctx.textAlign = "right";
-        ctx.fillText(`${lumoVal !== null ? lumoVal.toFixed(3) : "-"} eV`, barX + barW - 30, lumoY + 47);
-        ctx.textAlign = "left";
-
-        // 2. HOMO-LUMO Gap Dimension & Callout
-        const gapCenterX = barX + barW / 2;
-        const gapMidY = (lumoY + barH + homoY) / 2;
-
-        // Gap dimension line with dual arrows
-        drawDoubleArrow(ctx, gapCenterX, lumoY + barH + 12, homoY - 12, 10, "#dc2626", 2.5);
-
-        // Gap Pill Badge
-        const gapPillW = 340;
-        const gapPillH = 88;
-        drawRoundedRect(ctx, gapCenterX - gapPillW / 2, gapMidY - gapPillH / 2, gapPillW, gapPillH, 20, "#fff5f5", "#fca5a5", 2);
-
-        ctx.textAlign = "center";
-        ctx.fillStyle = "#dc2626";
-        ctx.font = "bold 24px 'Inter', sans-serif";
-        ctx.fillText(`ΔE_gap = ${gapVal !== null ? gapVal.toFixed(3) : "-"} eV`, gapCenterX, gapMidY - 10);
-
-        if (gapVal !== null && gapVal > 0) {
-          const kcalGap = (gapVal * 23.0605).toFixed(2);
-          const nmEdge = (1239.84193 / gapVal).toFixed(1);
-          ctx.fillStyle = "#991b1b";
-          ctx.font = "500 15px 'Inter', sans-serif";
-          ctx.fillText(`${kcalGap} kcal/mol  •  λ_edge = ${nmEdge} nm`, gapCenterX, gapMidY + 22);
-        }
-        ctx.textAlign = "left";
-
-        // 3. HOMO Level (Occupied Orbital - Rich Terracotta / Amber)
-        drawRoundedRect(ctx, barX, homoY, barW, barH, 10, "#d97706", "#b45309", 1.5);
-
-        // Spin-paired electron representation (Antiparallel arrows)
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 26px 'Inter', sans-serif";
-        ctx.fillText("HOMO", barX + 30, homoY + 47);
-
-        // Electron occupancy indicator: ⥮
-        ctx.font = "bold 26px 'Inter', sans-serif";
-        ctx.fillStyle = "#fef3c7";
-        ctx.fillText("  ⥮", barX + 115, homoY + 47);
-
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 24px 'JetBrains Mono', Consolas, monospace";
-        ctx.textAlign = "right";
-        ctx.fillText(`${homoVal !== null ? homoVal.toFixed(3) : "-"} eV`, barX + barW - 30, homoY + 47);
-        ctx.textAlign = "left";
-
-        // Bottom Orbital Stats Card
-        const orbCardY = leftPanelY + leftPanelH - 140;
-        drawRoundedRect(ctx, leftPanelX + 30, orbCardY, leftPanelW - 60, 100, 8, "#f8fafc", "#e2e8f0", 1);
-
-        ctx.fillStyle = "#334155";
-        ctx.font = "bold 15px 'Inter', sans-serif";
-        ctx.fillText("Orbital Summary & Boundary Metrics", leftPanelX + 50, orbCardY + 34);
-
-        ctx.font = "500 14px 'Inter', sans-serif";
-        ctx.fillStyle = "#64748b";
-        const kjGap = gapVal !== null ? (gapVal * 96.485).toFixed(1) : "-";
-        ctx.fillText(`HOMO-LUMO Energy Difference: ${gapVal !== null ? gapVal.toFixed(4) : "-"} eV (${kjGap} kJ/mol)`, leftPanelX + 50, orbCardY + 66);
-
-        // ──────────────────────────────────────────
-        // RIGHT PANEL: Conceptual DFT Reactivity Descriptors
-        // ──────────────────────────────────────────
-        const rightPanelX = 1190;
-        const rightPanelY = 190;
-        const rightPanelW = 1130;
-        const rightPanelH = 1150;
-
-        drawRoundedRect(ctx, rightPanelX, rightPanelY, rightPanelW, rightPanelH, 12, "#ffffff", "#e2e8f0", 1.5);
-        drawRoundedRect(ctx, rightPanelX, rightPanelY, rightPanelW, 68, 12, "#f8fafc", "#e2e8f0", 1.5);
-
-        ctx.fillStyle = "#0f172a";
-        ctx.font = "bold 22px 'Inter', sans-serif";
-        ctx.fillText("Conceptual DFT (CDFT) Reactivity Descriptors", rightPanelX + 30, rightPanelY + 42);
-
-        ctx.fillStyle = "#64748b";
-        ctx.font = "500 15px 'Inter', sans-serif";
-        ctx.textAlign = "right";
-        ctx.fillText("Global Reactivity Indices", rightPanelX + rightPanelW - 30, rightPanelY + 42);
-        ctx.textAlign = "left";
-
-        // CDFT Table Header
-        const tableX = rightPanelX + 30;
-        const tableY = rightPanelY + 100;
-        const tableW = rightPanelW - 60;
-        const headerH = 52;
-
-        drawRoundedRect(ctx, tableX, tableY, tableW, headerH, 6, "#f1f5f9", "#cbd5e1", 1);
-
-        ctx.fillStyle = "#334155";
-        ctx.font = "bold 15px 'Inter', sans-serif";
-        ctx.fillText("Reactivity Descriptor", tableX + 24, tableY + 33);
-        ctx.textAlign = "center";
-        ctx.fillText("Symbol", tableX + 410, tableY + 33);
-        ctx.textAlign = "right";
-        ctx.fillText("Value", tableX + 680, tableY + 33);
-        ctx.textAlign = "left";
-        ctx.fillText("Operational Formula", tableX + 740, tableY + 33);
-
-        // CDFT Rows
-        const cdftRows = [
-          { name: "Chemical Hardness", symbol: "η", value: hardnessVal !== null ? `${hardnessVal.toFixed(3)} eV` : "-", formula: "(I - A) / 2", desc: "Resistance to charge transfer" },
-          { name: "Chemical Softness", symbol: "S", value: softnessVal !== null ? `${softnessVal.toFixed(3)} eV⁻¹` : "-", formula: "1 / (2η)", desc: "Polarizability & reactivity capacity" },
-          { name: "Electronegativity", symbol: "χ", value: electronegativityVal !== null ? `${electronegativityVal.toFixed(3)} eV` : "-", formula: "(I + A) / 2", desc: "Mulliken global electronegativity" },
-          { name: "Chemical Potential", symbol: "μ", value: potentialVal !== null ? `${potentialVal.toFixed(3)} eV` : "-", formula: "-χ", desc: "Escaping tendency of electrons" },
-          { name: "Electrophilicity Index", symbol: "ω", value: electrophilicityVal !== null ? `${electrophilicityVal.toFixed(3)} eV` : "-", formula: "μ² / (2η)", desc: "Energy stabilization capacity" },
-          { name: "Ionization Potential", symbol: "I", value: ipVal !== null ? `${ipVal.toFixed(3)} eV` : "-", formula: "-E(HOMO)", desc: "Energy required to remove electron" },
-          { name: "Electron Affinity", symbol: "A", value: eaVal !== null ? `${eaVal.toFixed(3)} eV` : "-", formula: "-E(LUMO)", desc: "Energy released upon electron addition" },
-        ];
-
-        let curRowY = tableY + headerH + 10;
-        const rowH = 92;
-
-        cdftRows.forEach((r, idx) => {
-          const isEven = idx % 2 === 0;
-          drawRoundedRect(ctx, tableX, curRowY, tableW, rowH, 6, isEven ? "#ffffff" : "#f8fafc", "#e2e8f0", 1);
-
-          // Name & Description
-          ctx.fillStyle = "#0f172a";
-          ctx.font = "bold 16px 'Inter', sans-serif";
-          ctx.fillText(r.name, tableX + 24, curRowY + 36);
-
-          ctx.fillStyle = "#64748b";
-          ctx.font = "13px 'Inter', sans-serif";
-          ctx.fillText(r.desc, tableX + 24, curRowY + 64);
-
-          // Symbol
-          ctx.textAlign = "center";
-          ctx.fillStyle = "#0284c7";
-          ctx.font = "bold 20px 'Inter', Georgia, serif";
-          ctx.fillText(r.symbol, tableX + 410, curRowY + 50);
-
-          // Value (Monospace)
-          ctx.textAlign = "right";
-          ctx.fillStyle = "#0f172a";
-          ctx.font = "bold 18px 'JetBrains Mono', Consolas, monospace";
-          ctx.fillText(r.value, tableX + 680, curRowY + 50);
-
-          // Formula
-          ctx.textAlign = "left";
-          ctx.fillStyle = "#475569";
-          ctx.font = "500 15px 'JetBrains Mono', Consolas, monospace";
-          ctx.fillText(r.formula, tableX + 740, curRowY + 50);
-
-          curRowY += rowH + 8;
-        });
-
-        // CDFT Reference Footnote Card (Clean definitions without literature citations)
-        const footY = rightPanelY + rightPanelH - 120;
-        drawRoundedRect(ctx, tableX, footY, tableW, 80, 8, "#f8fafc", "#e2e8f0", 1);
-
-        ctx.fillStyle = "#334155";
-        ctx.font = "bold 14px 'Inter', sans-serif";
-        ctx.fillText("Approximation & Fundamental Relations", tableX + 24, footY + 32);
-
-        ctx.font = "13px 'Inter', sans-serif";
-        ctx.fillStyle = "#64748b";
-        ctx.fillText("Finite-difference approximations: Ionization potential I ≈ -E(HOMO) and Electron affinity A ≈ -E(LUMO).", tableX + 24, footY + 58);
-
-        // Download PNG directly without bottom watermark/citations banner
-        const imgUri = canvas.toDataURL("image/png");
-        const a = document.createElement("a");
-        a.href = imgUri;
-        a.download = `${molName}_Frontier_Orbitals_and_CDFT.png`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        showToast(`Exported publication diagram for <strong>${molName}</strong>.`);
-      });
-    }
+    document.getElementById("engine-orbitals-download-png")?.addEventListener("click",async e=>{
+      const button=e.currentTarget;button.disabled=true;
+      try{if(!currentEngineData)throw Error("No calculation loaded.");await PublicationFigures.saveOrbitals(currentEngineData.latest_job||{},`${currentEngineData.name||"molecule"}_orbitals_publication`);showToast("Orbital eigenvalue diagram exported.");}
+      catch(err){showToast(err.message,"warning");}finally{button.disabled=false;}
+    });
 
     // Full AI/ML Dataset JSON Export
     const exportJsonBtn = document.getElementById("engine-btn-export-json");
@@ -12717,29 +12318,8 @@
       });
     }
 
-    const downloadPngBtn = document.getElementById("engine-nmr-download-png");
-    if (downloadPngBtn) {
-      downloadPngBtn.addEventListener("click", () => {
-        if (!currentNMRData) {
-          showToast("No NMR data loaded.");
-          return;
-        }
-        const offCanvas = document.createElement("canvas");
-        const scale = 2.5;
-        offCanvas.width = 1000 * scale;
-        offCanvas.height = 420 * scale;
-        renderNMRSpectrumToCanvas(offCanvas, scale, true);
+    document.getElementById("engine-nmr-download-png")?.addEventListener("click",e=>exportPublicationSpectrum("nmr",e.currentTarget));
 
-        offCanvas.toBlob((blob) => {
-          if (!blob) return;
-          const link = document.createElement("a");
-          link.href = URL.createObjectURL(blob);
-          link.download = `calculated_nmr_${currentNMRNucleus}_spectrum.png`;
-          link.click();
-          showToast("High-resolution NMR spectrum exported as PNG.");
-        });
-      });
-    }
   }
   initNMRStudio();
 

@@ -3625,3 +3625,11 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
 .engine-result-grid.is-geometry-only #engine-btn-export-json { display:none; }
 
 #engine-formula-badge { text-transform:none; }
+
+/* Publication export controls retain readable labels on narrow screens. */
+.figure-export-settings summary { cursor: pointer; font-weight: 600; }
+.figure-export-controls { display: flex; flex-wrap: wrap; gap: .85rem; margin-top: 1rem; align-items: end; }
+.figure-export-controls label { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; min-width: 100px; flex: 1 1 105px; }
+.figure-export-controls input, .figure-export-controls select { width: 100%; min-width: 0; }
+.figure-export-controls .figure-export-check { flex-direction: row; align-items: center; min-width: 145px; padding-bottom: .5rem; }
+.figure-export-check input { width: auto; }

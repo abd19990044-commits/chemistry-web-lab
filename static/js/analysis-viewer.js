@@ -68,16 +68,16 @@
     const topologyInput=el('engine-3d-topology-file');
     listen(el('engine-3d-topology-open'),'click',()=>topologyInput.click());
     listen(topologyInput,'change',async()=>{const file=topologyInput.files?.[0];if(!file)return;try{const molecule=await BrowserChemistry.file(file);if(disposed)return;if(molecule.topology!=='source')throw Error('Use SDF/MOL to supply bond orders.');const next=attachTopology(atoms,molecule);bonds=next;source=true;job.molecular_topology={...molecule,atoms:atoms.map(a=>({id:a.id,elem:a.elem,x:a.x,y:a.y,z:a.z,charge:molecule.atoms[a.id-1].charge||0})),bonds};MoleculeGraph.apply(model,bonds);notice();restyle();}catch(e){options.warn?.(e.message);}finally{topologyInput.value='';}});
-    listen(el('engine-3d-download-png'),'click',()=>{
+    listen(el('engine-3d-download-png'),'click',async event=>{
+      const button=event.currentTarget,wasSpinning=spinning;button.disabled=true;if(wasSpinning)toggleSpin();
       try{
-        let uri;const oldView=viewer.getView().slice(),r=viewport.getBoundingClientRect(),scale=Math.min(2,4096/Math.max(r.width,r.height));
-        if(viewer.rendererType==='canvas')uri=viewer.pngURI(scale);
-        else{try{viewer.setWidth(Math.round(r.width*scale));viewer.setHeight(Math.round(r.height*scale));viewer.render();uri=viewer.pngURI();}finally{viewer.resize();viewer.setView(oldView);viewer.render();}}
-        if(!uri?.startsWith('data:image/png;base64,'))throw Error('The renderer returned an invalid PNG.');
-        const decoded=atob(uri.split(',')[1]),bytes=Uint8Array.from(decoded,c=>c.charCodeAt(0));
-        const url=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
-        const a=document.createElement('a');a.href=url;a.download='calculated-molecular-geometry.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
-      }catch(e){options.warn?.('Could not export molecular PNG: '+e.message);}
+        await PublicationFigures.saveMolecule(viewer,viewport,{
+          prepare:()=>restyle(true),
+          restore:()=>{const bg=el('engine-3d-bg')?.value||'#090e17';viewer.setBackgroundColor(bg==='transparent'?0:bg,bg==='transparent'?0:1);restyle();},
+          metadata:{source_name:job.molecule||job.name||null,orca_version:job.orca_version||null,method:job.method||null,basis_set:job.basis_set||null,atoms:atoms.length,topology:source?'source':'estimated / unverified',geometry_coordinates:'unchanged'}
+        });
+      }catch(e){options.warn?.('Could not export molecular figure: '+e.message);}
+      finally{button.disabled=false;if(wasSpinning&&!disposed)toggleSpin();}
     });
     return {draw,fit,toggleSpin,topology:()=>({atoms:atoms.map(a=>({id:a.id,elem:a.elem,x:a.x,y:a.y,z:a.z,charge:job.molecular_topology?.atoms?.[a.id-1]?.charge||0})),bonds:structuredClone(bonds),topology:source?'source':'unverified'}),destroy(){disposed=true;spinning=false;cancelAnimationFrame(spinFrame);controls.destroy();observer.disconnect();events.abort();el('engine-3d-spin')?.classList.remove('btn-primary');}};
   }
