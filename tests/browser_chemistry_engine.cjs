@@ -7,6 +7,12 @@ vm.runInContext(fs.readFileSync('static/js/chemistry-worker.js','utf8'),context,
 const run=(type,payload)=>new Promise((resolve,reject)=>{active={resolve,reject};context.onmessage({data:{id:1,type,payload}});});
 (async()=>{
 const mb=await run('parse',{text:fs.readFileSync('tests/fixtures/browser_chemistry/methylene-blue.sdf','utf8'),format:'sdf',name:'Methylene blue'});
+const saved=context.MoleculeGraph.mol(mb.atoms,mb.bonds,'Methylene blue');
+assert.equal(saved.split('\n')[1].slice(20,22),'3D');
+const reopened=await run('parse',{text:saved,format:'mol',name:'Methylene blue reopened'});
+assert.equal(reopened.generated3D,false);
+assert.equal(reopened.bonds.length,mb.bonds.length);
+assert(reopened.atoms.every((a,i)=>['x','y','z'].every(k=>Math.abs(a[k]-mb.atoms[i][k])<=.00005001)));
 console.log('Methylene blue',mb.atoms.length,mb.bonds.length,mb.formula,mb.atoms.filter(a=>a.charge).map(a=>[a.elem,a.charge]));
 assert.equal(mb.generated3D,true);assert.equal(mb.atoms.length,39);assert.equal(mb.bonds.length,40);assert.equal(mb.bonds.filter(b=>b.order===2).length,7);
 assert.equal(mb.bonds.filter(b=>b.a1===1||b.a2===1).length,0);

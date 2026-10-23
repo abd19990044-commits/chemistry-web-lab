@@ -3623,3 +3623,5 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
 .engine-result-grid.is-geometry-only #engine-basis-badge,
 .engine-result-grid.is-geometry-only #engine-solv-badge,
 .engine-result-grid.is-geometry-only #engine-btn-export-json { display:none; }
+
+#engine-formula-badge { text-transform:none; }

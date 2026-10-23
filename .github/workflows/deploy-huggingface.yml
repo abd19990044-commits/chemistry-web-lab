@@ -97,3 +97,5 @@ jobs:
 # Runtime source alignment: normalize missing-value placeholder punctuation.
 
 # Runtime update: export rendered molecular PNGs as downloadable binary blobs.
+
+# Runtime source alignment: export explicit MDL 3D metadata and preserve reimported geometry.

@@ -42,7 +42,7 @@
     validate(atoms,bonds);
     if(atoms.length>999||bonds.length>999)throw Error('MOL V2000 supports up to 999 atoms and bonds.');
     const pad=(v,n)=>String(v).padStart(n,' '),index=new Map(atoms.map((a,i)=>[a.id,i+1]));
-    const lines=[name.replace(/[\r\n]/g,' ').slice(0,80),'  Chemistry Lab  3D','',`${pad(atoms.length,3)}${pad(bonds.length,3)}  0  0  0  0            999 V2000`];
+    const lines=[name.replace(/[\r\n]/g,' ').slice(0,80),'  ChemLab'.padEnd(20)+'3D','',`${pad(atoms.length,3)}${pad(bonds.length,3)}  0  0  0  0            999 V2000`];
     for(const a of atoms)lines.push(`${pad(a.x.toFixed(4),10)}${pad(a.y.toFixed(4),10)}${pad(a.z.toFixed(4),10)} ${a.elem.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`);
     for(const b of bonds)lines.push(`${pad(index.get(b.a1),3)}${pad(index.get(b.a2),3)}${pad(b.order===1.5?4:b.order,3)}  0  0  0  0`);
     const charged=atoms.filter(a=>a.charge);
