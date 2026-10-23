@@ -15,7 +15,7 @@ MODULE = ROOT / 'static/js/publication-figures.js'
 def node(script, *args):
     if not shutil.which('node'):
         pytest.skip('Node.js required')
-    result = subprocess.run(['node', '-e', f'require({str(MODULE)!r});const P=globalThis.PublicationFigures;const assert=require("node:assert/strict");\n'+script, *map(str,args)], cwd=ROOT, text=True, capture_output=True, timeout=20)
+    result = subprocess.run(['node', '-e', f'require({str(MODULE)!r});const P=globalThis.PublicationFigures;const assert=require("node:assert/strict");\n'+script, *map(str,args)], cwd=ROOT, text=True, encoding='utf-8', capture_output=True, timeout=20)
     assert result.returncode == 0, result.stderr
     return result.stdout
 
