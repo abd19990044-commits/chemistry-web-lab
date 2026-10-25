@@ -176,7 +176,7 @@ class TestCloudflareOutageResilience:
                 slug = expected_slug or "chem-tools-test"
                 return PushResult(slug=slug, owner="researcher_beta", url=f"https://kaggle.com/code/researcher_beta/{slug}", requested_slug=slug)
 
-            def list_kernels(self):
+            def list_kernels(self, **kwargs):
                 return []
 
         import orca_orchestrator.service as s_mod

@@ -487,7 +487,7 @@ class KaggleClient:
             shutil.rmtree(out_dir, ignore_errors=True)
 
     # -- listing -----------------------------------------------------------
-    def list_kernels(self, prefix: str | None = None, page_size: int = 100) -> list[dict]:
+    def list_kernels(self, prefix: str | None = None, page_size: int = 100, *, max_pages: int = 20) -> list[dict]:
         """Lists this account's kernels."""
         prefix = prefix or CONFIG.job_id_prefix
         if is_local_mode():
@@ -509,12 +509,12 @@ class KaggleClient:
 
         rows: list[dict] = []
         page = 1
-        max_pages = 20
+        max_pages = max(1, min(20, int(max_pages)))
         while page <= max_pages:
             def attempt(_a, p=page):
                 cmd = ["kaggle", "kernels", "list", "--mine", "--csv",
                        "--page-size", str(int(page_size)), "--page", str(p)]
-                proc = self._run(cmd, timeout=90, operation="kernels_list")
+                proc = self._run(cmd, timeout=10 if page_size == 1 and max_pages == 1 else 90, operation="kernels_list")
                 return proc.stdout or ""
 
             stdout = self.retry.call("kaggle kernels list", attempt)

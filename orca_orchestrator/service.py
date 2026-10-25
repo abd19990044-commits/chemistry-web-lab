@@ -148,11 +148,13 @@ class OrchestratorService:
     def authenticate(self, username: str, key_or_token: str) -> KaggleCredentials:
         """Validates credentials against Kaggle and caches them in RAM.
 
-        Doubles as the sign-in check: `list_kernels` fails loudly on bad
-        credentials, so one call both proves the account and fetches the job
-        list, which is what the sign-in screen actually needs."""
+        A one-page probe fails loudly on bad credentials. Full remote history
+        and Cloudflare recovery run through synchronization after sign-in."""
         creds = parse_credentials(username, key_or_token)
-        KaggleClient(creds).list_kernels()
+        from .retry import RetryPolicy
+        client = KaggleClient(creds)
+        client.retry = RetryPolicy(max_attempts=2, base_delay=.5, max_delay=1, deadline_seconds=25)
+        client.list_kernels(page_size=1, max_pages=1)
         BROKER.remember(creds)
         log_event(log, "authenticated", "Kaggle credentials verified",
                   owner=creds.username, fingerprint=creds.fingerprint)
@@ -168,6 +170,28 @@ class OrchestratorService:
         if cached is None or cached.fingerprint != creds.fingerprint:
             return self.authenticate(creds.username, creds.key or creds.api_token)
         return cached
+
+    def cached_jobs(self, creds: KaggleCredentials) -> list[dict]:
+        """Already-known jobs only; login must not run full remote recovery twice."""
+        return [self.describe(job) for job in self.store.list_jobs(creds.username)
+                if not self.store.is_tombstoned(job.job_id, creds.username)]
+
+    def defer_cloudflare_sync(self, job_id: str, *, register: bool = False) -> None:
+        from .background_io import defer
+        def replicate():
+            job = self.store.get_job(job_id)
+            if job is None or self.store.is_tombstoned(job_id, job.owner):
+                return
+            version = job._extra.get("_version")
+            if register:
+                extra = job._extra
+                self.cf_controller.register_job(job, workflow_id=extra.get("workflow_id"),
+                    parent_job_id=extra.get("parent_job_id"), step_index=extra.get("step_index", 0),
+                    step_count=extra.get("step_count", 1), step_name=extra.get("step_name", "CALC"))
+            else:
+                self.cf_controller.sync_job_state(job)
+            self.store.put_job(job, expected_version=version)
+        defer(("job", id(self), job_id), replicate)
 
     # -- submit ------------------------------------------------------------
     def submit(
@@ -305,19 +329,9 @@ class OrchestratorService:
                 self.store.put_job(job, expected_version=job._extra.get("_version"))
                 shutil.rmtree(final_submission_dir, ignore_errors=True)
 
-                # Persist metadata to Cloudflare Control Plane
-                try:
-                    self.cf_controller.register_job(
-                        job,
-                        workflow_id=workflow_id,
-                        parent_job_id=parent_job_id,
-                        step_index=step_index,
-                        step_count=step_count,
-                        step_name=step_name,
-                    )
-                    self.store.put_job(job, expected_version=job._extra.get("_version"))
-                except Exception as exc:
-                    log.warning("Could not register job in Cloudflare control plane: %s", exc)
+                # The remote push and local idempotency record are authoritative.
+                # Slow/degraded metadata replication must not hold the HTTP response.
+                self.defer_cloudflare_sync(job.job_id, register=True)
 
                 response = SubmitResult(job_id=job.job_id, slug=result.slug,
                                         url=result.url, title=job.title)
@@ -473,11 +487,7 @@ class OrchestratorService:
                 remote_status_unknown = True
                 remote_status_error = type(exc).__name__
                 log.warning("remote status unknown for %s: %s", job_id, exc)
-            try:
-                self.cf_controller.sync_job_state(job)
-                self.store.put_job(job, expected_version=job._extra.get("_version"))
-            except Exception:
-                pass
+            self.defer_cloudflare_sync(job.job_id)
 
         described = self.describe(job)
         if remote_status_unknown:
@@ -804,6 +814,50 @@ class OrchestratorService:
             return fallback, out_dir
         shutil.rmtree(out_dir, ignore_errors=True)
         return None, out_dir
+
+    def fetch_geometry_results(self, creds: KaggleCredentials, job_id: str) -> tuple[str | None, str]:
+        """Fetch only scientific text needed by an optimization dependency.
+
+        Never download GBW/checkpoints merely to unlock a subsequent stage.
+        Archived-only older kernels retain the bounded compatibility fallback.
+        """
+        if not is_valid_slug(job_id):
+            raise ValidationError("invalid job id")
+        auth = self.ensure_authenticated(creds)
+        job = self.store.get_job(job_id)
+        if job and job.owner != auth.username.lower():
+            raise ValidationError("Access denied: job does not belong to this user")
+        if self.store.is_tombstoned(job_id, auth.username):
+            raise NotFoundError("job was deleted locally", job_id=job_id)
+        archived, _manifest = self.result_store.retrieve(job_id, auth.username)
+        if archived and os.path.exists(archived):
+            return archived, ""
+        from .retry import RetryPolicy
+        client = KaggleClient(auth, retry=RetryPolicy(max_attempts=2, deadline_seconds=55))
+        target = (job.current_slug if job else None) or job_id
+        out_dir = client.fetch_output(target, file_pattern=r"(?i).*\.(out|inp|xyz)$", timeout=25)
+        try:
+            paths = [os.path.join(out_dir, name) for name in os.listdir(out_dir)
+                     if name.lower().endswith((".out", ".inp", ".xyz"))
+                     and os.path.isfile(os.path.join(out_dir, name))]
+            if any(path.lower().endswith(".out") for path in paths) and any(path.lower().endswith(".inp") for path in paths):
+                archive = os.path.join(out_dir, "_geometry.zip")
+                with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for path in paths:
+                        zf.write(path, os.path.basename(path))
+                return archive, out_dir
+        except BaseException:
+            shutil.rmtree(out_dir, ignore_errors=True)
+            raise
+        shutil.rmtree(out_dir, ignore_errors=True)
+        # Archive-only older kernels: ask for the archive alone, never a
+        # second copy of all loose binary/checkpoint outputs beside it.
+        out_dir = client.fetch_output(target, file_pattern=r"(?i)(?:.*/)?results\.zip$", timeout=25)
+        archive = os.path.join(out_dir, "results.zip")
+        if os.path.isfile(archive) and _safe_zip_file(archive):
+            return archive, out_dir
+        shutil.rmtree(out_dir, ignore_errors=True)
+        return None, ""
 
     def archive_job_results(
         self,

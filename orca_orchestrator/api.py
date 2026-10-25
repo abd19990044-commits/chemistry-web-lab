@@ -70,8 +70,9 @@ def login():
         return jsonify({
             "ok": True,
             "owner": creds.username,
-            "jobs": service.list_jobs(creds),
-            "workflows": service.list_workflows(creds),
+            "jobs": service.cached_jobs(creds),
+            "workflows": [],
+        "sync_required": True,
             "max_active_jobs": max_active_jobs_per_account(),
         })
 

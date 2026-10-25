@@ -31,11 +31,14 @@ def _remote_chains(client: KaggleClient) -> dict[str, list[dict]]:
 def active_remote_job_ids(client: KaggleClient) -> set[str]:
     """Return logical jobs whose newest Kaggle window is queued or running."""
     active: set[str] = set()
-    for job_id, windows in _remote_chains(client).items():
-        if not windows:
-            continue
-        newest = max(windows, key=lambda item: int(item.get("epoch", 0)))
-        status = client.status(newest["slug"])
+    from concurrent.futures import ThreadPoolExecutor
+    newest = [(job_id, max(windows, key=lambda item: int(item.get("epoch", 0)))["slug"])
+              for job_id, windows in _remote_chains(client).items() if windows]
+    # Each CLI/API operation is bounded; overlap independent observations rather
+    # than waiting serially for every historical notebook on an account.
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="kaggle-capacity") as pool:
+        observations = list(pool.map(lambda item: (item[0], client.status(item[1])), newest))
+    for job_id, status in observations:
         if status.status in KERNEL_ACTIVE_STATUSES:
             active.add(job_id)
     return active

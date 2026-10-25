@@ -497,7 +497,7 @@
         else if (typeof data.detail === "object") errMsg = data.detail.message || JSON.stringify(data.detail);
       }
       if (!errMsg) errMsg = `Request failed (HTTP ${resp.status}).`;
-      throw new Error(errMsg);
+      const error=new Error(errMsg);error.status=resp.status;error.code=data.code||data.error?.code;error.retryable=resp.status===429||resp.status>=500;throw error;
     }
     return data;
   }
@@ -4427,9 +4427,14 @@
     renderJobs();
   }
 
+  let kaggleSyncTask=null;
   async function syncKaggleJobs(username, key, opts = {}) {
-    try { const data = await postJSON("/api/kaggle/sync", {kaggle_username: username, kaggle_key: key}); mergeRemoteJobs(username,key,data.jobs||[]); pollAllActiveJobs(); return true; }
-    catch (err) { if (!(opts && opts.silent)) showToast(`<strong>Kaggle job sync failed</strong><br>${err.message}`); else console.warn("Kaggle job sync failed:",err.message); return false; }
+    if(kaggleSyncTask&&kaggleSyncTask.username===username&&kaggleSyncTask.key===key)return kaggleSyncTask.promise;
+    const task={username,key};
+    task.promise=(async()=>{try{const data=await postJSON("/api/kaggle/sync",{kaggle_username:username,kaggle_key:key});mergeRemoteJobs(username,key,data.jobs||[]);pollAllActiveJobs();return true;}
+      catch(err){if(!opts.silent)showToast(`<strong>Kaggle job sync failed</strong><br>${err.message}`);return false;}
+      finally{if(kaggleSyncTask===task)kaggleSyncTask=null;}})();
+    kaggleSyncTask=task;return task.promise;
   }
 
   async function attemptLogin(username, key, opts) {
@@ -5080,7 +5085,7 @@
 
   const STATUS_LABELS = {
     queued: "Queued",
-    waiting_dependency: "Waiting for Stage 1",
+    waiting_dependency: "Waiting for previous stage",
     submitting: "Submitting…",
     running: "Running",
     downloading: "Downloading results",
@@ -5274,6 +5279,16 @@
         info.appendChild(waitingRow);
       }
 
+      if(job.status==="error"&&job.dependsOnWorkflow&&Number(job.stage)>1&&!String(job.jobId||"").startsWith("chem-tools-")&&(!job.backend||job.backend==="kaggle_client_queue")){
+        const parent=jobs.find(item=>item.workflowId===job.dependsOnWorkflow&&Number(item.stage)===Number(job.stage)-1);
+        if(parent?.status==="complete"){
+          const retry=document.createElement("button");retry.type="button";retry.className="btn btn-outline btn-small";retry.textContent="Retry this stage";
+          retry.title="Verify the completed geometry and retry only this unsubmitted stage.";
+          retry.addEventListener("click",async()=>{retry.disabled=true;try{await retryWorkflowDependency(job.jobId);}finally{renderJobs();}});
+          actions.append(retry);
+        }
+      }
+
       const CANCELLABLE_JOB_STATUSES = ["queued", "running", "restarting", "submitting", "waiting_dependency", "downloading", "verifying"];
       const isClientOnlyWaitingJob = (j) => !j.backend || j.backend === "kaggle_client_queue";
 
@@ -5386,94 +5401,76 @@
   // Finds the coordinates for subsequent stages:
   // 1. Prioritizes the latest completed ancestor stage that performed Geometry Optimization (OPT).
   // 2. If NO OPT stage exists in the workflow (e.g. all SP or Freq), takes the coordinates from the .inp file of the immediately preceding step.
+  async function workflowGeometry(job) {
+    const resp=await fetch("/api/kaggle/extract-opt-coords",{method:"POST",headers:{"Content-Type":"application/json"},signal:AbortSignal.timeout(120000),body:JSON.stringify({...credsFor(job),job_id:job.jobId})});
+    const data=await resp.json().catch(()=>null);
+    if(!resp.ok||!data?.ok){
+      const error=new Error(typeof data?.error==="string"?data.error:(data?.error?.message||"Completed-stage results are not available yet."));
+      error.retryable=![400,422].includes(resp.status);error.code=data?.code;throw error;
+    }
+    if(data.converged!==true){const error=new Error("The optimization geometry has not been verified as converged.");error.retryable=false;throw error;}
+    if(!data.coords?.trim()){const error=new Error("Final geometry is not available yet.");error.retryable=true;throw error;}
+    return data.coords.trim();
+  }
+
   async function getWorkflowOptimizedCoords(targetJob, allJobs) {
-    if (!targetJob || !targetJob.dependsOnWorkflow) return null;
-    const workflowId = targetJob.dependsOnWorkflow;
-    const currentStageNum = targetJob.stage || 2;
-    
-    // Find all completed predecessor stages in this workflow, sorted newest first
-    const predecessors = (allJobs || loadJobs())
-      .filter(x => x.workflowId === workflowId && (x.stage || 1) < currentStageNum && x.status === "complete")
-      .sort((a, b) => (b.stage || 1) - (a.stage || 1));
-
-    if (!predecessors.length) return null;
-
-    // 1. Primary: Prioritize the most recent Geometry Optimization (OPT) predecessor
-    const optPredecessors = predecessors.filter(isOptimizationJob);
-    if (optPredecessors.length > 0) {
-      for (const cand of optPredecessors) {
-        // a. Cached coordinates from previous extraction
-        if (cand.optimizedCoords && cand.optimizedCoords.trim()) {
-          return { coords: cand.optimizedCoords.trim(), sourceStage: cand.stage, sourceName: cand.name };
-        }
-        // b. Fetch from /api/kaggle/extract-opt-coords
-        try {
-          const resp = await fetch("/api/kaggle/extract-opt-coords", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...credsFor(cand), job_id: cand.jobId })
-          });
-          const data = await resp.json().catch(() => null);
-          if (data && data.ok && data.coords && data.coords.trim()) {
-            const coords = data.coords.trim();
-            updateJob(cand.jobId, { optimizedCoords: coords });
-            cand.optimizedCoords = coords;
-            return { coords, sourceStage: cand.stage, sourceName: cand.name };
-          }
-        } catch (err) {
-          console.warn(`Could not extract coords from OPT Stage ${cand.stage}:`, err.message);
-        }
-      }
-    }
-
-    // An optimization predecessor is a hard scientific prerequisite. Never
-    // fall back to its original .inp/config coordinates when final optimized
-    // coordinates could not be extracted: that would silently run the next
-    // stage on pre-optimization geometry.
-    if (optPredecessors.length > 0) return null;
-
-    // 2. Secondary fallback (when NO OPT is available): Take coordinates from the .inp of the immediately preceding step
-    const immediatePredecessor = predecessors.find(x => x.stage === currentStageNum - 1) || predecessors[0];
-    if (immediatePredecessor) {
-      // a. Extract from the .inp file text directly
-      const inpCoords = extractCoordsFromInp(immediatePredecessor.input_content);
-      if (inpCoords && inpCoords.trim()) {
-        return { coords: inpCoords.trim(), sourceStage: immediatePredecessor.stage, sourceName: immediatePredecessor.name };
-      }
-
-      // b. Extract from stageConfig / stage2Config
-      const cfgCoords = (immediatePredecessor.stageConfig && immediatePredecessor.stageConfig.coords) ||
-                        (immediatePredecessor.stage2Config && immediatePredecessor.stage2Config.coords);
-      if (cfgCoords && cfgCoords.trim()) {
-        return { coords: cfgCoords.trim(), sourceStage: immediatePredecessor.stage, sourceName: immediatePredecessor.name };
-      }
-
-      // c. Fetch from /api/kaggle/extract-opt-coords on the immediate predecessor (reads .inp from archive)
-      try {
-        const resp = await fetch("/api/kaggle/extract-opt-coords", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...credsFor(immediatePredecessor), job_id: immediatePredecessor.jobId })
-        });
-        const data = await resp.json().catch(() => null);
-        if (data && data.ok && data.coords && data.coords.trim()) {
-          const coords = data.coords.trim();
-          return { coords, sourceStage: immediatePredecessor.stage, sourceName: immediatePredecessor.name };
-        }
-      } catch (err) {
-        console.warn(`Could not extract coords from Stage ${immediatePredecessor.stage}:`, err.message);
-      }
-    }
-
-    // 3. Tertiary fallback: Check all remaining predecessor configs
-    for (const cand of predecessors) {
-      const cfgCoords = (cand.stageConfig && cand.stageConfig.coords) || (cand.stage2Config && cand.stage2Config.coords);
-      if (cfgCoords && cfgCoords.trim()) {
-        return { coords: cfgCoords.trim(), sourceStage: cand.stage, sourceName: cand.name };
-      }
-    }
-
+    if(!targetJob?.dependsOnWorkflow)return null;
+    const predecessors=(allJobs||loadJobs()).filter(x=>x.workflowId===targetJob.dependsOnWorkflow&&Number(x.stage||1)<Number(targetJob.stage||2)&&x.status==="complete").sort((a,b)=>Number(b.stage||1)-Number(a.stage||1));
+    if(!predecessors.length)return null;
+    const optimized=predecessors.filter(isOptimizationJob);
+    // The latest optimization is authoritative. A delayed download must never
+    // silently select older geometry or the pre-optimization input instead.
+    if(optimized.length){const source=optimized[0],coords=source.optimizedCoords?.trim()||await workflowGeometry(source);updateJob(source.jobId,{optimizedCoords:coords});return {coords,sourceStage:source.stage,sourceName:source.name};}
+    const source=predecessors.find(x=>Number(x.stage)===Number(targetJob.stage||2)-1)||predecessors[0];
+    const coords=extractCoordsFromInp(source.input_content)||source.stageConfig?.coords||source.stage2Config?.coords;
+    if(coords?.trim())return {coords:coords.trim(),sourceStage:source.stage,sourceName:source.name};
     return null;
+  }
+
+  const workflowAdvances = new Map();
+  async function prepareWorkflowStage(job) {
+    const id=job.jobId;
+    if(workflowAdvances.has(id))return workflowAdvances.get(id);
+    const operation=(async()=>{
+      const jobs=loadJobs(),current=jobs.find(x=>x.jobId===id);
+      if(!current||current.status!=="waiting_dependency"||Date.now()<Number(current.dependencyRetryAt||0))return false;
+      const parent=jobs.find(x=>x.workflowId===current.dependsOnWorkflow&&Number(x.stage)===Number(current.stage||2)-1);
+      if(!parent||parent.status!=="complete")return false;
+      const stillWaiting=()=>{const fresh=loadJobs(),child=fresh.find(x=>x.jobId===id),prior=fresh.find(x=>x.jobId===parent.jobId);return child?.status==="waiting_dependency"&&prior?.status==="complete"?child:null;};
+      try{
+        const geometry=await getWorkflowOptimizedCoords(current,jobs);
+        if(!geometry?.coords){const error=new Error("Final coordinates of the completed predecessor are unavailable.");error.retryable=true;throw error;}
+        if(!stillWaiting())return false;
+        const config={...(current.stageConfig||current.stage2Config||{}),coords:geometry.coords};
+        const generated=await postJSON("/api/orca/generate",{...config,name:config.name||current.name});
+        if(!generated?.input_text)throw new Error("The next stage's input could not be generated.");
+        if(!stillWaiting())return false;
+        const patch={status:"queued",readyAt:Date.now(),submittedAt:null,startedAt:null,finishedAt:null,input_content:generated.input_text,stageConfig:config,stage2Config:config,parentJobId:parent.jobId,warning:null,queueReason:null,dependencyRetryAt:null,dependencyFirstWaitAt:null,dependencyAttempts:0};
+        updateJob(id,patch);Object.assign(job,patch);
+        showToast(`Stage ${current.stage} is ready using the verified geometry from Stage ${geometry.sourceStage}.`);
+        return true;
+      }catch(error){
+        const fresh=stillWaiting();if(!fresh)return false;
+        const first=fresh.dependencyFirstWaitAt||Date.now(),attempts=Number(fresh.dependencyAttempts||0)+1;
+        const retry=error.retryable!==false&&Date.now()-first<30*60*1000;
+        const patch=retry?{status:"waiting_dependency",dependencyFirstWaitAt:first,dependencyAttempts:attempts,dependencyRetryAt:Date.now()+Math.min(90000,10000*2**Math.min(attempts-1,4)),queueReason:"WAITING_FOR_PARENT_OUTPUT",warning:"Waiting for the completed stage's final geometry. Results may still be publishing; the next stage will retry automatically."}:{status:"error",finishedAt:Date.now(),warning:`Stage ${current.stage} was not submitted: ${error.message}`,queueReason:null};
+        updateJob(id,patch);Object.assign(job,patch);return false;
+      }
+    })();
+    workflowAdvances.set(id,operation);
+    try{return await operation;}finally{if(workflowAdvances.get(id)===operation)workflowAdvances.delete(id);}
+  }
+
+  async function retryWorkflowDependency(jobId) {
+    const jobs=loadJobs(),job=jobs.find(item=>item.jobId===jobId);
+    if(!job||job.status!=="error"||!job.dependsOnWorkflow||Number(job.stage)<=1||String(jobId).startsWith("chem-tools-")||workflowAdvances.has(jobId)||(job.backend&&job.backend!=="kaggle_client_queue"))return false;
+    const parent=jobs.find(item=>item.workflowId===job.dependsOnWorkflow&&Number(item.stage)===Number(job.stage)-1);
+    if(parent?.status!=="complete")return false;
+    // Re-validate results on an explicit retry; the finished calculations
+    // themselves are immutable and are never placed back in the queue.
+    for(const prior of jobs.filter(item=>item.workflowId===job.dependsOnWorkflow&&Number(item.stage)<Number(job.stage)&&isOptimizationJob(item)))updateJob(prior.jobId,{optimizedCoords:null});
+    updateJob(jobId,{status:"waiting_dependency",finishedAt:null,warning:null,dependencyFirstWaitAt:null,dependencyRetryAt:null,dependencyAttempts:0});
+    await prepareWorkflowStage(job);await processKaggleQueue();return true;
   }
 
   let isProcessingQueue = false;
@@ -5490,68 +5487,9 @@
       for (const j of waitingDepJobs) {
         if (j.dependsOnWorkflow) {
           const parentStageNum = (j.stage || 2) - 1;
-          const parentJob = jobs.find(x => x.workflowId === j.dependsOnWorkflow && x.stage === parentStageNum);
+          const parentJob = jobs.find(x => x.workflowId === j.dependsOnWorkflow && Number(x.stage) === parentStageNum);
           if (parentJob && parentJob.status === "complete") {
-            try {
-              const optResult = await getWorkflowOptimizedCoords(j, jobs);
-              if (optResult && optResult.coords) {
-                const stageCfg = j.stageConfig || j.stage2Config || {};
-                stageCfg.coords = optResult.coords;
-                const genResp = await postJSON("/api/orca/generate", { ...stageCfg, name: stageCfg.name || `${j.name}` });
-                if (genResp && genResp.input_text) {
-                  j.status = "queued";
-                  j.readyAt = Date.now();
-                  j.input_content = genResp.input_text;
-                  j.stageConfig = stageCfg;
-                  j.stage2Config = stageCfg;
-                  j.parentJobId = parentJob.jobId;
-                  j.warning = null;
-                  updateJob(j.jobId, {
-                    status: "queued",
-                    readyAt: Date.now(),
-                    input_content: genResp.input_text,
-                    stageConfig: stageCfg,
-                    stage2Config: stageCfg,
-                    parentJobId: parentJob.jobId,
-                    warning: null,
-                  });
-                  updated = true;
-                  showToast(`🔗 <strong>Stage ${parentStageNum} (${parentJob.name})</strong> finished! Geometry from Stage ${optResult.sourceStage} (${optResult.sourceName}) applied and <strong>Stage ${j.stage} (${j.name})</strong> promoted to active queue.`);
-                } else {
-                  j.status = "error";
-                  j.finishedAt = Date.now();
-                  j.warning = `Stage ${parentStageNum} finished, but the server could not generate Stage ${j.stage}'s input file. The chain has been stopped - submit Stage ${j.stage} manually.`;
-                  updateJob(j.jobId, {
-                    status: "error",
-                    finishedAt: Date.now(),
-                    warning: j.warning,
-                  });
-                  updated = true;
-                }
-              } else {
-                j.status = "error";
-                j.finishedAt = Date.now();
-                j.warning = `Could not extract optimized coordinates from earlier stages for Stage ${j.stage} (${j.name}). The chain has been stopped - previous results are untouched; submit Stage ${j.stage} manually.`;
-                updateJob(j.jobId, {
-                  status: "error",
-                  finishedAt: Date.now(),
-                  warning: j.warning,
-                });
-                updated = true;
-                showToast(`⚠️ <strong>Workflow stopped:</strong> no optimized coordinates were found for Stage ${j.stage}.`);
-              }
-            } catch (e) {
-              console.warn(`Could not extract coords for dependent Stage ${j.stage} job:`, e.message);
-              j.status = "error";
-              j.finishedAt = Date.now();
-              j.warning = `Failed to extract optimized coordinates for Stage ${j.stage} (${j.name}): ${e.message}.`;
-              updateJob(j.jobId, {
-                status: "error",
-                warning: j.warning,
-                finishedAt: Date.now(),
-              });
-              updated = true;
-            }
+            if(await prepareWorkflowStage(j))updated=true;
           } else if (parentJob && ["error", "cancelled"].includes(parentJob.status)) {
             if (parentJob.status === "restarting") continue;
             j.status = "cancelled";
@@ -5768,74 +5706,10 @@
   // and the dispatcher only ever touches "queued" jobs without a real
   // chem-tools- id.
   async function advanceWorkflowChain(parentJob) {
-    try {
-      if (!parentJob || !parentJob.workflowId || !parentJob.stage) return false;
-      const jobs = loadJobs();
-      const dependents = jobs.filter(j =>
-        j.status === "waiting_dependency" &&
-        j.dependsOnWorkflow === parentJob.workflowId &&
-        (j.stage || 2) - 1 === parentJob.stage
-      );
-      if (!dependents.length) return false;
-
-      for (const j of dependents) {
-        // Never resurrect a stage that already failed terminally: its error
-        // state and user-facing explanation must survive later polls of the
-        // completed parent stage.
-        if (TERMINAL_STATUSES.includes(j.status)) continue;
-        try {
-          // 1. Pull the geometry from the latest Opt stage in the workflow chain
-          const optResult = await getWorkflowOptimizedCoords(j, jobs);
-          if (!optResult || !optResult.coords) {
-            throw new Error(`no optimized coordinates were found in previous stages for Stage ${j.stage}`);
-          }
-          // 2. Rebuild the next stage's input around that geometry.
-          const stageCfg = j.stageConfig || j.stage2Config || {};
-          stageCfg.coords = optResult.coords;
-          const genResp = await postJSON("/api/orca/generate", { ...stageCfg, name: stageCfg.name || `${j.name}` });
-          if (!genResp || !genResp.input_text) throw new Error("the server could not generate the next stage's input file");
-          // 3. Promote to the active queue; the dispatcher submits it.
-          j.status = "queued";
-          j.readyAt = Date.now();
-          j.submittedAt = null;
-          j.startedAt = null;
-          j.finishedAt = null;
-          j.input_content = genResp.input_text;
-          j.stageConfig = stageCfg;
-          j.stage2Config = stageCfg;
-          j.warning = null;
-          updateJob(j.jobId, {
-            status: "queued",
-            readyAt: Date.now(),
-            submittedAt: null,
-            startedAt: null,
-            finishedAt: null,
-            input_content: genResp.input_text,
-            stageConfig: stageCfg,
-            stage2Config: stageCfg,
-            warning: null,
-          });
-          showToast(`🔗 <strong>Stage ${parentJob.stage} (${parentJob.name})</strong> finished! Geometry from Stage ${optResult.sourceStage} (${optResult.sourceName}) applied and <strong>Stage ${j.stage} (${j.name})</strong> promoted to the active queue.`);
-        } catch (e) {
-          console.warn(`Chain transition failed for Stage ${j.stage}:`, e.message);
-          j.status = "error";
-          j.finishedAt = Date.now();
-          j.warning = `Could not continue the workflow after Stage ${parentJob.stage} (${parentJob.name}): ${e.message}. The chain has been stopped - Stage ${parentJob.stage}'s completed results are untouched. Fix the issue and submit Stage ${j.stage} manually.`;
-          updateJob(j.jobId, {
-            status: "error",
-            finishedAt: Date.now(),
-            warning: j.warning,
-          });
-          showToast(`⚠️ <strong>Workflow stopped:</strong> ${e.message} - Stage ${j.stage} was not submitted.`);
-        }
-      }
-      // Dispatch whatever the promotion produced right away.
-      await processKaggleQueue();
-      return true;
-    } catch (err) {
-      console.warn("advanceWorkflowChain failed:", err.message);
-      return false;
-    }
+    if(!parentJob?.workflowId||!parentJob.stage)return false;
+    const dependents=loadJobs().filter(j=>j.status==="waiting_dependency"&&j.dependsOnWorkflow===parentJob.workflowId&&Number(j.stage||2)-1===Number(parentJob.stage));
+    for(const job of dependents)await prepareWorkflowStage(job);
+    await processKaggleQueue();return dependents.length>0;
   }
 
   const pollGuards = new Map();

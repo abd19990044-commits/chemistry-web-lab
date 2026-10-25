@@ -99,7 +99,7 @@ class FakeClient:
                           requested_slug=expected_slug)
 
 
-    def list_kernels(self, prefix=None, page_size=100):
+    def list_kernels(self, prefix=None, page_size=100, **kwargs):
         return [{"slug": s, "owner": "tester", "ref": "tester/" + s,
                  "url": "https://kaggle/" + s, "title": s, "last_run": "2026-07-30"}
                 for s in (self.fake.kernels if self.fake else [])]

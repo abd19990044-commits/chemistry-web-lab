@@ -508,6 +508,23 @@ def fetch_archive(kaggle_username, kaggle_key, job_id, owner=None):
         return None, None, {"ok": False, "error": "Failed to fetch the archive: %s" % exc}, 502
 
 
+def _fetch_geometry_authoritatively(username, key, job_id):
+    from orca_orchestrator.service import get_service
+    from orca_orchestrator.credentials import parse as parse_credentials
+    service = get_service()
+    get_job = getattr(getattr(service, "store", None), "get_job", None)
+    tracked = get_job(job_id) if callable(get_job) else None
+    fetch_geometry = getattr(service, "fetch_geometry_results", None)
+    if tracked and callable(fetch_geometry):
+        try:
+            return fetch_geometry(parse_credentials(username, key), job_id)
+        except _OrchValidationError as exc:
+            if "does not belong" in str(exc).lower() or "access denied" in str(exc).lower():
+                raise _OwnerDenied(str(exc)) from exc
+            raise
+    return _fetch_results_authoritatively(username, key, job_id)
+
+
 def extract_opt_coords(kaggle_username, kaggle_key, job_id, owner=None):
     kaggle_username, kaggle_key = resolve_credentials(kaggle_username, kaggle_key, owner=owner)
     job_id = (job_id or "").strip()
@@ -518,7 +535,7 @@ def extract_opt_coords(kaggle_username, kaggle_key, job_id, owner=None):
 
     cleanup_dir = None
     try:
-        zip_path, cleanup_dir = _fetch_results_authoritatively(
+        zip_path, cleanup_dir = _fetch_geometry_authoritatively(
             kaggle_username, kaggle_key, job_id
         )
 

@@ -427,7 +427,7 @@ def test_cross_user_result_access_blocked_n9(temp_dir, mock_results_zip, monkeyp
     fake_creds = KaggleCredentials(username="victim_user", key="invalid-fake-key-12345")
     
     # Mock KaggleClient.list_kernels to simulate authentication failure for invalid key
-    def mock_list_kernels(self):
+    def mock_list_kernels(self, **kwargs):
         if self.creds.key != "valid-attacker-key":
             raise AuthenticationError("Invalid Kaggle API key")
         return []
@@ -518,7 +518,7 @@ def test_sweep_authentication_and_owner_isolation_n12(monkeypatch):
 
     # 2. Invalid credentials
     valid_key = "0123456789abcdef0123456789abcdef"
-    def mock_list_kernels(self):
+    def mock_list_kernels(self, **kwargs):
         if self.creds.key != valid_key:
             raise AuthenticationError("Invalid Kaggle API key")
         return []

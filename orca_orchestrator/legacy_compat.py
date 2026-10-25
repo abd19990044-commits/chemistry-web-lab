@@ -119,13 +119,17 @@ def _legacy_job(job):
 
 
 def login():
-    creds = _creds(request.get_json(force=True, silent=True) or {})
+    payload = request.get_json(force=True, silent=True) or {}
+    if not any(str(payload.get(name) or "").strip() for name in ("kaggle_username", "username", "kaggle_key", "key")) and not request.headers.get("X-Kaggle-Username") and not request.headers.get("X-Kaggle-Key"):
+        raise ValidationError("Kaggle username and API key/token are required.")
+    creds = _creds(payload)
     service = get_service()
     service.authenticate(creds.username, creds.key or creds.api_token)
     return jsonify({
         "ok": True,
-        "jobs": [_legacy_job(j) for j in service.list_jobs(creds)],
-        "workflows": service.list_workflows(creds),
+        "jobs": [_legacy_job(j) for j in service.cached_jobs(creds)],
+        "workflows": [],
+        "sync_required": True,
         "owner": creds.username,
         "username": creds.username,
     })

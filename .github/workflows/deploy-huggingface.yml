@@ -11,6 +11,7 @@ name: Deploy Hugging Face runtime
 
 # Renders molecular figures with depth-correct multiple bonds and configurable print labels.
 # Keeps print label placement consistent and supports manual label positioning in preview.
+# Reduces PubChem/Kaggle latency and retries staged geometry handoffs without duplicate launches.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later

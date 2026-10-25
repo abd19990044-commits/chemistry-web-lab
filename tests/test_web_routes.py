@@ -353,12 +353,15 @@ def run_all_checks():
     section("5. Sign-in: the one call that is both a credential check and a fetch")
     # ===========================================================================
     try:
-        with_cli(PagedCli([100, 100, 7]))
+        cli = with_cli(PagedCli([100, 100, 7]))
         r = client.post("/api/kaggle/login", json={"kaggle_username": "tester",
                                                    "kaggle_key": KEY})
         body = r.get_json()
         check("signing in succeeds and returns the job list",
               r.status_code == 200 and body["ok"] is True, json.dumps(body)[:200])
+        check("sign-in verifies only one remote page before returning cached jobs",
+              len([c for c in cli.calls if len(c) > 2 and c[2] == "list"]) == 1)
+        body = client.post("/api/kaggle/sync", json={"kaggle_username": "tester", "kaggle_key": KEY}).get_json()
         check("REGRESSION: every page is fetched, not just the first 100",
               len(body["jobs"]) == 207, "recovered %d jobs" % len(body["jobs"]))
 
