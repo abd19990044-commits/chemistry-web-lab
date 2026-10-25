@@ -4,6 +4,7 @@ Never executed in a web request. Integrity failure stops the build.
 Open Babel is GPL-2.0; upstream source and notices are linked alongside assets.
 """
 from pathlib import Path
+import gzip
 import hashlib
 import time
 import urllib.request
@@ -32,6 +33,11 @@ def install(destination=None):
                 if attempt == 2:
                     raise
                 time.sleep(attempt + 1)
+    # Precompress once at image build time; serving never spends request CPU
+    # compressing the multi-megabyte engine for each user. Original bytes stay
+    # pinned above and browsers transparently decode Content-Encoding: gzip.
+    for name in ASSETS:
+        (destination / (name + ".gz")).write_bytes(gzip.compress((destination / name).read_bytes(), compresslevel=9, mtime=0))
     return destination
 
 

@@ -152,6 +152,16 @@ def static_files(filename: str):
     everything was uploaded into a single directory."""
     for candidate in (filename, os.path.basename(filename)):
         if os.path.isfile(os.path.join(STATIC_DIR, candidate)):
+            native_types = {"vendor/openbabel/openbabel.js": "application/javascript", "vendor/openbabel/openbabel.wasm": "application/wasm", "vendor/openbabel/openbabel.data": "application/octet-stream"}
+            if candidate in native_types:
+                compressed = candidate + ".gz"
+                if request.accept_encodings["gzip"] > 0 and not request.headers.get("Range") and os.path.isfile(os.path.join(STATIC_DIR, compressed)):
+                    response = send_from_directory(STATIC_DIR, compressed, mimetype=native_types[candidate], max_age=3600)
+                    response.headers["Content-Encoding"] = "gzip"
+                else:
+                    response = send_from_directory(STATIC_DIR, candidate, mimetype=native_types[candidate], max_age=3600)
+                response.vary.add("Accept-Encoding")
+                return response
             return send_from_directory(STATIC_DIR, candidate, max_age=3600)
     abort(404)
 

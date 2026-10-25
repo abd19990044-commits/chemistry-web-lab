@@ -7,9 +7,10 @@ let enginePromise;
 async function engine(){
   if(!enginePromise)enginePromise=(async()=>{
     const base=new URL('../vendor/openbabel/',self.location.href);
-    const load=async name=>{const r=await fetch(new URL(name,base));if(!r.ok)throw Error('Browser chemistry engine is unavailable. Reload after deployment.');return r.arrayBuffer();};
+    const asset=name=>{const url=new URL(name,base);url.search=new URL(self.location.href).search;return url;};
+    const load=async name=>{const r=await fetch(asset(name));if(!r.ok)throw Error('Browser chemistry engine is unavailable. Reload after deployment.');return r.arrayBuffer();};
     const [wasm,data]=await Promise.all([load('openbabel.wasm'),load('openbabel.data')]);
-    importScripts(new URL('openbabel.js',base).href);
+    importScripts(asset('openbabel.js').href);
     const ob=OpenBabelModule({wasmBinary:wasm,getPreloadedPackage:()=>data,print:()=>{},printErr:()=>{}});
     await new Promise(resolve=>ob.then(()=>resolve()));return {ob};
   })();
