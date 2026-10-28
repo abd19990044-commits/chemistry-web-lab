@@ -68,3 +68,12 @@ Exports are browser-only and do not re-minimize, recenter or alter coordinates.
 
 The application remains MIT; Ketcher and its dependencies retain their upstream
 licenses, with Apache LICENSE/NOTICE available in the interface.
+
+Generated reaction editing loads the complete, validated RXN chemistry, then
+adds captions/arrow styles as editable KET nodes. Condensed CDXML artwork can
+contain text instead of atom graphs and is therefore not used as the chemical
+reaction source. Captions use the KET 2.0 paragraph format emitted by pinned
+Ketcher 3.18.0; changes never alter the imported molecular graph. Expanded view
+uses a page overlay, so it also works when iframe fullscreen permission is
+unavailable. Developer caches for both browser engines are excluded from source
+packages; Docker installs their verified distributions separately.

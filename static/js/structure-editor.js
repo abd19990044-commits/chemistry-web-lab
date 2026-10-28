@@ -17,6 +17,7 @@
   async function ready(){
     if(editor)return editor;
     if(readyTask)return readyTask;
+    const initialScroll={top:window.scrollY,left:window.scrollX};
     note('Loading standalone 2D editor and browser chemistry engine...');
     readyTask=new Promise((resolve,reject)=>{
       let timer,deadline,checking=false;
@@ -29,7 +30,10 @@
           let draft;try{draft=localStorage.getItem(draftKey);}catch(_){}
           if(draft&&draft.length<=2*1024*1024){loading=true;await editor.setMolecule(draft);loading=false;dirty=true;note('Your local draft has been restored.');}
           else note('Editor ready. Use the left toolbar for atoms, bonds, rings and reaction tools.');
-          editor.editor.subscribe('change',changed);resolve(editor);
+          editor.editor.subscribe('change',changed);
+          frame.contentDocument.addEventListener('keydown',escapeExpanded);
+          if(byId('sketcher').classList.contains('is-active'))window.scrollTo({...initialScroll,behavior:'instant'});
+          resolve(editor);
         }catch(error){loading=false;editor=null;reject(error);}
       };
       const message=event=>{if(event.origin===location.origin&&event.source===frame.contentWindow&&event.data?.eventType==='init')check();};
@@ -48,12 +52,17 @@
       byId('sketch-replace-confirm').addEventListener('click',replace);byId('sketch-replace-cancel').addEventListener('click',cancel);dialog.addEventListener('close',closed);dialog.showModal();
     });
   }
-  async function load(text){
+  async function load(text,reactionOptions=null){
     activate();const api=await ready();
     if(!await canReplace())return false;
     if(typeof text!=='string'||!text.trim()||text.length>5*1024*1024)throw Error('Open a nonempty chemical drawing file of at most 5 MB.');
     loading=true;revision++;clearTimeout(saveTimer);
-    try{await api.setMolecule(text);dirty=false;note('Drawing loaded. Edit directly on the canvas; save KET to keep text, arrows and layout.');}
+    try{
+      await api.setMolecule(text);
+      if(reactionOptions)await api.setMolecule(JSON.stringify(ChemicalDrawing.decorateReaction(await api.getKet(),reactionOptions)));
+      dirty=false;note('Drawing loaded. Edit directly on the canvas; save KET to keep text, arrows and layout.');
+      document.querySelector('.chemdraw-sketch-toolbar').scrollIntoView({block:'start',behavior:'instant'});
+    }
     finally{loading=false;}
     changed();return true;
   }
@@ -64,10 +73,7 @@
     byId(kind+'-edit-2d')?.addEventListener('click',()=>action(async()=>{
       const source=sources[kind];if(!source)throw Error('Render a structure or reaction first.');
       if(kind==='explorer')await load(decode(source.mol_file_base64));
-      else if(source.cdxml_file_base64){
-        try{await load(decode(source.cdxml_file_base64));}
-        catch(error){note('The ChemDraw layout could not be imported. Load the RXN chemistry using Open file, or save the CDXML for ChemDraw. '+error.message,true);}
-      }else await load(decode(source.rxn_file_base64));
+      else await load(decode(source.rxn_file_base64),source.render_request||{});
     }));
   }
   byId('sketch-import-file').addEventListener('change',event=>action(async()=>{const file=event.target.files?.[0];event.target.value='';if(!file)return;if(file.size>5*1024*1024)throw Error('Drawing file limit: 5 MB.');await load(await file.text());}));
@@ -86,6 +92,7 @@
     const api=await ready();if(api.containsReaction())throw Error('Transfer a molecule without reaction arrows to 3D. Save the reaction as KET or RXN.');
     const mol=await api.getMolfile('v2000');note('Generating a hydrogen-complete 3D starting geometry locally...');
     const molecule=await BrowserChemistry.fromDrawing(mol,'Drawn molecule');
+    collapseExpanded();
     window.openOrcaWizardWithCoords(molecule.coords,molecule.name,{molecule,formula:molecule.formula});
     note('Molecule opened in Molecular Studio. Review its 3D geometry and charge before calculation.');
   }));
@@ -98,5 +105,9 @@
     document.querySelector('.ws-tab[data-target="reaction"]')?.click();
     note('Reaction chemistry transferred. KET keeps the original canvas layout and annotations.');
   }));
-  byId('sketch-expand').addEventListener('click',()=>action(async()=>{const wrapper=byId('sketch-frame-wrap');if(document.fullscreenElement)await document.exitFullscreen();else await wrapper.requestFullscreen();}));
+  function collapseExpanded(){byId('sketch-frame-wrap').classList.remove('is-expanded');byId('sketch-collapse').classList.add('hidden');byId('sketch-expand').setAttribute('aria-expanded','false');}
+  function escapeExpanded(event){if(event.key==='Escape')collapseExpanded();}
+  byId('sketch-expand').addEventListener('click',()=>{byId('sketch-frame-wrap').classList.add('is-expanded');byId('sketch-collapse').classList.remove('hidden');byId('sketch-expand').setAttribute('aria-expanded','true');});
+  byId('sketch-collapse').addEventListener('click',collapseExpanded);
+  document.addEventListener('keydown',escapeExpanded);
 })();

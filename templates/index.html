@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" defer></script>
 {% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/drawing-tools.css') }}?v=20261028chemdraw1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/drawing-tools.css') }}?v=20261028chemdraw2">
 </head>
 <body data-initial-view="{{ initial_view or 'home' }}">
 
@@ -439,6 +439,7 @@ Products:   12 CO2 + 6 H2O</pre>
       </details>
       <div id="sketch-status" role="status" aria-live="polite">Open this tab to load the standalone editor. Chemistry and drawing edits run in your browser.</div>
       <div id="sketch-frame-wrap" class="chemdraw-sketch-frame">
+        <button type="button" id="sketch-collapse" class="btn btn-outline btn-small hidden">Exit expanded editor</button>
         <iframe id="sketch-frame" title="Interactive 2D molecule and reaction drawing editor" data-src="/static/vendor/ketcher/index.html?v=3.18.0" sandbox="allow-scripts allow-same-origin allow-downloads allow-modals allow-forms" allow="clipboard-read; clipboard-write"></iframe>
       </div>
       <p class="chemdraw-help">Choose KET to retain the full drawing, text, arrows and layout. MOL/SDF store a molecule and RXN stores reaction chemistry. PNG/SVG store artwork. Sending to 3D generates new coordinates and adds valence hydrogens; it does not use the flat drawing as a quantum geometry. Reaction transfer sends chemistry to the drawing tools; keep KET for the exact arrangement and captions.</p>
@@ -3037,7 +3038,8 @@ Products:   12 CO2 + 6 H2O</pre>
   <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261024labels1"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}?v=20261028chemdraw1"></script>
   <script src="{{ url_for('static', filename='js/drawing-tools.js') }}?v=20261028chemdraw1"></script>
-  <script src="{{ url_for('static', filename='js/structure-editor.js') }}?v=20261028chemdraw1"></script>
+  <script src="{{ url_for('static', filename='js/chemical-drawing.js') }}?v=20261028chemdraw2"></script>
+  <script src="{{ url_for('static', filename='js/structure-editor.js') }}?v=20261028chemdraw2"></script>
   <script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>

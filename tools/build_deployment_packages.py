@@ -115,7 +115,7 @@ def is_global_excluded(p: Path) -> bool:
         relative = Path(p.name)
     # Browser binaries are installed from pinned checksums in the Docker build,
     # never copied from an untracked developer cache into source packages.
-    if relative.parts[:3] == ('static', 'vendor', 'openbabel'):
+    if relative.parts[:3] in (('static', 'vendor', 'openbabel'), ('static', 'vendor', 'ketcher')):
         return True
     if any(part in EXCLUDE_DIRS or part.startswith(('_tmp_', '_diag_')) for part in relative.parts):
         return True

@@ -1,7 +1,7 @@
-.chemdraw-preferences{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin:.75rem 0 1.25rem;padding:.85rem 1rem;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.chemdraw-preferences{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin:.75rem 0 1.25rem;padding:.85rem 1rem;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
 .chemdraw-origin{display:inline-block;color:var(--accent,#2dd4bf);font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .chemdraw-studio-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;align-items:start}
-.chemdraw-tool-card{padding:1.4rem;border:1px solid var(--border);border-radius:16px;background:var(--surface)}
+.chemdraw-tool-card{padding:1.4rem;border:1px solid var(--border);border-radius:16px;background:var(--panel)}
 .chemdraw-tool-card h3{margin:.55rem 0 1.25rem;font-size:1.12rem}
 .chemdraw-tool-card form{display:flex;flex-direction:column;gap:.65rem}
 .chemdraw-tool-card input{width:100%;min-width:0;box-sizing:border-box}
@@ -10,7 +10,7 @@
 .chemdraw-action-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
 .chemdraw-action-grid .btn{white-space:normal;justify-content:center;min-height:44px}
 .chemdraw-help{color:var(--text-muted);font-size:.8rem;line-height:1.65;margin:1rem 0}
-.chemdraw-result{margin-top:1rem;padding:1rem;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.chemdraw-result{margin-top:1rem;padding:1rem;border:1px solid var(--border);border-radius:10px;background:var(--bg,var(--panel-2))}
 .chemdraw-result pre{margin:0 0 .75rem;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.95rem;line-height:1.6;color:var(--text)}
 .chemdraw-result p{overflow-wrap:anywhere;line-height:1.6}
 .chemdraw-mechanism-canvas{background:white;border-radius:8px;overflow:auto;margin-bottom:.75rem}
@@ -21,9 +21,9 @@
 .builder3d-export-group>span{color:var(--text-muted);margin-right:.25rem}
 @media(max-width:900px){.chemdraw-studio-grid{grid-template-columns:1fr}}
 @media(max-width:480px){.chemdraw-tool-card{padding:1rem}.chemdraw-action-grid{grid-template-columns:1fr}.chemdraw-preferences{gap:.65rem}}
-.chemdraw-sketch-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:.55rem;padding:.9rem;border:1px solid var(--border);border-radius:12px;margin-bottom:.75rem;background:var(--surface)}
+.chemdraw-sketch-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:.55rem;padding:.9rem;border:1px solid var(--border);border-radius:12px;margin-bottom:.75rem;background:var(--panel)}
 .chemdraw-sketch-toolbar select{max-width:240px;padding:.5rem}
-.chemdraw-sketch-frame{height:780px;min-height:620px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff;margin:.75rem 0}
+.chemdraw-sketch-frame{position:relative;height:780px;min-height:620px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff;margin:.75rem 0}
 .chemdraw-sketch-frame iframe{display:block;border:0;width:100%;height:100%;background:white}
 .chemdraw-sketch-frame:fullscreen{height:100vh;border:0;border-radius:0}
 .chemdraw-sketch-import{border:1px solid var(--border);padding:.75rem 1rem;border-radius:10px;margin:.75rem 0}
@@ -34,3 +34,8 @@
 #sketch-status{min-height:1.5em;font-size:.84rem;line-height:1.5;color:var(--text-muted)}
 #sketch-status.chemdraw-error{color:var(--danger,#f87171)}
 @media(max-width:720px){.chemdraw-sketch-frame{overflow:auto}.chemdraw-sketch-frame iframe{min-width:740px}.chemdraw-sketch-toolbar select{max-width:100%}}
+
+.chemdraw-sketch-toolbar{scroll-margin-top:90px}
+.chemdraw-sketch-frame.is-expanded{position:fixed;inset:76px 12px 12px;height:auto;min-height:0;margin:0;z-index:1800;box-shadow:0 8px 48px #0005}
+.chemdraw-sketch-frame.is-expanded iframe{margin-top:42px;height:calc(100% - 42px)}
+#sketch-collapse{position:absolute;top:5px;right:10px;z-index:5;color:#172033;background:#fff}

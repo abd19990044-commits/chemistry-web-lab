@@ -212,3 +212,35 @@ def test_explicit_exports_preserve_smiles_that_are_ambiguous_as_formulas(client,
     assert result.status_code == 200
     assert seen == [([(Fraction(1), 'CO')], [(Fraction(1), 'CO')])]
     assert drawing.resolve_species('smiles:CO')[0] == 'CO'
+
+
+def test_deployment_excludes_developer_browser_binary_caches(tmp_path, monkeypatch):
+    from tools import build_deployment_packages as builder
+    monkeypatch.setattr(builder, 'REPO_ROOT', tmp_path)
+    for name in ('openbabel', 'ketcher'):
+        cache = tmp_path / 'static' / 'vendor' / name
+        cache.mkdir(parents=True)
+        asset = cache / 'engine.js'
+        asset.write_text('untracked developer binary cache')
+        assert builder.is_global_excluded(asset)
+        assert builder.is_global_excluded(cache)
+    assert not builder.is_global_excluded(tmp_path / 'static' / 'js' / 'structure-editor.js')
+
+
+def test_editor_rxn_captions_keep_all_molecular_graphs_and_arrow_style():
+    if not shutil.which('node'):
+        pytest.skip('Node required')
+    root = Path(__file__).resolve().parents[1]
+    code = r'''
+require('./static/js/chemical-drawing.js');const assert=require('node:assert/strict');
+const input={ket_version:'2.0.0',root:{nodes:[{$ref:'mol0'},{$ref:'mol1'},{$ref:'mol2'},{type:'arrow',data:{mode:'filled-triangle',pos:[{x:3,y:0,z:0},{x:6,y:0,z:0}]}}]},mol0:{type:'molecule',atoms:[{label:'C'},{label:'C'}],bonds:[{type:2,atoms:[0,1]}]},mol1:{type:'molecule',atoms:[{label:'H'},{label:'H'}],bonds:[{type:1,atoms:[0,1]}]},mol2:{type:'molecule',atoms:[{label:'C'},{label:'C'}],bonds:[{type:1,atoms:[0,1]}]}};
+const original=JSON.stringify(input),output=ChemicalDrawing.decorateReaction(JSON.stringify(input),{arrow_top:'Ni',arrow_bottom:'25 °C',arrow_style:'equilibrium'});
+assert.equal(JSON.stringify(input),original);
+for(const key of ['mol0','mol1','mol2'])assert.deepEqual(output[key],input[key]);
+assert.equal(output.root.nodes.filter(n=>n.$ref).length,3);
+assert.equal(output.root.nodes.find(n=>n.type==='arrow').data.mode,'equilibrium-filled-half-bow');
+const texts=output.root.nodes.filter(n=>n.type==='text');assert.equal(texts.length,2);assert.equal(texts[0].paragraphs[0].parts[0].text,'Ni');assert.equal(texts[1].paragraphs[0].parts[0].text,'25 °C');assert(texts[0].boundingBox.y>0);assert(texts[1].boundingBox.y<0);
+assert.throws(()=>ChemicalDrawing.decorateReaction({root:{nodes:[]}},{}),/arrow/);
+'''
+    result = subprocess.run(['node', '-e', code], cwd=root, capture_output=True, text=True, encoding='utf-8', timeout=10)
+    assert result.returncode == 0, result.stderr

@@ -14,6 +14,7 @@ name: Deploy Hugging Face runtime
 # Reduces PubChem/Kaggle latency and retries staged geometry handoffs without duplicate launches.
 # Serves precompressed native browser-engine assets to accelerate cold imports.
 # Transfers ChemDraw tools, standalone browser 2D editing, and distinct MOL/SDF/XYZ exports.
+# Preserves full RXN chemistry with editable KET captions and expands without fullscreen permission.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later
