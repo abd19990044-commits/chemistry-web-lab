@@ -1790,6 +1790,21 @@
     addFromOutBtn.title = "Import fragment from calculation outputs";
 
     addMolBox.append(addMolInput, addMolBtn, addAtomBtn, addFromOutBtn);
+    const edit2DBtn=document.createElement("button");edit2DBtn.type="button";
+    edit2DBtn.id="builder3d-edit-2d";edit2DBtn.className="btn btn-outline btn-small";edit2DBtn.textContent="Edit in 2D";
+    edit2DBtn.title="Copy the current source atoms and bonds to the 2D editor; generate a separate flat layout";
+    edit2DBtn.addEventListener("click",async()=>{
+      controls.finish();
+      if(bState.fragments.some(fragment=>fragment.topology!=="source")){showToast("Import source MOL/SDF bond orders before sending this geometry to the 2D editor.","warning");return;}
+      edit2DBtn.disabled=true;
+      try{
+        const file=MoleculeGraph.serialize(bState.atoms,bState.bonds,"mol",opts.name||wizard.name||"Molecule","source");
+        const loaded=await window.OrcaDrawingEditor.open({structure:file.text,title:opts.name||wizard.name||"Molecule",mode:"replace",layout:true,source:"Molecular Studio · copied geometry and source bonds"});
+        if(loaded)closeWizard();
+      }catch(error){showToast(error.message,"warning");}finally{edit2DBtn.disabled=false;}
+    });
+    addMolBox.append(edit2DBtn);
+
     const exportGroup=document.createElement("div");
     exportGroup.className="builder3d-export-group";
     const exportLabel=document.createElement("span");exportLabel.textContent="Save coordinates";exportLabel.className="small";

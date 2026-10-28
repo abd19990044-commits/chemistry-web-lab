@@ -15,6 +15,7 @@ name: Deploy Hugging Face runtime
 # Serves precompressed native browser-engine assets to accelerate cold imports.
 # Transfers ChemDraw tools, standalone browser 2D editing, and distinct MOL/SDF/XYZ exports.
 # Preserves full RXN chemistry with editable KET captions and expands without fullscreen permission.
+# Adds PubChem 2D import, arbitrary group labels, browser PNG/Word export and linked editing workflows.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later

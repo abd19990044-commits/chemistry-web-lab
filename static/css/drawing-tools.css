@@ -39,3 +39,13 @@
 .chemdraw-sketch-frame.is-expanded{position:fixed;inset:76px 12px 12px;height:auto;min-height:0;margin:0;z-index:1800;box-shadow:0 8px 48px #0005}
 .chemdraw-sketch-frame.is-expanded iframe{margin-top:42px;height:calc(100% - 42px)}
 #sketch-collapse{position:absolute;top:5px;right:10px;z-index:5;color:#172033;background:#fff}
+.sketch-document-row,.sketch-source-heading,.sketch-inline-form,.sketch-source-links,.sketch-image-settings,.sketch-transfer-bar{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem}
+.sketch-document-row{margin:.8rem 0}.sketch-document-row input{width:240px}.sketch-document-row label,.sketch-tool-panel label{font-size:.8rem;color:var(--text-muted)}
+.sketch-tool-panel{padding:1rem 1.1rem;border:1px solid var(--border);background:var(--panel);border-radius:12px;margin:.75rem 0;scroll-margin-top:90px}
+.sketch-inline-form{margin:.8rem 0}.sketch-inline-form input{flex:1;min-width:180px}.sketch-source-heading select{max-width:270px}
+.sketch-label-grid{display:grid;grid-template-columns:1fr 1.5fr auto;gap:.75rem;align-items:end}.sketch-label-grid label{display:block;margin-bottom:.4rem}.sketch-label-grid input{width:100%;box-sizing:border-box}
+.sketch-source-links{margin:.75rem 0}.sketch-tool-panel .chemdraw-help{margin:.7rem 0 0}.sketch-image-settings select{max-width:280px}.sketch-transfer-bar{padding:.65rem 0}
+.sketch-image-preview{display:flex;flex-direction:column;gap:.5rem;margin-top:1rem;padding:1rem;border:1px solid var(--border);border-radius:10px;background:repeating-conic-gradient(#eee 0% 25%,#fff 0% 50%) 50%/16px 16px;color:#172033}.sketch-image-preview img{display:block;max-width:100%;max-height:280px;object-fit:contain;align-self:center}
+.sketch-expanded-actions{display:none}.is-expanded .sketch-expanded-actions{display:flex;position:absolute;top:5px;left:10px;gap:.5rem;z-index:5}.sketch-expanded-actions .btn{background:#fff;color:#172033}
+.chemdraw-sketch-frame:not(.is-expanded)>#sketch-collapse{display:none}
+@media(max-width:760px){.sketch-label-grid{grid-template-columns:1fr}.sketch-inline-form{align-items:stretch}.sketch-inline-form button{width:100%}.sketch-document-row input{flex:1}.sketch-expanded-actions .btn{font-size:.7rem;padding:.35rem .45rem}}

@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" defer></script>
 {% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/drawing-tools.css') }}?v=20261028chemdraw2">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/drawing-tools.css') }}?v=20261028studio3">
 </head>
 <body data-initial-view="{{ initial_view or 'home' }}">
 
@@ -420,25 +420,53 @@ Products:   12 CO2 + 6 H2O</pre>
         <h2>2D Structure &amp; Reaction Editor</h2>
         <p>Draw or edit atoms, multiple and stereochemical bonds, rings, reaction arrows, captions and conditions. Select, drag, rotate, align, clean up, undo and redo using the editor toolbar.</p>
       </div>
-      <div class="chemdraw-sketch-toolbar">
-        <label class="btn btn-outline btn-small" for="sketch-import-file">Open structure / reaction file</label>
-        <input id="sketch-import-file" type="file" class="hidden" accept=".mol,.sdf,.rxn,.rdf,.ket,.smi,.smiles,.cml,.cdxml">
-        <label for="sketch-export-format" class="small">Save as</label>
-        <select id="sketch-export-format" aria-label="2D drawing export format">
-          <option value="ket">KET · full editable drawing</option><option value="mol">MOL · molecule</option><option value="sdf">SDF · molecule</option><option value="rxn">RXN · reaction</option><option value="svg">SVG · vector image</option><option value="png">PNG · image</option><option value="smiles">SMILES · chemistry only</option>
-        </select>
-        <button type="button" id="sketch-save" class="btn btn-primary btn-small">Save drawing</button>
-        <button type="button" id="sketch-to-3d" class="btn btn-outline btn-small">Molecule → 3D / ORCA</button>
-        <button type="button" id="sketch-to-reaction" class="btn btn-outline btn-small">Reaction → Drawing tools</button>
+      <div class="chemdraw-sketch-toolbar" aria-label="Drawing commands">
+        <button type="button" class="btn btn-outline btn-small" data-sketch-panel="sources" aria-expanded="true">Import / transfer</button>
+        <button type="button" class="btn btn-outline btn-small" data-sketch-panel="labels" aria-expanded="false">Write labels &amp; groups</button>
+        <button type="button" class="btn btn-outline btn-small" data-sketch-panel="export" aria-expanded="false">Image settings</button>
+        <button type="button" id="sketch-save" class="btn btn-primary btn-small" data-sketch-command>Save file</button>
+        <button type="button" class="btn btn-primary btn-small" data-sketch-action="png" data-sketch-command>Save PNG</button>
+        <button type="button" class="btn btn-outline btn-small" data-sketch-action="word" data-sketch-command>Copy for Word</button>
         <button type="button" id="sketch-expand" class="btn btn-ghost btn-small">Expand editor</button>
       </div>
-      <details class="chemdraw-sketch-import">
-        <summary>Load SMILES, MOL, RXN, CDXML or an editable KET drawing as text</summary>
-        <textarea id="sketch-import-text" rows="3" maxlength="5242880" aria-label="Structure or reaction text" placeholder="CC(=O)O  or  CCBr.[OH-]>>CCO.[Br-]" spellcheck="false"></textarea>
-        <button type="button" id="sketch-load-text" class="btn btn-outline btn-small">Load into editor</button>
-      </details>
+      <div class="sketch-document-row"><label for="sketch-drawing-title">Drawing name</label><input id="sketch-drawing-title" value="Chemical drawing" maxlength="100"><span id="sketch-origin" class="small">Local editable drawing</span></div>
+      <section id="sketch-panel-sources" class="sketch-tool-panel" aria-label="Import and transfer">
+        <div class="sketch-source-heading"><label for="sketch-import-mode">Import mode</label><select id="sketch-import-mode"><option value="replace">Replace drawing</option><option value="add">Add to current drawing</option></select><span class="small">Unsaved work is protected when replacing a drawing.</span></div>
+        <form id="sketch-pubchem-form" class="sketch-inline-form"><label for="sketch-pubchem-query">PubChem</label><input id="sketch-pubchem-query" placeholder="Compound name or CID, e.g. Aspirin or 2244" maxlength="256" required><button type="submit" class="btn btn-primary btn-small" data-sketch-command>Import from PubChem</button></form>
+        <div class="sketch-source-links">
+          <button type="button" id="sketch-use-explorer" class="btn btn-outline btn-small" disabled data-sketch-command>Use explorer molecule</button>
+          <button type="button" id="sketch-use-reaction" class="btn btn-outline btn-small" disabled data-sketch-command>Use drawn reaction</button>
+          <label class="btn btn-outline btn-small" for="sketch-import-file">Open MOL / SDF / RXN / KET / CDXML</label>
+          <input id="sketch-import-file" type="file" class="hidden" accept=".mol,.sdf,.rxn,.rdf,.ket,.smi,.smiles,.cml,.cdxml">
+        </div>
+        <details class="chemdraw-sketch-import"><summary>Paste a molecule, reaction SMILES or editable drawing</summary>
+          <textarea id="sketch-import-text" rows="3" maxlength="5242880" aria-label="Structure or reaction text" placeholder="CC(=O)O  or  CCBr.[OH-]>>CCO.[Br-]" spellcheck="false"></textarea>
+          <button type="button" id="sketch-load-text" class="btn btn-outline btn-small" data-sketch-command>Load into editor</button>
+        </details>
+      </section>
+      <section id="sketch-panel-labels" class="sketch-tool-panel hidden" aria-label="Free labels and chemical groups">
+        <form id="sketch-label-form" class="sketch-label-grid">
+          <div><label for="sketch-group-label">Write any group label</label><input id="sketch-group-label" placeholder="COOH, CH2OH, Ph, MyGroup or any label" value="COOH" maxlength="80" required></div>
+          <div><label for="sketch-group-smiles">Underlying structure (optional SMILES)</label><input id="sketch-group-smiles" placeholder="e.g. C(=O)O; first atom attaches to the molecule" maxlength="4096" spellcheck="false"></div>
+          <button type="submit" class="btn btn-primary btn-small" data-sketch-command>Add group to drawing</button>
+        </form>
+        <div class="sketch-source-links"><button type="button" id="sketch-group-library" class="btn btn-outline btn-small" data-sketch-command>Group library</button><button type="button" id="sketch-text-tool" class="btn btn-outline btn-small" data-sketch-command>Write free text / captions</button></div>
+        <p class="chemdraw-help">Keyboard: focus empty canvas space, type a group such as <strong>COOH</strong>, then press Enter and place it on a terminal carbon. Unknown labels can also be entered; they remain undefined groups until you supply their structure. Use the text tool for any caption, equation or note. Labels can be expanded or edited using the native group menu.</p>
+      </section>
+      <section id="sketch-panel-export" class="sketch-tool-panel hidden" aria-label="Image and file export">
+        <div class="sketch-image-settings">
+          <label for="sketch-image-quality">PNG long edge</label><select id="sketch-image-quality"><option value="2048">2048 px</option><option value="4096" selected>4096 px</option><option value="6000">Up to 6000 px (24 MP limit)</option></select>
+          <label class="checkbox-row"><input id="sketch-image-transparent" type="checkbox">Transparent background</label>
+          <button type="button" id="sketch-image-preview" class="btn btn-outline btn-small" data-sketch-command>Preview image</button>
+          <label for="sketch-export-format">Other file formats</label><select id="sketch-export-format" aria-label="2D drawing export format"><option value="ket">KET · complete editable drawing</option><option value="mol">MOL · molecule</option><option value="sdf">SDF · molecule</option><option value="rxn">RXN · reaction</option><option value="svg">SVG · vector image</option><option value="png">PNG · configured image</option><option value="smiles">SMILES · chemistry only</option></select>
+        </div>
+        <p class="chemdraw-help">PNG and Word use the current edited drawing, including captions and group labels. PNG carries 600 dpi metadata; its actual pixel dimensions are reported after export. KET preserves the full editable canvas. Images are prepared on your device.</p>
+        <div id="sketch-preview-wrap" class="sketch-image-preview hidden"><img id="sketch-preview-image" alt="Preview of the edited chemical drawing"><span id="sketch-preview-size" class="small"></span></div>
+      </section>
+      <div class="sketch-transfer-bar" aria-label="Send edited chemistry"><span class="small">Send edited chemistry to</span><button type="button" id="sketch-to-explorer" class="btn btn-ghost btn-small" data-sketch-command>Molecule Explorer</button><button type="button" id="sketch-to-reaction" class="btn btn-ghost btn-small" data-sketch-command>Reaction Drawing</button><button type="button" id="sketch-to-3d" class="btn btn-ghost btn-small" data-sketch-command>3D / ORCA</button></div>
       <div id="sketch-status" role="status" aria-live="polite">Open this tab to load the standalone editor. Chemistry and drawing edits run in your browser.</div>
       <div id="sketch-frame-wrap" class="chemdraw-sketch-frame">
+        <div class="sketch-expanded-actions"><button type="button" class="btn btn-outline btn-small" data-sketch-action="png" data-sketch-command>Save PNG</button><button type="button" class="btn btn-outline btn-small" data-sketch-action="word" data-sketch-command>Copy for Word</button><button type="button" data-sketch-action="labels" class="btn btn-outline btn-small">Write labels</button></div>
         <button type="button" id="sketch-collapse" class="btn btn-outline btn-small hidden">Exit expanded editor</button>
         <iframe id="sketch-frame" title="Interactive 2D molecule and reaction drawing editor" data-src="/static/vendor/ketcher/index.html?v=3.18.0" sandbox="allow-scripts allow-same-origin allow-downloads allow-modals allow-forms" allow="clipboard-read; clipboard-write"></iframe>
       </div>
@@ -3036,10 +3064,11 @@ Products:   12 CO2 + 6 H2O</pre>
   <script src="{{ url_for('static', filename='js/publication-molecule.js') }}?v=20261024labels1"></script>
   <script src="{{ url_for('static', filename='js/publication-figures.js') }}?v=20261024labels1"></script>
   <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261024labels1"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261028chemdraw1"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261028studio3"></script>
   <script src="{{ url_for('static', filename='js/drawing-tools.js') }}?v=20261028chemdraw1"></script>
   <script src="{{ url_for('static', filename='js/chemical-drawing.js') }}?v=20261028chemdraw2"></script>
-  <script src="{{ url_for('static', filename='js/structure-editor.js') }}?v=20261028chemdraw2"></script>
+  <script src="{{ url_for('static', filename='js/editor-integration.js') }}?v=20261028studio3"></script>
+  <script src="{{ url_for('static', filename='js/structure-editor.js') }}?v=20261028studio3"></script>
   <script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>
