@@ -91,6 +91,7 @@ packages = [
 "static" = "static"
 "app.py" = "app.py"
 "fetch_browser_engine.py" = "fetch_browser_engine.py"
+"fetch_ketcher_editor.py" = "fetch_ketcher_editor.py"
 "chem_core.py" = "chem_core.py"
 "kaggle_runner.py" = "kaggle_runner.py"
 "reaction_conditions.py" = "reaction_conditions.py"
@@ -120,6 +121,7 @@ include = [
     "/bootstrap",
     "app.py",
     "fetch_browser_engine.py",
+    "fetch_ketcher_editor.py",
     "chem_core.py",
     "kaggle_runner.py",
     "reaction_conditions.py",

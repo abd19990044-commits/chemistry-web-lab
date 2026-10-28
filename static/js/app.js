@@ -614,8 +614,13 @@
 
     hide(explorerError); hide(explorerResult); show(explorerLoading);
     try {
-      const data = await postJSON("/api/compound", { query });
+      const drawingRequest = {
+        query, publication_drawing:true,
+        transparent_background:document.getElementById("explorer-export-transparent")?.checked||false,
+      };
+      const data = await postJSON("/api/compound", drawingRequest);
       lastCompound = { query, smiles: data.smiles, name: data.filename };
+      window.dispatchEvent(new CustomEvent("chemdraw:compound",{detail:{...data,render_request:{kind:"molecule",smiles:data.smiles,transparent_background:drawingRequest.transparent_background}}}));
 
       document.getElementById("explorer-image").src = b64ToDataUrl(data.image_png_base64, "image/png");
       if (data.cdxml_file_base64) {
@@ -906,11 +911,15 @@
       const arrowStyle = document.getElementById("reaction-arrow-style")?.value || "forward";
       const data = await postJSON("/api/reaction", {
         reactants, products,
+        auto_balance:document.getElementById("reaction-auto-balance")?.checked||false,
+        drawing_style:document.getElementById("reaction-small-as-formula").checked?"smart":"skeletal",
+        transparent_background:document.getElementById("reaction-export-transparent")?.checked||false,
         small_as_formula: document.getElementById("reaction-small-as-formula").checked,
         arrow_top: reactionArrowTop?.value.trim() || "",
         arrow_bottom: reactionArrowBottom?.value.trim() || "",
         arrow_style: arrowStyle,
       });
+      window.dispatchEvent(new CustomEvent("chemdraw:reaction",{detail:data}));
       const rxnImg = document.getElementById("reaction-image");
       rxnImg.onerror = () => {
         if (data.image_png_base64 && rxnImg.src !== b64ToDataUrl(data.image_png_base64, "image/png")) {
@@ -1781,31 +1790,31 @@
     addFromOutBtn.title = "Import fragment from calculation outputs";
 
     addMolBox.append(addMolInput, addMolBtn, addAtomBtn, addFromOutBtn);
-    const exportXYZBtn = document.createElement("button");
-    exportXYZBtn.type = "button";
-    exportXYZBtn.className = "btn btn-ghost btn-small";
-    exportXYZBtn.textContent = "Export XYZ";
-    exportXYZBtn.title = "Download the current geometry in angstroms";
-    exportXYZBtn.addEventListener("click", () => {
-      controls.finish();
-      const content = `${bState.atoms.length}\nMolecular Studio · coordinates in angstroms\n${formatXYZ(bState.atoms)}\n`;
-      const url = URL.createObjectURL(new Blob([content], {type:"text/plain;charset=utf-8"}));
-      const link = document.createElement("a");
-      link.href = url; link.download = "molecular-geometry.xyz"; link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    });
-    addMolBox.appendChild(exportXYZBtn);
-    const exportMolBtn=document.createElement("button");
-    exportMolBtn.className="btn btn-ghost btn-small";exportMolBtn.textContent="Export MOL";
-    exportMolBtn.title="Preserve bond orders and formal charges";
-    exportMolBtn.addEventListener("click",()=>{
-      controls.finish();
-      try{const content=MoleculeGraph.mol(bState.atoms,bState.bonds)+"$$$$\n";
-        const url=URL.createObjectURL(new Blob([content],{type:"chemical/x-mdl-sdfile"}));
-        const link=document.createElement("a");link.href=url;link.download="molecular-structure.sdf";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-      }catch(e){showToast(e.message,"warning");}
-    });
-    addMolBox.appendChild(exportMolBtn);
+    const exportGroup=document.createElement("div");
+    exportGroup.className="builder3d-export-group";
+    const exportLabel=document.createElement("span");exportLabel.textContent="Save coordinates";exportLabel.className="small";
+    exportGroup.append(exportLabel);
+    for(const format of ["mol","sdf","xyz"]){
+      const button=document.createElement("button");button.type="button";
+      button.className="btn btn-ghost btn-small";button.id="builder3d-export-"+format;
+      button.textContent=format.toUpperCase();
+      button.title=format==="xyz"?"Save current coordinates in angstroms; XYZ does not store bond orders or formal charges":"Save current 3D coordinates, source bond orders and formal charges";
+      button.addEventListener("click",()=>{
+        controls.finish();
+        try{
+          const topology=bState.fragments.every(f=>f.topology==="source")?"source":"unverified";
+          const name=opts.name||wizard.name||"Molecule";
+          const file=MoleculeGraph.serialize(bState.atoms,bState.bonds,format,name,topology);
+          const url=URL.createObjectURL(new Blob([file.text],{type:file.mime+";charset=utf-8"}));
+          const link=document.createElement("a");link.href=url;
+          link.download=(name.replace(/[^a-zA-Z0-9_-]+/g,"-").slice(0,70)||"molecular-structure")+"."+file.extension;
+          document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+          if(topology!=="source"&&format!=="xyz")showToast("Saved current geometry. Its bond topology is unverified; SDF records this status.","warning");
+        }catch(error){showToast(error.message,"warning");}
+      });
+      exportGroup.append(button);
+    }
+    addMolBox.append(exportGroup);
     const exportPngBtn=document.createElement("button");
     exportPngBtn.type="button";exportPngBtn.id="builder3d-download-png";
     exportPngBtn.className="btn btn-ghost btn-small";exportPngBtn.textContent="High-Res PNG";

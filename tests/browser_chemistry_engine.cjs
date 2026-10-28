@@ -6,6 +6,11 @@ context.postMessage=data=>{if(data.progress){progress.push(data.progress);if(pro
 vm.runInContext(fs.readFileSync('static/js/chemistry-worker.js','utf8'),context,{filename:'chemistry-worker.js'});
 const run=(type,payload)=>new Promise((resolve,reject)=>{active={resolve,reject};context.onmessage({data:{id:1,type,payload}});});
 (async()=>{
+const ethanolInput=context.MoleculeGraph.mol([{id:1,elem:'C',x:0,y:0,z:0},{id:2,elem:'C',x:1.5,y:0,z:0},{id:3,elem:'O',x:2.2,y:1.2,z:0}],[{a1:1,a2:2,order:1},{a1:2,a2:3,order:1}],'Drawn ethanol');
+const drawn=await run('parse',{text:ethanolInput,format:'mol',name:'Drawn ethanol',generate3D:true,addHydrogens:true});
+assert.equal(drawn.atoms.length,9);assert.equal(drawn.atoms.filter(a=>a.elem==='H').length,6);assert.equal(drawn.bonds.length,8);assert.equal(drawn.topology,'source');assert(drawn.generated3D);
+assert(drawn.atoms.some(a=>Math.abs(a.z-drawn.atoms[0].z)>.1));
+console.log('2D drawing to hydrogen-complete 3D ethanol',drawn.formula,drawn.atoms.length);
 const mb=await run('parse',{text:fs.readFileSync('tests/fixtures/browser_chemistry/methylene-blue.sdf','utf8'),format:'sdf',name:'Methylene blue'});
 const saved=context.MoleculeGraph.mol(mb.atoms,mb.bonds,'Methylene blue');
 assert.equal(saved.split('\n')[1].slice(20,22),'3D');

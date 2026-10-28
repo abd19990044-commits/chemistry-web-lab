@@ -49,6 +49,21 @@
     for(let i=0;i<charged.length;i+=8){const group=charged.slice(i,i+8);lines.push('M  CHG'+pad(group.length,3)+group.map(a=>pad(index.get(a.id),4)+pad(a.charge,4)).join(''));}
     lines.push('M  END');return lines.join('\n')+'\n';
   }
+  // Separate chemical file formats: a MOL is one CTAB, an SDF is a
+  // property-bearing record ending in $$$$, and XYZ carries coordinates only.
+  function serialize(atoms,bonds,format,name='Molecule',topology='source'){
+    validate(atoms,bonds);
+    const title=String(name).replace(/[\r\n\x00-\x1f]/g,' ').slice(0,80)||'Molecule';
+    if(format==='xyz')return {text:atoms.length+'\n'+title+' | angstrom | bond orders and formal charges not stored in XYZ\n'+atoms.map(a=>a.elem+' '+['x','y','z'].map(k=>String(a[k])).join(' ')).join('\n')+'\n',mime:'chemical/x-xyz',extension:'xyz'};
+    if(!['mol','sdf'].includes(format))throw Error('Choose MOL, SDF or XYZ.');
+    for(const a of atoms){
+      if(!/^[A-Z][a-z]?$/.test(a.elem)||!['x','y','z'].every(k=>a[k].toFixed(4).length<=10))throw Error('Coordinates or atom symbols exceed MOL V2000 field limits.');
+      if(!Number.isInteger(a.charge||0)||Math.abs(a.charge||0)>999)throw Error('Invalid formal charge for MOL V2000.');
+    }
+    let text=mol(atoms,bonds,title);
+    if(format==='sdf')text+='>  <COORDINATE_UNITS>\nAngstrom\n\n>  <TOPOLOGY_STATUS>\n'+(topology==='source'?'source':'unverified')+'\n\n$$$$\n';
+    return {text,mime:format==='mol'?'chemical/x-mdl-molfile':'chemical/x-mdl-sdfile',extension:format};
+  }
   // Synthetic 3D generation has no meaningful placement for disconnected ions.
   // Pack their bounding boxes for viewing; never move imported 3D/QM geometry.
   function packGeneratedComponents(atoms,bonds){
@@ -59,5 +74,5 @@
     let edge=Math.max(...groups[0].map(a=>a.x));
     for(const group of groups.slice(1)){const shift=edge+3-Math.min(...group.map(a=>a.x));group.forEach(a=>a.x+=shift);edge=Math.max(...group.map(a=>a.x));}
   }
-  root.MoleculeGraph={validate,infer,apply,canAdd,maxValence,xyz,mol,packGeneratedComponents};
+  root.MoleculeGraph={validate,infer,apply,canAdd,maxValence,xyz,mol,serialize,packGeneratedComponents};
 })(globalThis);

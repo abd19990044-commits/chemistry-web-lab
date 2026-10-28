@@ -107,3 +107,6 @@ node_modules/
 
 # Verified browser engine binaries are installed during image build.
 static/vendor/openbabel/
+
+# Pinned standalone 2D editor installed during image build.
+static/vendor/ketcher/

@@ -13,6 +13,7 @@ name: Deploy Hugging Face runtime
 # Keeps print label placement consistent and supports manual label positioning in preview.
 # Reduces PubChem/Kaggle latency and retries staged geometry handoffs without duplicate launches.
 # Serves precompressed native browser-engine assets to accelerate cold imports.
+# Transfers ChemDraw tools, standalone browser 2D editing, and distinct MOL/SDF/XYZ exports.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later

@@ -14,6 +14,7 @@ RUN python -c "import rarfile; rarfile.tool_setup()"
 
 COPY . .
 RUN python fetch_browser_engine.py
+RUN python fetch_ketcher_editor.py
 RUN pip install --no-cache-dir -e ./orca_engine
 
 # Hugging Face Spaces routes external traffic to port 7860 by default.

@@ -70,6 +70,8 @@ from flask import (Flask, abort, after_this_request, jsonify, render_template, r
 
 import chem_core as core
 import reaction_conditions
+from services import drawing_service
+from services.drawing_routes import register_drawing_routes
 import kaggle_runner
 from services import (
     kaggle_service,
@@ -153,6 +155,11 @@ def static_files(filename: str):
     for candidate in (filename, os.path.basename(filename)):
         if os.path.isfile(os.path.join(STATIC_DIR, candidate)):
             native_types = {"vendor/openbabel/openbabel.js": "application/javascript", "vendor/openbabel/openbabel.wasm": "application/wasm", "vendor/openbabel/openbabel.data": "application/octet-stream"}
+            if candidate.startswith("vendor/ketcher/"):
+                editor_types = {".js": "application/javascript", ".css": "text/css", ".wasm": "application/wasm", ".html": "text/html", ".svg": "image/svg+xml", ".json": "application/json"}
+                extension = os.path.splitext(candidate)[1]
+                if extension in editor_types:
+                    native_types[candidate] = editor_types[extension]
             if candidate in native_types:
                 compressed = candidate + ".gz"
                 if request.accept_encodings["gzip"] > 0 and not request.headers.get("Range") and os.path.isfile(os.path.join(STATIC_DIR, compressed)):
@@ -458,12 +465,16 @@ def _apply_security_headers_and_csrf(response):
         response.headers["X-CSRF-Token"] = session["csrf_token"]
 
     # Strict Security Headers
+    editor_document = request.path == "/static/vendor/ketcher/index.html"
     response.headers["X-Content-Type-Options"] = "nosniff"
     # The official Spaces page embeds this origin in an iframe. CSP can name
     # that exact parent; X-Frame-Options cannot express a cross-origin allowlist.
     if _IS_HF_SPACE:
         response.headers.pop("X-Frame-Options", None)
         frame_ancestors = "'self' https://huggingface.co"
+    elif editor_document:
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        frame_ancestors = "'self'"
     else:
         response.headers["X-Frame-Options"] = "DENY"
         frame_ancestors = "'none'"
@@ -488,6 +499,8 @@ def _apply_security_headers_and_csrf(response):
 # ─────────────────────────────────────────────────────────────
 # Pages
 # ─────────────────────────────────────────────────────────────
+register_drawing_routes(app)
+
 @app.route("/")
 def index():
     return _render_lab_index("home")
@@ -734,16 +747,24 @@ def api_compound():
         return error_response("Please enter a compound name, SMILES, or InChI.")
 
     try:
+        if data.get("publication_drawing") is True:
+            drawing_service.text_field(data, "query", 4096, required=True)
+            drawing_service.drawing_options(data)
         parsed = core.parse_compound(query)
         smiles = core.resolve_compound_to_smiles(query)
         if not smiles:
             return error_response(f"Could not recognize \u201c{query}\u201d. Check the spelling, or try a SMILES/InChI string instead.", 404)
 
-        image_bytes = core.render_molecule_png(smiles)
+        publication_drawing = data.get("publication_drawing") is True
+        if publication_drawing:
+            options = drawing_service.drawing_options(data)
+            image_bytes, svg_bytes = drawing_service.render_molecule_images(smiles, options["transparent_background"])
+        else:
+            image_bytes = core.render_molecule_png(smiles)
+            svg_bytes = core.render_molecule_svg(smiles)
         if not image_bytes:
             return error_response("Could not draw a structure for this input.", 422)
         mol_bytes = core.generate_mol_file_bytes(smiles)
-        svg_bytes = core.render_molecule_svg(smiles)
         cdxml_bytes = core.generate_single_compound_cdxml(smiles, title=query)
 
         props = None
@@ -784,6 +805,10 @@ def api_compound():
             "wikipedia_summary": wiki,
         }
         return jsonify(payload)
+    except drawing_service.DrawingBusyError as exc:
+        return jsonify(ok=False, error=str(exc)), 429, {"Retry-After": "2"}
+    except ValueError as exc:
+        return error_response(str(exc), 422)
     except Exception:  # noqa: BLE001
         log.error("api_compound failed:\n%s", traceback.format_exc())
         return error_response("An unexpected technical error occurred.", 500)
@@ -811,10 +836,17 @@ def api_reaction():
         return error_response("Please enter both reactants and products.")
 
     try:
-        reactant_terms = core.split_compound_terms(reactants_str)
-        product_terms = core.split_compound_terms(products_str)
+        split_terms = drawing_service.split_terms if "drawing_style" in data or data.get("auto_balance") is True else core.split_compound_terms
+        reactant_terms = split_terms(reactants_str)
+        product_terms = split_terms(products_str)
         if not reactant_terms or not product_terms:
             return error_response("Could not parse the compound list.")
+        if "drawing_style" in data or data.get("auto_balance") is True:
+            drawing_service.text_field(data, "reactants", required=True)
+            drawing_service.text_field(data, "products", required=True)
+            drawing_service.drawing_options(data)
+            if len(reactant_terms) + len(product_terms) > 10:
+                return error_response("Use at most 10 species per drawing.", 422)
 
         for term in reactant_terms + product_terms:
             if term.coefficient <= 0:
@@ -834,7 +866,8 @@ def api_reaction():
         unique_names = list({t.name for t in reactant_terms + product_terms})
         
         def _resolve_worker(name: str):
-            return name, core.resolve_species(name)
+            resolver = drawing_service.resolve_species if "drawing_style" in data else core.resolve_species
+            return name, resolver(name)
 
         if len(unique_names) > 1:
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(unique_names), 8)) as pool:
@@ -858,6 +891,11 @@ def api_reaction():
                     503)
             return error_response("Could not recognize: " + ", ".join(unresolved), 404)
 
+        balance_notice = ""
+        if data.get("auto_balance") is True:
+            reactant_terms, product_terms, balance_notice = drawing_service.automatically_balance(
+                reactant_terms, product_terms, resolved)
+
         # An MDL RXN cannot express a fraction, so 1/2 O2 is scaled away - and
         # said out loud, because it changes the numbers the person typed.
         factor, (rxn_reactants, rxn_products) = core.scale_terms_to_integers(
@@ -869,18 +907,25 @@ def api_reaction():
         # Default on: writing O2 rather than drawing it is what a chemist does.
         small_as_formula = data.get("small_as_formula", True) is not False
         arrow_style = (data.get("arrow_style") or "forward").strip()
-        image_bytes = core.render_reaction_png(
-            as_pairs(reactant_terms), as_pairs(product_terms),
-            small_as_formula=small_as_formula,
-            arrow_top=arrow_top, arrow_bottom=arrow_bottom,
-            arrow_style=arrow_style)
-        image_bytes = reaction_conditions.overlay_png(image_bytes, arrow_top, arrow_bottom)
-        svg_bytes = core.render_reaction_svg(
-            as_pairs(reactant_terms), as_pairs(product_terms),
-            small_as_formula=small_as_formula,
-            arrow_top=arrow_top, arrow_bottom=arrow_bottom,
-            arrow_style=arrow_style)
-        svg_bytes = reaction_conditions.overlay_svg(svg_bytes, arrow_top, arrow_bottom)
+        if "drawing_style" in data:
+            options = drawing_service.drawing_options(data)
+            image_bytes, svg_bytes = drawing_service.render_reaction_images(
+                as_pairs(reactant_terms), as_pairs(product_terms), options)
+            small_as_formula = options["small_as_formula"]
+            arrow_style = options["arrow_style"]
+        else:
+            image_bytes = core.render_reaction_png(
+                as_pairs(reactant_terms), as_pairs(product_terms),
+                small_as_formula=small_as_formula,
+                arrow_top=arrow_top, arrow_bottom=arrow_bottom,
+                arrow_style=arrow_style)
+            image_bytes = reaction_conditions.overlay_png(image_bytes, arrow_top, arrow_bottom)
+            svg_bytes = core.render_reaction_svg(
+                as_pairs(reactant_terms), as_pairs(product_terms),
+                small_as_formula=small_as_formula,
+                arrow_top=arrow_top, arrow_bottom=arrow_bottom,
+                arrow_style=arrow_style)
+            svg_bytes = reaction_conditions.overlay_svg(svg_bytes, arrow_top, arrow_bottom)
         if not image_bytes:
             return error_response("Could not draw the reaction scheme - check the formulas.", 422)
 
@@ -901,6 +946,8 @@ def api_reaction():
         cdxml_report = core.validate_cdxml_bytes(cdxml_bytes) if cdxml_bytes else {"valid": False}
 
         notes = list(interpretations)
+        if balance_notice:
+            notes.append(balance_notice)
         if factor != 1:
             notes.append(
                 f"The MDL RXN format has no field for a fractional coefficient, so every "
@@ -930,11 +977,25 @@ def api_reaction():
                 ".".join(resolved[t.name] for t in reactant_terms),
                 ".".join(resolved[t.name] for t in product_terms)),
             "equation": equation,
+            "render_request": {
+                "kind": "reaction",
+                "reactant_pairs": [{"coefficient": str(t.coefficient), "smiles": resolved[t.name]} for t in reactant_terms],
+                "product_pairs": [{"coefficient": str(t.coefficient), "smiles": resolved[t.name]} for t in product_terms],
+                "drawing_style": "smart" if small_as_formula else "skeletal",
+                "arrow_style": arrow_style,
+                "arrow_top": arrow_top,
+                "arrow_bottom": arrow_bottom,
+                "transparent_background": data.get("transparent_background") is True,
+            },
             "balance": balance,
             "file_report": rxn_report,
             "cdxml_report": cdxml_report,
             "notes": notes,
         })
+    except drawing_service.DrawingBusyError as exc:
+        return jsonify(ok=False, error=str(exc)), 429, {"Retry-After": "2"}
+    except ValueError as exc:
+        return error_response(str(exc), 422)
     except Exception:  # noqa: BLE001
         log.error("api_reaction failed:\n%s", traceback.format_exc())
         return error_response("An unexpected technical error occurred.", 500)

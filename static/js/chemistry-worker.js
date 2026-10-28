@@ -50,7 +50,7 @@ function readReady3D(text,name){
   const net=atoms.reduce((n,a)=>n+a.charge,0),formula=order.map(e=>e+(counts[e]>1?counts[e]:'')).join('')+(net?(Math.abs(net)>1?Math.abs(net):'')+(net>0?'+':'-'):'');
   return {atoms,bonds,name:name||'Molecule',coords:MoleculeGraph.xyz(atoms),formula,generated3D:false,topology:'source'};
 }
-async function parse({text,format,name,generate3D=false}){
+async function parse({text,format,name,generate3D=false,addHydrogens=false}){
   if(typeof text!=='string'||text.length>5*1024*1024)throw Error('Structure file limit: 5 MB.');
   if(!['xyz','mol','sdf','pdb','out','log','txt','orca','g03','g09'].includes(format))throw Error('Unsupported structure format.');
   if(!generate3D&&['mol','sdf'].includes(format)){const ready=readReady3D(text,name);if(ready)return ready;}
@@ -62,6 +62,12 @@ async function parse({text,format,name,generate3D=false}){
   try{
     const authoritative=['mol','sdf'].includes(format);
     const generated3D=generate3D||(authoritative&&m.GetDimension()===2);
+    if(addHydrogens){
+      for(let i=1;i<=m.NumAtoms();i++)if(m.GetAtom(i).GetAtomicNum()<1)throw Error('Replace query atoms or R-groups with concrete elements before transfer to 3D.');
+      const drawnAtomCount=m.NumAtoms();
+      for(let i=1;i<=drawnAtomCount;i++)m.AddHydrogens(m.GetAtom(i));
+      if(m.NumAtoms()>1000)throw Error('Adding hydrogens exceeds the 1000-atom editor limit.');
+    }
     if(generated3D){const g=new ob.OB3DGenWrapper();try{if(g.generate3DStructure(m,'UFF')<0)throw Error('Cannot generate 3D geometry for this structure.');}finally{g.delete();}}
     const result=extract(m);
     if(generated3D){MoleculeGraph.packGeneratedComponents(result.atoms,result.bonds);result.coords=MoleculeGraph.xyz(result.atoms);}

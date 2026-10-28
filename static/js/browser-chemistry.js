@@ -43,5 +43,5 @@
     const task={key,promise};lookupTask=task;
     try{return structuredClone(await promise);}finally{if(lookupTask===task){lookupTask=null;lookupAbort=null;}}
   }
-  root.BrowserChemistry={file,lookup,parse:(text,format='xyz',name='Molecule')=>run('parse',{text,format,name}),optimize:(payload,onProgress)=>run('optimize',payload,onProgress),stop:()=>worker?.postMessage({type:'stop'}),cancel};
+  root.BrowserChemistry={file,lookup,parse:(text,format='xyz',name='Molecule')=>run('parse',{text,format,name}),fromDrawing:(text,name='Drawn molecule')=>run('parse',{text,format:'mol',name,generate3D:true,addHydrogens:true}),optimize:(payload,onProgress)=>run('optimize',payload,onProgress),stop:()=>worker?.postMessage({type:'stop'}),cancel};
 })(globalThis);

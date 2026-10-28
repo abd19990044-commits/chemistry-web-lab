@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" defer></script>
 {% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/drawing-tools.css') }}?v=20261028chemdraw1">
 </head>
 <body data-initial-view="{{ initial_view or 'home' }}">
 
@@ -120,6 +121,8 @@
     <div class="workspace-nav">
       <button class="ws-tab is-active" data-target="explorer">Molecule Explorer</button>
       <button class="ws-tab" data-target="reaction">Reaction Drawing</button>
+      <button class="ws-tab" data-target="sketcher">2D Structure &amp; Reaction Editor</button>
+      <button class="ws-tab" data-target="advanced-chemistry">Advanced Chemistry</button>
     </div>
 
     <!-- ---- Molecule Explorer ---- -->
@@ -135,6 +138,11 @@
         <button type="submit" class="btn btn-primary"><span class="btn-label">Analyze</span></button>
       </form>
 
+      <div class="chemdraw-preferences">
+        <span class="chemdraw-origin">ChemDraw rendering · 600 dpi</span>
+        <label class="checkbox-row"><input type="checkbox" id="explorer-export-transparent"> Transparent export background</label>
+        <span class="field-hint">Applies when you press Analyze. SVG remains vector artwork.</span>
+      </div>
       <div id="explorer-error" class="alert alert-error hidden"></div>
       <div id="explorer-loading" class="loading-row hidden"><span class="spinner"></span> Querying PubChem and drawing the structure…</div>
 
@@ -149,9 +157,13 @@
           <div class="molecule-img-stage" id="explorer-img-stage">
             <img id="explorer-image" alt="Compound structure">
           </div>
+          <button type="button" id="explorer-edit-2d" class="btn btn-primary btn-small">Edit structure in 2D</button>
           <button type="button" id="explorer-copy-word" class="btn btn-primary btn-small" title="Copy 2D structure formatted for Microsoft Word">📋 Copy for Word</button>
           <a id="explorer-download-cdxml" class="btn btn-primary btn-small" download title="Download ChemDraw XML file for editing in ChemDraw">🧪 Download ChemDraw (.cdxml)</a>
           <a id="explorer-download-mol" class="btn btn-ghost btn-small" download>⬇ Download MOL file</a>
+          <a id="explorer-download-png" class="btn btn-outline btn-small" download>Download PNG · 600 dpi</a>
+          <button type="button" id="explorer-download-tiff" class="btn btn-outline btn-small">Download TIFF · 600 dpi</button>
+          <span id="explorer-export-status" class="small" role="status" aria-live="polite"></span>
           <a id="explorer-download-svg" class="btn btn-outline btn-small" download>⬇ Download SVG</a>
         </div>
         <div class="result-data">
@@ -228,6 +240,9 @@
               <input type="checkbox" id="reaction-small-as-formula" checked>
               <span>Write small molecules as formulas (O<sub>2</sub>, H<sub>2</sub>O, CO<sub>2</sub>) instead of drawing them</span>
             </label>
+            <label class="checkbox-row reaction-option"><input type="checkbox" id="reaction-auto-balance" checked> Balance automatically and verify elements and charge</label>
+            <label class="checkbox-row reaction-option"><input type="checkbox" id="reaction-export-transparent"> Transparent export background</label>
+            <span class="field-hint">Smart style uses condensed structural formulas for tiny organics. Uncheck formulas for skeletal drawings. Settings apply to the next drawing.</span>
             <div class="reaction-option mt-1">
               <label for="reaction-arrow-style" class="small font-bold mr-1">Arrow Type:</label>
               <select id="reaction-arrow-style" class="form-select form-select-sm" style="display:inline-block; width:auto; padding: 2px 8px; font-size: 13px;">
@@ -384,10 +399,14 @@ Products:   12 CO2 + 6 H2O</pre>
         <div id="reaction-filecheck" class="reaction-badge hidden"></div>
         <ul id="reaction-notes" class="reaction-notes hidden"></ul>
         <div class="reaction-actions">
+          <button type="button" id="reaction-edit-2d" class="btn btn-primary btn-small">Edit reaction in 2D</button>
           <button type="button" id="reaction-calc-thermo-btn" class="btn btn-primary btn-small" title="Transfer drawn reaction to Thermochemistry Studio and calculate reaction energetics">⚡ Calculate Thermochemistry →</button>
           <button type="button" id="reaction-copy-word" class="btn btn-outline btn-small" title="Copy reaction scheme formatted for Microsoft Word">📋 Copy for Word</button>
           <a id="reaction-download-cdxml" class="btn btn-primary btn-small" download title="Download ChemDraw XML reaction scheme for editing in ChemDraw">🧪 Download ChemDraw (.cdxml)</a>
           <a id="reaction-download-rxn" class="btn btn-ghost btn-small" download>⬇ Download RXN file</a>
+          <a id="reaction-download-png" class="btn btn-outline btn-small" download>Download PNG · 600 dpi</a>
+          <button type="button" id="reaction-download-tiff" class="btn btn-outline btn-small">Download TIFF · 600 dpi</button>
+          <span id="reaction-export-status" class="small" role="status" aria-live="polite"></span>
           <a id="reaction-download-svg" class="btn btn-outline btn-small" download>⬇ Download SVG</a>
           <code id="reaction-smiles" class="mono small"></code>
         </div>
@@ -395,6 +414,98 @@ Products:   12 CO2 + 6 H2O</pre>
     </div>
 
     <!-- ---- Reaction Workflow & Thermochemistry Studio ---- -->
+    <div id="sketcher" class="ws-panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Interactive chemical drawing · browser chemistry</span>
+        <h2>2D Structure &amp; Reaction Editor</h2>
+        <p>Draw or edit atoms, multiple and stereochemical bonds, rings, reaction arrows, captions and conditions. Select, drag, rotate, align, clean up, undo and redo using the editor toolbar.</p>
+      </div>
+      <div class="chemdraw-sketch-toolbar">
+        <label class="btn btn-outline btn-small" for="sketch-import-file">Open structure / reaction file</label>
+        <input id="sketch-import-file" type="file" class="hidden" accept=".mol,.sdf,.rxn,.rdf,.ket,.smi,.smiles,.cml,.cdxml">
+        <label for="sketch-export-format" class="small">Save as</label>
+        <select id="sketch-export-format" aria-label="2D drawing export format">
+          <option value="ket">KET · full editable drawing</option><option value="mol">MOL · molecule</option><option value="sdf">SDF · molecule</option><option value="rxn">RXN · reaction</option><option value="svg">SVG · vector image</option><option value="png">PNG · image</option><option value="smiles">SMILES · chemistry only</option>
+        </select>
+        <button type="button" id="sketch-save" class="btn btn-primary btn-small">Save drawing</button>
+        <button type="button" id="sketch-to-3d" class="btn btn-outline btn-small">Molecule → 3D / ORCA</button>
+        <button type="button" id="sketch-to-reaction" class="btn btn-outline btn-small">Reaction → Drawing tools</button>
+        <button type="button" id="sketch-expand" class="btn btn-ghost btn-small">Expand editor</button>
+      </div>
+      <details class="chemdraw-sketch-import">
+        <summary>Load SMILES, MOL, RXN, CDXML or an editable KET drawing as text</summary>
+        <textarea id="sketch-import-text" rows="3" maxlength="5242880" aria-label="Structure or reaction text" placeholder="CC(=O)O  or  CCBr.[OH-]>>CCO.[Br-]" spellcheck="false"></textarea>
+        <button type="button" id="sketch-load-text" class="btn btn-outline btn-small">Load into editor</button>
+      </details>
+      <div id="sketch-status" role="status" aria-live="polite">Open this tab to load the standalone editor. Chemistry and drawing edits run in your browser.</div>
+      <div id="sketch-frame-wrap" class="chemdraw-sketch-frame">
+        <iframe id="sketch-frame" title="Interactive 2D molecule and reaction drawing editor" data-src="/static/vendor/ketcher/index.html?v=3.18.0" sandbox="allow-scripts allow-same-origin allow-downloads allow-modals allow-forms" allow="clipboard-read; clipboard-write"></iframe>
+      </div>
+      <p class="chemdraw-help">Choose KET to retain the full drawing, text, arrows and layout. MOL/SDF store a molecule and RXN stores reaction chemistry. PNG/SVG store artwork. Sending to 3D generates new coordinates and adds valence hydrogens; it does not use the flat drawing as a quantum geometry. Reaction transfer sends chemistry to the drawing tools; keep KET for the exact arrangement and captions.</p>
+      <p class="chemdraw-help">A draft is saved only in this browser when storage is available. Ketcher 3.18.0 / Indigo WASM · <a href="/static/licenses/ketcher/LICENSE" target="_blank" rel="noopener">Apache 2.0 license</a> · <a href="/static/licenses/ketcher/NOTICE" target="_blank" rel="noopener">Notices</a></p>
+      <dialog id="sketch-replace-dialog" class="chemdraw-replace-dialog">
+        <h3>Replace the current drawing?</h3><p>The editor contains changes. Save your drawing before replacing it.</p>
+        <div class="chemdraw-actions"><button type="button" id="sketch-save-before-replace" class="btn btn-outline">Save current KET</button><button type="button" id="sketch-replace-cancel" class="btn btn-ghost">Keep current drawing</button><button type="button" id="sketch-replace-confirm" class="btn btn-primary">Replace drawing</button></div>
+      </dialog>
+    </div>
+
+    <div id="advanced-chemistry" class="ws-panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Transferred from your ChemDraw project</span>
+        <h2>Advanced Chemistry</h2>
+        <p>Balance redox equations, cancel spectator ions, map a unique common substructure, and draw the electron-flow arrows you specify.</p>
+      </div>
+      <div class="chemdraw-studio-grid">
+        <section class="chemdraw-tool-card" aria-labelledby="advanced-reaction-title">
+          <span class="chemdraw-origin">Reaction tools</span>
+          <h3 id="advanced-reaction-title">From equation to chemistry</h3>
+          <form id="chemdraw-advanced-form">
+            <label for="chemdraw-reactants">Reactants</label>
+            <input id="chemdraw-reactants" type="text" maxlength="2000" value="[Fe+2]" placeholder="Names, formulas or SMILES separated by +" required>
+            <label for="chemdraw-products">Products</label>
+            <input id="chemdraw-products" type="text" maxlength="2000" value="[Fe+3]" placeholder="Names, formulas or SMILES separated by +" required>
+            <div class="chemdraw-actions">
+              <button type="button" id="chemdraw-use-reaction" class="btn btn-ghost btn-small">Use Reaction Drawing inputs</button>
+              <button type="button" id="chemdraw-ionic-example" class="btn btn-ghost btn-small">Acid/base example</button>
+            </div>
+            <div class="chemdraw-action-grid">
+              <button type="submit" name="action" value="redox_acidic" class="btn btn-primary">Redox · acidic</button>
+              <button type="submit" name="action" value="redox_basic" class="btn btn-outline">Redox · basic</button>
+              <button type="submit" name="action" value="net_ionic" class="btn btn-outline">Net ionic equation</button>
+              <button type="submit" name="action" value="atom_map" class="btn btn-outline">Atom mapping</button>
+            </div>
+          </form>
+          <p class="chemdraw-help">Redox may add H₂O, H⁺/OH⁻ and electrons. Net ionic reduction requires a balanced aqueous equation and supported electrolytes. Mapping requires one species per side and rejects ambiguous symmetry.</p>
+          <div id="chemdraw-advanced-status" role="status" aria-live="polite"></div>
+          <div id="chemdraw-advanced-result" class="chemdraw-result hidden">
+            <pre id="chemdraw-advanced-text"></pre>
+            <p id="chemdraw-advanced-note" class="small"></p>
+            <p id="chemdraw-spectators" class="small"></p>
+            <button type="button" id="chemdraw-copy-result" class="btn btn-ghost btn-small">Copy result</button>
+          </div>
+        </section>
+        <section class="chemdraw-tool-card" aria-labelledby="mechanism-title">
+          <span class="chemdraw-origin">User-directed mechanism</span>
+          <h3 id="mechanism-title">Number atoms, then add arrows</h3>
+          <form id="chemdraw-mechanism-form">
+            <label for="chemdraw-mechanism-smiles">Explicit SMILES</label>
+            <input id="chemdraw-mechanism-smiles" type="text" maxlength="4096" value="CCO" required spellcheck="false">
+            <label for="chemdraw-mechanism-arrows">Electron-flow instructions</label>
+            <input id="chemdraw-mechanism-arrows" type="text" maxlength="512" placeholder="1->2,3~>2" spellcheck="false">
+            <p class="chemdraw-help">Leave arrows blank to preview atom numbers. Use <code>1-&gt;2</code> for an electron pair and <code>3~&gt;2</code> for one electron. Arrows are drawn exactly as entered; no mechanism is inferred.</p>
+            <button type="submit" class="btn btn-primary">Render mechanism</button>
+          </form>
+          <div id="chemdraw-mechanism-status" role="status" aria-live="polite"></div>
+          <div id="chemdraw-mechanism-result" class="chemdraw-result hidden">
+            <div class="chemdraw-mechanism-canvas"><img id="chemdraw-mechanism-image" alt="Atom-numbered structure with user-specified curved arrows"></div>
+            <a id="chemdraw-mechanism-download" class="btn btn-outline btn-small" download="mechanism.svg">Download vector SVG</a>
+          </div>
+        </section>
+      </div>
+      <p class="chemdraw-help">The chemistry algorithms and drawing styles are ported from your MIT-licensed ChemDraw repository. Each operation uses a bounded server rendering slot. Molecular import, movement, UFF/MMFF94 and coordinate downloads in Molecular Studio continue to run in your browser.</p>
+      <button type="button" id="chemdraw-reset-preferences" class="btn btn-ghost btn-small">Reset drawing preferences</button>
+    </div>
+
     <div id="reaction-workflow" class="ws-panel">
       <div class="panel-head">
         <span class="panel-eyebrow">Quantum reaction studio</span>
@@ -2918,13 +3029,15 @@ Products:   12 CO2 + 6 H2O</pre>
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='js/molecule-graph.js') }}?v=20261023d"></script>
-  <script src="{{ url_for('static', filename='js/browser-chemistry.js') }}?v=20261026perf2"></script>
+  <script src="{{ url_for('static', filename='js/molecule-graph.js') }}?v=20261028chemdraw1"></script>
+  <script src="{{ url_for('static', filename='js/browser-chemistry.js') }}?v=20261028chemdraw1"></script>
   <script src="{{ url_for('static', filename='js/molecular-controls.js') }}?v=20261023mol1"></script>
   <script src="{{ url_for('static', filename='js/publication-molecule.js') }}?v=20261024labels1"></script>
   <script src="{{ url_for('static', filename='js/publication-figures.js') }}?v=20261024labels1"></script>
   <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261024labels1"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261026perf1"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261028chemdraw1"></script>
+  <script src="{{ url_for('static', filename='js/drawing-tools.js') }}?v=20261028chemdraw1"></script>
+  <script src="{{ url_for('static', filename='js/structure-editor.js') }}?v=20261028chemdraw1"></script>
   <script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>

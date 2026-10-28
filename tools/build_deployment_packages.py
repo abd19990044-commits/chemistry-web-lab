@@ -237,6 +237,7 @@ def build_huggingface_package(dest_dir: Path, provenance: dict) -> dict:
         'app.py',
         'chem_core.py',
         'fetch_browser_engine.py',
+        'fetch_ketcher_editor.py',
         'kaggle_runner.py',
         'reaction_conditions.py',
         'requirements.txt',
