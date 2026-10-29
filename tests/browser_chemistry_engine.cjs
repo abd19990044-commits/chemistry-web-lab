@@ -7,9 +7,12 @@ vm.runInContext(fs.readFileSync('static/js/chemistry-worker.js','utf8'),context,
 const run=(type,payload)=>new Promise((resolve,reject)=>{active={resolve,reject};context.onmessage({data:{id:1,type,payload}});});
 (async()=>{
 const ethanolInput=context.MoleculeGraph.mol([{id:1,elem:'C',x:0,y:0,z:0},{id:2,elem:'C',x:1.5,y:0,z:0},{id:3,elem:'O',x:2.2,y:1.2,z:0}],[{a1:1,a2:2,order:1},{a1:2,a2:3,order:1}],'Drawn ethanol');
-const drawn=await run('parse',{text:ethanolInput,format:'mol',name:'Drawn ethanol',generate3D:true,addHydrogens:true});
+const flatInput=text=>text.split('\n').map((line,i)=>i===1?line.replace('3D','2D'):line).join('\n');
+const drawn=await run('parse',{text:flatInput(ethanolInput),format:'mol',name:'Drawn ethanol',generate3D:true,addHydrogens:true});
 assert.equal(drawn.atoms.length,9);assert.equal(drawn.atoms.filter(a=>a.elem==='H').length,6);assert.equal(drawn.bonds.length,8);assert.equal(drawn.topology,'source');assert(drawn.generated3D);
 assert(drawn.atoms.some(a=>Math.abs(a.z-drawn.atoms[0].z)>.1));
+function tetraVolume(m,id){const c=m.atoms.find(a=>a.id===id),ids=m.bonds.filter(b=>b.a1===id||b.a2===id).map(b=>b.a1===id?b.a2:b.a1),v=ids.slice(0,3).map(i=>{const a=m.atoms.find(a=>a.id===i);return [a.x-c.x,a.y-c.y,a.z-c.z];});assert.equal(v.length,3);return Math.abs(v[0][0]*(v[1][1]*v[2][2]-v[1][2]*v[2][1])-v[0][1]*(v[1][0]*v[2][2]-v[1][2]*v[2][0])+v[0][2]*(v[1][0]*v[2][1]-v[1][1]*v[2][0]));}
+assert(tetraVolume(drawn,1)>.1,'2D drawing must produce a nonplanar tetrahedral carbon');
 console.log('2D drawing to hydrogen-complete 3D ethanol',drawn.formula,drawn.atoms.length);
 const acidInput=context.MoleculeGraph.mol([{id:1,elem:'C',x:0,y:0,z:0},{id:2,elem:'C',x:1.5,y:0,z:0},{id:3,elem:'O',x:2.2,y:1.2,z:0},{id:4,elem:'O',x:2.2,y:-1.2,z:0}],[{a1:1,a2:2,order:1},{a1:2,a2:3,order:2},{a1:2,a2:4,order:1}],'Drawn acetic acid');
 const acid=await run('parse',{text:acidInput,format:'mol',generate3D:true,addHydrogens:true});
@@ -26,6 +29,9 @@ const methylSaved=context.MoleculeGraph.serialize(methyl.atoms,methyl.bonds,'sdf
 const methylReopened=await run('parse',{text:methylSaved,format:'sdf'});assert.equal(methylReopened.atoms.length,4);assert.equal(methylReopened.atoms[0].radical,2);
 for(const charge of [-1,1]){const ion=await run('parse',{text:context.MoleculeGraph.mol([{id:1,elem:'C',charge,x:0,y:0,z:0}],[]),format:'mol',generate3D:true,addHydrogens:true});assert.equal(ion.atoms.length,4);assert.equal(ion.atoms[0].charge,charge);}
 console.log('Methyl radical / ions preserve CH3, electron states and SDF round trip');
+const ethylInput=context.MoleculeGraph.mol([{id:1,elem:'C',x:0,y:0,z:0},{id:2,elem:'C',radical:2,x:1.5,y:0,z:0}],[{a1:1,a2:2,order:1}]);
+const ethyl=await run('parse',{text:flatInput(ethylInput),format:'mol',generate3D:true,addHydrogens:true});assert.equal(ethyl.atoms.length,7);assert.equal(ethyl.atoms[1].radical,2);assert(tetraVolume(ethyl,1)>.1);
+console.log('Native 2D ethyl radical builds tetrahedral CH3 geometry',ethyl.formula);
 const mb=await run('parse',{text:fs.readFileSync('tests/fixtures/browser_chemistry/methylene-blue.sdf','utf8'),format:'sdf',name:'Methylene blue'});
 const saved=context.MoleculeGraph.mol(mb.atoms,mb.bonds,'Methylene blue');
 assert.equal(saved.split('\n')[1].slice(20,22),'3D');

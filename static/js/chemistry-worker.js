@@ -72,7 +72,9 @@ async function parse({text,format,name,generate3D=false,addHydrogens=false}){
     // operation builds geometry without changing the source protonation.
     if(generated3D){
       const source=extract(m),op=ob.OBOp.FindType('gen3D');
-      if(!op||!op.Do(m,'fast'))throw Error('Cannot generate 3D geometry for this structure.');
+      // This pinned build's fast/fastest paths return before copying the new
+      // coordinates back. The balanced path commits and checks stereochemistry.
+      if(!op||!op.Do(m,'medium')||m.GetDimension()!==3)throw Error('Cannot generate 3D geometry for this structure.');
       const generated=extract(m);
       if((addHydrogens&&generated.atoms.length!==source.atoms.length)||source.atoms.some((a,i)=>generated.atoms[i]?.elem!==a.elem||generated.atoms[i]?.charge!==a.charge||generated.atoms[i]?.radical!==a.radical))throw Error('3D generation changed the source chemical species. Transfer stopped.');
     }

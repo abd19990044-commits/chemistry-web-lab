@@ -3581,6 +3581,7 @@
     document.getElementById("orca-output").textContent = data.input_text;
     setDownload(document.getElementById("orca-download-inp"), data.file_base64, "text/plain", data.filename);
     lastOrcaFile = { filename: data.filename, content: data.input_text };
+    showView("orca", "generator");
     show(wrap);
     wrap.scrollIntoView({ behavior: "smooth" });
   }
@@ -3589,6 +3590,7 @@
   let currentDualWorkflowData = null;
 
   function renderWorkflowOutputs(wfData) {
+    showView("orca", "generator");
     currentWorkflowData = wfData;
     currentDualWorkflowData = wfData;
     const wrap = document.getElementById("orca-output-wrap");
