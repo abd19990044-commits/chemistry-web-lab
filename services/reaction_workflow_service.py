@@ -673,7 +673,10 @@ def compute_reaction_thermodynamics(species_results, temperature_tolerance_k=0.0
                             % (s.get("display_name"), imag))
     dG_J = deltas["G"] * HARTREE_KJ_MOL * 1000.0
     dH_J = deltas["H"] * HARTREE_KJ_MOL * 1000.0
-    if not all(math.isfinite(value) for value in (dG_J, dH_J, deltas["E_elec"], S_rxn)):
+    converted = [dG_J, dH_J, deltas["E_elec"] * HARTREE_KJ_MOL, S_rxn]
+    if zpe_available:
+        converted.extend([deltas["ZPE"] * HARTREE_KJ_MOL, dE0_hartree * HARTREE_KJ_MOL])
+    if not all(math.isfinite(value) for value in converted):
         raise ReactionValidationError("reaction thermodynamics exceed the supported numeric range")
     if temperature_k and entropy_available and abs(dG_J - (dH_J - temperature_k * S_rxn)) > 15.0:
         warnings.append("WARNING - G/H/S INCONSISTENCY beyond numerical tolerance.")
