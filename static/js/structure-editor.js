@@ -101,7 +101,7 @@
     const options=imageOptions(),key=JSON.stringify({revision,...options});if(figureCache?.key===key)return figureCache.promise;
     const captured=revision,promise=(async()=>{
       const ket=await editor.getKet();if(revision!==captured)throw Error('The drawing changed while preparing export. Please try again.');
-      const svg=await editor.generateImage(ket,{outputFormat:'svg',backgroundColor:options.transparent?'':'#FFFFFF'});
+      const svg=await editor.generateImage(ket,{outputFormat:'svg',backgroundColor:options.transparent?undefined:'1,1,1'});
       const image=await integration.rasterize(svg,options);return {...image,revision:captured,key};
     })();figureCache={key,promise};promise.catch(()=>{if(figureCache?.key===key)figureCache=null;});return promise;
   }
@@ -136,7 +136,7 @@
     else if(format==='rxn')download(await api.getRxn('v2000'),'chemical/x-mdl-rxnfile',basename()+'.rxn');
     else if(format==='smiles')download(await api.getSmiles(false),'chemical/x-daylight-smiles',basename()+'.smi');
     else if(format==='png'){await savePNG();return;}
-    else if(format==='svg')download(await api.generateImage(await api.getKet(),{outputFormat:'svg',backgroundColor:byId('sketch-image-transparent').checked?'':'#FFFFFF'}),'image/svg+xml',basename()+'.svg');
+    else if(format==='svg')download(await api.generateImage(await api.getKet(),{outputFormat:'svg',backgroundColor:byId('sketch-image-transparent').checked?undefined:'1,1,1'}),'image/svg+xml',basename()+'.svg');
     if(format==='ket'&&revision===current)dirty=false;note(format==='ket'?'Complete editable drawing saved.':'File exported. Save KET to retain the complete editable canvas.');
   }));
   byId('sketch-to-3d').addEventListener('click',()=>action(async()=>{
