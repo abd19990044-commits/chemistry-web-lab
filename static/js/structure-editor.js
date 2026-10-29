@@ -45,6 +45,7 @@
           if(draft&&draft.length<=2*1024*1024){loading=true;await editor.setMolecule(draft);loading=false;dirty=true;note('Local draft restored.'+groupWarning);}
           else note('Editor ready. Draw, import a compound, or write a label.'+groupWarning);
           electronControls=EditorElectrons.attach(editor,{mode:()=>byId('sketch-delete-state').value,isImport:()=>loading,note});
+          frame.contentDocument.addEventListener('click',event=>{const button=event.target.closest?.('button');if((button?.getAttribute('title')||button?.getAttribute('aria-label')||'').startsWith('Add/Remove explicit hydrogens'))electronControls.hydrogenConversion();},true);
           editor.editor.subscribe('change',changed);frame.contentDocument.addEventListener('keydown',escapeExpanded);frame.contentDocument.addEventListener('keydown',nativeKeyboard,true);
           if(byId('sketcher').classList.contains('is-active'))window.scrollTo({...initialScroll,behavior:'instant'});
           resolve(editor);

@@ -15,6 +15,7 @@ const removedAtom={atoms:new Map([[0,atom(4)]]),bonds:new Map()};assert.equal(Ed
 const redo={atoms:new Map([[0,{...atom(),radical:2,fixedH:3}],[1,{...atom(),radical:2,fixedH:3}]]),bonds:new Map()};assert.equal(EditorElectrons.deletionEdits(before,redo).length,0);
 const replacement={atoms:new Map([[0,{...atom(),label:'N'}]]),bonds:new Map()};assert.equal(EditorElectrons.deletionEdits(before,replacement).length,0);
 const bondEdit={atoms:before.atoms,bonds:new Map([[0,{begin:0,end:1,type:2}]])};assert.equal(EditorElectrons.deletionEdits(before,bondEdit).length,0);
+const withH={atoms:new Map([[0,atom()],[1,atom()],[2,{label:'H'}]]),bonds:new Map()};assert(EditorElectrons.hydrogenOnlyChange(withH,after));assert(!EditorElectrons.hydrogenOnlyChange(before,removedAtom));
 ''')
 
 

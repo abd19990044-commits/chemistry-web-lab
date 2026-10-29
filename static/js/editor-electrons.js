@@ -35,12 +35,18 @@
     if(hydrogens!==null&&(!Number.isInteger(hydrogens)||hydrogens<0||hydrogens>8))throw Error('Choose automatic hydrogens or a count from 0 to 8.');
     return Object.assign(atom.clone(),{charge,radical,implicitHCount:hydrogens,explicitValence:-1});
   }
+  function hydrogenOnlyChange(before,after){
+    const changed=[...[...before.atoms].filter(([id])=>!after.atoms.has(id)).map(([,a])=>a),...[...after.atoms].filter(([id])=>!before.atoms.has(id)).map(([,a])=>a)];
+    return changed.length>0&&changed.every(a=>a.label==='H')&&[...before.atoms].filter(([,a])=>a.label!=='H').every(([id,a])=>after.atoms.get(id)?.label===a.label&&after.atoms.get(id)?.charge===a.charge);
+  }
   function attach(api,{mode,isImport,note}){
-    const native=api.editor;let before=snapshot(native),ptr=native.historyPtr,updating=false;
+    const native=api.editor;let before=snapshot(native),ptr=native.historyPtr,updating=false,hydrogenCommand=false;
     const replace=(id,attrs)=>{const atom=native.struct().atoms.get(id);if(!atom||atom.sgs?.size)throw Error('Expand a collapsed group before editing its atom state.');native.selection({atoms:[id]});native.tool('atom',Object.assign(atom.clone(),attrs));};
     const onChange=()=>{
       if(updating)return;
       const after=snapshot(native),currentPtr=native.historyPtr;
+      const hydrogenConversion=hydrogenCommand&&hydrogenOnlyChange(before,after);hydrogenCommand=false;
+      if(hydrogenConversion){before=after;ptr=currentPtr;return;}
       if(isImport()||currentPtr<=ptr){before=after;ptr=currentPtr;return;}
       const edits=deletionEdits(before,after,mode());
       if(edits.length){
@@ -58,10 +64,11 @@
     native.subscribe('change',onChange);
     function selected(){const ids=native.selection()?.atoms||[];if(ids.length!==1)throw Error('Select one atom on the canvas first. Expand a collapsed group to edit its atoms.');const atom=native.struct().atoms.get(ids[0]);if(!atom||atom.sgs?.size)throw Error('Expand the group and select one of its atoms.');return {id:ids[0],atom};}
     return {
+      hydrogenConversion(){hydrogenCommand=true;},
       read(){const {atom}=selected();return {label:atom.label,charge:atom.charge||0,radical:atom.radical||0,hydrogens:atom.implicitHCount??null};},
       apply(charge,radical,hydrogens){const {id,atom}=selected();replace(id,atomAttrs(atom,charge,radical,hydrogens));native.selection({atoms:[id]});before=snapshot(native);ptr=native.historyPtr;},
       reset(){before=snapshot(native);ptr=native.historyPtr;}
     };
   }
-  root.EditorElectrons={electrons,deletionEdits,atomAttrs,attach};
+  root.EditorElectrons={electrons,deletionEdits,atomAttrs,hydrogenOnlyChange,attach};
 })(globalThis);
