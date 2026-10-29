@@ -73,3 +73,26 @@ Native extension contracts checked against upstream v3.18.0:
 - `packages/ketcher-core/src/domain/serializers/ket/ketSerializer.ts`
 - `packages/ketcher-react/src/script/ui/state/templates/init-lib.ts`
 - `packages/ketcher-react/src/script/ui/state/hotkeys.ts`
+
+## Radicals, ions and deletion
+
+The `Radicals / ions` panel changes the selected atom's formal charge, MDL radical
+state and implicit hydrogen count through the native atom tool. This preserves
+native atom identifiers, isotopes, coordinates and undo operations. Expand a
+collapsed functional group before editing its individual atoms.
+
+The default deletion mode is radical cleavage: surviving endpoints retain their
+previous implicit hydrogen counts. One removed bond order creates one radical
+electron; two open valences use the triplet diradical state, which the user can
+change to singlet. Higher open valences retain their hydrogen count and need an
+explicit electron-state decision. `Keep existing H; set electrons manually` and
+the conventional `Complete valence with H` modes are also available. Loading a
+new structure, undo, redo and changing a bond order do not constitute cleavage.
+The correction and deletion share one undo step.
+
+Native Open Babel `gen3D` preserves the drawn protonation. The older wrapper's
+automatic pH correction is not used. MDL radical states survive worker parsing,
+3D geometry generation, MOL/SDF coordinate exports and transfer back to 2D.
+ORCA setup receives the net formal charge and an initial multiplicity from the
+drawn atom states. Users must review coupling between multiple radical centers;
+an atom drawing alone cannot determine the molecular ground-state multiplicity.

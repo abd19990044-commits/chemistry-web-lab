@@ -19,6 +19,13 @@ const chargedAmine=context.MoleculeGraph.mol([{id:1,elem:'N',charge:1,x:0,y:0,z:
 const ammonium=await run('parse',{text:chargedAmine,format:'mol',generate3D:true,addHydrogens:true});
 assert.equal(ammonium.atoms.length,8);assert.equal(ammonium.atoms.reduce((sum,a)=>sum+a.charge,0),1);
 console.log('Drawn ammonium preserves positive charge',ammonium.formula);
+const methylInput=context.MoleculeGraph.mol([{id:1,elem:'C',radical:2,x:0,y:0,z:0}],[],'Methyl radical');
+const methyl=await run('parse',{text:methylInput,format:'mol',generate3D:true,addHydrogens:true});
+assert.equal(methyl.atoms.length,4);assert.equal(methyl.atoms[0].radical,2);assert.equal(methyl.atoms[0].charge,0);
+const methylSaved=context.MoleculeGraph.serialize(methyl.atoms,methyl.bonds,'sdf','Methyl radical').text;assert(methylSaved.includes('M  RAD'));
+const methylReopened=await run('parse',{text:methylSaved,format:'sdf'});assert.equal(methylReopened.atoms.length,4);assert.equal(methylReopened.atoms[0].radical,2);
+for(const charge of [-1,1]){const ion=await run('parse',{text:context.MoleculeGraph.mol([{id:1,elem:'C',charge,x:0,y:0,z:0}],[]),format:'mol',generate3D:true,addHydrogens:true});assert.equal(ion.atoms.length,4);assert.equal(ion.atoms[0].charge,charge);}
+console.log('Methyl radical / ions preserve CH3, electron states and SDF round trip');
 const mb=await run('parse',{text:fs.readFileSync('tests/fixtures/browser_chemistry/methylene-blue.sdf','utf8'),format:'sdf',name:'Methylene blue'});
 const saved=context.MoleculeGraph.mol(mb.atoms,mb.bonds,'Methylene blue');
 assert.equal(saved.split('\n')[1].slice(20,22),'3D');

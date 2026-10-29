@@ -22,7 +22,7 @@ function read(ob,text,format){
 }
 function extract(m){
   const atoms=[],bonds=[];
-  for(let i=1;i<=m.NumAtoms();i++){const a=m.GetAtom(i);atoms.push({id:i,elem:symbols[a.GetAtomicNum()],x:a.GetX(),y:a.GetY(),z:a.GetZ(),charge:a.GetFormalCharge()});}
+  for(let i=1;i<=m.NumAtoms();i++){const a=m.GetAtom(i);atoms.push({id:i,elem:symbols[a.GetAtomicNum()],x:a.GetX(),y:a.GetY(),z:a.GetZ(),charge:a.GetFormalCharge(),radical:a.GetSpinMultiplicity()});}
   for(let i=0;i<m.NumBonds();i++){const b=m.GetBond(i);bonds.push({a1:b.GetBeginAtomIdx(),a2:b.GetEndAtomIdx(),order:b.GetBondOrder(),aromatic:b.IsAromatic()});}
   MoleculeGraph.validate(atoms,bonds);return {atoms,bonds,coords:MoleculeGraph.xyz(atoms),formula:m.GetFormula()};
 }
@@ -74,7 +74,7 @@ async function parse({text,format,name,generate3D=false,addHydrogens=false}){
       const source=extract(m),op=ob.OBOp.FindType('gen3D');
       if(!op||!op.Do(m,'fast'))throw Error('Cannot generate 3D geometry for this structure.');
       const generated=extract(m);
-      if((addHydrogens&&generated.atoms.length!==source.atoms.length)||source.atoms.some((a,i)=>generated.atoms[i]?.elem!==a.elem||generated.atoms[i]?.charge!==a.charge))throw Error('3D generation changed the source chemical species. Transfer stopped.');
+      if((addHydrogens&&generated.atoms.length!==source.atoms.length)||source.atoms.some((a,i)=>generated.atoms[i]?.elem!==a.elem||generated.atoms[i]?.charge!==a.charge||generated.atoms[i]?.radical!==a.radical))throw Error('3D generation changed the source chemical species. Transfer stopped.');
     }
     const result=extract(m);
     if(generated3D){MoleculeGraph.packGeneratedComponents(result.atoms,result.bonds);result.coords=MoleculeGraph.xyz(result.atoms);}

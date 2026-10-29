@@ -47,6 +47,8 @@
     for(const b of bonds)lines.push(`${pad(index.get(b.a1),3)}${pad(index.get(b.a2),3)}${pad(b.order===1.5?4:b.order,3)}  0  0  0  0`);
     const charged=atoms.filter(a=>a.charge);
     for(let i=0;i<charged.length;i+=8){const group=charged.slice(i,i+8);lines.push('M  CHG'+pad(group.length,3)+group.map(a=>pad(index.get(a.id),4)+pad(a.charge,4)).join(''));}
+    const radicals=atoms.filter(a=>a.radical);
+    for(let i=0;i<radicals.length;i+=8){const group=radicals.slice(i,i+8);if(group.some(a=>![1,2,3].includes(a.radical)))throw Error('Invalid MDL radical state.');lines.push('M  RAD'+pad(group.length,3)+group.map(a=>pad(index.get(a.id),4)+pad(a.radical,4)).join(''));}
     lines.push('M  END');return lines.join('\n')+'\n';
   }
   // Separate chemical file formats: a MOL is one CTAB, an SDF is a
@@ -54,7 +56,7 @@
   function serialize(atoms,bonds,format,name='Molecule',topology='source'){
     validate(atoms,bonds);
     const title=String(name).replace(/[\r\n\x00-\x1f]/g,' ').slice(0,80)||'Molecule';
-    if(format==='xyz')return {text:atoms.length+'\n'+title+' | angstrom | bond orders and formal charges not stored in XYZ\n'+atoms.map(a=>a.elem+' '+['x','y','z'].map(k=>String(a[k])).join(' ')).join('\n')+'\n',mime:'chemical/x-xyz',extension:'xyz'};
+    if(format==='xyz')return {text:atoms.length+'\n'+title+' | angstrom | bond orders, formal charges and radicals not stored in XYZ\n'+atoms.map(a=>a.elem+' '+['x','y','z'].map(k=>String(a[k])).join(' ')).join('\n')+'\n',mime:'chemical/x-xyz',extension:'xyz'};
     if(!['mol','sdf'].includes(format))throw Error('Choose MOL, SDF or XYZ.');
     for(const a of atoms){
       if(!/^[A-Z][a-z]?$/.test(a.elem)||!['x','y','z'].every(k=>a[k].toFixed(4).length<=10))throw Error('Coordinates or atom symbols exceed MOL V2000 field limits.');

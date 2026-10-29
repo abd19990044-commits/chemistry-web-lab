@@ -49,3 +49,5 @@
 .sketch-expanded-actions{display:none}.is-expanded .sketch-expanded-actions{display:flex;position:absolute;top:5px;left:10px;gap:.5rem;z-index:5}.sketch-expanded-actions .btn{background:#fff;color:#172033}
 .chemdraw-sketch-frame:not(.is-expanded)>#sketch-collapse{display:none}
 @media(max-width:760px){.sketch-label-grid{grid-template-columns:1fr}.sketch-inline-form{align-items:stretch}.sketch-inline-form button{width:100%}.sketch-document-row input{flex:1}.sketch-expanded-actions .btn{font-size:.7rem;padding:.35rem .45rem}}
+
+#sketch-atom-form input[type="number"]{width:5rem;min-height:2rem}#sketch-delete-state{max-width:100%}

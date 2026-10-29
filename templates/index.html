@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" defer></script>
 {% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/drawing-tools.css') }}?v=20261029studio5">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/drawing-tools.css') }}?v=20261029electrons1">
 </head>
 <body data-initial-view="{{ initial_view or 'home' }}">
 
@@ -423,6 +423,7 @@ Products:   12 CO2 + 6 H2O</pre>
       <div class="chemdraw-sketch-toolbar" aria-label="Drawing commands">
         <button type="button" class="btn btn-outline btn-small" data-sketch-panel="sources" aria-expanded="true">Import / transfer</button>
         <button type="button" class="btn btn-outline btn-small" data-sketch-panel="labels" aria-expanded="false">Write labels &amp; groups</button>
+        <button type="button" class="btn btn-outline btn-small" data-sketch-panel="electrons" aria-expanded="false">Radicals / ions</button>
         <button type="button" class="btn btn-outline btn-small" data-sketch-panel="export" aria-expanded="false">Image settings</button>
         <button type="button" id="sketch-save" class="btn btn-primary btn-small" data-sketch-command>Save file</button>
         <button type="button" class="btn btn-primary btn-small" data-sketch-action="png" data-sketch-command>Save PNG</button>
@@ -430,6 +431,7 @@ Products:   12 CO2 + 6 H2O</pre>
         <button type="button" id="sketch-expand" class="btn btn-ghost btn-small">Expand editor</button>
       </div>
       <div class="sketch-document-row"><label for="sketch-drawing-title">Drawing name</label><input id="sketch-drawing-title" value="Chemical drawing" maxlength="100"><span id="sketch-origin" class="small">Local editable drawing</span></div>
+      <div class="sketch-document-row"><label for="sketch-delete-state">After deleting an atom or bond</label><select id="sketch-delete-state"><option value="radical" selected>Leave radicals, keep existing H</option><option value="manual">Keep existing H; set electrons manually</option><option value="cap">Complete valence with H</option></select></div>
       <section id="sketch-panel-sources" class="sketch-tool-panel" aria-label="Import and transfer">
         <div class="sketch-source-heading"><label for="sketch-import-mode">Import mode</label><select id="sketch-import-mode"><option value="replace">Replace drawing</option><option value="add">Add to current drawing</option></select><span class="small">Unsaved work is protected when replacing a drawing.</span></div>
         <form id="sketch-pubchem-form" class="sketch-inline-form"><label for="sketch-pubchem-query">PubChem</label><input id="sketch-pubchem-query" placeholder="Compound name or CID, e.g. Aspirin or 2244" maxlength="256" required><button type="submit" class="btn btn-primary btn-small" data-sketch-command>Import from PubChem</button></form>
@@ -452,6 +454,16 @@ Products:   12 CO2 + 6 H2O</pre>
         </form>
         <div class="sketch-source-links"><button type="button" id="sketch-group-library" class="btn btn-outline btn-small" data-sketch-command>Group library</button><button type="button" id="sketch-text-tool" class="btn btn-outline btn-small" data-sketch-command>Write free text / captions</button></div>
         <p class="chemdraw-help">Keyboard: focus empty canvas space, type a group such as <strong>COOH</strong>, then press Enter and place it on a terminal carbon. Unknown labels can also be entered; they remain undefined groups until you supply their structure. Use the text tool for any caption, equation or note. Labels can be expanded or edited using the native group menu.</p>
+      </section>
+      <section id="sketch-panel-electrons" class="sketch-tool-panel hidden" aria-label="Atom electron and hydrogen states">
+        <p class="chemdraw-help">Select one atom with the selection tool, then read or change its state. Expand a collapsed group first. Charges and radical electrons belong to the chemical structure. Removing a single bond leaves a monoradical at each surviving end; two open valences use a triplet diradical unless you choose another state.</p>
+        <form id="sketch-atom-form" class="sketch-image-settings">
+          <label for="sketch-atom-charge">Formal charge</label><input id="sketch-atom-charge" type="number" min="-15" max="15" step="1" value="0" required>
+          <label for="sketch-atom-radical">Radical state</label><select id="sketch-atom-radical"><option value="0">None</option><option value="2" selected>Monoradical (one electron)</option><option value="1">Diradical (singlet)</option><option value="3">Diradical (triplet)</option></select>
+          <label for="sketch-atom-h">Implicit H on this atom</label><select id="sketch-atom-h"><option value="auto" selected>Automatic from electron state</option><option value="0">0 (no implicit H)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select>
+          <button type="button" id="sketch-read-atom" class="btn btn-outline btn-small" data-sketch-command>Read selected atom</button><button type="submit" class="btn btn-primary btn-small" data-sketch-command>Apply atom state</button>
+        </form>
+        <p class="chemdraw-help">Use charge +1 or -1 for an ion, and select None for a closed shell ion. A radical ion can carry both charge and a radical. Check the molecular spin multiplicity when preparing ORCA inputs.</p>
       </section>
       <section id="sketch-panel-export" class="sketch-tool-panel hidden" aria-label="Image and file export">
         <div class="sketch-image-settings">
@@ -3058,17 +3070,18 @@ Products:   12 CO2 + 6 H2O</pre>
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='js/molecule-graph.js') }}?v=20261028chemdraw1"></script>
-  <script src="{{ url_for('static', filename='js/browser-chemistry.js') }}?v=20261029protonation1"></script>
+  <script src="{{ url_for('static', filename='js/molecule-graph.js') }}?v=20261029electrons1"></script>
+  <script src="{{ url_for('static', filename='js/browser-chemistry.js') }}?v=20261029electrons1"></script>
   <script src="{{ url_for('static', filename='js/molecular-controls.js') }}?v=20261023mol1"></script>
   <script src="{{ url_for('static', filename='js/publication-molecule.js') }}?v=20261024labels1"></script>
   <script src="{{ url_for('static', filename='js/publication-figures.js') }}?v=20261024labels1"></script>
   <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261024labels1"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261029studio5"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261029electrons1"></script>
   <script src="{{ url_for('static', filename='js/drawing-tools.js') }}?v=20261028chemdraw1"></script>
   <script src="{{ url_for('static', filename='js/chemical-drawing.js') }}?v=20261028chemdraw2"></script>
-  <script src="{{ url_for('static', filename='js/editor-integration.js') }}?v=20261029studio5"></script>
-  <script src="{{ url_for('static', filename='js/structure-editor.js') }}?v=20261029studio5"></script>
+  <script src="{{ url_for('static', filename='js/editor-integration.js') }}?v=20261029electrons1"></script>
+  <script src="{{ url_for('static', filename='js/editor-electrons.js') }}?v=20261029electrons1"></script>
+  <script src="{{ url_for('static', filename='js/structure-editor.js') }}?v=20261029electrons1"></script>
   <script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='js/reaction-editor.js') }}?v=20260818f"></script>
   <script src="{{ url_for('static', filename='job_runtime_fix.js') }}?v=20260824"></script>

@@ -4,7 +4,7 @@
   const byId=id=>document.getElementById(id),frame=byId('sketch-frame'),integration=window.EditorIntegration;
   if(!frame||!integration)return;
   const draftKey='orca.chemdraw.editor-draft.v1',sources={};
-  let readyTask=null,editor=null,dirty=false,revision=0,saveTimer=null,loading=false,busy=false,figureCache=null,previewURL=null;
+  let readyTask=null,editor=null,electronControls=null,dirty=false,revision=0,saveTimer=null,loading=false,busy=false,figureCache=null,previewURL=null;
   const note=(message,error=false)=>{const el=byId('sketch-status');el.textContent=message;el.classList.toggle('chemdraw-error',error);};
   const decode=base64=>new TextDecoder().decode(Uint8Array.from(atob(base64),c=>c.charCodeAt(0)));
   const title=()=>byId('sketch-drawing-title').value.trim()||'Chemical drawing';
@@ -44,6 +44,7 @@
           let draft;try{draft=localStorage.getItem(draftKey);}catch(_){}
           if(draft&&draft.length<=2*1024*1024){loading=true;await editor.setMolecule(draft);loading=false;dirty=true;note('Local draft restored.'+groupWarning);}
           else note('Editor ready. Draw, import a compound, or write a label.'+groupWarning);
+          electronControls=EditorElectrons.attach(editor,{mode:()=>byId('sketch-delete-state').value,isImport:()=>loading,note});
           editor.editor.subscribe('change',changed);frame.contentDocument.addEventListener('keydown',escapeExpanded);frame.contentDocument.addEventListener('keydown',nativeKeyboard,true);
           if(byId('sketcher').classList.contains('is-active'))window.scrollTo({...initialScroll,behavior:'instant'});
           resolve(editor);
@@ -125,6 +126,8 @@
   byId('sketch-load-text').addEventListener('click',()=>action(()=>load(byId('sketch-import-text').value,{source:'Pasted structure / reaction'})));
   byId('sketch-label-form').addEventListener('submit',event=>{event.preventDefault();action(()=>addGroup(byId('sketch-group-label').value,byId('sketch-group-smiles').value));});
   byId('sketch-group-library').addEventListener('click',()=>action(async()=>{await ready();nativeButton('Structure Library');note('Search the library for a group, select it, then place it on the canvas.');}));
+  byId('sketch-read-atom').addEventListener('click',()=>action(async()=>{await ready();const state=electronControls.read();byId('sketch-atom-charge').value=state.charge;byId('sketch-atom-radical').value=state.radical;byId('sketch-atom-h').value=state.hydrogens===null?'auto':state.hydrogens;note('Selected '+state.label+' atom. Set its charge, electron state and hydrogen count.');}));
+  byId('sketch-atom-form').addEventListener('submit',event=>{event.preventDefault();action(async()=>{await ready();electronControls.apply(Number(byId('sketch-atom-charge').value),Number(byId('sketch-atom-radical').value),byId('sketch-atom-h').value==='auto'?null:Number(byId('sketch-atom-h').value));note('Atom state applied. Radical dots and formal charges are saved in KET, MOL and SDF.');});});
   byId('sketch-text-tool').addEventListener('click',()=>action(async()=>{await ready();nativeButton('Add text');note('Click the canvas and write any text, caption or equation. Use the native text controls to format it.');}));
   byId('sketch-image-preview').addEventListener('click',()=>action(preview));
   for(const id of ['sketch-image-quality','sketch-image-transparent','sketch-drawing-title'])byId(id).addEventListener('change',clearFigure);

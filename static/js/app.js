@@ -2758,7 +2758,7 @@
 
       const shiftedSnapshot = newAtoms.map((na, idx) => ({
         id: Math.max(0, ...bState.atoms.map(a => a.id)) + idx + 1,
-        elem: na.elem, charge:na.charge||0,
+        elem: na.elem, charge:na.charge||0, radical:na.radical||0,
         x: na.x + offsetX,
         y: na.y,
         z: na.z,
@@ -3226,7 +3226,12 @@
       wizard.molecule={coords:finalXYZ,atoms:structuredClone(bState.atoms),bonds:structuredClone(bState.bonds),topology:bState.fragments.every(f=>f.topology==="source")?"source":"unverified"};
       wizard.name = bState.fragments.map(f => f.name).join("_") || "molecule";
       wizard.formula = computeFormula(bState.atoms);
-      if(bState.fragments.every(f=>f.topology==="source"))wizard.charge=bState.atoms.reduce((n,a)=>n+(a.charge||0),0);
+      if(bState.fragments.every(f=>f.topology==="source")){
+        wizard.charge=bState.atoms.reduce((n,a)=>n+(a.charge||0),0);
+        const unpaired=bState.atoms.reduce((n,a)=>n+(a.radical===2?1:a.radical===3?2:0),0);
+        wizard.mult=Math.min(20,unpaired+1);
+        wizard.spinFromDrawing=bState.atoms.some(a=>a.radical)?'Initial multiplicity follows the drawn atom states. Review spin coupling for multiple radical centers.':'';
+      }
       setCoordsStatus(`${wizard.name} (${wizard.formula}, ${bState.atoms.length} atoms)`);
       renderStep("calc");
     });
@@ -3509,7 +3514,7 @@
     nextBtn.type = "button"; nextBtn.className = "btn btn-primary"; nextBtn.textContent = "Next ▶";
     nextBtn.addEventListener("click", () => {
       const n = Number(input.value);
-      if (!Number.isFinite(n) || n < min || n > max) {
+      if (!Number.isInteger(n) || n < min || n > max) {
         err.textContent = errorText;
         return;
       }
@@ -3535,6 +3540,7 @@
       errorText: "Enter a whole number between 1 and 20.",
       nextStep: wizard.calc_type === "tddft" ? "nroots" : "cores",
     });
+    if(wizard.spinFromDrawing){const hint=document.createElement('p');hint.className='modal-hint';hint.textContent=wizard.spinFromDrawing;modalBody.append(hint);}
   }
 
   function stepNroots() {
