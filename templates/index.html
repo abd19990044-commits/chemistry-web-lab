@@ -467,12 +467,12 @@ Products:   12 CO2 + 6 H2O</pre>
       </section>
       <section id="sketch-panel-export" class="sketch-tool-panel hidden" aria-label="Image and file export">
         <div class="sketch-image-settings">
-          <label for="sketch-image-quality">PNG long edge</label><select id="sketch-image-quality"><option value="2048">2048 px</option><option value="4096" selected>4096 px</option><option value="6000">Up to 6000 px (24 MP limit)</option></select>
+          <label for="sketch-image-quality">PNG long edge</label><select id="sketch-image-quality"><option value="2048">2048 px</option><option value="4096">4096 px</option><option value="6000">Up to 6000 px (24 MP limit)</option><option value="12000" selected>Maximum (device limit, up to 12000 px)</option></select>
           <label class="checkbox-row"><input id="sketch-image-transparent" type="checkbox">Transparent background</label>
           <button type="button" id="sketch-image-preview" class="btn btn-outline btn-small" data-sketch-command>Preview image</button>
           <label for="sketch-export-format">Other file formats</label><select id="sketch-export-format" aria-label="2D drawing export format"><option value="ket">KET · complete editable drawing</option><option value="mol">MOL · molecule</option><option value="sdf">SDF · molecule</option><option value="rxn">RXN · reaction</option><option value="svg">SVG · vector image</option><option value="png">PNG · configured image</option><option value="smiles">SMILES · chemistry only</option></select>
         </div>
-        <p class="chemdraw-help">PNG and Word use the current edited drawing, including captions and group labels. PNG carries 600 dpi metadata; its actual pixel dimensions are reported after export. KET preserves the full editable canvas. Images are prepared on your device.</p>
+        <p class="chemdraw-help">PNG and Word use the same full resolution image, including captions and group labels. Maximum quality adapts to device memory, up to 12000 pixels and 64 megapixels. PNG carries 600 dpi metadata; actual dimensions are reported after export. KET preserves the full editable canvas. Images are prepared on your device.</p>
         <div id="sketch-preview-wrap" class="sketch-image-preview hidden"><img id="sketch-preview-image" alt="Preview of the edited chemical drawing"><span id="sketch-preview-size" class="small"></span></div>
       </section>
       <div class="sketch-transfer-bar" aria-label="Send edited chemistry"><span class="small">Send edited chemistry to</span><button type="button" id="sketch-to-explorer" class="btn btn-ghost btn-small" data-sketch-command>Molecule Explorer</button><button type="button" id="sketch-to-reaction" class="btn btn-ghost btn-small" data-sketch-command>Reaction Drawing</button><button type="button" id="sketch-to-3d" class="btn btn-ghost btn-small" data-sketch-command>3D / ORCA</button></div>
@@ -3079,7 +3079,7 @@ Products:   12 CO2 + 6 H2O</pre>
   <script src="{{ url_for('static', filename='js/app.js') }}?v=20261029orca2"></script>
   <script src="{{ url_for('static', filename='js/drawing-tools.js') }}?v=20261028chemdraw1"></script>
   <script src="{{ url_for('static', filename='js/chemical-drawing.js') }}?v=20261028chemdraw2"></script>
-  <script src="{{ url_for('static', filename='js/editor-integration.js') }}?v=20261029electrons1"></script>
+  <script src="{{ url_for('static', filename='js/editor-integration.js') }}?v=20261029max1"></script>
   <script src="{{ url_for('static', filename='js/editor-electrons.js') }}?v=20261029electrons2"></script>
   <script src="{{ url_for('static', filename='js/structure-editor.js') }}?v=20261029electrons2"></script>
   <script src="{{ url_for('static', filename='js/kaggle_credentials.js') }}?v=20260818f"></script>

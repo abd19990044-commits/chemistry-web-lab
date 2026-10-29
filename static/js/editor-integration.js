@@ -62,10 +62,17 @@
     })();pending.set(key,task);
     try{return {...await task};}finally{if(pending.get(key)===task)pending.delete(key);}
   }
-  function imageSize(width,height,longEdge=4096){
+  function maxImageBudget(memory=Number(root.navigator?.deviceMemory||0)){
+    if(memory>0&&memory<=2)return {longEdge:6000,pixels:16000000};
+    if(memory>0&&memory<=4)return {longEdge:8192,pixels:32000000};
+    if(memory>=8)return {longEdge:12000,pixels:64000000};
+    return {longEdge:10000,pixels:48000000};
+  }
+  function imageSize(width,height,longEdge=12000){
     if(![width,height].every(v=>Number.isFinite(v)&&v>0))throw Error('Invalid drawing dimensions.');
-    if(![2048,4096,6000].includes(longEdge))throw Error('Choose 2048, 4096 or 6000 pixels.');
-    let scale=longEdge/Math.max(width,height);scale=Math.min(scale,Math.sqrt(24000000/(width*height)));
+    if(![2048,4096,6000,12000].includes(longEdge))throw Error('Choose a supported image quality.');
+    const budget=longEdge===12000?maxImageBudget():{longEdge,pixels:24000000};
+    let scale=budget.longEdge/Math.max(width,height);scale=Math.min(scale,Math.sqrt(budget.pixels/(width*height)));
     return {width:Math.max(1,Math.floor(width*scale)),height:Math.max(1,Math.floor(height*scale))};
   }
   function escapeHTML(text){return String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -73,19 +80,27 @@
     const displayWidth=Math.min(640,Math.round(480*width/height)),displayHeight=Math.round(displayWidth*height/width);
     return '<div><img src="'+dataURL+'" width="'+displayWidth+'" height="'+displayHeight+'" alt="'+escapeHTML(title)+'" /></div>';
   }
-  async function rasterize(svg,{longEdge=4096,transparent=false,dpi=600,title='Chemical drawing'}={}){
+  async function rasterize(svg,{longEdge=12000,transparent=false,dpi=600,title='Chemical drawing'}={}){
     // Native Ketcher returns a Blob from its iframe, with a different prototype.
     if(!svg||typeof svg.arrayBuffer!=='function'||!Number.isFinite(svg.size)||svg.size<1||svg.size>10*1024*1024)throw Error('SVG drawing exceeds the image export limit.');
     const bytesSVG=await svg.arrayBuffer();if(bytesSVG.byteLength>10*1024*1024)throw Error('SVG drawing exceeds the image export limit.');
     const url=URL.createObjectURL(new Blob([bytesSVG],{type:'image/svg+xml'}));let image;
     try{image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('Could not render the drawing image.'));img.src=url;});}
     finally{URL.revokeObjectURL(url);}
-    const size=imageSize(image.naturalWidth,image.naturalHeight,longEdge),canvas=document.createElement('canvas');canvas.width=size.width;canvas.height=size.height;
-    const context=canvas.getContext('2d');if(!context)throw Error('Canvas export is unavailable.');
-    if(!transparent){context.fillStyle='#fff';context.fillRect(0,0,size.width,size.height);}context.drawImage(image,0,0,size.width,size.height);
-    const raw=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Error('PNG encoding failed.')),'image/png'));
+    const requested=imageSize(image.naturalWidth,image.naturalHeight,longEdge);let size,raw,lastError;
+    // Some browsers impose a lower canvas limit than their device memory hints.
+    for(const pixelLimit of [Infinity,16000000,4000000]){
+      if(pixelLimit!==Infinity&&requested.width*requested.height<=pixelLimit)continue;
+      const scale=Math.min(1,Math.sqrt(pixelLimit/(requested.width*requested.height))),canvas=document.createElement('canvas');
+      size={width:Math.max(1,Math.floor(requested.width*scale)),height:Math.max(1,Math.floor(requested.height*scale))};canvas.width=size.width;canvas.height=size.height;
+      try{
+        const context=canvas.getContext('2d');if(!context)throw Error('Canvas export is unavailable.');
+        if(!transparent){context.fillStyle='#fff';context.fillRect(0,0,size.width,size.height);}context.drawImage(image,0,0,size.width,size.height);
+        raw=await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Error('PNG encoding failed.')),'image/png'));break;
+      }catch(error){lastError=error;}finally{canvas.width=canvas.height=1;}
+    }
+    if(!raw)throw lastError||Error('PNG encoding failed. Choose a smaller image size.');
     const bytes=root.PublicationFigures.pngMetadata(new Uint8Array(await raw.arrayBuffer()),dpi,{kind:'editable_2d_drawing',title,pixel_width:size.width,pixel_height:size.height,background:transparent?'transparent':'white',coordinates:'2D artwork; no 3D coordinates changed'});
-    canvas.width=canvas.height=1;
     return {blob:new Blob([bytes],{type:'image/png'}),...size,dpi};
   }
   function dataURL(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not prepare the clipboard image.'));reader.readAsDataURL(blob);});}
@@ -98,5 +113,5 @@
     const item=new ClipboardItem({'image/png':png,'text/html':html,'text/plain':new Blob([title],{type:'text/plain'})});
     return navigator.clipboard.write([item]);
   }
-  root.EditorIntegration={group:()=>structuredClone(group),groupText,installGroups,definition,makeGroup,registerGroup,hasUndefined,pubchem,imageSize,rasterize,wordHTML,copyForWord};
+  root.EditorIntegration={group:()=>structuredClone(group),groupText,installGroups,definition,makeGroup,registerGroup,hasUndefined,pubchem,maxImageBudget,imageSize,rasterize,wordHTML,copyForWord};
 })(globalThis);

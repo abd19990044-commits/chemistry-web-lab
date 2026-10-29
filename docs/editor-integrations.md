@@ -96,3 +96,10 @@ automatic pH correction is not used. MDL radical states survive worker parsing,
 ORCA setup receives the net formal charge and an initial multiplicity from the
 drawn atom states. Users must review coupling between multiple radical centers;
 an atom drawing alone cannot determine the molecular ground-state multiplicity.
+
+Maximum PNG quality is the default for both download and Word clipboard. The same
+rendered PNG is reused without downsampling. The device budget is 16 MP / 6000 px
+on devices reporting at most 2 GB, 32 MP / 8192 px up to 4 GB, and 64 MP / 12000 px
+from 8 GB. Unknown memory uses 48 MP / 10000 px. Lower explicit quality options
+remain available. The 600 dpi print metadata is separate from actual pixel count.
+SVG export remains vector artwork for resolution-independent resizing.

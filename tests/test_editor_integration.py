@@ -60,6 +60,7 @@ def test_image_sizes_stay_within_memory_budget_and_word_html_is_escaped():
 require('./static/js/editor-integration.js');const assert=require('node:assert/strict');
 assert.deepEqual(EditorIntegration.imageSize(800,400,4096),{width:4096,height:2048});
 const size=EditorIntegration.imageSize(100,100,6000);assert(size.width*size.height<=24010000);assert.throws(()=>EditorIntegration.imageSize(0,100),/dimensions/);
+assert.deepEqual(EditorIntegration.maxImageBudget(8),{longEdge:12000,pixels:64000000});assert.deepEqual(EditorIntegration.maxImageBudget(2),{longEdge:6000,pixels:16000000});const maximum=EditorIntegration.imageSize(800,400,12000);assert(maximum.width>4096);assert(maximum.width*maximum.height<=64000000);
 const html=EditorIntegration.wordHTML('data:image/png;base64,AA',4096,2048,'<script>');assert(html.includes('&lt;script&gt;'));assert(!html.includes('<script>'));assert(html.includes('width="640"'));
 ''')
 
@@ -81,5 +82,14 @@ const foreign={size:6,arrayBuffer:async()=>new TextEncoder().encode('<svg/>').bu
 global.Image=class{set src(value){this.naturalWidth=200;this.naturalHeight=100;queueMicrotask(()=>this.onload());}};
 let drawn=false,filled=false;global.document={createElement:()=>({getContext:()=>({fillRect(){filled=true;},drawImage(){drawn=true;}}),toBlob:fn=>fn(new Blob(['PNG'],{type:'image/png'}))})};
 global.PublicationFigures={pngMetadata:bytes=>bytes};
-(async()=>{const result=await EditorIntegration.rasterize(foreign,{transparent:true});assert(drawn);assert(!filled);assert.equal(result.width,4096);assert.equal(result.height,2048);assert.equal(result.blob.type,'image/png');await assert.rejects(()=>EditorIntegration.rasterize({size:20e6,arrayBuffer(){}}),/limit/);})().catch(e=>{console.error(e);process.exitCode=1;});
+(async()=>{const result=await EditorIntegration.rasterize(foreign,{transparent:true,longEdge:4096});assert(drawn);assert(!filled);assert.equal(result.width,4096);assert.equal(result.height,2048);assert.equal(result.blob.type,'image/png');await assert.rejects(()=>EditorIntegration.rasterize({size:20e6,arrayBuffer(){}}),/limit/);})().catch(e=>{console.error(e);process.exitCode=1;});
+''')
+
+
+def test_maximum_export_retries_a_lower_canvas_limit_without_upscaling_again():
+    node(r'''
+require('./static/js/editor-integration.js');const assert=require('node:assert/strict');
+global.Image=class{set src(value){this.naturalWidth=800;this.naturalHeight=400;queueMicrotask(()=>this.onload());}};
+let attempts=0;global.document={createElement:()=>({getContext:()=>({fillRect(){},drawImage(){}}),toBlob:fn=>fn(++attempts===1?null:new Blob(['PNG'],{type:'image/png'}))})};global.PublicationFigures={pngMetadata:bytes=>bytes};
+(async()=>{const result=await EditorIntegration.rasterize(new Blob(['<svg/>']),{longEdge:12000});assert.equal(attempts,2);assert(result.width*result.height<=16000000);assert(result.width*result.height>4000000);})().catch(e=>{console.error(e);process.exitCode=1;});
 ''')
