@@ -72,3 +72,14 @@ Object.defineProperty(global,'navigator',{configurable:true,value:{clipboard:{wr
 let resolve;const figure=new Promise(r=>resolve=r);const copied=EditorIntegration.copyForWord(figure,'Example');assert(started);assert(captured['image/png'] instanceof Promise);resolve({blob:new Blob(['PNG'],{type:'image/png'}),width:4096,height:2048});
 copied.then(async()=>{assert.equal((await captured['image/png']).type,'image/png');assert((await (await captured['text/html']).text()).includes('data:image/png'));}).catch(e=>{console.error(e);process.exitCode=1;});
 ''')
+
+
+def test_svg_blob_from_editor_frame_can_be_rasterized():
+    node(r'''
+require('./static/js/editor-integration.js');const assert=require('node:assert/strict');
+const foreign={size:6,arrayBuffer:async()=>new TextEncoder().encode('<svg/>').buffer};assert(!(foreign instanceof Blob));
+global.Image=class{set src(value){this.naturalWidth=200;this.naturalHeight=100;queueMicrotask(()=>this.onload());}};
+let drawn=false,filled=false;global.document={createElement:()=>({getContext:()=>({fillRect(){filled=true;},drawImage(){drawn=true;}}),toBlob:fn=>fn(new Blob(['PNG'],{type:'image/png'}))})};
+global.PublicationFigures={pngMetadata:bytes=>bytes};
+(async()=>{const result=await EditorIntegration.rasterize(foreign,{transparent:true});assert(drawn);assert(!filled);assert.equal(result.width,4096);assert.equal(result.height,2048);assert.equal(result.blob.type,'image/png');await assert.rejects(()=>EditorIntegration.rasterize({size:20e6,arrayBuffer(){}}),/limit/);})().catch(e=>{console.error(e);process.exitCode=1;});
+''')

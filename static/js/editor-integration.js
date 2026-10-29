@@ -74,8 +74,10 @@
     return '<div><img src="'+dataURL+'" width="'+displayWidth+'" height="'+displayHeight+'" alt="'+escapeHTML(title)+'" /></div>';
   }
   async function rasterize(svg,{longEdge=4096,transparent=false,dpi=600,title='Chemical drawing'}={}){
-    if(!(svg instanceof Blob)||svg.size>10*1024*1024)throw Error('SVG drawing exceeds the image export limit.');
-    const url=URL.createObjectURL(svg);let image;
+    // Native Ketcher returns a Blob from its iframe, with a different prototype.
+    if(!svg||typeof svg.arrayBuffer!=='function'||!Number.isFinite(svg.size)||svg.size<1||svg.size>10*1024*1024)throw Error('SVG drawing exceeds the image export limit.');
+    const bytesSVG=await svg.arrayBuffer();if(bytesSVG.byteLength>10*1024*1024)throw Error('SVG drawing exceeds the image export limit.');
+    const url=URL.createObjectURL(new Blob([bytesSVG],{type:'image/svg+xml'}));let image;
     try{image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('Could not render the drawing image.'));img.src=url;});}
     finally{URL.revokeObjectURL(url);}
     const size=imageSize(image.naturalWidth,image.naturalHeight,longEdge),canvas=document.createElement('canvas');canvas.width=size.width;canvas.height=size.height;
