@@ -73,6 +73,26 @@ def test_encrypted_credentials_survive_process_and_cloudflare_loss(tmp_path):
     assert restarted.load_credentials("other-owner") is None
 
 
+def test_browser_credential_resolution_never_trusts_a_supplied_account_name(tmp_path, monkeypatch):
+    import orca_orchestrator.credential_vault as vault
+    from services.kaggle_service import resolve_credentials
+
+    manager = EncryptedCredentialVaultManager(
+        client=InMemoryCloudflareBackend(),
+        broker=CredentialBroker(),
+        master_key=bytes(range(32)),
+        state_dir=str(tmp_path),
+    )
+    manager.save_credentials("owner-a", KaggleCredentials(username="account-a", api_token="private-test-secret"))
+    monkeypatch.setattr(vault, "get_vault_manager", lambda: manager)
+    assert resolve_credentials("account-a", "", owner=None) == ("account-a", "")
+    assert resolve_credentials("account-a", "", owner="owner-b") == ("account-a", "")
+    assert resolve_credentials("account-b", "", owner="owner-a") == ("account-b", "")
+    assert resolve_credentials("", "", owner="owner-a") == ("account-a", "private-test-secret")
+    assert manager.load_credentials("account-a") is None
+    assert manager.load_job_credentials("account-a").api_token == "private-test-secret"
+
+
 def test_forgetting_credentials_cannot_restore_an_old_cloud_record(tmp_path):
     class UnavailableDelete(InMemoryCloudflareBackend):
         def delete_credential_vault(self, owner):

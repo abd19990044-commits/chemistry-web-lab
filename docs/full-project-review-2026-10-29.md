@@ -11,6 +11,7 @@ publication exports, dependency security, packaging, and deployment.
 | --- | --- | --- |
 | High | Generator chains and capacity-overflow submissions were stored in a browser-owned queue. Closing the page could strand later stages. | Complete chains are registered in the durable server workflow ledger before acceptance. A lifecycle supervisor observes outputs and dispatches dependency-ready stages without UI polling. |
 | High | Cloudflare's in-memory fallback could acknowledge credential saves without surviving a server restart. Application-owner identities also differ from Kaggle usernames. | An AES-256-GCM SQLite mirror persists encrypted records; internal recovery resolves the verified account alias. Cloudflare remains an encrypted replica. |
+| High | A legacy credential resolver could use a client-supplied account name as a vault lookup key. | Browser credential resolution uses only the authenticated application owner, checks the requested account matches that owner's saved account, and never authorizes a saved connection through a username RAM alias. Internal job recovery remains separate. |
 | Medium | Local ORCA settings were saved in plaintext. Same-computer execution required a separately started worker. | Connection settings use authenticated encrypted envelopes with legacy migration. Desktop startup embeds the existing durable local worker. Docker retains its explicit external worker. |
 | High | A reaction execution route could bypass the site's Kaggle submission passcode. | Initial reaction and calculation-chain execution verify the configured passcode. Credentials/passcodes are not copied into scientific stage snapshots. |
 | Medium | Reaction cancellation could change a local label while leaving backend execution active. | Tracked attempts enter cancellation pending; the supervisor requests backend cancellation and retries unavailable backends. Future stages do not start. |
@@ -29,7 +30,7 @@ publication exports, dependency security, packaging, and deployment.
   probe confirmed `Popen.poll() is None` while psutil reported that PID missing.
   These failures were retained and reported; production code was not weakened
   to bypass process-identity checks.
-- Added 26 focused regression cases for the findings and new execution paths.
+- Added 27 focused regression cases for the findings and new execution paths.
   A combined 100-test security, background-execution, analyzer, packaging, and
   ownership run passed. Separate scientific/workflow and UI suites were run
   during implementation.

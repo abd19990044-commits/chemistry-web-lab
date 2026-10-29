@@ -16,7 +16,7 @@ name: Deploy Hugging Face runtime
 # Transfers ChemDraw tools, standalone browser 2D editing, and distinct MOL/SDF/XYZ exports.
 # Preserves full RXN chemistry with editable KET captions and expands without fullscreen permission.
 # Publishes analyzer figure previews, journal typography, smooth molecules and true line-art TIFF.
-# Publishes audited background workflows and embedded local execution only after CI succeeds.
+# Publishes audited background workflows and strictly owner-bound encrypted connections after CI succeeds.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later

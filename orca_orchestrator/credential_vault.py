@@ -319,19 +319,15 @@ class EncryptedCredentialVaultManager:
         return True
 
     def load_credentials(self, owner: str) -> KaggleCredentials | None:
-        """Loads credentials: first from RAM broker, then from encrypted Cloudflare vault."""
+        """Load an owner-bound encrypted record; username RAM aliases are not authority."""
         owner_clean = _clean_owner(owner)
         if not owner_clean:
             return None
         if self.local_storage.is_deleted(owner_clean):
             return None
 
-        # 1. Check RAM broker
-        cached = self.broker.get(owner_clean)
-        if cached and cached.is_valid:
-            return cached
-
-        # 2. Check Cloudflare encrypted vault
+        # The broker also has Kaggle-username entries for internal orchestration.
+        # Never treat those aliases as a saved browser-owner credential record.
         key = self.master_key
         if not key:
             return None

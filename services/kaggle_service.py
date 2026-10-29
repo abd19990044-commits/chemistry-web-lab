@@ -108,19 +108,14 @@ def resolve_credentials(kaggle_username, kaggle_key, owner=None):
     kaggle_username = (kaggle_username or "").strip()
     kaggle_key = (kaggle_key or "").strip()
     kaggle_username, kaggle_key = kaggle_runner.clean_kaggle_credentials(kaggle_username, kaggle_key)
-    if not kaggle_key:
+    if not kaggle_key and owner:
         try:
             from orca_orchestrator.credential_vault import get_vault_manager
             vm = get_vault_manager()
-            loaded = None
-            if owner:
-                loaded = vm.load_credentials(owner)
-            if not loaded and kaggle_username:
-                loaded = vm.load_credentials(kaggle_username)
-            if loaded:
+            loaded = vm.load_credentials(owner)
+            if loaded and (not kaggle_username or kaggle_username.lower() == loaded.username.lower()):
                 kaggle_key = loaded.key or loaded.api_token or ""
-                if not kaggle_username and loaded.username:
-                    kaggle_username = loaded.username
+                kaggle_username = loaded.username
         except Exception:
             pass
     return kaggle_username, kaggle_key
