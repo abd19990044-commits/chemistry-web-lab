@@ -45,13 +45,13 @@ If you discover a security vulnerability within Chemistry Lab, please report it 
 
 ### E. Encrypted Kaggle Credential Persistence (AES-256-GCM AEAD)
 - **Zero Plaintext Persistence in Cloudflare:** Cloudflare D1 stores only high-entropy ciphertext, 12-byte random IVs (nonces), and 16-byte AEAD authentication tags. Plaintext Kaggle credentials never touch Cloudflare storage or Cloudflare logs.
-- **Fail-Closed Master Key:** The encryption key is a 256-bit (32-byte) secret passed via the environment variable `KAGGLE_CREDENTIALS_ENCRYPTION_KEY`. The Cloudflare Worker never possesses this master key and cannot decrypt stored records.
+- **Fail-Closed Master Key:** Production uses `KAGGLE_CREDENTIALS_ENCRYPTION_KEY` or a domain-separated key derived from the environment session secret. An invalid explicit key is rejected. A standalone local installation may use a private installation key file. The Cloudflare Worker receives none of these keys and cannot decrypt stored records; see [background connection storage](docs/background-execution.md).
 - **Owner-Bound Associated Authenticated Data (AAD):** Encryption binds the user's canonical owner ID into the AEAD authenticated payload (`owner:<owner_id>`). Any cross-tenant substitution, record swapping, or tampering triggers immediate cryptographic authentication tag verification failure (`InvalidTag`).
 - **Memory-Only In-Process Decryption:** Decryption occurs strictly in process RAM on Hugging Face / Chemistry Lab backend. When a Space sleeps or restarts, credentials are reconstituted in memory on demand for background reconciliation and watchdog sweeps.
 - **Strict Multi-Tenant Isolation:** When User B visits or wakes a shared Space, background recovery processes User A's stalled jobs without exposing User A's credentials, tokens, or job outputs to User B's session or browser.
 
 ### F. Direct User Execution & Cloud Passcode Protection
-- **No Third-Party Intermediation:** Chemistry Lab is designed for direct personal user operation and does not act as a third-party broker or proxy for Kaggle. All calculations run directly within the user's private Kaggle account under their personal credentials without server retention.
+- **No Third-Party Intermediation:** Chemistry Lab is designed for direct personal user operation and does not act as a third-party broker or proxy for Kaggle. All calculations run directly within the user's private Kaggle account under their personal credentials with owner-bound encrypted credential retention for background execution.
 - **Sole User Liability:** Users are solely and entirely responsible for compliance with Kaggle's Terms of Service and Acceptable Use Policies and bear full liability for any violation.
 - **Access Passcode Gating:** When deployed on public cloud hosting or custom domains, the server environment variable `KAGGLE_EXECUTION_PASSCODE` provides constant-time authorization (`hmac.compare_digest`) before Kaggle submission endpoints and login fields are unlocked.
 - **Local Mode Access:** When executed locally with no secret configured, users leave the passcode prompt blank and press Enter to unlock login fields.

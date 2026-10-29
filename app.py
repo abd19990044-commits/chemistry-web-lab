@@ -1246,6 +1246,8 @@ def api_kaggle_login():
             service.authenticate(creds.username, creds.key or creds.api_token)
             # Persist encrypted credential bound to authoritative owner if configured
             target_owner = owner or creds.username
+            if not owner:
+                session["user"] = {"sub": target_owner, "name": creds.username, "provider": "kaggle"}
             try:
                 get_vault_manager().save_credentials(target_owner, creds)
             except Exception as save_err:
@@ -1567,6 +1569,16 @@ def api_kaggle_submit():
         extra_files=files_payload,
         owner=owner,
     )
+    if payload.get("ok") and status == 200:
+        try:
+            from orca_orchestrator.credential_vault import get_vault_manager
+            from orca_orchestrator.credentials import parse as parse_credentials
+            get_vault_manager().save_credentials(owner or kaggle_username,
+                                                parse_credentials(kaggle_username, kaggle_key))
+            payload["background_credentials_saved"] = True
+        except Exception as exc:
+            payload["background_credentials_saved"] = False
+            log.warning("Background credential persistence unavailable: %s", type(exc).__name__)
     if idem_key and payload.get("ok") and status == 200:
         # Compatibility cache layer only: the authoritative replay store is
         # the orchestrator store the service just persisted to.
@@ -2567,7 +2579,8 @@ def _reaction_owner() -> str:
 def api_v1_reactions():
     _reaction_store.cleanup_if_due()
     if request.method == "GET":
-        return jsonify({"ok": True, "reactions": _reaction_store.list_reactions(_reaction_owner())})
+        return jsonify({"ok": True, "reactions": [r for r in _reaction_store.list_reactions(_reaction_owner())
+                                                   if r.get("kind") != "calculation"]})
     payload = request.get_json(silent=True) or {}
     try:
         reaction = create_reaction(_reaction_owner(), payload.get("equation") or "", _reaction_store,
@@ -2867,6 +2880,14 @@ def api_v1_reaction_start_execution(reaction_id):
             break
 
     auth_owner = get_authenticated_owner(session=session, request=request)
+    has_kaggle = any((st.get("backend") or "").lower() in {"kaggle", "kaggle_cloud"}
+                     for sp in reaction.get("species", []) for st in sp.get("stages", []))
+    if has_kaggle:
+        from services.calculation_workflow_routes import kaggle_execution_allowed
+        if not auth_owner:
+            return jsonify({"ok": False, "error": "Authentication required for Kaggle execution"}), 401
+        if not kaggle_execution_allowed(request.get_json(silent=True) or {}):
+            return jsonify({"ok": False, "error": "INVALID_KAGGLE_PASSCODE"}), 403
     if has_server_local:
         if not auth_owner:
             return jsonify({"ok": False, "error": {"code": "UNAUTHORIZED", "message": "Authentication required for server-local ORCA execution."}}), 401
@@ -2880,6 +2901,8 @@ def api_v1_reaction_start_execution(reaction_id):
             }), 403
 
     reaction["state"] = "RUNNING"
+    reaction["background_enabled"] = True
+    _reaction_store.save_reaction(reaction)
     dispatch = dispatch_ready_stages(
         reaction,
         owner_id=auth_owner or _reaction_owner(),
@@ -4427,8 +4450,17 @@ def api_orca_engine_analyze_job():
             shutil.rmtree(cleanup_dir, ignore_errors=True)
 
 
+from services.calculation_workflow_routes import register_calculation_routes
+register_calculation_routes(app, lambda: _reaction_store)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))
-    # Container entry point must listen on the platform-provided interface.
-    app.run(host="0.0.0.0", port=port, debug=False)  # nosec B104
+    from services.application_runtime import start_application_runtime, stop_application_runtime
+    start_application_runtime()
+    host = os.environ.get("BIND_HOST") or ("0.0.0.0" if _IS_HF_SPACE else "127.0.0.1")
+    try:
+        app.run(host=host, port=port, debug=False)
+    finally:
+        stop_application_runtime()
 

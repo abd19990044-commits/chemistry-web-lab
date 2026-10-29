@@ -2,17 +2,10 @@
 """
 Credential handling.
 
-Policy: **Kaggle credentials are never written to persistent server storage.**
-They arrive with a request, live in RAM under a short TTL, and are used to
-construct a throwaway `$HOME` for a single CLI invocation. Nothing survives a
-process restart, so a compromise of the Space's disk yields no user secrets.
-
-The cost of that policy is stated plainly rather than hidden: the server can
-only act on a job while *some* recent request has supplied credentials for its
-owner. Between such requests the chain is carried forward by the Kaggle kernel
-itself, which self-continues. `watchdog.py` is therefore best-effort by
-construction, and the boundary is documented in ARCHITECTURE.md instead of
-being papered over.
+Saved Kaggle credentials use the owner-bound AES-256-GCM vault. The broker
+keeps only a short-lived RAM cache; a background worker can reload the encrypted
+record after a process restart without requiring an open browser. CLI calls use
+an isolated temporary configuration directory, removed in ``finally``.
 
 Continuation credential boundary
 --------------------------------

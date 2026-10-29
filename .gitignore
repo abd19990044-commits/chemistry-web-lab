@@ -104,6 +104,9 @@ node_modules/
 *.sqlite3-*
 *.db
 *.db-*
+connection_vault.key
+.connection-key.lock
+local_orca_settings.json
 
 # Verified browser engine binaries are installed during image build.
 static/vendor/openbabel/

@@ -2,15 +2,12 @@
 """
 Encrypted Kaggle Credential Vault.
 
-Provides secure, authenticated AEAD persistence (AES-256-GCM) for Kaggle API
-credentials across Hugging Face Space restarts:
-
-1. The master key (KAGGLE_CREDENTIALS_ENCRYPTION_KEY) is stored ONLY in Hugging
-   Face Space Secrets / environment memory. It is NEVER sent to Cloudflare,
-   NEVER stored in D1, and NEVER written to disk.
-2. Cloudflare D1 stores ONLY ciphertext, random nonces, authentication tags,
-   and non-secret metadata in the `credential_vault` table.
-3. Plaintext credentials exist strictly in process RAM while actively needed.
+Persists owner-bound AES-256-GCM records in a local SQLite mirror and optionally
+Cloudflare D1. Production uses an explicit KAGGLE_CREDENTIALS_ENCRYPTION_KEY or
+a domain-separated key derived from SECRET_KEY. Standalone local installations
+can use a private installation key file. No plaintext token is kept in either
+persistent vault, returned to the browser, or embedded in generated kernels.
+CLI calls may use short-lived private configuration files, removed in finally.
 """
 from __future__ import annotations
 
@@ -237,16 +234,38 @@ class EncryptedCredentialVaultManager:
         client: CloudflareClientProtocol | None = None,
         broker: CredentialBroker | None = None,
         master_key: bytes | None = None,
+        state_dir: str | None = None,
+        auto_key: bool = False,
     ) -> None:
         self.client = client or get_cloudflare_client()
         self.broker = broker or BROKER
         self._master_key = master_key
+        self._state_dir = state_dir
+        self.auto_key = auto_key
+
+    @property
+    def state_dir(self) -> str:
+        from .config import CONFIG
+        return (self._state_dir or os.environ.get("CHEMISTRY_LAB_STATE_DIR")
+                or os.environ.get("ORCA_STATE_DIR") or CONFIG.store.state_dir)
+
+    @property
+    def local_storage(self):
+        from .credential_storage import LocalCredentialStorage
+        return LocalCredentialStorage(self.state_dir)
 
     @property
     def master_key(self) -> bytes | None:
         if self._master_key is not None:
             return self._master_key
-        return get_master_encryption_key()
+        key = get_master_encryption_key()
+        if key is None and self.auto_key:
+            from services.connection_crypto import connection_key
+            try:
+                key = connection_key(self.state_dir)
+            except ValueError:
+                return None
+        return key
 
     @property
     def is_configured(self) -> bool:
@@ -260,7 +279,7 @@ class EncryptedCredentialVaultManager:
         verify_with_kaggle: bool = False,
         status: str = "ACTIVE",
     ) -> bool:
-        """Saves credentials by encrypting and writing to Cloudflare D1 vault.
+        """Saves encrypted credentials locally and replicates them to Cloudflare.
 
         Always caches in local in-memory RAM broker.
         """
@@ -271,49 +290,40 @@ class EncryptedCredentialVaultManager:
             raise ValueError("Cannot save invalid Kaggle credentials.")
 
         if verify_with_kaggle:
-            # Test validity against Kaggle if requested
-            from .credentials import kaggle_environment
-            import subprocess
+            import kaggle_runner
             try:
-                with kaggle_environment(creds) as env:
-                    res = subprocess.run(
-                        ["kaggle", "competitions", "list"],
-                        env=env,
-                        capture_output=True,
-                        text=True,
-                        timeout=15,
-                    )
-                    if res.returncode != 0 and ("401" in res.stderr or "Unauthorized" in res.stderr):
-                        raise CredentialVerificationError("Kaggle rejected credentials (401 Unauthorized).")
+                verified = kaggle_runner.verify_kaggle_credentials(creds.username, creds.key or creds.api_token)
+                if str(verified.get("username") or "").lower() != creds.username.lower():
+                    raise CredentialVerificationError("Verified Kaggle account does not match the supplied username")
             except CredentialVerificationError:
                 raise
             except Exception as exc:
-                log.warning("Kaggle verification pre-check encountered non-fatal error: %s", exc)
-
-        # Cache in process RAM
-        self.broker.remember(creds)
-        if owner_clean != creds.username.lower():
-            with self.broker._lock:
-                self.broker._entries[owner_clean] = (creds, time.time() + self.broker._ttl)
+                raise CredentialVerificationError("Kaggle credential verification failed; the saved credential was not changed") from exc
 
         key = self.master_key
         if not key:
-            # Check test mode
-            if os.environ.get("CHEMISTRY_LAB_TEST_MODE") == "1" or os.environ.get("PYTEST_CURRENT_TEST"):
-                key = bytes.fromhex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-            else:
-                log.error("Cannot persist credentials: master encryption key is missing.")
-                raise CredentialVaultError("Master encryption key is not configured on this server.")
+            raise CredentialVaultError("Master encryption key is not configured on this server.")
 
         enc_data = encrypt_credentials(creds, key, owner_clean)
         enc_data["status"] = status
         record = CloudflareCredentialVaultRecord.from_dict(enc_data)
-        return self.client.put_credential_vault(record)
+        self.local_storage.put(record)
+        try:
+            self.client.put_credential_vault(record)
+        except Exception as exc:
+            log.warning("Encrypted vault replication deferred: %s", type(exc).__name__)
+        self.broker.remember(creds)
+        if owner_clean != creds.username.lower():
+            with self.broker._lock:
+                self.broker._entries[owner_clean] = (creds, time.time() + self.broker._ttl)
+        return True
 
     def load_credentials(self, owner: str) -> KaggleCredentials | None:
         """Loads credentials: first from RAM broker, then from encrypted Cloudflare vault."""
         owner_clean = _clean_owner(owner)
         if not owner_clean:
+            return None
+        if self.local_storage.is_deleted(owner_clean):
             return None
 
         # 1. Check RAM broker
@@ -326,13 +336,16 @@ class EncryptedCredentialVaultManager:
         if not key:
             return None
 
-        vault_record = self.client.get_credential_vault(owner_clean)
+        vault_record = self.local_storage.get(owner_clean) or self.client.get_credential_vault(owner_clean)
         if not vault_record:
+            return None
+        if vault_record.status != "ACTIVE":
             return None
 
         try:
             creds = decrypt_credentials(vault_record, key, owner_clean)
             if creds and creds.is_valid:
+                self.local_storage.put(vault_record)
                 self.broker.remember(creds)
                 if owner_clean != creds.username.lower():
                     with self.broker._lock:
@@ -343,6 +356,7 @@ class EncryptedCredentialVaultManager:
             # Update record status to INVALID to prevent infinite retry loops
             vault_record.status = "CREDENTIALS_INVALID"
             vault_record.updated_at = time.time()
+            self.local_storage.put(vault_record)
             self.client.put_credential_vault(vault_record)
         except Exception as exc:
             log.warning("Unexpected error loading credentials for owner %s: %s", owner_clean, exc)
@@ -355,13 +369,33 @@ class EncryptedCredentialVaultManager:
         if not owner_clean:
             return False
 
+        record = self.local_storage.get(owner_clean)
         self.broker.forget(owner_clean)
-        return self.client.delete_credential_vault(owner_clean)
+        if record:
+            self.broker.forget(record.kaggle_username)
+        deleted = self.local_storage.delete(owner_clean)
+        try:
+            return self.client.delete_credential_vault(owner_clean) or deleted
+        except Exception:
+            return deleted
 
     def get_metadata(self, owner: str) -> CloudflareCredentialMetadata:
         """Returns non-secret metadata for owner credentials."""
         owner_clean = _clean_owner(owner)
+        if self.local_storage.is_deleted(owner_clean):
+            return CloudflareCredentialMetadata(exists=False, owner=owner_clean)
+        record = self.local_storage.get(owner_clean)
+        if record:
+            return CloudflareCredentialMetadata.from_dict({**record.to_dict(), "exists": True})
         return self.client.get_credential_metadata(owner_clean)
+
+    def load_job_credentials(self, kaggle_owner: str):
+        """Internal recovery lookup; never expose another owner's secret through an API."""
+        for owner in self.local_storage.owners():
+            record = self.local_storage.get(owner)
+            if record and record.kaggle_username == kaggle_owner and record.status == "ACTIVE":
+                return self.load_credentials(owner)
+        return self.load_credentials(kaggle_owner)
 
 
 _VAULT_MANAGER_INSTANCE: EncryptedCredentialVaultManager | None = None
@@ -371,5 +405,5 @@ def get_vault_manager() -> EncryptedCredentialVaultManager:
     """Returns the singleton EncryptedCredentialVaultManager instance."""
     global _VAULT_MANAGER_INSTANCE
     if _VAULT_MANAGER_INSTANCE is None:
-        _VAULT_MANAGER_INSTANCE = EncryptedCredentialVaultManager()
+        _VAULT_MANAGER_INSTANCE = EncryptedCredentialVaultManager(auto_key=True)
     return _VAULT_MANAGER_INSTANCE

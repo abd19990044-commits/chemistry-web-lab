@@ -600,16 +600,47 @@ def assemble_final_result(stage_list: list):
 # ------------------------- reaction thermodynamics -------------------------
 def compute_reaction_thermodynamics(species_results, temperature_tolerance_k=0.01):
     warnings = []
+    if not species_results:
+        raise ReactionValidationError("no species supplied for reaction thermodynamics")
     incomplete = [s for s in species_results if not s.get("final_result", {}).get("complete_thermochemistry")]
     if incomplete:
         raise ReactionValidationError("not all species have complete valid thermochemistry - "
                                       "reaction thermodynamics blocked (%d incomplete)" % len(incomplete))
+    for species in species_results:
+        result = species["final_result"]
+        for field in ("E_final", "H_final", "G_final", "temperature_k", "entropy_j_mol_k", "zpe_hartree"):
+            value = result.get(field)
+            if value is None and field not in ("E_final", "H_final", "G_final"):
+                continue
+            try:
+                valid = math.isfinite(float(value)) and not isinstance(value, bool)
+                if field == "temperature_k":
+                    valid = valid and float(value) > 0
+            except (TypeError, ValueError, OverflowError):
+                valid = False
+            if not valid:
+                raise ReactionValidationError("invalid or non-finite thermochemistry field: %s" % field)
+        try:
+            nu = float(species["nu"])
+            if not math.isfinite(nu) or nu == 0 or isinstance(species["nu"], bool):
+                raise ValueError
+        except (KeyError, TypeError, ValueError, OverflowError):
+            raise ReactionValidationError("invalid stoichiometric coefficient") from None
     temps = {round(float(s["final_result"].get("temperature_k") or 0.0), 6)
              for s in species_results if s.get("final_result", {}).get("temperature_k")}
     if len(temps) > 1:
         raise ReactionValidationError("temperature mismatch across species (%s K) - resolve before computing "
                                       "reaction thermodynamics; no silent interpolation." % sorted(temps))
     temperature_k = temps.pop() if temps else None
+    if any(s["final_result"].get("temperature_k") is None for s in species_results):
+        temperature_k = None
+        warnings.append("MISSING TEMPERATURE: equilibrium constants are unavailable; no temperature was inferred.")
+    entropy_available = all(s["final_result"].get("entropy_j_mol_k") is not None for s in species_results)
+    zpe_available = all(s["final_result"].get("zpe_hartree") is not None for s in species_results)
+    if not entropy_available:
+        warnings.append("INCOMPLETE ENTROPY: reaction entropy is unavailable, not zero.")
+    if not zpe_available:
+        warnings.append("INCOMPLETE ZPE: reaction ZPE and zero-point energy are unavailable, not zero.")
     methods = {(s["final_result"].get("method"), s["final_result"].get("basis_set")) for s in species_results}
     solvents = {(s["final_result"].get("solvent_model"), s["final_result"].get("solvent")) for s in species_results}
     if len(methods) > 1:
@@ -631,7 +662,10 @@ def compute_reaction_thermodynamics(species_results, temperature_tolerance_k=0.0
         if fr.get("entropy_j_mol_k") is not None:
             S_rxn += nu * float(fr["entropy_j_mol_k"])
     deltas["S"] = S_rxn
-    dE0_hartree = deltas["E_elec"] + deltas["ZPE"]
+    deltas["S"] = S_rxn if entropy_available else None
+    if not zpe_available:
+        deltas["ZPE"] = None
+    dE0_hartree = deltas["E_elec"] + deltas["ZPE"] if zpe_available else None
     for s in species_results:
         imag = s.get("final_result", {}).get("imaginary_count") or 0
         if imag and s.get("role") != "transition_state":
@@ -639,18 +673,20 @@ def compute_reaction_thermodynamics(species_results, temperature_tolerance_k=0.0
                             % (s.get("display_name"), imag))
     dG_J = deltas["G"] * HARTREE_KJ_MOL * 1000.0
     dH_J = deltas["H"] * HARTREE_KJ_MOL * 1000.0
-    if temperature_k and abs(dG_J - (dH_J - temperature_k * S_rxn)) > 15.0:
+    if not all(math.isfinite(value) for value in (dG_J, dH_J, deltas["E_elec"], S_rxn)):
+        raise ReactionValidationError("reaction thermodynamics exceed the supported numeric range")
+    if temperature_k and entropy_available and abs(dG_J - (dH_J - temperature_k * S_rxn)) > 15.0:
         warnings.append("WARNING - G/H/S INCONSISTENCY beyond numerical tolerance.")
     ln_k = (-dG_J / (R_J_MOL_K * temperature_k)) if temperature_k else None
     log10_k = (ln_k / math.log(10.0)) if ln_k is not None else None
     k_value, k_note = None, None
     if ln_k is not None:
-        if ln_k > 690.0:
+        if not math.isfinite(ln_k):
+            raise ReactionValidationError("equilibrium logarithm exceeds the supported numeric range")
+        if ln_k > 300.0 * math.log(10.0):
             k_note = "K > 1e300 (use lnK / log10K)"
-            k_value = float("inf")
-        elif ln_k < -690.0:
+        elif ln_k < -300.0 * math.log(10.0):
             k_note = "K < 1e-300 (use lnK / log10K)"
-            k_value = 0.0
         else:
             k_value = math.exp(ln_k)
     return {
@@ -660,8 +696,10 @@ def compute_reaction_thermodynamics(species_results, temperature_tolerance_k=0.0
         "dH_hartree": deltas["H"], "dS_j_mol_k": deltas["S"], "dG_hartree": deltas["G"],
         "delta_E_elec_hartree": deltas["E_elec"], "delta_ZPE_hartree": deltas["ZPE"],
         "delta_H_hartree": deltas["H"], "delta_S_j_mol_k": deltas["S"], "delta_G_hartree": deltas["G"],
-        "dE_elec_kj_mol": deltas["E_elec"] * HARTREE_KJ_MOL, "dZPE_kj_mol": deltas["ZPE"] * HARTREE_KJ_MOL,
-        "dE0_kj_mol": dE0_hartree * HARTREE_KJ_MOL, "delta_E0_kj_mol": dE0_hartree * HARTREE_KJ_MOL,
+        "dE_elec_kj_mol": deltas["E_elec"] * HARTREE_KJ_MOL,
+        "dZPE_kj_mol": deltas["ZPE"] * HARTREE_KJ_MOL if zpe_available else None,
+        "dE0_kj_mol": dE0_hartree * HARTREE_KJ_MOL if zpe_available else None,
+        "delta_E0_kj_mol": dE0_hartree * HARTREE_KJ_MOL if zpe_available else None,
         "dH_kj_mol": deltas["H"] * HARTREE_KJ_MOL, "dG_kj_mol": deltas["G"] * HARTREE_KJ_MOL,
         "ln_k": ln_k, "log10_k": log10_k, "k": k_value, "k_note": k_note,
         "warnings": warnings, "species_count": len(species_results),
@@ -738,14 +776,25 @@ class ReactionStore:
                 return r
         return None
 
-    def save_reaction(self, reaction: dict):
+    def save_reaction(self, reaction: dict, *, control_override=False):
         # SQLite is the durable workflow ledger.  The JSON file remains the
         # compatibility read model used by the existing UI, but it is written
         # only after the workflow/step projection has committed atomically.
         from services.workflow_store import sync_reaction
-        sync_reaction(reaction, self.state_dir)
         with self._lock:
             items = self._read(self.reactions_path, [])
+            latest = next((r for r in items if r.get("reaction_id") == reaction.get("reaction_id")), None)
+            controls = {"PAUSED", "CANCELLED", "CANCEL_REQUESTED"}
+            if not control_override and latest and latest.get("state") in controls and reaction.get("state") not in controls:
+                # A result/status observation must not undo an operator action
+                # committed while its remote request was in flight.
+                reaction["state"] = latest["state"]
+                if latest["state"] == "PAUSED":
+                    for species in reaction.get("species", []):
+                        for stage in species.get("stages", []):
+                            if stage.get("state") in {"READY", "QUEUED"}:
+                                stage["state"] = "PAUSED"
+            sync_reaction(reaction, self.state_dir)
             items = [r for r in items if r.get("reaction_id") != reaction.get("reaction_id")]
             items.append(reaction)
             self._write_atomic(self.reactions_path, items)
@@ -916,7 +965,11 @@ class ReactionStore:
                     sp["state"] = "CANCELLED"
                 for st in sp.get("stages", []):
                     if st.get("state") not in ("COMPLETE", "FAILED"):
-                        st["state"] = "CANCELLED"
+                        if st.get("kaggle_job_id") or st.get("local_job_id") or st.get("agent_job_id"):
+                            st["state"] = "CANCEL_REQUESTED"
+                            target["state"] = "CANCEL_REQUESTED"
+                        else:
+                            st["state"] = "CANCELLED"
             from services.workflow_store import sync_reaction
             sync_reaction(target, self.state_dir)
             self._write_atomic(self.reactions_path, items)
@@ -975,6 +1028,8 @@ def dispatch_ready_stages(
     store = store or ReactionStore(state_dir)
     dispatched = []
     waiting = []
+    if reaction.get("state") in {"PAUSED", "CANCELLED", "CANCEL_REQUESTED", "FAILED", "COMPLETE"}:
+        return {"ok": True, "dispatched_stage_ids": [], "waiting_stage_ids": []}
     for species in reaction.get("species", []):
         workflow_id = species.get("workflow_id")
         for stage in species.get("stages", []):
@@ -1645,11 +1700,15 @@ def complete_stage_with_output(reaction: dict, species_id: str, stage_id: str, o
                 nxt["parent_stage_id"] = stage["stage_id"]
 
         all_sp_stages_done = all(s.get("state") in ("COMPLETE", "COMPLETED_WITH_WARNINGS") for s in species["stages"])
-        if all_sp_stages_done and species["stages"]:
+        if all_sp_stages_done and species["stages"] and reaction.get("kind") != "calculation":
             assemble_species_result(reaction, species_id, store=None)
 
         species["state"] = "COMPLETE" if all(s.get("state") in ("COMPLETE", "COMPLETED_WITH_WARNINGS") for s in species["stages"]) else "RUNNING"
         reaction["state"] = "WAITING"
+
+        if reaction.get("kind") == "calculation" and all(sp.get("state") == "COMPLETE" for sp in reaction["species"]):
+            reaction["state"] = "COMPLETE"
+            reaction["finished_at"] = utcnow_iso(store.now_provider if store else None)
 
         all_species_done = all(sp.get("state") == "COMPLETE" and sp.get("final_result") for sp in reaction["species"])
         if all_species_done and reaction["species"] and store is not None:
@@ -1929,7 +1988,7 @@ def retry_stage(reaction: dict, species_id: str, stage_id: str = None, store: Re
     reaction["state"] = "RUNNING"
 
     if store is not None:
-        store.save_reaction(reaction)
+        store.save_reaction(reaction, control_override=True)
 
     return stage
 

@@ -80,7 +80,7 @@ def sha256_file(p: Path) -> str:
 def audit_python_version() -> tuple[bool, str]:
     v = sys.version_info
     v_str = f"{v.major}.{v.minor}.{v.micro}"
-    if v.major != 3 or v.minor not in (11, 12, 13, 14):
+    if v.major != 3 or v.minor not in (11, 12, 13):
         return False, f"Unsupported Python version: {v_str} (requires 3.11, 3.12, 3.13)"
     return True, f"Python {v_str} on {platform.system()} ({platform.machine()})"
 

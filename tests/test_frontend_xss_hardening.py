@@ -40,10 +40,10 @@ def test_reaction_unified_has_no_unsafe_innerhtml_sinks():
     assert "encodeURIComponent(String(completedStage.agent_job_id))" in content
 
     # Thermodynamics table must use textContent rather than string interpolation into innerHTML
-    assert "tdDe.textContent = dE_kj" in content
-    assert "tdDh.textContent = dH_kj" in content
-    assert "tdDg.textContent = dG_kj" in content
-    assert "tdDs.textContent = dS" in content
+    assert "tdDe.textContent = format(dE_kj)" in content
+    assert "tdDh.textContent = format(dH_kj)" in content
+    assert "tdDg.textContent = format(dG_kj)" in content
+    assert "tdDs.textContent = format(dS)" in content
 
 
 def test_app_js_defines_escape_html_and_hardens_toasts():

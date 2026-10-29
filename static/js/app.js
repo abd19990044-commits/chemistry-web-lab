@@ -3610,6 +3610,14 @@
     if (tabsWrap) {
       tabsWrap.classList.remove("hidden");
       tabsWrap.innerHTML = "";
+      const backendPicker = document.createElement("select");
+      backendPicker.id = "workflow-execution-backend";
+      backendPicker.setAttribute("aria-label", "Calculation execution computer");
+      [["kaggle", "Kaggle cloud"], ["server_local", "This application host / local computer"]].forEach(([value, label]) => {
+        const option = document.createElement("option"); option.value = value; option.textContent = label;
+        backendPicker.appendChild(option);
+      });
+      tabsWrap.appendChild(backendPicker);
       stages.forEach((st, idx) => {
         const tBtn = document.createElement("button");
         tBtn.type = "button";
@@ -3630,7 +3638,7 @@
 
     if (dualKaggleBtn) {
       dualKaggleBtn.classList.remove("hidden");
-      dualKaggleBtn.textContent = `🚀 Submit ${stages.length}-Stage Workflow to Kaggle Queue (Auto-Chained)`;
+      dualKaggleBtn.textContent = `Run ${stages.length}-stage workflow in background`;
       dualKaggleBtn.onclick = () => submitWorkflowToQueue(wfData);
     }
     if (singleKaggleBtn) singleKaggleBtn.classList.add("hidden");
@@ -3648,69 +3656,68 @@
     renderWorkflowOutputs(dw);
   }
 
-  function submitWorkflowToQueue(wfData) {
-    const jobs = loadJobs();
+  async function submitWorkflowToQueue(wfData) {
     const stages = wfData.stages || [
-      { num: 1, type: "opt", name: `${wfData.workflowName}_Stage1_Opt`, config: wfData.wizardSnapshot?.stage1 || {}, data: wfData.stage1 },
-      { num: 2, type: wfData.wizardSnapshot?.stage2?.calc_type || "sp", name: `${wfData.workflowName}_Stage2_${(wfData.wizardSnapshot?.stage2?.calc_type || 'SP').toUpperCase()}`, config: wfData.wizardSnapshot?.stage2 || {}, data: wfData.stage2 }
+      { num: 1, type: "opt", config: wfData.wizardSnapshot?.stage1 || {}, data: wfData.stage1 },
+      { num: 2, type: wfData.wizardSnapshot?.stage2?.calc_type || "sp", config: wfData.wizardSnapshot?.stage2 || {}, data: wfData.stage2 }
     ];
-
-    while (jobs.length + stages.length > MAX_TOTAL_JOBS) {
-      let terminalIdx = -1;
-      for (let i = jobs.length - 1; i >= 0; i--) {
-        if (TERMINAL_STATUSES.includes(jobs[i].status)) {
-          terminalIdx = i;
-          break;
-        }
-      }
-      if (terminalIdx !== -1) {
-        jobs.splice(terminalIdx, 1);
-      } else {
-        break;
-      }
+    const button = document.getElementById("orca-submit-dual-queue");
+    if (button?.disabled) return;
+    if (button) button.disabled = true;
+    try {
+      rememberOrcaSource();
+      wfData.serverRequestId ||= "chain_" + crypto.randomUUID();
+      const backend = document.getElementById("workflow-execution-backend")?.value || "kaggle";
+      const linkSource = ["google_drive", "link"].includes(getSelectedOrcaSourceKind());
+      const data = await postJSON("/api/v1/calculation-workflows", {
+        request_id: wfData.serverRequestId, name: wfData.workflowName, backend,
+        stages: stages.map(st => ({type: st.type, name: st.name, config: st.config || {}, input_text: st.data?.input_text || ""})),
+        dataset_sources: linkSource ? "" : (normalizeKaggleDatasetInput(localStorage.getItem(LS_KEYS.orcaDataset) || "") || localStorage.getItem(LS_KEYS.orcaDataset) || ""),
+        orca_link: linkSource ? (localStorage.getItem(LS_KEYS.orcaLink) || "") : "",
+        ...credsFor({}),
+        kaggle_passcode: document.getElementById("kaggle-passcode")?.value.trim() || window._kagglePasscode || sessionStorage.getItem("orca_kaggle_passcode") || ""
+      });
+      mergeCalculationJobs(data.jobs || []);
+      showToast("Calculation chain saved on the server. You can close the browser while it runs.");
+      switchToTab("jobs");
+    } catch (err) {
+      showToast("Could not save calculation chain: " + err.message, "error");
+    } finally {
+      if (button) button.disabled = false;
     }
-    saveJobs(jobs);
-
-    if (jobs.length + stages.length > MAX_TOTAL_JOBS) {
-      showToast(`Adding ${stages.length} workflow jobs would exceed the maximum limit of ${MAX_TOTAL_JOBS} active jobs in your workspace. Please delete old completed jobs before queueing new ones.`, "warning");
-      return;
-    }
-    const workflowId = "chain_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
-    rememberOrcaSource();
-    const orcaSourceKind = localStorage.getItem(LS_KEYS.orcaSourceKind) || (document.getElementById("orca-source-link")?.checked ? "link" : "dataset");
-    const orcaDataset = localStorage.getItem(LS_KEYS.orcaDataset) || (document.getElementById("kaggle-dataset") ? document.getElementById("kaggle-dataset").value.trim() : "");
-    const orcaLink = localStorage.getItem(LS_KEYS.orcaLink) || (document.getElementById("kaggle-orca-link") ? document.getElementById("kaggle-orca-link").value.trim() : "");
-
-    stages.forEach((st, idx) => {
-      const isFirst = idx === 0;
-      const job = {
-        name: st.name || `${wfData.workflowName}_Stage${st.num}_${(st.type || 'calc').toUpperCase()}`,
-        jobId: `job_${Date.now() + idx}_${st.num}`,
-        workflowId: workflowId,
-        workflowStageCount: stages.length,
-        stage: st.num,
-        stageType: st.type || "opt",
-        stageConfig: st.config,
-        stage2Config: st.config, // backwards compat
-        dependsOnWorkflow: isFirst ? null : workflowId,
-        input_filename: (st.data && st.data.filename) || `${wfData.workflowName}_stage${st.num}_${st.type}.inp`,
-        input_content: (st.data && st.data.input_text) || "",
-        kaggleUsername: (currentKaggle && currentKaggle.username) || localStorage.getItem(LS_KEYS.kaggleUsername) || "",
-        orcaSourceKind: orcaSourceKind,
-        orcaDataset: orcaDataset,
-        orcaLink: orcaLink,
-        status: isFirst ? "queued" : "waiting_dependency",
-        submittedAt: isFirst ? (Date.now() + idx) : null,
-        startedAt: null,
-        finishedAt: null,
-      };
-      addJob(job);
-    });
-
-    showToast(`⚡ Added ${stages.length}-Stage Chained Workflow for <strong>${wfData.workflowName}</strong> to Kaggle Queue.`);
-    switchToTab("jobs");
-    processKaggleQueue();
   }
+
+  function mergeCalculationJobs(incoming) {
+    const jobs = loadJobs();
+    incoming.forEach(remote => {
+      const index = jobs.findIndex(local => local.serverStageId === remote.serverStageId || local.jobId === remote.jobId);
+      if (index < 0) jobs.unshift(remote);
+      else jobs[index] = {...jobs[index], ...remote};
+    });
+    const stageJobs = new Set(jobs.filter(job => job.serverStageId).map(job => job.jobId));
+    saveJobs(jobs.filter(job => job.serverStageId || !stageJobs.has(job.jobId)));
+    renderJobs();
+  }
+
+  let calculationSyncInFlight = false;
+  async function syncCalculationWorkflows() {
+    if (calculationSyncInFlight) return false;
+    calculationSyncInFlight = true;
+    try {
+      const response = await fetch("/api/v1/calculation-workflows", {credentials: "same-origin", cache: "no-store"});
+      if (!response.ok) return false;
+      const data = await response.json();
+      mergeCalculationJobs(data.jobs || []);
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      calculationSyncInFlight = false;
+    }
+  }
+
+  setInterval(syncCalculationWorkflows, 30000);
+  setTimeout(syncCalculationWorkflows, 2000);
 
   function submitDualWorkflowToQueue(dw) {
     submitWorkflowToQueue(dw);
@@ -4463,7 +4470,7 @@
   async function syncKaggleJobs(username, key, opts = {}) {
     if(kaggleSyncTask&&kaggleSyncTask.username===username&&kaggleSyncTask.key===key)return kaggleSyncTask.promise;
     const task={username,key};
-    task.promise=(async()=>{try{const data=await postJSON("/api/kaggle/sync",{kaggle_username:username,kaggle_key:key});mergeRemoteJobs(username,key,data.jobs||[]);pollAllActiveJobs();return true;}
+    task.promise=(async()=>{try{const data=await postJSON("/api/kaggle/sync",{kaggle_username:username,kaggle_key:key});mergeRemoteJobs(username,key,data.jobs||[]);pollAllActiveJobs();syncCalculationWorkflows();return true;}
       catch(err){if(!opts.silent)showToast(`<strong>Kaggle job sync failed</strong><br>${err.message}`);return false;}
       finally{if(kaggleSyncTask===task)kaggleSyncTask=null;}})();
     kaggleSyncTask=task;return task.promise;
@@ -4785,7 +4792,14 @@
           status: "queued",
           submittedAt: Date.now(),
         };
-        addJob(queuedJob);
+        const saved = await postJSON("/api/v1/calculation-workflows", {
+          request_id: queuedJob.jobId, name: queuedJob.name, backend: "kaggle",
+          stages: [{type: "CUSTOM_ORCA", config: {}, input_text: inpText}],
+          kaggle_username: username, kaggle_key: key,
+          dataset_sources: queuedDataset, orca_link: queuedLink,
+          kaggle_passcode: document.getElementById("kaggle-passcode")?.value.trim() || window._kagglePasscode || sessionStorage.getItem("orca_kaggle_passcode") || ""
+        });
+        mergeCalculationJobs(saved.jobs || []);
 
         // Clear the submitted form fields
         const inpContent = document.getElementById("kaggle-inp-content");
@@ -5328,8 +5342,18 @@
         const cancelBtn = document.createElement("button");
         cancelBtn.type = "button";
         cancelBtn.className = "job-cancel-btn btn btn-ghost btn-small";
-        cancelBtn.textContent = "Cancel";
+        cancelBtn.textContent = job.serverWorkflowId ? "Cancel workflow" : "Cancel";
         cancelBtn.addEventListener("click", async () => {
+          if (job.serverWorkflowId) {
+            cancelBtn.disabled = true;
+            try {
+              await postJSON(`/api/v1/calculation-workflows/${encodeURIComponent(job.serverWorkflowId)}/cancel`, {});
+              await syncCalculationWorkflows();
+              showToast("Workflow cancellation requested. Pending stages will not start.");
+            } catch (err) { showToast(err.message, "error"); }
+            finally { cancelBtn.disabled = false; }
+            return;
+          }
           if (isClientOnlyWaitingJob(job)) {
             job.status = "cancelled";
             job.warning = "Cancelled before submission.";
@@ -5384,7 +5408,7 @@
                 renderJobs();
               } else {
                 cancelBtn.disabled = false;
-                cancelBtn.textContent = "Cancel";
+                cancelBtn.textContent = job.serverWorkflowId ? "Cancel workflow" : "Cancel";
               }
             }
           } catch (e) {
@@ -5539,7 +5563,7 @@
       let currentActive = jobs.filter(reservesKaggleSlot).length;
       if (currentActive < MAX_ACTIVE_KAGGLE_JOBS) {
         const runnable = jobs
-          .filter(j => j.status === "queued" && !(j.jobId && j.jobId.startsWith("chem-tools-")))
+          .filter(j => !j.serverWorkflowId && j.status === "queued" && !(j.jobId && j.jobId.startsWith("chem-tools-")))
           .sort((a, b) => {
             const aIsChained = (a.stage && a.stage > 1) ? 1 : 0;
             const bIsChained = (b.stage && b.stage > 1) ? 1 : 0;
@@ -5755,6 +5779,7 @@
     // job forever (the early-return below skipped it) - the "stuck in Queued
     // while it actually runs on Kaggle" bug.
     if (!job.jobId) return;
+    if (job.serverWorkflowId) { await syncCalculationWorkflows(); return; }
     const hasRealKaggleId = job.jobId.startsWith("chem-tools-");
     if (!hasRealKaggleId && ["queued", "waiting_dependency", "submitting"].includes(job.status)) return;
     const guardKey = job.rootId || job.jobId;

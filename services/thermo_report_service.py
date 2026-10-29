@@ -163,7 +163,9 @@ def generate_thermo_report_pdf(thermo: dict, reaction: dict, now_provider=None) 
     row("ln K:", _fmt(ln_k, "", 4))
     row("log10 K:", _fmt(log10_k, "", 4))
     k = thermo.get("k")
-    if k is None:
+    if thermo.get("k_note"):
+        row("K:", str(thermo["k_note"]))
+    elif k is None:
         row("K:", "n/a")
     elif k == float("inf"):
         row("K:", "K > 1e300 (see log10 K)")

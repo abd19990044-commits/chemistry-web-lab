@@ -54,9 +54,34 @@ def build_health(*, orchestrator_available: bool, orca_engine_available: bool) -
         with tempfile.TemporaryFile(mode="w+", prefix="chemlab-write-probe-") as fh:
             fh.write("ok")
             fh.flush()
+        if orchestrator_available and not payload.get("orchestrator_error"):
+            state_dir = payload.get("config", {}).get("state_dir")
+            if not state_dir:
+                from orca_orchestrator.config import CONFIG
+                state_dir = CONFIG.store.state_dir
+            # /tmp can remain writable while the database/result volume fails.
+            with tempfile.TemporaryFile(mode="w+", prefix="chemlab-state-probe-", dir=state_dir) as fh:
+                fh.write("ok")
+                fh.flush()
+                os.fsync(fh.fileno())
         payload["storage_writable"] = True
     except OSError:
         payload["storage_writable"] = False
+    background_ok = True
+    if os.environ.get("CHEMISTRY_LAB_REQUIRE_BACKGROUND") == "1":
+        from services.application_runtime import runtime_status
+        runtime = runtime_status()
+        payload["background_runtime"] = runtime
+        background_ok = bool(runtime.get("background_workflows"))
+        if runtime.get("embedded_local_worker"):
+            background_ok = background_ok and bool(runtime.get("local_worker_running"))
+    payload["background_ok"] = background_ok
+    # The orchestrator's own 'ok' must not overwrite dependency failures.
+    payload["ok"] = bool(cli["ok"] and orca_engine_available
+                         and payload["storage_writable"]
+                         and background_ok
+                         and not payload.get("orchestrator_error")
+                         and (not worker_required or payload.get("local_worker_ok")))
     return payload
 
 
@@ -70,13 +95,17 @@ def build_ready(*, orchestrator_available: bool, orca_engine_available: bool) ->
     health = build_health(orchestrator_available=orchestrator_available,
                           orca_engine_available=orca_engine_available)
     worker_ok = (not health.get("local_worker_required")) or bool(health.get("local_worker_ok"))
-    ready = bool(health.get("storage_writable")) and orchestrator_available and worker_ok
+    orchestrator_ok = bool(health.get("orchestrator")) and not health.get("orchestrator_error")
+    engine_ok = bool(health.get("orca_engine"))
+    background_ok = bool(health.get("background_ok", True))
+    ready = bool(health.get("storage_writable")) and orchestrator_ok and engine_ok and worker_ok and background_ok
     return {"ok": ready, "ready": ready,
             "checks": {
                 "storage": bool(health.get("storage_writable")),
-                "orchestrator": bool(health.get("orchestrator")),
-                "orca_engine": bool(health.get("orca_engine")),
+                "orchestrator": orchestrator_ok,
+                "orca_engine": engine_ok,
                 "kaggle_cli": bool(health.get("kaggle_cli_ok")),
                 "local_worker": worker_ok,
+                "background_workflows": background_ok,
             },
             "detail": health}

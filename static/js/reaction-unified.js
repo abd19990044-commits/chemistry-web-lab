@@ -150,7 +150,8 @@
           const startRes = await fetch(`/api/v1/reactions/${encodeURIComponent(activeReactionId)}/start-execution`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ max_concurrency: concurrencyLimit })
+            body: JSON.stringify({ max_concurrency: concurrencyLimit,
+              kaggle_passcode: document.getElementById('kaggle-passcode')?.value.trim() || window._kagglePasscode || sessionStorage.getItem('orca_kaggle_passcode') || '' })
           });
           const startData = await startRes.json();
           if (!startRes.ok || !startData.ok) {
@@ -366,33 +367,38 @@
 
     const tbody = document.getElementById('rxn-wf-thermo-tbody');
     if (tbody) {
-      const dE_kj = thermo.dE_elec_kj_mol || (thermo.delta_E_elec_hartree * 2625.5);
-      const dH_kj = thermo.dH_kj_mol || (thermo.delta_H_hartree * 2625.5);
-      const dG_kj = thermo.dG_kj_mol || (thermo.delta_G_hartree * 2625.5);
-      const dS = thermo.dS_j_mol_k || thermo.delta_S_j_mol_k || 0;
-      const log10k = thermo.log10_k !== undefined ? thermo.log10_k.toFixed(2) : '-';
-      const kVal = thermo.k ? (thermo.k > 1e6 || thermo.k < 1e-4 ? thermo.k.toExponential(3) : thermo.k.toFixed(4)) : '-';
+      const energy = (primary, legacy) => Number.isFinite(primary) ? primary
+        : (Number.isFinite(legacy) ? legacy * 2625.4996394799 : null);
+      const format = value => Number.isFinite(value) ? value.toFixed(2) : '-';
+      const dE_kj = energy(thermo.dE_elec_kj_mol, thermo.delta_E_elec_hartree);
+      const dH_kj = energy(thermo.dH_kj_mol, thermo.delta_H_hartree);
+      const dG_kj = energy(thermo.dG_kj_mol, thermo.delta_G_hartree);
+      const dS = thermo.dS_j_mol_k ?? thermo.delta_S_j_mol_k;
+      const log10k = format(thermo.log10_k);
+      const kVal = thermo.k_note || (Number.isFinite(thermo.k)
+        ? (thermo.k > 1e6 || (thermo.k !== 0 && thermo.k < 1e-4)
+          ? thermo.k.toExponential(3) : thermo.k.toFixed(4)) : '-');
 
       tbody.innerHTML = '';
       const tr = document.createElement('tr');
 
       const tdDe = document.createElement('td');
       tdDe.className = 'font-bold';
-      tdDe.textContent = dE_kj ? dE_kj.toFixed(2) : '-';
+      tdDe.textContent = format(dE_kj);
       tr.appendChild(tdDe);
 
       const tdDh = document.createElement('td');
       tdDh.className = 'font-bold text-primary';
-      tdDh.textContent = dH_kj ? dH_kj.toFixed(2) : '-';
+      tdDh.textContent = format(dH_kj);
       tr.appendChild(tdDh);
 
       const tdDg = document.createElement('td');
       tdDg.className = 'font-bold ' + (dG_kj < 0 ? 'text-success' : 'text-danger');
-      tdDg.textContent = dG_kj ? dG_kj.toFixed(2) : '-';
+      tdDg.textContent = format(dG_kj);
       tr.appendChild(tdDg);
 
       const tdDs = document.createElement('td');
-      tdDs.textContent = dS ? dS.toFixed(2) : '-';
+      tdDs.textContent = format(dS);
       tr.appendChild(tdDs);
 
       const tdLogK = document.createElement('td');
@@ -446,7 +452,8 @@
         const startRes = await fetch(`/api/v1/reactions/${encodeURIComponent(reactionId)}/start-execution`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ max_concurrency: concurrencyLimit })
+          body: JSON.stringify({ max_concurrency: concurrencyLimit,
+              kaggle_passcode: document.getElementById('kaggle-passcode')?.value.trim() || window._kagglePasscode || sessionStorage.getItem('orca_kaggle_passcode') || '' })
         });
         const startData = await startRes.json();
         if (!startRes.ok || !startData.ok) {

@@ -66,6 +66,9 @@ EXCLUDE_EXTS = {
 }
 
 GLOBAL_EXCLUDED_NAMES = {
+    'connection_vault.key',
+    '.connection-key.lock',
+    'local_orca_settings.json',
     '.dev.vars',
     'kaggle.json',
     'orca_manual_6_1_0.pdf',

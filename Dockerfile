@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt .
+RUN python -m pip install --no-cache-dir --upgrade 'pip>=26.2,<27'
 RUN pip install --no-cache-dir -r requirements.txt
 RUN python -c "import rarfile; rarfile.tool_setup()"
 

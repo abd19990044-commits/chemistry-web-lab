@@ -25,13 +25,11 @@ interrupt a healthy calculation.
 
 Honest limits
 -------------
-Under the chosen "no stored credentials" policy the watchdog can only act on
-jobs whose owner has supplied credentials recently (`CredentialBroker`, in RAM,
-TTL-bounded). Between those moments the chain is carried by the Kaggle kernel,
-which self-continues. This is a real constraint, not an implementation gap, and
-it is reported in `sweep()`'s result as `skipped_no_credentials` rather than
-being quietly ignored -- an operator should be able to see how much of the
-fleet the watchdog can currently reach.
+The watchdog first checks its TTL-bounded RAM broker, then the encrypted vault.
+Application-owner aliases are resolved internally when a Kaggle account owns
+the job. Missing or revoked credentials are reported as skipped_no_credentials;
+no browser session, plaintext database token, or open page is required. The
+application host must remain running for server-side dispatch to progress.
 """
 from __future__ import annotations
 
@@ -226,6 +224,8 @@ class Watchdog:
                 from .credential_vault import get_vault_manager
                 manager = get_vault_manager()
             creds = manager.load_credentials(owner)
+            if creds is None and hasattr(manager, "load_job_credentials"):
+                creds = manager.load_job_credentials(owner)
             if creds is not None:
                 self.broker.remember(creds)
             return creds

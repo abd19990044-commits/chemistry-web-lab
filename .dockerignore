@@ -65,3 +65,6 @@ scratch_*
 *.sqlite3-*
 kaggle.json
 .dev.vars
+**/connection_vault.key
+**/.connection-key.lock
+**/local_orca_settings.json

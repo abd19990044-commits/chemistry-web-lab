@@ -301,11 +301,16 @@ def get_local_orca_settings(state_dir: Optional[str] = None) -> Dict[str, Any]:
                 try:
                     with open(cfg_file, "r", encoding="utf-8") as f:
                         data = json.load(f)
-                        res = dict(_DEFAULT_SETTINGS)
-                        res.update(data)
-                        if "orca_bin" in res and not res.get("orca_executable"):
-                            res["orca_executable"] = res["orca_bin"]
-                        return res
+                    from services.connection_crypto import open_settings
+                    legacy = data.get("encrypted_connection_settings") != 1
+                    data = open_settings(data, base, "local-orca-settings/v1")
+                    if legacy:
+                        save_local_orca_settings(data, state_dir=base)
+                    res = dict(_DEFAULT_SETTINGS)
+                    res.update(data)
+                    if "orca_bin" in res and not res.get("orca_executable"):
+                        res["orca_executable"] = res["orca_bin"]
+                    return res
                 except Exception:
                     pass
             return dict(_DEFAULT_SETTINGS)
@@ -314,6 +319,8 @@ def get_local_orca_settings(state_dir: Optional[str] = None) -> Dict[str, Any]:
             try:
                 with open(cfg_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                    from services.connection_crypto import open_settings
+                    data = open_settings(data, base, "local-orca-settings/v1")
                     res = dict(_DEFAULT_SETTINGS)
                     res.update(data)
                     return res
@@ -358,9 +365,10 @@ def save_local_orca_settings(settings: Dict[str, Any], state_dir: Optional[str] 
         if os.path.isfile(cfg_file):
             try:
                 with open(cfg_file, "r", encoding="utf-8") as f:
-                    current.update(json.load(f))
-            except Exception:
-                pass
+                    from services.connection_crypto import open_settings
+                    current.update(open_settings(json.load(f), base, "local-orca-settings/v1"))
+            except Exception as exc:
+                raise ValueError("Saved local ORCA settings cannot be decrypted; restore the installation key") from exc
         current.update(settings)
         if "orca_executable" in current and current["orca_executable"]:
             safe, err_msg = is_safe_executable_path(str(current["orca_executable"]))
@@ -369,9 +377,18 @@ def save_local_orca_settings(settings: Dict[str, Any], state_dir: Optional[str] 
         # Ensure hard limit of 1 on local concurrency
         current["concurrency"] = DEFAULT_LOCAL_ORCA_CONCURRENCY
         tmp = cfg_file + ".tmp." + uuid.uuid4().hex
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(current, f, indent=2)
-        os.replace(tmp, cfg_file)
+        from services.connection_crypto import seal_settings
+        envelope = seal_settings(current, base, "local-orca-settings/v1")
+        try:
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(envelope, f)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, cfg_file)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
         return current
 
 def validate_local_orca_config(

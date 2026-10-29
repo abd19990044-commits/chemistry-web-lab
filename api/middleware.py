@@ -14,6 +14,7 @@ class NativeApiBodyLimitMiddleware:
     """
 
     _PREFIXES = (
+        "/api/v1/calculation-workflows",
         "/api/v1/analysis",
         "/api/v1/compound",
         "/api/v1/kaggle",

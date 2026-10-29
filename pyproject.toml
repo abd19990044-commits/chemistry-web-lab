@@ -96,7 +96,7 @@ packages = [
 "kaggle_runner.py" = "kaggle_runner.py"
 "reaction_conditions.py" = "reaction_conditions.py"
 "schema" = "schema"
-"data" = "data"
+"data/examples" = "data/examples"
 "bootstrap" = "bootstrap"
 "requirements-local-agent.txt" = "requirements-local-agent.txt"
 "requirements-local-agent-hpc.txt" = "requirements-local-agent-hpc.txt"
@@ -117,7 +117,7 @@ include = [
     "/static",
     "/orca_engine",
     "/schema",
-    "/data",
+    "/data/examples",
     "/bootstrap",
     "app.py",
     "fetch_browser_engine.py",

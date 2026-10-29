@@ -426,32 +426,24 @@ Every failure in your brief, and what now happens.
 
 ## 6. Security posture
 
-**Credentials are never written to persistent server storage.** They arrive with
-a request, live in RAM under a TTL (`CredentialBroker`), and construct a
-throwaway `$HOME` for a single CLI invocation, removed in `finally`. A
-compromise of the Space's disk yields no user secrets.
+Credentials are persisted as owner-bound AES-256-GCM ciphertext in a local
+SQLite mirror and, when configured, Cloudflare D1. The watchdog can reload them
+after its RAM cache expires or a process restarts. A deleted credential leaves a
+local tombstone so an unavailable Cloudflare deletion cannot restore an old key.
 
-**The stated cost.** The server can only act on a job while some recent request
-has supplied credentials for its owner. Between those moments the chain is
-carried by the Kaggle kernel, which self-continues. `sweep()` reports this
-honestly as `skipped_no_credentials` and a `reachability` string, rather than
-quietly pretending full coverage. This was your explicit choice, and it is the
-right one for a public site - but an operator should be able to see the boundary.
+The application lifecycle starts a workflow supervisor. It observes Kaggle
+results, validates completed stages, and dispatches dependency-ready successors
+without browser polling. A cross-process scheduler lock and durable execution
+identities prevent concurrent duplicate dispatch. Local desktop execution also
+starts an embedded ORCA worker; the Docker entrypoint retains its separately
+supervised local worker and explicitly disables a second embedded worker.
 
-**Residual exposure, stated plainly.** The in-kernel runner must authenticate to
-Kaggle in order to push its own successor, so the credential is embedded in the
-pushed kernel source. It lives inside a private notebook belonging to the user
-for as long as that notebook exists. This is inherent to *any* self-continuing
-kernel, not a consequence of this design - but it is mitigated:
-
-- kernels are pushed `is_private: true`;
-- `sys.excepthook` scrubs every traceback, because a traceback can print module
-  globals and the rendered output is saved with the kernel;
-- `logging_ext.RedactingFilter` scrubs `KGAT_*` and 32-hex patterns from every
-  log record, including those from third-party libraries;
-- credential files are deleted from the kernel filesystem immediately after the
-  successor push;
-- users should use a dedicated, revocable token.
+Production encryption keys stay in environment secrets. Standalone local
+installations can use a private installation key file, which must be backed up
+separately from the database and excluded from Git and deployment packages.
+Kaggle kernels use Kaggle User Secrets for self-continuation; the server's
+credential is not embedded in kernel source. CLI configuration files are private
+and short-lived. See [background execution](docs/background-execution.md).
 
 ---
 
@@ -764,10 +756,11 @@ full machinery; old ones finish on the path they started.
 Stated because a design document that claims no limits is not describing a real
 system.
 
-**Watchdog reachability is bounded by credential caching.** Consequence of the
-no-stored-credentials choice, reported in every sweep result. If you later want
-true 24/7 unattended recovery, the change is an opt-in encrypted credential
-vault; nothing else in the architecture needs to move.
+**Host availability remains required.** Browser closure does not stop the
+scheduler, but a stopped local computer or sleeping cloud application cannot
+dispatch work. Restart recovery also requires retained workflow state and a
+stable encryption key; a platform that wipes ephemeral disk cannot recover
+unsubmitted stages from that disk.
 
 **A `run_token` heartbeat is a lease, not a distributed lock.** If a Kaggle
 process is paused for longer than the liveness threshold and then resumed, a

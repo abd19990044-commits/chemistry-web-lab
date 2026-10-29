@@ -34,7 +34,12 @@ async def lifespan(_app: FastAPI):
     # The legacy Flask app is imported below; importing it runs the
     # orchestrator's boot reconciliation exactly once (startup recovery,
     # logging, credential vault) - the same process serves both layers.
-    yield
+    from services.application_runtime import start_application_runtime, stop_application_runtime
+    start_application_runtime()
+    try:
+        yield
+    finally:
+        stop_application_runtime()
 
 
 def _create_app() -> FastAPI:

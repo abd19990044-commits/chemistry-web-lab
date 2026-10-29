@@ -292,6 +292,14 @@ python app.py
 ```
 Open your browser and navigate to: **`http://127.0.0.1:7860`**
 
+The local application starts its ORCA execution worker internally. Configure
+the executable and input/output paths in the server-host settings; a separate
+companion script is unnecessary on the same computer. Generated calculation
+chains can run through **This application host / local computer** or **Kaggle
+cloud**. Their execution continues after browser closure while the application
+host remains running. See [background execution and encrypted connection
+storage](docs/background-execution.md).
+
 ---
 
 ## 📡 Comprehensive API Endpoints

@@ -349,6 +349,9 @@ def test_master_key_failure_model_fails_safely(test_client, monkeypatch):
     monkeypatch.delenv("KAGGLE_CREDENTIALS_ENCRYPTION_KEY", raising=False)
     monkeypatch.delenv("CHEMISTRY_LAB_TEST_MODE", raising=False)
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setenv("CHEMISTRY_LAB_ENV", "production")
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.delenv("FLASK_SECRET_KEY", raising=False)
 
     with patch("kaggle_runner.verify_kaggle_credentials", return_value={"username": "prod_user"}):
         res = test_client.post("/api/kaggle/credentials", json={
