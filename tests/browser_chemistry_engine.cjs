@@ -11,6 +11,14 @@ const drawn=await run('parse',{text:ethanolInput,format:'mol',name:'Drawn ethano
 assert.equal(drawn.atoms.length,9);assert.equal(drawn.atoms.filter(a=>a.elem==='H').length,6);assert.equal(drawn.bonds.length,8);assert.equal(drawn.topology,'source');assert(drawn.generated3D);
 assert(drawn.atoms.some(a=>Math.abs(a.z-drawn.atoms[0].z)>.1));
 console.log('2D drawing to hydrogen-complete 3D ethanol',drawn.formula,drawn.atoms.length);
+const acidInput=context.MoleculeGraph.mol([{id:1,elem:'C',x:0,y:0,z:0},{id:2,elem:'C',x:1.5,y:0,z:0},{id:3,elem:'O',x:2.2,y:1.2,z:0},{id:4,elem:'O',x:2.2,y:-1.2,z:0}],[{a1:1,a2:2,order:1},{a1:2,a2:3,order:2},{a1:2,a2:4,order:1}],'Drawn acetic acid');
+const acid=await run('parse',{text:acidInput,format:'mol',generate3D:true,addHydrogens:true});
+assert.equal(acid.atoms.length,8);assert.equal(acid.atoms.filter(a=>a.elem==='H').length,4);assert.equal(acid.atoms.reduce((sum,a)=>sum+a.charge,0),0);assert.equal(acid.bonds.filter(b=>b.order===2).length,1);
+console.log('Drawn acid preserves neutral protonation',acid.formula,acid.atoms.length);
+const chargedAmine=context.MoleculeGraph.mol([{id:1,elem:'N',charge:1,x:0,y:0,z:0},{id:2,elem:'C',x:1.5,y:0,z:0}],[{a1:1,a2:2,order:1}],'Methylammonium');
+const ammonium=await run('parse',{text:chargedAmine,format:'mol',generate3D:true,addHydrogens:true});
+assert.equal(ammonium.atoms.length,8);assert.equal(ammonium.atoms.reduce((sum,a)=>sum+a.charge,0),1);
+console.log('Drawn ammonium preserves positive charge',ammonium.formula);
 const mb=await run('parse',{text:fs.readFileSync('tests/fixtures/browser_chemistry/methylene-blue.sdf','utf8'),format:'sdf',name:'Methylene blue'});
 const saved=context.MoleculeGraph.mol(mb.atoms,mb.bonds,'Methylene blue');
 assert.equal(saved.split('\n')[1].slice(20,22),'3D');

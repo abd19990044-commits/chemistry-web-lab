@@ -15,7 +15,7 @@ name: Deploy Hugging Face runtime
 # Serves precompressed native browser-engine assets to accelerate cold imports.
 # Transfers ChemDraw tools, standalone browser 2D editing, and distinct MOL/SDF/XYZ exports.
 # Preserves full RXN chemistry with editable KET captions and expands without fullscreen permission.
-# Corrects Indigo RGB export options and verifies the 2D to ORCA geometry workflow.
+# Preserves drawn acid/base protonation during browser 3D generation for ORCA inputs.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later

@@ -68,7 +68,14 @@ async function parse({text,format,name,generate3D=false,addHydrogens=false}){
       for(let i=1;i<=drawnAtomCount;i++)m.AddHydrogens(m.GetAtom(i));
       if(m.NumAtoms()>1000)throw Error('Adding hydrogens exceeds the 1000-atom editor limit.');
     }
-    if(generated3D){const g=new ob.OB3DGenWrapper();try{if(g.generate3DStructure(m,'UFF')<0)throw Error('Cannot generate 3D geometry for this structure.');}finally{g.delete();}}
+    // OB3DGenWrapper changes protonation to pH 7.4. The native gen3D
+    // operation builds geometry without changing the source protonation.
+    if(generated3D){
+      const source=extract(m),op=ob.OBOp.FindType('gen3D');
+      if(!op||!op.Do(m,'fast'))throw Error('Cannot generate 3D geometry for this structure.');
+      const generated=extract(m);
+      if((addHydrogens&&generated.atoms.length!==source.atoms.length)||source.atoms.some((a,i)=>generated.atoms[i]?.elem!==a.elem||generated.atoms[i]?.charge!==a.charge))throw Error('3D generation changed the source chemical species. Transfer stopped.');
+    }
     const result=extract(m);
     if(generated3D){MoleculeGraph.packGeneratedComponents(result.atoms,result.bonds);result.coords=MoleculeGraph.xyz(result.atoms);}
     // Never guess higher bond orders from XYZ. Its connectivity is unverified.
