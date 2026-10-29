@@ -15,7 +15,7 @@ name: Deploy Hugging Face runtime
 # Serves precompressed native browser-engine assets to accelerate cold imports.
 # Transfers ChemDraw tools, standalone browser 2D editing, and distinct MOL/SDF/XYZ exports.
 # Preserves full RXN chemistry with editable KET captions and expands without fullscreen permission.
-# Defaults PNG and Word to maximum device-adaptive resolution, up to 12000 pixels and 64 MP.
+# Publishes analyzer figure previews, journal typography, smooth molecules and true line-art TIFF.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later

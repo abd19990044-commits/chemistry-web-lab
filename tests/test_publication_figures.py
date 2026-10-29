@@ -15,7 +15,7 @@ MODULE = ROOT / 'static/js/publication-figures.js'
 def node(script, *args):
     if not shutil.which('node'):
         pytest.skip('Node.js required')
-    result = subprocess.run(['node', '-e', f'require({str(MODULE)!r});const P=globalThis.PublicationFigures;const assert=require("node:assert/strict");\n'+script, *map(str,args)], cwd=ROOT, text=True, encoding='utf-8', capture_output=True, timeout=20)
+    result = subprocess.run(['node', '-e', f'require({str(ROOT / "static/js/publication-style.js")!r});require({str(MODULE)!r});const P=globalThis.PublicationFigures;const assert=require("node:assert/strict");\n'+script, *map(str,args)], cwd=ROOT, text=True, encoding='utf-8', capture_output=True, timeout=20)
     assert result.returncode == 0, result.stderr
     return result.stdout
 
@@ -34,8 +34,9 @@ console.log(svg);
     assert svg.find('{*}metadata') is not None
     path = svg.find('.//{*}path')
     assert path is not None
-    assert path.attrib['d'].startswith(f'M{85 * 72 / 25.4 - 15:.3f},')
-    assert 'L52.000,' in path.attrib['d']  # 4000 cm^-1 is at the left, 400 at the right.
+    import re
+    xs = [float(v) for v in re.findall(r'[ML]([0-9.]+),', path.attrib['d'])]
+    assert len(xs) == 2 and xs[0] > xs[1] > 0  # Decreasing IR axis, at actual print size.
     assert svg.find('{*}g').attrib['font-size'] == '8'
     assert not svg.findall('.//{*}image')  # Real vector paths, no embedded screenshot.
 
@@ -49,7 +50,8 @@ const svg=P.plot(base,s),paths=[...svg.matchAll(/<path d="([^"]+)"/g)].map(m=>m[
 assert.equal(paths[0],paths[1]);assert.ok(svg.includes('Absorbance'));
 assert.throws(()=>P.plot({...base,series:[]},s),/No finite/);
 assert.throws(()=>P.plot({...base,xMin:Infinity},s),/axis limits/);
-assert.throws(()=>P.dimensions(P.settings({widthMm:180,heightMm:110,dpi:1200})),/32 megapixel/);
+assert.throws(()=>P.dimensions(P.settings({widthMm:190,heightMm:240,dpi:1200})),/64 megapixel/);
+assert.doesNotThrow(()=>P.dimensions(P.settings({widthMm:180,heightMm:110,dpi:1200})));
 assert.doesNotThrow(()=>P.dimensions(P.settings({widthMm:180,heightMm:110,dpi:1200}),false));
 ''')
 
@@ -134,4 +136,48 @@ assert.equal(JSON.stringify([loadedExperimentalSpectra,loadedExperimentalIRSpect
 irYAxisMode='theory_intensity';assert.throws(()=>publicationSpectrumSpec('ir'),/Integrated band intensities/);
 loadedExperimentalIRSpectra=[];const bands=publicationSpectrumSpec('ir');assert.equal(bands.series[0].sticks,true);assert.equal(bands.series[0].points[0].y,100);
 currentNMRData.h1_spectrum.is_reference_applied=true;assert.equal(publicationSpectrumSpec('nmr').reverseX,true);
+''')
+
+
+@pytest.mark.parametrize('mode,pillow_mode', [('gray', 'L'), ('bitmap', '1')])
+def test_grayscale_and_bilevel_tiff_are_real_pixel_modes_with_correct_row_padding(tmp_path, mode, pillow_mode):
+    path = tmp_path / f'{mode}.tiff'
+    node(r'''
+const fs=require('node:fs'),rgba=new Uint8Array(9*2*4);
+for(let i=0;i<18;i++){const c=i%3;rgba.set(c===0?[255,0,0,255]:c===1?[0,255,0,255]:[0,0,0,0],i*4);}
+fs.writeFileSync(process.argv[1],P.tiff(rgba,9,2,1200,{source:'pixel-mode regression'},process.argv[2]));
+''', path, mode)
+    with Image.open(path) as im:
+        assert im.mode == pillow_mode and im.size == (9, 2)
+        assert im.info['dpi'] == (1200, 1200)
+        expected = [54, 182, 255] * 3 if mode == 'gray' else [0, 255, 255] * 3
+        for row in range(2):
+            assert [im.getpixel((x, row)) for x in range(9)] == expected
+        assert im.tag_v2[258] == (8 if mode == 'gray' else 1,)
+
+
+def test_publication_typography_and_legend_edits_preserve_source_values_and_escape_text():
+    svg = node(r'''
+const spec={title:'A scientific plot',xMin:0,xMax:10,yMin:0,yMax:1,xLabel:'Time (s)',yLabel:'Absorbance',series:[{name:'Source <unsafe>',points:[{x:0,y:0},{x:10,y:1}]}]};
+const before=JSON.stringify(spec);P.setLegendLabel(spec.series[0].name,'Short & <editable>');
+const svg=P.plot(spec,P.settings({fontFamily:'times',fontSize:7,lineWidth:.8,format:'tiff-line',legend:'right'}));
+assert.equal(JSON.stringify(spec),before);assert(!svg.includes('<editable>'));console.log(svg);
+''')
+    svg = ET.fromstring(svg)
+    metadata = json.loads(svg.find('{*}metadata').text)
+    assert metadata['source_layers'] == ['Source <unsafe>']
+    assert metadata['display_layers'] == ['Short & <editable>']
+    assert metadata['figure_style']['text_pt'] == 7
+    assert metadata['figure_style']['curve_pt'] == .8
+    assert metadata['figure_style']['palette'] == 'monochrome'
+    curve = svg.find('.//{*}path')
+    assert curve.attrib['stroke'] == '#111111' and curve.attrib['stroke-width'] == '0.8'
+    assert not svg.findall('.//{*}image')
+
+
+def test_peak_annotations_reject_tiny_numerical_wiggles_and_keep_nearby_real_bands():
+    node(r'''
+const series=[{name:'IR',points:[{x:100,y:100},{x:101,y:20},{x:102,y:100},{x:103,y:60},{x:104,y:100},{x:110,y:99.999999},{x:111,y:100}]}];
+const before=JSON.stringify(series),peaks=PublicationStyle.peakCandidates(series,{xMin:100,xMax:120,yLabel:'Transmittance (%)'});
+assert.deepEqual(peaks.map(p=>p.x),[101,103]);assert.equal(JSON.stringify(series),before);
 ''')

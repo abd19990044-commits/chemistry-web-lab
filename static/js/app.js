@@ -6051,7 +6051,7 @@
   let analysisStudio = null;
   let isSpinning = false;
   let showLabels = false;
-  let isLabelBold = true;
+  let isLabelBold = false;
   let showDipole = false;
   let currentViewportBg = "#0B0F19";
   let currentSpectrumTheme = "dark";
@@ -6253,10 +6253,10 @@
     if(charges.length!==elements.length)charges=[];
     if (currentMode !== "off" && elements.length) {
       elements.forEach((el, idx) => {
-        if(el==="H"&&document.getElementById("engine-3d-label-hydrogens")?.value==="hide")return;
+        if((currentMode==="hetero"&&["C","H"].includes(el))||(el==="H"&&document.getElementById("engine-3d-label-hydrogens")?.value==="hide"))return;
         const c = coords[idx];
         if (c) {
-          let text = currentMode === "symbols" ? el : `${el}${idx + 1}`;
+          let text = ["symbols","hetero"].includes(currentMode) ? el : `${el}${idx + 1}`;
           const q = (Array.isArray(charges) && Number.isFinite(charges[idx])) ? charges[idx] : null;
           if((currentMode === "mulliken" || currentMode === "hirshfeld") && q === null)return;
 
@@ -6265,7 +6265,7 @@
           } else if ((currentMode === "both_mulliken" || currentMode === "both_hirshfeld") && q !== null) {
             text = `${el}${idx + 1} (${q >= 0 ? '+' : ''}${q.toFixed(3)})`;
           } else {
-            text = currentMode === "symbols" ? el : `${el}${idx + 1}`;
+            text = ["symbols","hetero"].includes(currentMode) ? el : `${el}${idx + 1}`;
           }
 
           viewer3D.addLabel(text, {
@@ -8626,6 +8626,12 @@
 
   function initQuantumEngine() {
     PublicationFigures.init();
+    for(const kind of ['uvvis','ir','nmr'])document.getElementById('engine-'+kind+'-figure-preview')?.addEventListener('click',()=>{
+      try{PublicationPreview.open(()=>{const spec=publicationSpectrumSpec(kind);return {svg:PublicationFigures.plot(spec),name:(currentEngineData?.name||'spectrum')+'_'+kind,metadata:spec.metadata,series:spec.series.map(item=>item.name)};});}catch(error){showToast(error.message,'warning');}
+    });
+    document.getElementById('engine-orbitals-figure-preview')?.addEventListener('click',()=>{
+      try{PublicationPreview.open(()=>({svg:PublicationFigures.orbitals(currentEngineData?.latest_job||{}),name:(currentEngineData?.name||'molecule')+'_orbitals',metadata:{kind:'frontier_orbital_eigenvalues'}}));}catch(error){showToast(error.message,'warning');}
+    });
     const form = document.getElementById("engine-form");
     const fileInput = document.getElementById("engine-file-input");
     const dropzone = document.getElementById("engine-dropzone");

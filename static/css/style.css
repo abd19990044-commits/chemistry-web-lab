@@ -3646,3 +3646,12 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
 .molecular-figure-preview[data-stale="true"] { opacity: .55; }
 .molecular-figure-preview[data-stale="true"] canvas { pointer-events: none; }
 .molecular-figure-preview canvas:focus-visible { outline: 2px solid #0072b2; outline-offset: -2px; }
+
+/* Publication previews show the exact vector composition against a neutral desk. */
+.publication-preview-dialog{box-sizing:border-box;width:min(1180px,96vw);max-height:94vh;padding:1.25rem;border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--text);overflow:auto}
+.publication-preview-dialog::backdrop{background:rgba(12,20,30,.65)}
+.publication-preview-header{display:flex;align-items:start;justify-content:space-between;gap:1rem}.publication-preview-header h3{margin:.3rem 0}.publication-preview-header p{margin:.3rem 0;font-size:.8rem;overflow-wrap:anywhere}
+.publication-preview-controls{padding:.8rem 0 1rem;border-bottom:1px solid var(--border)}.publication-preview-controls label{min-width:105px;max-width:200px}
+.publication-preview-status{display:block;margin:.85rem 0;font-size:.8rem;color:var(--text-muted)}
+.publication-preview-art{padding:1rem;background:#e9edf1;overflow:auto;border-radius:6px}.publication-preview-art>svg{display:block;width:100%;height:auto;max-height:65vh;background:#fff}
+@media(max-width:640px){.publication-preview-dialog{padding:.75rem}.publication-preview-controls{gap:.5rem}.publication-preview-controls label{flex-basis:40%;max-width:none}.publication-preview-art{padding:.25rem}}

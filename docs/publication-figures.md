@@ -8,7 +8,7 @@ The Calculation Analyzer exports 3D geometry, orbital eigenvalues, UV-Vis, IR an
 - **TIFF:** uncompressed, baseline, 8-bit RGB raster with explicit X/Y resolution in dots per inch and an ASCII-safe JSON image description. Transparency is composited on white. Monochrome styling is still an RGB image, not one-bit bitmap line art.
 - **SVG:** editable vector paths and text at the selected millimetre dimensions, for plots and orbital diagrams. It is not an embedded screenshot. Convert to the submission format requested by the journal if it does not accept SVG.
 
-The 600 dpi default supports detailed color figures. Select 1200 dpi or a vector export for demanding line-art requirements. Raster exports are limited to 32 megapixels and 10,000 pixels per side to bound browser memory usage; a rejected size is never silently downsampled. SVG is independent of raster resolution. Plots use Arial/Helvetica-compatible type at 8-9 points, white backgrounds, distinct line patterns and a high-contrast palette. Legends wrap without truncating file/layer names. Increase the height for many layers. Optional panel labels and plot titles are available; manuscript captions normally remain outside the figure.
+The 1200 dpi default supports demanding line and combination artwork. 300, 600 and 1000 dpi are also available. Raster exports are limited to 64 megapixels and 12,000 pixels per side to bound browser memory usage; a rejected size is never silently downsampled. SVG is independent of raster resolution. Plots use Arial/Helvetica-compatible type at 8-9 points, white backgrounds, distinct line patterns and a high-contrast palette. Legends wrap without truncating file/layer names. Increase the height for many layers. Optional panel labels and plot titles are available; manuscript captions normally remain outside the figure.
 
 The 3D exporter renders at the requested resolution, preserves the current camera and coordinates, and temporarily uses a white background with dark atom labels. It restores the viewer even if capture fails. PNG and TIFF are available for 3D geometry.
 
@@ -42,3 +42,38 @@ Atom scale, bond radius and multiple-bond spacing change appearance only. They n
 Preview and export now calculate label layout in physical points, independent of DPI. In a current preview, drag a label to move it without changing the molecule; click it then use arrow keys for fine adjustment (Shift moves farther). Escape cancels a drag. **Reset label positions** restores automatic layout. Saved label centers use normalized page coordinates and are included in export metadata.
 
 Appearance or camera changes mark the preview as outdated and disable label dragging until refreshed. Rotating the molecule, changing label content or print dimensions clears manual positions because those positions referred to the previous composition. Color/background/DPI changes preserve them. An in-progress preview from older settings is discarded instead of replacing the current view.
+
+
+## Figure studio (2026-10-29)
+
+Spectral and orbital figures share a print layout with selectable 5-14 pt Arial,
+Helvetica or Times typography; 0.4-1.5 pt curves; colorblind accessible or muted
+palettes; inward ticks; optional light gridlines; open or boxed axes; and legends
+below, above or beside the data. The compact preset uses 89 mm width and 6.5 pt
+text. These settings are editable and are not a certification for a journal.
+
+Use **Preview publication figure** for UV-Vis, IR, calculated NMR and frontier
+orbital diagrams. The preview and exports use the same vector source, numerical
+adapter and print dimensions. The preview can edit legend labels without changing
+source names or data. Copying for Word supplies a full resolution PNG and an HTML
+image representation. SVG exports keep text and curves editable. Font availability
+in the recipient's software can affect SVG typography; standard fonts are used.
+
+Optional peak labels identify the strongest local extrema (troughs for
+transmittance). Very small numerical wiggles are excluded. Numbers are sampled
+curve positions, not refined peak fits or automatic chemical assignments.
+
+**TIFF (grayscale)** is an actual 8-bit grayscale image. **TIFF (1-bit line art)**
+is a true bilevel TIFF, with MSB-first, row-padded pixels and explicit print
+resolution. It requires 1000/1200 dpi and black line styles. Molecular shaded
+images use PNG, RGB TIFF or grayscale TIFF rather than bilevel export.
+
+Molecular figures add matte composition presets, heteroatom-only labels and a
+monochrome atom palette. Adaptive supersampling smooths previews and smaller
+rasters. Larger exports are rendered directly at their requested resolution.
+Source coordinates, stereochemistry and bond orders are not changed by styling.
+
+References checked on 2026-10-29:
+- [Nature figure specifications](https://research-figure-guide.nature.com/figures/preparing-figures-our-specifications/)
+- [Nature figure sizing and editable artwork](https://research-figure-guide.nature.com/figures/building-and-exporting-figure-panels/)
+- [Elsevier artwork types](https://www.elsevier.com/about/policies-and-standards/author/artwork-and-media-instructions/artwork-types)

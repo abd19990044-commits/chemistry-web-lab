@@ -3,7 +3,7 @@
  */
 (function(root){
   'use strict';
-  const colors={H:'#eeeeee',C:'#727780',N:'#3056c9',O:'#db302a',F:'#54b544',Cl:'#39a04a',Br:'#9c452a',I:'#744aab',S:'#e8bf32',P:'#e98328',B:'#d88b82',Si:'#bf926c',Fe:'#bc672c',Na:'#9871c2',Cu:'#b77b43',Zn:'#899bad'};
+  const colors={H:'#eeeeee',C:'#4f5964',N:'#3056c9',O:'#db302a',F:'#54b544',Cl:'#39a04a',Br:'#9c452a',I:'#744aab',S:'#e8bf32',P:'#e98328',B:'#d88b82',Si:'#bf926c',Fe:'#bc672c',Na:'#9871c2',Cu:'#b77b43',Zn:'#899bad'};
   const radii={H:1.2,C:1.7,N:1.55,O:1.52,F:1.47,Cl:1.75,Br:1.85,I:1.98,S:1.8,P:1.8};
   const rgb=c=>/^#[0-9a-f]{6}$/i.test(c)?[1,3,5].map(i=>parseInt(c.slice(i,i+2),16)):[255,255,255];
   function rotate(p,q){
@@ -15,7 +15,7 @@
     if(!atoms.length||atoms.length>2000||atoms.some(a=>![a.x,a.y,a.z].every(Number.isFinite)))throw Error('Use a finite geometry with 1-2000 atoms.');
     const o={atomScale:.24,bondRadius:.085,bondSpacing:3.2,style:'ballAndStick',...options};
     if(!(o.atomScale>=.12&&o.atomScale<=1&&o.bondRadius>=.025&&o.bondRadius<=.3&&o.bondSpacing>=2.4&&o.bondSpacing<=5))throw Error('Invalid molecular drawing sizes.');
-    const points=atoms.map((a,i)=>({...rotate(a,view.slice(4,8)),elem:a.elem,id:a.id??i+1,r:(radii[a.elem]||1.7)*(o.style==='sphere'?.85:o.atomScale),color:colors[a.elem]||'#bb79ad'}));
+    const points=atoms.map((a,i)=>({...rotate(a,view.slice(4,8)),elem:a.elem,id:a.id??i+1,r:(radii[a.elem]||1.7)*(o.style==='sphere'?.85:o.atomScale),color:o.colorMode==='monochrome'?(a.elem==='H'?'#f0f0f0':'#777777'):(colors[a.elem]||'#bb79ad')}));
     const primitives=[],bonds=[];
     atoms.forEach((a,i)=>(a.bonds||[]).forEach((j,k)=>{
       if(j<=i||!points[j])return;
@@ -53,7 +53,7 @@
     return best;
   }
   async function raster(s,width,height,options={}){
-    if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||width*height>32000000)throw Error('Molecular raster exceeds the 32 megapixel limit.');
+    if(!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||width*height>64000000)throw Error('Molecular raster exceeds the 64 megapixel limit.');
     const f=frame(s,width,height,options.padding??.075),data=new Uint8ClampedArray(width*height*4),depth=new Float32Array(width*height);depth.fill(-Infinity);
     const bg=rgb(options.background||'#ffffff'),transparent=options.background==='transparent';
     for(let i=0;i<data.length;i+=4){data[i]=bg[0];data[i+1]=bg[1];data[i+2]=bg[2];data[i+3]=transparent?0:255;}
@@ -64,7 +64,7 @@
       const ax=sphere?p.x:p.a.x,ay=sphere?p.y:p.a.y,bx=sphere?p.x:p.b.x,by=sphere?p.y:p.b.y;
       const x0=Math.max(0,Math.floor(f.x+(Math.min(ax,bx)-p.r)*f.scale-1)),x1=Math.min(width-1,Math.ceil(f.x+(Math.max(ax,bx)+p.r)*f.scale+1));
       const y0=Math.max(0,Math.floor(f.y-(Math.max(ay,by)+p.r)*f.scale-1)),y1=Math.min(height-1,Math.ceil(f.y-(Math.min(ay,by)-p.r)*f.scale+1));
-      work+=(x1-x0+1)*(y1-y0+1);if(work>180000000)throw Error('This view is too complex at the selected size. Reduce the print size or resolution.');
+      work+=(x1-x0+1)*(y1-y0+1);if(work>360000000)throw Error('This view is too complex at the selected size. Reduce the print size or resolution.');
       for(let py=y0;py<=y1;py++)for(let px=x0;px<=x1;px++){
         const x=(px+.5-f.x)/f.scale,y=(f.y-py-.5)/f.scale;let hit,color,coverage=1;
         if(sphere){const dx=x-p.x,dy=y-p.y,rr=p.r*p.r-dx*dx-dy*dy;if(rr<0)continue;const dz=Math.sqrt(rr);hit={z:p.z+dz,nx:dx/p.r,ny:dy/p.r,nz:dz/p.r};color=p.color;coverage=Math.min(1,(p.r-Math.hypot(dx,dy))*f.scale+.5);}
@@ -138,7 +138,7 @@
   }
   function drawLabels(ctx,boxes,options){
     const {fontSize,color='#111111',badge='transparent',bold=false,background='#ffffff'}=options;
-    ctx.font=`${bold?'600':'400'} ${fontSize}px Arial, Helvetica, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=`${bold?'600':'400'} ${fontSize}px ${options.fontFamily||'Arial, Helvetica, sans-serif'}`;ctx.textAlign='center';ctx.textBaseline='middle';
     for(const b of boxes){const cx=b.x+b.w/2,cy=b.y+b.h/2,dx=cx-b.anchor.x,dy=cy-b.anchor.y,d=Math.hypot(dx,dy);
       if(d>b.anchor.r+fontSize){ctx.strokeStyle=color;ctx.globalAlpha=.55;ctx.lineWidth=Math.max(1,fontSize*.045);ctx.beginPath();ctx.moveTo(b.anchor.x+dx/d*b.anchor.r,b.anchor.y+dy/d*b.anchor.r);ctx.lineTo(cx,cy);ctx.stroke();ctx.globalAlpha=1;}
       if(badge!=='transparent'){ctx.fillStyle=badge==='dark'?'#17202b':'#ffffff';ctx.fillRect(b.x,b.y,b.w,b.h);}

@@ -9,7 +9,7 @@
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261024labels1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261029journal1">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" defer></script>
 {% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
@@ -1386,19 +1386,28 @@ Products:   12 CO2 + 6 H2O</pre>
       </div>
 
       <div id="engine-result" class="engine-result-grid hidden">
-        <details class="engine-full-card figure-export-settings" id="figure-export-settings">
-          <summary>Publication figure export: print size, resolution &amp; format</summary>
+        <details class="engine-full-card figure-export-settings" id="figure-export-settings" open>
+          <summary>Publication figure studio: layout, typography &amp; export</summary>
           <div class="figure-export-controls">
-            <label>Layout<select id="figure-preset"><option value="180,110">Double column</option><option value="85,65">Single column</option></select></label>
+            <label>Layout<select id="figure-preset"><option value="180,110">Double column</option><option value="85,65">Single column</option><option value="89,65">89 mm column</option><option value="183,110">183 mm spread</option></select></label>
             <label>Width (mm)<input id="figure-width-mm" type="number" min="50" max="190" value="180"></label>
             <label>Height (mm)<input id="figure-height-mm" type="number" min="40" max="240" value="110"></label>
-            <label>Resolution<select id="figure-dpi"><option value="300">300 dpi</option><option value="600" selected>600 dpi</option><option value="1200">1200 dpi</option></select></label>
-            <label>Format<select id="figure-format"><option value="png">PNG</option><option value="tiff">TIFF (RGB)</option><option value="svg">SVG (vector plots)</option></select></label>
+            <label>Resolution<select id="figure-dpi"><option value="300">300 dpi</option><option value="600">600 dpi</option><option value="1000">1000 dpi</option><option value="1200" selected>1200 dpi</option></select></label>
+            <label>Format<select id="figure-format"><option value="png">PNG</option><option value="tiff">TIFF (RGB)</option><option value="tiff-gray">TIFF (grayscale)</option><option value="tiff-line">TIFF (1-bit line art)</option><option value="svg">SVG (editable vector plots)</option></select></label>
+            <label>Style preset<select id="figure-style-preset"><option value="journal">Journal color</option><option value="compact">Compact column · 6.5 pt</option><option value="mono">Monochrome</option></select></label>
+            <label>Typeface<select id="figure-font"><option value="arial">Arial</option><option value="helvetica">Helvetica</option><option value="times">Times New Roman</option></select></label>
+            <label>Text (pt)<input id="figure-font-size" type="number" min="5" max="14" step="0.5" value="8"></label>
+            <label>Curve width (pt)<input id="figure-line-width" type="number" min="0.4" max="1.5" step="0.1" value="1.1"></label>
+            <label>Color palette<select id="figure-palette"><option value="accessible">Colorblind accessible</option><option value="muted">Muted scientific</option></select></label>
+            <label>Legend<select id="figure-legend"><option value="bottom">Below plot</option><option value="top">Above plot</option><option value="right">Right side</option><option value="none">Hidden</option></select></label>
+            <label>Axes<select id="figure-frame"><option value="open">Open frame</option><option value="boxed">Boxed frame</option></select></label>
+            <label class="figure-export-check"><input id="figure-grid" type="checkbox">Light major grid</label>
+            <label class="figure-export-check"><input id="figure-peaks" type="checkbox">Label strongest peak positions</label>
             <label>Panel label<input id="figure-panel" type="text" maxlength="12" placeholder="e.g. (a)"></label>
             <label class="figure-export-check"><input id="figure-monochrome" type="checkbox">Monochrome plots</label>
             <label class="figure-export-check"><input id="figure-title" type="checkbox">Include plot title</label>
           </div>
-          <p class="field-hint">Figures use a white background and the selected final print size. SVG is available for plots; 3D geometry uses PNG or TIFF. IR intensity exports use integrated band sticks. Check the target journal's artwork requirements.</p>
+          <p class="field-hint">Set the final print size before export. Preview and download share the same layout. SVG retains editable paths and text; 1-bit TIFF uses real bilevel pixels at 1000/1200 dpi. Peak labels show numerical positions, not chemical assignments. Match the target journal's artwork instructions.</p>
         </details>
 
         <!-- Archive calculation switcher bar (visible when an archive is loaded) -->
@@ -1490,9 +1499,9 @@ Products:   12 CO2 + 6 H2O</pre>
               </select>
               <label class="molecular-field">Custom background <input id="engine-3d-bg-color" type="color" value="#ffffff" title="Choose a custom viewport and figure background"></label>
               <select id="engine-3d-label-mode" class="select-small" title="Atom Labels & Partial Charges">
-                <option value="off" selected>Labels: Off</option>
+                <option value="off">Labels: Off</option>
                 <option value="elements">🏷 Atom numbers (C1, H2)</option>
-                <option value="symbols">Atom symbols (C, H)</option>
+                <option value="symbols">Atom symbols (C, H)</option><option value="hetero" selected>Heteroatom symbols (hide C/H)</option>
                 <option value="mulliken">⚡ Mulliken Charges</option>
                 <option value="both_mulliken">🏷+⚡ Atom &amp; Mulliken</option>
               </select>
@@ -1504,7 +1513,7 @@ Products:   12 CO2 + 6 H2O</pre>
                 <option value="light">⬜ Light Capsule</option>
                 <option value="transparent" selected>🚫 Transparent</option>
               </select>
-              <button type="button" id="engine-3d-label-bold" class="btn btn-primary btn-small" title="Toggle Bold Font"><strong>𝗕 Bold</strong></button>
+              <button type="button" id="engine-3d-label-bold" class="btn btn-ghost btn-small" title="Toggle Bold Font"><strong>𝗕 Bold</strong></button>
 
               <input type="file" id="engine-3d-chg-input" accept=".chg,.crg,.txt,.dat" class="hidden">
               <input type="file" id="engine-3d-crg-input" accept=".chg,.crg,.txt,.dat" class="hidden">
@@ -1540,10 +1549,11 @@ Products:   12 CO2 + 6 H2O</pre>
           <output id="engine-3d-inspector" class="analysis-atom-inspector" aria-live="polite">Click an atom to inspect coordinates and available partial charges.</output>
           <details class="molecular-figure-controls" open>
             <summary>Molecular figure appearance</summary>
+            <div class="figure-export-controls"><label>Composition preset<select id="engine-3d-figure-preset"><option value="custom">Custom appearance</option><option value="matte" selected>Journal ball and stick</option><option value="sticks">Clean sticks</option><option value="numbered">Numbered atoms</option></select></label><label>Figure atom colors<select id="engine-3d-figure-colors"><option value="element">Element colors</option><option value="monochrome">Monochrome</option></select></label></div>
             <div class="figure-export-controls">
-              <label>Atom scale <input id="engine-3d-atom-size" type="number" min="0.12" max="0.5" step="0.01" value="0.24"></label>
-              <label>Bond radius (Å) <input id="engine-3d-bond-radius" type="number" min="0.025" max="0.2" step="0.005" value="0.085"></label>
-              <label>Multiple bond spacing <input id="engine-3d-bond-spacing" type="number" min="2.4" max="5" step="0.2" value="3.2"></label>
+              <label>Atom scale <input id="engine-3d-atom-size" type="number" min="0.12" max="0.5" step="0.01" value="0.22"></label>
+              <label>Bond radius (Å) <input id="engine-3d-bond-radius" type="number" min="0.025" max="0.2" step="0.005" value="0.06"></label>
+              <label>Multiple bond spacing <input id="engine-3d-bond-spacing" type="number" min="2.4" max="5" step="0.2" value="3.6"></label>
               <label>Label placement (figure) <select id="engine-3d-label-layout"><option value="outside" selected>Outside atoms, avoid overlap</option><option value="center">On atoms</option></select></label>
               <label>Hydrogen labels <select id="engine-3d-label-hydrogens"><option value="hide" selected>Hide H labels</option><option value="show">Show all labels</option></select></label>
             </div>
@@ -1586,6 +1596,7 @@ Products:   12 CO2 + 6 H2O</pre>
           <div class="engine-col-card">
             <div class="card-title-row">
               <h4>Frontier Molecular Orbitals &amp; Gap</h4>
+              <button type="button" id="engine-orbitals-figure-preview" class="btn btn-secondary btn-small">Preview publication figure</button>
               <button type="button" id="engine-orbitals-download-png" class="btn btn-ghost btn-small" title="Export orbital eigenvalues with an automatic energy scale">Export orbital figure</button>
             </div>
             <div class="orbital-diagram-wrap">
@@ -1666,6 +1677,7 @@ Products:   12 CO2 + 6 H2O</pre>
               <button type="button" id="uv-remove-imported" class="btn btn-ghost btn-small" title="Remove all imported ORCA spectra (keeps the current calculation)">Remove Imported</button>
               <button type="button" id="engine-uvvis-legend-toggle" class="btn btn-ghost btn-small" title="Toggle Legend Labels in Top-Left Corner">🏷️ Hide Legend</button>
               <button type="button" id="engine-uvvis-theme-toggle" class="btn btn-ghost btn-small">☀️ White Theme</button>
+              <button type="button" id="engine-uvvis-figure-preview" class="btn btn-secondary btn-small">Preview publication figure</button>
               <button type="button" id="engine-uvvis-download-png" class="btn btn-ghost btn-small" title="Export visible spectrum curves using the publication settings">Export figure</button>
               <button type="button" id="engine-uvvis-export-csv" class="btn btn-ghost btn-small" title="Export all active spectra to CSV">⬇ Export CSV</button>
               <select id="uv-view-mode" class="form-select" style="max-width:220px;" title="Choose which spectral categories are displayed">
@@ -1898,6 +1910,7 @@ Products:   12 CO2 + 6 H2O</pre>
               </button>
               <button type="button" id="engine-ir-legend-toggle" class="btn btn-ghost btn-small" title="Toggle Legend Labels in Top-Left Corner">🏷️ Hide Legend</button>
               <button type="button" id="engine-ir-theme-toggle" class="btn btn-ghost btn-small">☀️ White Theme</button>
+              <button type="button" id="engine-ir-figure-preview" class="btn btn-secondary btn-small">Preview publication figure</button>
               <button type="button" id="engine-ir-download-png" class="btn btn-ghost btn-small" title="Export visible IR curves using the publication settings">Export figure</button>
               <button type="button" id="engine-ir-export-csv" class="btn btn-ghost btn-small" title="Export all active IR spectra to CSV">⬇ Export CSV</button>
               <span class="field-hint" id="engine-ir-import-status" style="flex-basis:100%;"></span>
@@ -2120,6 +2133,7 @@ Products:   12 CO2 + 6 H2O</pre>
             <div class="uvvis-top-actions">
               <button type="button" id="engine-nmr-export-csv" class="btn btn-secondary btn-small" title="Download calculated NMR peak data as CSV">📊 Download CSV</button>
               <button type="button" id="engine-nmr-export-json" class="btn btn-secondary btn-small" title="Download complete NMR results as JSON">📋 Download JSON</button>
+              <button type="button" id="engine-nmr-figure-preview" class="btn btn-secondary btn-small">Preview publication figure</button>
               <button type="button" id="engine-nmr-download-png" class="btn btn-ghost btn-small" title="Export calculated NMR sticks using the publication settings">Export figure</button>
             </div>
           </div>
@@ -3070,13 +3084,29 @@ Products:   12 CO2 + 6 H2O</pre>
     </div>
   </div>
 
+  <dialog id="figure-preview-dialog" class="publication-preview-dialog" aria-labelledby="figure-preview-heading">
+    <header class="publication-preview-header"><div><span class="panel-eyebrow">Publication figure</span><h3 id="figure-preview-heading">Final artwork preview</h3><p id="figure-preview-name"></p></div><button id="figure-preview-close" type="button" class="btn btn-ghost btn-small">Close preview</button></header>
+    <div class="figure-export-controls publication-preview-controls">
+      <label>Text (pt)<input data-figure-target="figure-font-size" type="number" min="5" max="14" step="0.5"></label>
+      <label>Curve width (pt)<input data-figure-target="figure-line-width" type="number" min="0.4" max="1.5" step="0.1"></label>
+      <label>Legend<select data-figure-target="figure-legend"><option value="bottom">Below plot</option><option value="top">Above plot</option><option value="right">Right side</option><option value="none">Hidden</option></select></label>
+      <label>Resolution<select data-figure-target="figure-dpi"><option value="300">300 dpi</option><option value="600">600 dpi</option><option value="1000">1000 dpi</option><option value="1200">1200 dpi</option></select></label>
+      <label>Format<select data-figure-target="figure-format"><option value="png">PNG</option><option value="tiff">TIFF (RGB)</option><option value="tiff-gray">TIFF (grayscale)</option><option value="tiff-line">TIFF (1-bit line art)</option><option value="svg">SVG (editable vector)</option></select></label>
+      <button id="figure-preview-save" type="button" class="btn btn-primary btn-small">Download figure</button><button id="figure-preview-copy" type="button" class="btn btn-outline btn-small">Copy image for Word</button>
+    </div>
+    <output id="figure-preview-status" class="publication-preview-status" aria-live="polite"></output>
+    <details id="figure-preview-legend-editor"><summary>Edit legend labels</summary><div id="figure-preview-labels" class="figure-export-controls"></div></details>
+    <div id="figure-preview-art" class="publication-preview-art"></div>
+  </dialog>
   <script src="{{ url_for('static', filename='js/molecule-graph.js') }}?v=20261029electrons1"></script>
   <script src="{{ url_for('static', filename='js/browser-chemistry.js') }}?v=20261029geometry2"></script>
   <script src="{{ url_for('static', filename='js/molecular-controls.js') }}?v=20261023mol1"></script>
-  <script src="{{ url_for('static', filename='js/publication-molecule.js') }}?v=20261024labels1"></script>
-  <script src="{{ url_for('static', filename='js/publication-figures.js') }}?v=20261024labels1"></script>
-  <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261024labels1"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261029orca2"></script>
+  <script src="{{ url_for('static', filename='js/publication-molecule.js') }}?v=20261029journal1"></script>
+  <script src="{{ url_for('static', filename='js/publication-style.js') }}?v=20261029journal1"></script>
+  <script src="{{ url_for('static', filename='js/publication-figures.js') }}?v=20261029journal1"></script>
+  <script src="{{ url_for('static', filename='js/publication-preview.js') }}?v=20261029journal1"></script>
+  <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261029journal1"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261029journal1"></script>
   <script src="{{ url_for('static', filename='js/drawing-tools.js') }}?v=20261028chemdraw1"></script>
   <script src="{{ url_for('static', filename='js/chemical-drawing.js') }}?v=20261028chemdraw2"></script>
   <script src="{{ url_for('static', filename='js/editor-integration.js') }}?v=20261029max1"></script>

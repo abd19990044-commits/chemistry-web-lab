@@ -42,7 +42,7 @@
       if(preview&&!preview.hidden){preview.setAttribute('data-stale','true');if(previewStatus)previewStatus.textContent='Preview outdated. Refresh it to show the current settings and orientation.';}
     }
     function watchOrientation(){const next=viewer.getView().slice(4,8).join(',');if(next!==lastOrientation){lastOrientation=next;invalidate(true);}}
-    for(const id of ['engine-3d-style','engine-3d-bg','engine-3d-bg-color','engine-3d-label-mode','engine-3d-label-color','engine-3d-label-badge','engine-3d-label-size','engine-3d-atom-size','engine-3d-bond-radius','engine-3d-bond-spacing','engine-3d-label-layout','engine-3d-label-hydrogens','figure-width-mm','figure-height-mm','figure-preset','figure-dpi','figure-panel']){
+    for(const id of ['engine-3d-figure-colors','figure-font','figure-format','engine-3d-style','engine-3d-bg','engine-3d-bg-color','engine-3d-label-mode','engine-3d-label-color','engine-3d-label-badge','engine-3d-label-size','engine-3d-atom-size','engine-3d-bond-radius','engine-3d-bond-spacing','engine-3d-label-layout','engine-3d-label-hydrogens','figure-width-mm','figure-height-mm','figure-preset','figure-dpi','figure-panel']){
       const reset=['engine-3d-label-mode','engine-3d-label-layout','engine-3d-label-hydrogens','figure-width-mm','figure-height-mm','figure-preset'].includes(id);
       for(const type of ['input','change'])listen(el(id),type,()=>invalidate(reset));
     }
@@ -91,8 +91,8 @@
       const mode=el('engine-3d-label-mode')?.value||'off';
       const charge=mode.includes('hirshfeld')?(job.hirshfeld_charges||job.chg_charges||job.crg_charges||[]):(job.mulliken_charges||job.charges||[]);
       const labels=atoms.map((a,i)=>{
-        if(mode==='off'||(el('engine-3d-label-hydrogens')?.value==='hide'&&a.elem==='H'))return '';
-        const atom=mode==='symbols'?a.elem:`${a.elem}${i+1}`,q=charge.length===atoms.length&&Number.isFinite(charge[i])?charge[i]:null;
+        if(mode==='off'||(mode==='hetero'&&['C','H'].includes(a.elem))||(el('engine-3d-label-hydrogens')?.value==='hide'&&a.elem==='H'))return '';
+        const atom=['symbols','hetero'].includes(mode)?a.elem:`${a.elem}${i+1}`,q=charge.length===atoms.length&&Number.isFinite(charge[i])?charge[i]:null;
         if(!mode.includes('mulliken')&&!mode.includes('hirshfeld'))return atom;
         if(q===null)return mode.startsWith('both_')?atom:'';
         const text=`${q>=0?'+':''}${q.toFixed(3)}`;return mode.startsWith('both_')?`${atom} (${text})`:text;
