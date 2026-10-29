@@ -5342,7 +5342,8 @@
         const cancelBtn = document.createElement("button");
         cancelBtn.type = "button";
         cancelBtn.className = "job-cancel-btn btn btn-ghost btn-small";
-        cancelBtn.textContent = job.serverWorkflowId ? "Cancel workflow" : "Cancel";
+        cancelBtn.textContent = "Cancel";
+        if (job.serverWorkflowId) cancelBtn.textContent = "Cancel workflow";
         cancelBtn.addEventListener("click", async () => {
           if (job.serverWorkflowId) {
             cancelBtn.disabled = true;
