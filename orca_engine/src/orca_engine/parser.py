@@ -119,6 +119,8 @@ class OrcaParser:
             (RegexLibrary.SPIN_S2_IDEAL, self._capture_s2_ideal),
             (RegexLibrary.SP_ENERGY, self._capture_sp_energy),
             (RegexLibrary.NORMAL_TERMINATION, self._capture_normal_termination),
+            (RegexLibrary.OPTIMIZATION_CONVERGED, self._capture_optimization_converged),
+            (RegexLibrary.OPTIMIZATION_CYCLE, self._capture_optimization_cycle),
             (RegexLibrary.ERROR_TERMINATION, self._capture_error_termination),
         )
         self._search_dispatch: tuple[tuple[re.Pattern[str], SearchAction], ...] = (
@@ -688,6 +690,14 @@ class OrcaParser:
         del match
         self.job.terminated_normally = True
         self.job.termination_message = line
+
+    def _capture_optimization_converged(self, match: re.Match[str], line: str) -> None:
+        """Record the output convergence certificate for this calculation block."""
+        self.job.geometry_optimization_converged = True
+
+    def _capture_optimization_cycle(self, match: re.Match[str], line: str) -> None:
+        """A new cycle invalidates an earlier certificate in an appended run."""
+        self.job.geometry_optimization_converged = False
 
     def _capture_error_termination(self, match: re.Match[str], line: str) -> None:
         """Capture ORCA error termination status.

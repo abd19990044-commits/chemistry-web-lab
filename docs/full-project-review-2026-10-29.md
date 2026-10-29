@@ -61,6 +61,9 @@ environment's process restrictions.
 
 ## Practical limits
 
+Follow-up browser and export verification is recorded in
+[the 30 October live-validation report](live-validation-2026-10-30.md).
+
 The local execution test uses a scripted stand-in, not a licensed quantum
 calculation. No live Kaggle job was submitted during this review. The latest
 interactive production-browser inspection remains unavailable after the browser

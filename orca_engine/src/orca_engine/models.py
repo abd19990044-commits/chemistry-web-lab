@@ -203,6 +203,7 @@ class JobData:
     tddft_cm: list[float] = field(default_factory=list)
     tddft_fosc: list[float] = field(default_factory=list)
     terminated_normally: bool | None = None
+    geometry_optimization_converged: bool | None = None
     termination_message: str | None = None
     error_messages: list[str] = field(default_factory=list)
     dipole_moment_debye: float | None = None

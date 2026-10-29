@@ -12,6 +12,18 @@
       .replace(/'/g, "&#039;");
   }
 
+  function engineCalculationStatus(job) {
+    if (job.geometry_only) return {normal: false, label: "Geometry only", optimized: false};
+    const terminated = typeof job.terminated_normally === "boolean" ? job.terminated_normally
+      : (job.termination_status === "NORMAL" ? true : null);
+    return {
+      normal: terminated === true,
+      label: terminated === true ? "Normal Termination" : terminated === false
+        ? "Abnormal Termination" : (job.termination_status || "Termination not reported"),
+      optimized: job.geometry_optimization_converged === true
+    };
+  }
+
   // Helper to extract session CSRF token from meta tag or cookie
   function getCsrfToken() {
     const meta = document.querySelector('meta[name="csrf-token"]');
@@ -6484,8 +6496,9 @@
 
     const statusBadge = document.getElementById("engine-status-badge");
     if (statusBadge) {
-      const isOk = !job.geometry_only && job.termination_status === "NORMAL";
-      statusBadge.textContent = job.geometry_only?"Geometry only":isOk?"Normal Termination":(job.termination_status || "Termination not reported");
+      const calculationStatus = engineCalculationStatus(job);
+      const isOk = calculationStatus.normal;
+      statusBadge.textContent = calculationStatus.label;
       statusBadge.className = `prop-badge ${isOk ? 'badge-success' : 'badge-neutral'}`;
     }
 
@@ -6617,16 +6630,7 @@
     }
 
     const cleanCartesian = extractCleanCartesian(xyz, elements, coords, job.coords_raw);
-    const rawText = (data.raw_text || data.content || "").toLowerCase();
-    const calcTypeStr = String(job.calculation_type || job.job_type || job.task || job.calc_type || "").toLowerCase();
-    const isOpt = (
-      rawText.includes("optimization run done") ||
-      rawText.includes("the optimization has converged") ||
-      rawText.includes("stationary point") ||
-      rawText.includes("geometry optimization") ||
-      /\b(opt|optts|cgo|neb|scan)\b/i.test(calcTypeStr) ||
-      /!\s*.*\b(opt|optts)\b/i.test(data.raw_text || "")
-    );
+    const isOpt = engineCalculationStatus(job).optimized;
 
     // Geometry Optimization Callout Banner
     const optBanner = document.getElementById("engine-opt-banner");

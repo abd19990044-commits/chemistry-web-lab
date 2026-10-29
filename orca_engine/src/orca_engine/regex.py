@@ -170,6 +170,12 @@ class RegexLibrary:
         re.IGNORECASE,
     )
     NORMAL_TERMINATION = re.compile(r"ORCA\s+TERMINATED\s+NORMALLY", re.IGNORECASE)
+    OPTIMIZATION_CONVERGED = re.compile(
+        r"^(?:\*+\s*)?THE\s+OPTIMIZATION\s+HAS\s+CONVERGED(?:\s*\*+)?$", re.IGNORECASE
+    )
+    OPTIMIZATION_CYCLE = re.compile(
+        r"^(?:\*+\s*)?(?:GEOMETRY\s+)?OPTIMIZATION\s+CYCLE\s+\d+(?:\s*\*+)?$", re.IGNORECASE
+    )
     # Fatal-termination banners only. An earlier catch-all ``Error\s*:``
     # alternative matched diagnostic text inside successful runs and flagged
     # them as failures, so each accepted form is spelled out.

@@ -95,6 +95,7 @@ def job_to_dict(index: int, job: JobData) -> dict[str, Any]:
 
         "tddft_states": len(job.tddft_cm),
         "terminated_normally": job.terminated_normally,
+        "geometry_optimization_converged": job.geometry_optimization_converged,
         "termination_message": job.termination_message,
         "had_error_termination": job.had_error_termination,
         "error_count": len(job.error_messages),
