@@ -1167,12 +1167,13 @@ def _geometry_identity(input_text):
     return "no-geometry"
 
 
-def _neb_image_count():
-    mep = sorted(glob.glob(wp("*_MEP.allxyz")))
-    if not mep:
-        return 0
-    result = art.validate_allxyz(mep[0])
-    return int(result.detail.get("images", 0)) if result.ok else 0
+def _neb_snapshot():
+    own_path = wp(BASENAME + "_MEP.allxyz")
+    paths = [own_path] if os.path.exists(own_path) else sorted(glob.glob(wp("*_MEP.allxyz")))
+    if len(paths) != 1:
+        return None, None
+    result = art.validate_allxyz(paths[0])
+    return (paths[0], result) if result.ok else (None, result)
 
 
 def scientific_fingerprint(job_kind, input_text, *, cumulative, outcome=None):
@@ -1180,8 +1181,9 @@ def scientific_fingerprint(job_kind, input_text, *, cumulative, outcome=None):
 
     Pure in its text argument except for cheap reads of the small ASCII
     artefacts already in WORKDIR (a NumFreq column count, the MD restart
-    size, the NEB path image count). No large file is hashed here; the only
-    full-hash target is the one geometry file the input points at."""
+    size, and the verified NEB path). The NEB identity hashes atom coordinates
+    rather than comments, so fixed-size bands can still advance."""
+    _, neb = _neb_snapshot() if job_kind == "neb" else (None, None)
     return {
         "job_kind": job_kind,
         "geometry": _geometry_identity(input_text),
@@ -1189,7 +1191,8 @@ def scientific_fingerprint(job_kind, input_text, *, cumulative, outcome=None):
         "scan_steps": (int(outcome.scan_steps) if outcome is not None
                        else len(glob.glob(wp(BASENAME + ".[0-9][0-9][0-9].xyz")))),
         "freq_columns": len(glob.glob(wp(BASENAME + ".res.*"))),
-        "neb_images": _neb_image_count(),
+        "neb_images": int(neb.detail.get("images", 0)) if neb and neb.ok else 0,
+        "neb_path": neb.detail.get("geometry_sha256", "") if neb and neb.ok else "",
         "mdrestart_size": _file_size(wp(BASENAME + ".mdrestart")),
         "last_energy": (outcome.energy if outcome is not None else None),
     }
@@ -1202,7 +1205,7 @@ def fingerprint_progressed(previous, current):
     re-iteration on the same geometry changes the energy without moving the
     calculation anywhere. Every component that IS compared is a completion
     marker: a new geometry, another optimisation cycle, another scan point,
-    another Hessian column, another path image, a rewritten MD restart."""
+    another Hessian column, moved path images, a rewritten MD restart."""
     if previous is None or current is None:
         return True
     return (current["geometry"] != previous["geometry"]
@@ -1210,6 +1213,7 @@ def fingerprint_progressed(previous, current):
             or current["scan_steps"] > previous["scan_steps"]
             or current["freq_columns"] > previous["freq_columns"]
             or current["neb_images"] > previous["neb_images"]
+            or (current.get("neb_path") and current.get("neb_path") != previous.get("neb_path"))
             or current["mdrestart_size"] > previous["mdrestart_size"])
 
 
@@ -1261,21 +1265,18 @@ def build_continuation(original_text, out_text, job_kind, outcome):
     hess_ok = os.path.exists(hess_path) and art.validate_hessian(hess_path).ok
 
     if job_kind == "neb":
-        mep = sorted(glob.glob(wp("*_MEP.allxyz")))
-        snapshot = mep[0] if mep and art.validate_allxyz(mep[0]).ok else None
+        snapshot, _validation = _neb_snapshot()
         if snapshot:
             name = os.path.basename(snapshot)
-            carry(snapshot, 10)
-            if not re.search(r"(?i)restart_allxyzfile", text):
-                if re.search(r"(?i)%\s*neb", text):
-                    text = re.sub(r"(?i)%\s*neb",
-                                  lambda m: m.group(0) + '\n  Restart_ALLXYZFile "%s"' % name,
-                                  text, count=1)
-                else:
-                    text = text.rstrip() + '\n%%neb\n  Restart_ALLXYZFile "%s"\nend\n' % name
-            notes.append("NEB resumed from " + name)
+            if carry(snapshot, 10):
+                text = art.set_neb_restart(text, name)
+                notes.append("NEB resumed from " + name)
+            else:
+                refusal = "the verified NEB path could not be carried to the next window"
         else:
-            notes.append("no complete _MEP.allxyz; NEB restarts from its endpoints")
+            refusal = "no complete, unambiguous NEB path exists; refusing to repeat the original endpoints"
+        if refusal:
+            notes.append(refusal)
         for path in glob.glob(wp("*.xyz")):
             if not path.endswith("_trj.xyz"):
                 carry(path, 20)
@@ -1412,6 +1413,14 @@ def build_continuation(original_text, out_text, job_kind, outcome):
     # genuinely non-converging system.
     if job_kind in ("opt", "opt_freq", "scan", "irc"):
         text = art.set_geom_maxiter(text, PER_WINDOW_MAXITER)
+    elif job_kind == "neb" and art.neb_requests_ts(text) and outcome.kind == art.OUTCOME_MAXITER:
+        span = art.find_block_span(text, "geom")
+        body = text[span[1]:span[2]] if span else ""
+        limit = re.search(r"(?i)\bMaxIter\s+(\d+)", art._mask_comments(art._mask_nested_blocks(body)))
+        previous = int(limit.group(1)) if limit else PER_WINDOW_MAXITER
+        budget = min(MAX_TOTAL_OPT_CYCLES, max(PER_WINDOW_MAXITER, previous * 2))
+        text = art.set_geom_maxiter(text, max(previous, budget))
+        notes.append("TS optimization may repeat from the saved band; geometry-cycle budget %d" % max(previous, budget))
 
     text = art.ensure_simple_keyword(text, "NoAutoStart")
     carried.sort(key=lambda item: (item[0], item[1]))
@@ -2158,7 +2167,7 @@ def _main_impl():
         LAST_ORCA_RETURN_CODE = execution.run()
         out_text = read_output(out_path)
         outcome = art.classify_outcome(out_text, job_kind=job_kind,
-                                       killed_by=execution.stop_reason)
+                                       killed_by=execution.stop_reason, input_text=text)
         session_cycles += outcome.opt_cycles
         cumulative = cumulative_header + session_cycles
 
@@ -2246,7 +2255,7 @@ def _main_impl():
     # ------------------------------------------------------------------
     out_text = read_output(out_path)
     if outcome is None:
-        outcome = art.classify_outcome(out_text, job_kind=job_kind)
+        outcome = art.classify_outcome(out_text, job_kind=job_kind, input_text=text)
 
     if outcome.is_complete:
         note = ("The calculation finished: %s. Optimisation cycles in this window: %d; "

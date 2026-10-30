@@ -44,6 +44,9 @@ from the chain of different calculation stages. The notebook can use Kaggle User
 Secrets for self-continuation; the server-side supervisor can also reconcile
 and resume supported windows while the application is online.
 
+For NEB/NEB-TS phase completion, verified path restarts, and restart limits, see
+[NEB-TS continuation](neb-ts-continuation.md).
+
 ## Encrypted connection storage
 
 - Kaggle API credentials use AES-256-GCM with the owner identity authenticated

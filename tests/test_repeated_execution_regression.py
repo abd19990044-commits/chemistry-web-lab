@@ -176,6 +176,67 @@ def _encode_inline(files):
     return base64.b64encode(gzip.compress(json.dumps(payload).encode("utf-8"), 6)).decode("ascii")
 
 
+def test_neb_ts_continues_across_fixed_image_count_until_ts_and_freq_finish(runner, monkeypatch, tmp_path):
+    inp = H2O_INP.replace(" Opt", " NEB-TS Freq") + '%neb NImages 2 Product "product.xyz" end\n'
+    kr = setup_job(runner, monkeypatch, tmp_path, inp_text=inp, job_kind="neb")
+    observed_inputs = []
+
+    def move_band(pass_number):
+        with open(kr.wp("h2o.inp"), encoding="utf-8") as fh:
+            observed_inputs.append(fh.read())
+        frames = [H2O_FRAME.format(n=pass_number + index) for index in range(4)]
+        with open(kr.wp("h2o_MEP.allxyz"), "w", encoding="utf-8") as fh:
+            fh.write(">\n".join(frames))
+
+    band = "*** THE NEB OPTIMIZATION HAS CONVERGED ***\n"
+    normal = "ORCA TERMINATED NORMALLY\n"
+    FakeExecution.on_run = move_band
+    FakeExecution.script = [(band + normal, None), (band + normal, None),
+                            (band + "THE OPTIMIZATION HAS CONVERGED\nVIBRATIONAL FREQUENCIES\n" + normal, None)]
+    assert kr.main() == 0
+    assert len(FakeExecution.instances) == 3
+    assert read_state(kr)["job"]["state"] == "FINISHED"
+    assert all('Restart_ALLXYZFile "h2o_MEP.allxyz"' in text for text in observed_inputs[1:])
+
+
+def test_neb_time_limit_hands_verified_band_to_successor(runner, monkeypatch, tmp_path):
+    inp = H2O_INP.replace(" Opt", " NEB-TS") + '%neb NImages 2 Product "product.xyz" end\n'
+    kr = setup_job(runner, monkeypatch, tmp_path, inp_text=inp, job_kind="neb")
+
+    def write_band(_pass):
+        with open(kr.wp("h2o_MEP.allxyz"), "w", encoding="utf-8") as fh:
+            fh.write(">\n".join(H2O_FRAME.format(n=index) for index in range(4)))
+
+    FakeExecution.on_run = write_band
+    FakeExecution.script = [("unfinished path\n", "time")]
+    pushed = []
+    def push(manifest, *_args):
+        pushed.append(manifest)
+        return "neb-next", "https://www.kaggle.com/code/tester/neb-next"
+    monkeypatch.setattr(kr, "push_successor", push)
+    assert kr.main() == 0
+    assert len(pushed) == 1
+    assert read_state(kr)["job"]["state"] == "QUEUED"
+    assert os.path.exists(os.path.join(kr.OUTPUT_DIR, "CHECKPOINT_BUNDLE.zip"))
+
+
+def test_neb_unchanged_band_cannot_repeat_on_comment_changes(runner, monkeypatch, tmp_path):
+    inp = H2O_INP.replace(" Opt", " NEB-TS") + '%neb NImages 2 Product "product.xyz" end\n'
+    kr = setup_job(runner, monkeypatch, tmp_path, inp_text=inp, job_kind="neb")
+
+    def same_band(pass_number):
+        frames = [H2O_FRAME.format(n=index).replace("frame ", f"pass{pass_number} frame ")
+                  for index in range(4)]
+        with open(kr.wp("h2o_MEP.allxyz"), "w", encoding="utf-8") as fh:
+            fh.write(">\n".join(frames))
+
+    FakeExecution.on_run = same_band
+    FakeExecution.script = [("THE NEB OPTIMIZATION HAS CONVERGED\nORCA TERMINATED NORMALLY\n", None)] * 2
+    assert kr.main() == 1
+    assert len(FakeExecution.instances) == 2
+    assert read_state(kr)["job"]["last_error"]["code"] == "no_scientific_progress"
+
+
 def read_state(kr):
     with open(os.path.join(kr.OUTPUT_DIR, "STATE.json"), encoding="utf-8") as fh:
         return json.load(fh)

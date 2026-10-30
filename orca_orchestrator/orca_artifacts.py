@@ -43,6 +43,8 @@ uses statvfs as an upper bound, never as the primary signal.
 """
 from __future__ import annotations
 
+import hashlib
+import math
 import os
 import re
 import shutil
@@ -86,6 +88,8 @@ MAXITER_FRAGMENTS = (
     "did not converge but reached the maximum number of optimisation cycles",
     "maximum number of optimization cycles reached",
     "the optimization did not converge",
+    "the neb optimization has not converged",
+    "the neb optimization did not converge",
 )
 
 SCF_FAILURE_FRAGMENTS = (
@@ -280,7 +284,50 @@ class OrcaOutcome:
         return f"<OrcaOutcome {self.kind} job={self.job_kind} reason={self.reason!r}>"
 
 
-def classify_outcome(out_text: str, *, job_kind: str, killed_by: str | None = None) -> OrcaOutcome:
+def neb_requests_ts(input_text: str) -> bool:
+    keywords = " ".join(re.findall(r"(?m)^[ \t]*!([^\n]*)", _mask_comments(input_text)))
+    return bool(re.search(r"(?i)(?<![\w-])(?:[a-z]+-)*NEB-TS(?![\w-])", keywords))
+
+
+def _neb_completion_gap(text: str, input_text: str) -> str:
+    """NEB path convergence is distinct from its subsequent OptTS and Freq.
+
+    Match actual output lines, excluding input echoes and comments. FAST-NEB-TS
+    can switch to OptTS without a converged-band banner; its explicit TS-phase
+    announcement is sufficient context for a later geometry convergence banner.
+    """
+    bands = list(re.finditer(
+        r"(?im)^[ \t*]*(?:THE\s+)?NEB\s+OPTIMIZATION\s+(?:HAS\s+)?CONVERGED[ \t*]*$", text))
+    phase_end = bands[-1].end() if bands else -1
+    if neb_requests_ts(input_text):
+        starts = list(re.finditer(
+            r"(?im)^[ \t]*Next a TS optimization is performed[^\n]*$", text))
+        if starts:
+            phase_end = max(phase_end, starts[-1].end())
+        if phase_end < 0:
+            return "the NEB path has not reached the transition-state optimization"
+        ts_tail = text[phase_end:]
+        certificates = list(re.finditer(
+            r"(?im)^[ \t*]*(?:THE\s+)?(?:GEOMETRY\s+)?OPTIMI[ZS]ATION\s+"
+            r"(?:HAS\s+)?CONVERGED[ \t*]*$", ts_tail))
+        if not certificates:
+            return "the NEB path is available but the transition-state optimization has not converged"
+        phase_end += certificates[-1].end()
+        if re.search(r"(?im)^[ \t*]*GEOMETRY OPTIMIZATION CYCLE\s+\d+", text[phase_end:]):
+            return "a later transition-state optimization cycle has not converged"
+    elif phase_end < 0:
+        return "the NEB path has not converged"
+    if _has_any(_normalize(text[phase_end:]), MAXITER_FRAGMENTS):
+        return "the final NEB/transition-state optimization did not converge"
+    keywords = " ".join(re.findall(r"(?m)^[ \t]*!([^\n]*)", _mask_comments(input_text)))
+    if re.search(r"(?i)(?<![\w-])(?:NUM)?FREQ(?![\w-])", keywords):
+        if not re.search(r"(?m)^[ \t]*VIBRATIONAL FREQUENCIES[ \t]*$", text[phase_end:]):
+            return "the requested frequency calculation after NEB/OptTS has not completed"
+    return ""
+
+
+def classify_outcome(out_text: str, *, job_kind: str, killed_by: str | None = None,
+                     input_text: str = "") -> OrcaOutcome:
     """The single decision point for "is this calculation finished?".
 
     `killed_by` is set when *we* stopped ORCA ("time" or "disk"), which takes
@@ -339,6 +386,14 @@ def classify_outcome(out_text: str, *, job_kind: str, killed_by: str | None = No
         return make(OUTCOME_SCF_FAILED,
                     "the SCF did not converge; continuing with a different guess or "
                     "convergence strategy may still succeed")
+
+    # NEB-TS is a multi-phase calculation, even though its durable job kind
+    # remains 'neb'. The exact input preserves the requested TS/Freq milestones.
+    if normal_end and job_kind == "neb":
+        gap = _neb_completion_gap(text, input_text)
+        if gap:
+            return make(OUTCOME_MAXITER, gap)
+        return make(OUTCOME_COMPLETE, "NEB and all requested TS/frequency milestones completed")
 
     # 7. --- The MaxIter fix. --------------------------------------------
     # ORCA exited normally but the optimisation did not converge. The manual
@@ -566,9 +621,11 @@ def validate_allxyz(path: str) -> ValidationResult:
             current.append(line)
     groups.append(current)
 
-    frames, natoms0 = 0, None
+    frames, natoms0, elements0 = 0, None, None
+    geometry_digest = hashlib.sha256()
     for group in groups:
-        group = [g for g in group if g.strip()]
+        while group and not group[0].strip():
+            group = group[1:]
         if not group:
             return ValidationResult(False, "allxyz", "an empty frame block was found")
         try:
@@ -576,18 +633,39 @@ def validate_allxyz(path: str) -> ValidationResult:
         except (ValueError, IndexError):
             return ValidationResult(False, "allxyz", "a frame has no valid atom-count line")
         coords = group[2:2 + natoms]
-        if len(coords) < natoms or any(len(c.split()) < 4 for c in coords):
+        if natoms <= 0 or len(coords) < natoms or any(len(c.split()) != 4 for c in coords):
             return ValidationResult(False, "allxyz",
                                     "a frame is truncated mid-coordinate-block")
+        if any(line.strip() for line in group[2 + natoms:]):
+            return ValidationResult(False, "allxyz", "unexpected data after a frame")
+        elements = []
+        for line in coords:
+            symbol, *fields = line.split()
+            try:
+                values = tuple(float(field) for field in fields)
+            except ValueError:
+                return ValidationResult(False, "allxyz", "non-numeric path coordinates")
+            if not all(math.isfinite(value) for value in values):
+                return ValidationResult(False, "allxyz", "non-finite path coordinates")
+            elements.append(symbol.lower())
+            # Comments, timestamps, whitespace and numeric formatting are not
+            # scientific progress; only atom identities and coordinates count.
+            canonical = (symbol.lower(), *(0.0 if value == 0 else value for value in values))
+            geometry_digest.update((repr(canonical) + "\n").encode("utf-8"))
         if natoms0 is None:
             natoms0 = natoms
         elif natoms != natoms0:
             return ValidationResult(False, "allxyz", "frames disagree on the atom count")
+        if elements0 is None:
+            elements0 = elements
+        elif elements != elements0:
+            return ValidationResult(False, "allxyz", "frames disagree on atom order")
         frames += 1
     if frames < 2:
         return ValidationResult(False, "allxyz",
                                 "a NEB path needs at least two images to restart from")
-    return ValidationResult(True, "allxyz", images=frames, natoms=natoms0)
+    return ValidationResult(True, "allxyz", images=frames, natoms=natoms0,
+                            geometry_sha256=geometry_digest.hexdigest())
 
 
 def validate_engrad(path: str) -> ValidationResult:
@@ -839,6 +917,8 @@ def find_block_span(text: str, name: str):
     Comment text is masked, not removed, so the indices are valid in the
     ORIGINAL string. A nested sub-block's keys are not this block's keys."""
     masked = _mask_comments(text or "")
+    # Filenames such as "end.xyz" or "scan.xyz" are values, not block tokens.
+    masked = re.sub(r'''(?:"[^"\n]*"|'[^'\n]*')''', lambda m: " " * len(m.group(0)), masked)
     m = re.search(r"(?im)^[ \t]*%\s*" + name + r"\b", masked)
     if not m:
         return None
@@ -863,6 +943,22 @@ def _mask_nested_blocks(body: str) -> str:
         for i in range(*m.span()):
             masked[i] = " "
     return "".join(masked)
+
+
+def set_neb_restart(text: str, filename: str) -> str:
+    """Point the NEB block at the verified snapshot, replacing stale references."""
+    directive = 'Restart_ALLXYZFile "%s"' % filename
+    span = find_block_span(text, "neb")
+    if not span:
+        return text.rstrip() + "\n%neb\n  " + directive + "\nend\n"
+    _, start, end = span
+    body = text[start:end]
+    matches = list(re.finditer(r'(?i)\bRestart_ALLXYZFile\s+(?:"[^"\n]*"|[^\s#]+)',
+                               _mask_comments(body)))
+    for match in reversed(matches):
+        body = body[:match.start()] + body[match.end():]
+    body = "\n  " + directive + "\n" + body.lstrip("\n")
+    return text[:start] + body + text[end:]
 
 
 def set_geom_maxiter(text: str, maxiter: int) -> str:
