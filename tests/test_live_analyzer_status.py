@@ -13,7 +13,7 @@ NORMAL = "****ORCA TERMINATED NORMALLY****\n"
 
 def test_real_tddft_output_reports_termination_without_optimization_certificate():
     path = Path(__file__).resolve().parents[1] / "orca_engine/data/orcafile/orca6.1/napc9oxcuv.out"
-    with path.open() as stream:
+    with path.open(encoding="utf-8") as stream:
         job = OrcaParser(stream).parse()[-1]
     data = job_to_web_json(job, "test", 1)
     assert data["terminated_normally"] is True
@@ -53,7 +53,7 @@ def test_optimization_certificate_does_not_leak_to_next_calculation():
 
 
 def test_frontend_uses_authoritative_status_fields_without_conflating_convergence():
-    source = (Path(__file__).resolve().parents[1] / "static/js/app.js").read_text()
+    source = (Path(__file__).resolve().parents[1] / "static/js/app.js").read_text(encoding="utf-8")
     start = source.index("  function engineCalculationStatus(job) {")
     end = source.index("  // Helper to extract session CSRF", start)
     code = source[start:end] + r"""
