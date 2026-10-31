@@ -237,6 +237,30 @@ def test_neb_unchanged_band_cannot_repeat_on_comment_changes(runner, monkeypatch
     assert read_state(kr)["job"]["last_error"]["code"] == "no_scientific_progress"
 
 
+def test_neb_missing_notebook_secrets_keeps_verified_restart_and_archives_diagnostics(runner, monkeypatch, tmp_path):
+    import zipfile
+    inp = H2O_INP.replace(" Opt", " NEB-TS") + '%neb NEB_Restart_XYZFile "initial.allxyz" end\n'
+    kr = setup_job(runner, monkeypatch, tmp_path, inp_text=inp, job_kind="neb")
+    monkeypatch.setattr(kr, "CONTINUATION_CREDENTIALS_AVAILABLE", False)
+    monkeypatch.setattr(kr, "CONTINUATION_CREDENTIALS_ERROR", "Kaggle User Secrets are unavailable")
+    def save_band(_pass):
+        with open(kr.wp("h2o_MEP.allxyz"), "w", encoding="utf-8") as fh:
+            fh.write(">\n".join(H2O_FRAME.format(n=index) for index in range(4)))
+    FakeExecution.on_run = save_band
+    FakeExecution.script = [("unfinished path\n", "time")]
+    assert kr.main() == 0
+    state = read_state(kr)
+    assert state["job"]["state"] == "RESTARTING"
+    assert state["job"]["last_error"]["code"] == "successor_push_failed"
+    with zipfile.ZipFile(os.path.join(kr.OUTPUT_DIR, "results.zip")) as archive:
+        assert {"STATE.json", "JOB_NOTE.txt", "CHECKPOINT.json", "job_result.json"} <= set(archive.namelist())
+        assert "User Secrets" in archive.read("JOB_NOTE.txt").decode("utf-8")
+        checkpoint = json.loads(archive.read("CHECKPOINT.json"))
+        assert checkpoint["status"] == "verified"
+        assert 'Restart_ALLXYZFile "h2o_MEP.allxyz"' in checkpoint["next_input_text"]
+        assert "initial.allxyz" not in checkpoint["next_input_text"]
+
+
 def read_state(kr):
     with open(os.path.join(kr.OUTPUT_DIR, "STATE.json"), encoding="utf-8") as fh:
         return json.load(fh)

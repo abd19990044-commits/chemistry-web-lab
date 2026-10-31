@@ -1841,6 +1841,12 @@ def package_results(note=""):
     if molden["status"] != "MOLDEN_GENERATED":
         molden_note = "Molden artifact: %s (%s)." % (molden["status"], molden["detail"])
         note = (note + "\n\n" + molden_note) if note else molden_note
+    if note:
+        try:
+            with open(NOTE_FILE, "w", encoding="utf-8") as fh:
+                fh.write(note.strip() + "\n")
+        except OSError:
+            pass
     # Publish a small machine-readable terminal record alongside the human
     # output.  Consumers must not infer success from the presence of results.zip
     # or from a Kaggle HTTP status alone.
@@ -1886,6 +1892,13 @@ def package_results(note=""):
         _molden_re = re.compile(r"\.molden(\.input)?$", re.IGNORECASE)
         ordered = [p for p in ordered
                    if not _molden_re.search(os.path.basename(p))]
+
+    # State/continuation diagnostics live in OUTPUT_DIR, not WORKDIR. Keep
+    # them inside the download itself, before large optional wavefunctions.
+    diagnostics = [path for path in (STATE_FILE, NOTE_FILE, CHECKPOINT_FILE,
+                                    os.path.join(OUTPUT_DIR, "job_result.json")) if os.path.isfile(path)]
+    diagnostic_names = {os.path.basename(path) for path in diagnostics}
+    ordered = diagnostics + [path for path in ordered if os.path.basename(path) not in diagnostic_names]
 
     manifest, included, skipped, total = [], 0, [], 0
     zip_path = os.path.join(OUTPUT_DIR, "results.zip")
@@ -1936,12 +1949,6 @@ def package_results(note=""):
                         ("\n\nLeft out:\n" + "\n".join(skipped)) if skipped else ""))
     except OSError:
         pass
-    if note:
-        try:
-            with open(NOTE_FILE, "w") as fh:
-                fh.write(note.strip() + "\n")
-        except OSError:
-            pass
     emit("results_packaged", "packaged the window's output",
          files=included, bytes=total, archive=bool(zip_path))
 

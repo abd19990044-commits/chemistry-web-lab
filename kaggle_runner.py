@@ -2392,11 +2392,16 @@ def _package_results(note=""):
     # results never have to exist twice inside the 20 GB output quota. Every
     # step is best-effort: if the disk is full we still want the .out and the
     # note to reach the user rather than losing the whole window's work.
+    _molden_note = "Molden artifact: %s%s." % (_molden_status, (": " + _molden_detail) if _molden_detail else "")
+    note_path = os.path.join(OUTPUT_DIR, "JOB_NOTE.txt")
+    _write_text(note_path, (note + "\n\n" + _molden_note) if note else _molden_note)
+    sources = [note_path] + [path for path in _ordered_result_files()
+                            if os.path.basename(path) != "JOB_NOTE.txt"]
     manifest, included, skipped, total = [], 0, [], 0
     zip_path = os.path.join(OUTPUT_DIR, "results.zip")
     try:
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
-            for path in _ordered_result_files():
+            for path in sources:
                 name = os.path.basename(path)
                 try:
                     size = os.path.getsize(path)
@@ -2443,9 +2448,6 @@ def _package_results(note=""):
                 "Files in results.zip (%d, %s total):\n%s%s"
                 % (included, _gb(total), "\n".join(manifest),
                    ("\n\nLeft out:\n" + "\n".join(skipped)) if skipped else ""))
-    _molden_note = "Molden artifact: %s%s." % (_molden_status, (": " + _molden_detail) if _molden_detail else "")
-    _write_text(os.path.join(OUTPUT_DIR, "JOB_NOTE.txt"),
-                (note + "\n\n" + _molden_note) if note else _molden_note)
     if zip_path and os.path.exists(zip_path):
         log("[results] Packaged %d file(s) into %s (%s on disk)."
             % (included, zip_path, _gb(os.path.getsize(zip_path))))
@@ -2594,6 +2596,26 @@ def _push_continuation_with_retries(job_dir, max_attempts=5, base_delay=15.0):
     raise RuntimeError("kaggle kernels push failed after retries: " + detail)
 
 
+def _set_neb_restart(text, name):
+    """Replace both ORCA restart spellings with one verified current path."""
+    clean = re.sub(r"(?m)#.*$", lambda m: " " * len(m.group(0)), text)
+    guard = re.sub(r"\"[^\"\n]*\"|'[^'\n]*'", lambda m: " " * len(m.group(0)), clean)
+    start = re.search(r"(?im)^[ \t]*%\s*neb\b", guard)
+    directive = 'Restart_ALLXYZFile "%s"' % name
+    if not start:
+        return text.rstrip() + "\n%neb\n  " + directive + "\nend\n"
+    end = re.search(r"(?i)(?<![\w.-])end(?![\w.-])", guard[start.end():])
+    if not end:
+        raise ValueError("the NEB block has no closing end")
+    body_end = start.end() + end.start()
+    body = text[start.end():body_end]
+    body_clean = clean[start.end():body_end]
+    matches = list(re.finditer(r'(?i)\b(?:Restart_ALLXYZFile|NEB_Restart_XYZFile)\s+(?:"[^"\n]*"|[^\s#]+)', body_clean))
+    for match in reversed(matches):
+        body = body[:match.start()] + body[match.end():]
+    return text[:start.end()] + "\n  " + directive + "\n" + body.lstrip("\n") + text[body_end:]
+
+
 def _build_next_input_and_carry():
     # Returns (next_input_text, carry_items, notes). carry_items are
     # (priority, filename, bytes) - lower priority number = more important.
@@ -2617,14 +2639,7 @@ def _build_next_input_and_carry():
         snap = os.path.basename(mep[0]) if (mep and _allxyz_is_complete(mep[0])) else None
         if snap:
             carry(_wp(snap), 10)
-            if re.search(r"(?i)restart_allxyzfile", text):
-                pass
-            elif re.search(r"(?i)%\s*neb", text):
-                text = re.sub(r"(?i)%\s*neb",
-                              lambda m: m.group(0) + '\n  Restart_ALLXYZFile "' + snap + '"',
-                              text, count=1)
-            else:
-                text = text.rstrip() + '\n%neb\n  Restart_ALLXYZFile "' + snap + '"\nend\n'
+            text = _set_neb_restart(text, snap)
             notes.append("NEB resumed from " + snap)
         else:
             notes.append("NEB restarted from scratch (no complete _MEP.allxyz)")
@@ -2832,7 +2847,7 @@ def _drop_references(text, dropped):
             text = re.sub(r"(?i)\bInHess\s+Read\b", "", text)
             removed.append("Hessian reuse (%s did not fit; it will be recomputed)" % name)
         elif low.endswith(".allxyz"):
-            text = re.sub(r"(?im)^[ \t]*Restart_ALLXYZFile\b.*$", "", text)
+            text = re.sub(r"(?im)^[ \t]*(?:Restart_ALLXYZFile|NEB_Restart_XYZFile)\b.*$", "", text)
             removed.append("NEB path restart (%s did not fit; the path restarts fresh)" % name)
         elif low.endswith(".res") or ".res." in low:
             text = re.sub(r"(?im)^[ \t]*Restart\s+true[ \t]*$", "", text)

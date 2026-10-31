@@ -9,6 +9,63 @@ NORMAL = "****ORCA TERMINATED NORMALLY****\n"
 FREQ = "VIBRATIONAL FREQUENCIES\n"
 
 
+def legacy_function(name):
+    import ast
+    import re
+    import kaggle_runner
+    source = kaggle_runner.KAGGLE_RUNNER_BODY
+    node = next(node for node in ast.parse(source).body
+                if isinstance(node, ast.FunctionDef) and node.name == name)
+    namespace = {"re": re}
+    exec(compile(ast.get_source_segment(source, node), "legacy-helper.py", "exec"), namespace)
+    return namespace[name]
+
+
+@pytest.mark.parametrize("implementation", ["modern", "legacy"])
+@pytest.mark.parametrize("directives", [
+    'NEB_Restart_XYZFile "initial.allxyz"',
+    'neb_restart_xyzfile initial.allxyz',
+    'Restart_ALLXYZFile "stale.allxyz" NEB_Restart_XYZFile "initial.allxyz"',
+])
+def test_avogadro_restart_alias_is_replaced_not_retained(implementation, directives):
+    rewrite = art.set_neb_restart if implementation == "modern" else legacy_function("_set_neb_restart")
+    inp = '# generated input\n! M062X NEB-TS Freq def2-SVP SMD(WATER)\n%neb\n  ' + directives + '\nend\n'
+    output = rewrite(inp, "latest_MEP.allxyz")
+    assert output.count("Restart_ALLXYZFile") == 1
+    assert "NEB_Restart_XYZFile" not in output and "initial.allxyz" not in output
+    assert "stale.allxyz" not in output
+    assert '! M062X NEB-TS Freq def2-SVP SMD(WATER)' in output
+    assert 'Restart_ALLXYZFile "latest_MEP.allxyz"' in output
+
+
+def test_legacy_result_zip_includes_the_handoff_note_from_output_directory(tmp_path):
+    import glob
+    import os
+    import shutil
+    import zipfile
+    work, output = tmp_path / "work", tmp_path / "output"
+    work.mkdir()
+    output.mkdir()
+    primary = work / "sample.out"
+    primary.write_text("unfinished NEB path\n", encoding="utf-8")
+    package = legacy_function("_package_results")
+    def write_note(path, text):
+        with open(path, "a", encoding="utf-8") as stream:
+            stream.write(text + "\n")
+    package.__globals__.update({
+        "os": os, "glob": glob, "shutil": shutil, "zipfile": zipfile,
+        "WORKDIR": str(work), "OUTPUT_DIR": str(output), "BASENAME": "sample",
+        "RESULT_BUDGET_BYTES": 1024 * 1024, "OUT_TAIL_BYTES": 1024,
+        "_molden_status": "MOLDEN_UNAVAILABLE", "_molden_detail": "not installed",
+        "_ordered_result_files": lambda: [str(primary)], "_wp": lambda name: str(work / name),
+        "_write_text": write_note, "_gb": str, "log": lambda *_args: None,
+    })
+    package("Successor push failed; verified path is retained.")
+    with zipfile.ZipFile(output / "results.zip") as archive:
+        assert "Successor push failed" in archive.read("JOB_NOTE.txt").decode("utf-8")
+        assert "sample.out" in archive.namelist()
+
+
 @pytest.mark.parametrize("variant", ["NEB-TS", "FAST-NEB-TS", "LOOSE-NEB-TS", "TIGHT-NEB-TS", "ZOOM-NEB-TS"])
 def test_converged_band_is_not_a_finished_transition_state(variant):
     inp = f"! B3LYP {variant}\n%neb NImages 8 end\n"

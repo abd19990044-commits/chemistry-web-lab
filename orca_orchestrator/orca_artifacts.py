@@ -953,7 +953,7 @@ def set_neb_restart(text: str, filename: str) -> str:
         return text.rstrip() + "\n%neb\n  " + directive + "\nend\n"
     _, start, end = span
     body = text[start:end]
-    matches = list(re.finditer(r'(?i)\bRestart_ALLXYZFile\s+(?:"[^"\n]*"|[^\s#]+)',
+    matches = list(re.finditer(r'(?i)\b(?:Restart_ALLXYZFile|NEB_Restart_XYZFile)\s+(?:"[^"\n]*"|[^\s#]+)',
                                _mask_comments(body)))
     for match in reversed(matches):
         body = body[:match.start()] + body[match.end():]

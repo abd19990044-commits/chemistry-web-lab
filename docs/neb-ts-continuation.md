@@ -21,6 +21,13 @@ the original endpoints. Restoring an earlier verified checkpoint can lose work
 performed after that checkpoint; a sudden platform kill cannot guarantee saving
 the latest iteration.
 
+Avogadro inputs can use the accepted ORCA spelling `NEB_Restart_XYZFile`.
+Continuation normalizes that spelling and `Restart_ALLXYZFile` to one reference
+to the verified current band; it does not retain an old initial-path reference.
+Downloaded modern result archives include `STATE.json`, `JOB_NOTE.txt`, and an
+available `CHECKPOINT.json`, so a failed successor push can be distinguished from
+a missing/rejected path without requiring access to the running web server.
+
 NEB normally retains a fixed number of images. The progress guard therefore
 compares path atom identities and coordinates, ignoring comment timestamps and
 numeric formatting. A changed band with the same image count is real progress;
