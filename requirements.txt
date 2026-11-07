@@ -6,6 +6,8 @@ rdkit==2025.3.6
 # and legacy username + key credentials are supported. Older 1.7.x releases
 # predate the CLI's access-token authentication support.
 kaggle==2.2.4
+# Kaggle imports six at CLI startup but does not declare it in its wheel metadata.
+six==1.17.0
 google-auth==2.32.0
 # Reaction schemes are composited (structures + coefficients + arrow) with PIL.
 # It arrives transitively with rdkit, but this file is the one that pins it.

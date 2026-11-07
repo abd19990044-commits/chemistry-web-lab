@@ -16,7 +16,7 @@ name: Deploy Hugging Face runtime
 # Transfers ChemDraw tools, standalone browser 2D editing, and distinct MOL/SDF/XYZ exports.
 # Preserves full RXN chemistry with editable KET captions and expands without fullscreen permission.
 # Publishes analyzer figure previews, journal typography, smooth molecules and true line-art TIFF.
-# Publishes NEB restart-alias compatibility and downloadable handoff diagnostics after CI succeeds.
+# Publishes explicit Kaggle CLI dependencies and a clean runtime startup check after CI succeeds.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later

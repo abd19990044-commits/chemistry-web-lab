@@ -219,6 +219,9 @@ jobs:
           source /tmp/test_clean_venv/bin/activate
           pip install --upgrade pip
           pip install dist/*.whl
+          # Probe before test extras can accidentally provide missing runtime dependencies.
+          pip check
+          (cd /tmp && python -m tools.check_kaggle_cli)
           pip install pytest httpx
           # Probe installed files outside the checkout so source imports cannot mask missing wheel assets.
           cd /tmp

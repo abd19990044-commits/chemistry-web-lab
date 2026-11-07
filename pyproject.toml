@@ -38,6 +38,7 @@ dependencies = [
     "requests>=2.33.0",
     "rdkit>=2023.9.0",
     "kaggle>=2.2.3",
+    "six>=1.17.0, <2",
     "google-auth>=2.32.0",
     "pillow>=13.0.0",
     "rarfile>=4.0",

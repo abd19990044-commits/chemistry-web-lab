@@ -273,7 +273,7 @@ def build_huggingface_package(dest_dir: Path, provenance: dict) -> dict:
     copy_tree_filtered(REPO_ROOT / 'bootstrap', dest_dir / 'bootstrap')
     # These helpers are imported by live API routes despite living in tools/.
     # Do not ship the remaining development tools or local build artifacts.
-    for helper in ('normalize_scientific_json.py', 'build_local_agent_packages.py'):
+    for helper in ('normalize_scientific_json.py', 'build_local_agent_packages.py', 'check_kaggle_cli.py'):
         copy_file_safe(REPO_ROOT / 'tools' / helper, dest_dir / 'tools' / helper)
 
     # 3. Data runtime assets

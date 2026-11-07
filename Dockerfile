@@ -17,6 +17,9 @@ COPY . .
 RUN python fetch_browser_engine.py
 RUN python fetch_ketcher_editor.py
 RUN pip install --no-cache-dir -e ./orca_engine
+# Exercise the CLI in the runtime image: importing the web app cannot detect
+# undeclared dependencies inside Kaggle's command-line import chain.
+RUN python -m pip check && python -m tools.check_kaggle_cli
 
 # Hugging Face Spaces routes external traffic to port 7860 by default.
 ENV PORT=7860

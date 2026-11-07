@@ -41,7 +41,8 @@ def test_huggingface_package_includes_live_helpers_without_development_artifacts
     builder.build_huggingface_package(target, provenance)
     for relative in ('app.py', 'api/main.py', 'Dockerfile', 'docker-entrypoint.sh',
                      'schema/canonical_scientific.schema.json',
-                     'tools/normalize_scientific_json.py', 'tools/build_local_agent_packages.py'):
+                     'tools/normalize_scientific_json.py', 'tools/build_local_agent_packages.py',
+                     'tools/check_kaggle_cli.py'):
         assert (target / relative).is_file()
     for relative in ('tests', '.github', 'cloudflare-control-plane', 'dist',
                      'tools/sync_deploy_manager.py', 'tools/build_deployment_packages.py'):
