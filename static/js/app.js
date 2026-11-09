@@ -4400,7 +4400,7 @@
     };
     if (remote.kaggle_url) patch.kaggleUrl = remote.kaggle_url;
     if (remote.chain_ids?.length) patch.chainIds = remote.chain_ids;
-    if (patch.remoteStatusUnknown && !TERMINAL_STATUSES.includes(remote.status)) {
+    if (patch.remoteStatusUnknown && !(remote.is_terminal && TERMINAL_STATUSES.includes(remote.status))) {
       patch.warning = remote.note || "Kaggle status is temporarily unavailable; retrying verification.";
       if (sameWindow && job.remoteState === "COMPLETE") {
         patch.remoteState = "COMPLETE";

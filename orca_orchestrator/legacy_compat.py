@@ -93,6 +93,7 @@ def _legacy_job(job):
         "kaggle_url": job.get("kaggle_url") or "",
         "status": _legacy_status(job.get("state"), job),
         "state": job.get("state"),
+        "is_terminal": bool(job.get("is_terminal")),
         "epoch": job.get("epoch", 0),
         "restarts": job.get("epoch", 0),
         "chain_ids": chain,

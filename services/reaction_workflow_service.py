@@ -1225,7 +1225,8 @@ def reconcile_kaggle_stages(
             remote_state = str(
                 observed.get("remote_state") or observed.get("state") or "UNKNOWN"
             ).upper()
-            finished = str(observed.get("state", "")).upper() == "FINISHED"
+            local_state = str(observed.get("state") or "").upper()
+            finished = local_state == "FINISHED"
             if finished:
                 remote_state = "COMPLETE"
             stage["remote_state"] = remote_state
@@ -1259,7 +1260,7 @@ def reconcile_kaggle_stages(
             entering_verification = stage.get("state") != "VERIFYING_RESULTS"
             stage["state"] = "VERIFYING_RESULTS"
             stage["waiting_reason"] = "KAGGLE_OUTPUT_NOT_AVAILABLE"
-            if not finished:
+            if local_state and not finished:
                 # The stopped window may have a successor. Do not archive an
                 # earlier window or dispatch the dependent stage prematurely.
                 continue
