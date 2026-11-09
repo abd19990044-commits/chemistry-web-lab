@@ -1383,6 +1383,31 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 2rem 6rem; }
   padding: 1.25rem;
 }
 
+.orbital-publication-view {
+  background: #fff;
+  color: #27313a;
+  border-radius: var(--radius-s);
+  overflow: hidden;
+}
+
+.orbital-publication-view svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 23rem;
+}
+
+.orbital-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem 1rem;
+  margin-top: .75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.analysis-spectrum-shortcuts { margin: .75rem 0; }
+.is-geometry-only .analysis-spectrum-shortcuts { display: none; }
+
 .orbital-levels {
   display: flex;
   flex-direction: column;

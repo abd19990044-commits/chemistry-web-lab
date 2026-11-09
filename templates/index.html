@@ -9,7 +9,7 @@
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261029journal1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261110orbital1">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" defer></script>
 {% if google_client_id %}<script src="https://accounts.google.com/gsi/client" async defer></script>{% endif %}
@@ -1410,11 +1410,15 @@ Products:   12 CO2 + 6 H2O</pre>
           <p class="field-hint">Set the final print size before export. Preview and download share the same layout. SVG retains editable paths and text; 1-bit TIFF uses real bilevel pixels at 1000/1200 dpi. Peak labels show numerical positions, not chemical assignments. Match the target journal's artwork instructions.</p>
         </details>
 
+        <div class="analysis-spectrum-shortcuts">
+          <button id="engine-jump-to-ir" type="button" class="btn btn-secondary btn-small">Go to IR spectrum</button>
+        </div>
+
         <!-- Archive calculation switcher bar (visible when an archive is loaded) -->
         <div id="engine-archive-bar" class="engine-archive-bar hidden">
           <div class="archive-bar-content">
             <span class="archive-icon">📦</span>
-            <span class="archive-title">Calculations inside uploaded archive:</span>
+            <span class="archive-title">Outputs in this results bundle:</span>
             <select id="engine-archive-select" class="select-small archive-select"></select>
             <button type="button" id="engine-archive-switch-btn" class="btn btn-primary btn-small">Load Selected Calculation</button>
             <span class="archive-cleanup-badge">⏳ Auto-clears in 30 min</span>
@@ -1600,21 +1604,13 @@ Products:   12 CO2 + 6 H2O</pre>
               <button type="button" id="engine-orbitals-download-png" class="btn btn-ghost btn-small" title="Export orbital eigenvalues with an automatic energy scale">Export orbital figure</button>
             </div>
             <div class="orbital-diagram-wrap">
-              <div class="orbital-levels" id="engine-orbital-levels-ladder">
-                <div class="orbital-row lumo-row" id="orb-ladder-lumo">
-                  <span class="orbital-tag">LUMO</span>
-                  <span class="orbital-val mono" id="engine-val-lumo"> - eV</span>
-                </div>
-                <div class="gap-indicator">
-                  <div class="gap-line"></div>
-                  <span class="gap-badge" id="engine-val-gap">ΔE<sub>gap</sub>: - eV</span>
-                  <div class="gap-line"></div>
-                </div>
-                <div class="orbital-row homo-row" id="orb-ladder-homo">
-                  <span class="orbital-tag">HOMO</span>
-                  <span class="orbital-val mono" id="engine-val-homo"> - eV</span>
-                </div>
+              <div id="engine-orbital-figure" class="orbital-publication-view"></div>
+              <div class="orbital-summary" aria-label="Overall frontier eigenvalues">
+                <span>HOMO <strong id="engine-val-homo">Not reported</strong></span>
+                <span>LUMO <strong id="engine-val-lumo">Not reported</strong></span>
+                <span>Gap <strong id="engine-val-gap">Not reported</strong></span>
               </div>
+              <p class="field-hint">The difference between orbital eigenvalues is not an optical excitation energy.</p>
             </div>
 
             <div class="card-title-row cdft-heading">
@@ -1883,7 +1879,7 @@ Products:   12 CO2 + 6 H2O</pre>
         <div id="engine-ir-section" class="engine-full-card hidden">
           <div class="card-title-row">
             <div>
-              <h4>Interactive Vibrational IR / FTIR Spectroscopic Studio &amp; Experimental Overlay</h4>
+              <h4 id="engine-ir-heading" tabindex="-1">Infrared (IR / FTIR) spectrum</h4>
               <span class="card-subtitle" style="display:block; font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
                 Convolute theoretical harmonic IR frequencies with Lorentzian line shapes and compare with experimental FTIR spectra (4000-400 cm⁻¹)
               </span>
@@ -3104,11 +3100,11 @@ Products:   12 CO2 + 6 H2O</pre>
   <script src="{{ url_for('static', filename='js/browser-chemistry.js') }}?v=20261029geometry2"></script>
   <script src="{{ url_for('static', filename='js/molecular-controls.js') }}?v=20261023mol1"></script>
   <script src="{{ url_for('static', filename='js/publication-molecule.js') }}?v=20261029journal1"></script>
-  <script src="{{ url_for('static', filename='js/publication-style.js') }}?v=20261109spectra1"></script>
-  <script src="{{ url_for('static', filename='js/publication-figures.js') }}?v=20261029journal1"></script>
+  <script src="{{ url_for('static', filename='js/publication-style.js') }}?v=20261110orbital1"></script>
+  <script src="{{ url_for('static', filename='js/publication-figures.js') }}?v=20261110orbital1"></script>
   <script src="{{ url_for('static', filename='js/publication-preview.js') }}?v=20261029journal1"></script>
   <script src="{{ url_for('static', filename='js/analysis-viewer.js') }}?v=20261029journal1"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261109spectra1"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=20261110orbital1"></script>
   <script src="{{ url_for('static', filename='js/drawing-tools.js') }}?v=20261028chemdraw1"></script>
   <script src="{{ url_for('static', filename='js/chemical-drawing.js') }}?v=20261028chemdraw2"></script>
   <script src="{{ url_for('static', filename='js/editor-integration.js') }}?v=20261029max1"></script>

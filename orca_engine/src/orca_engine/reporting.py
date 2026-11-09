@@ -71,6 +71,7 @@ def job_to_dict(index: int, job: JobData) -> dict[str, Any]:
         "ir_frequencies_cm": job.ir_frequencies_cm,
         "ir_intensities_km_mol": job.ir_intensities_km_mol,
         "ir_spectrum": job.ir_spectrum,
+        "ir_spectrum_requested": job.ir_spectrum_requested,
         "is_transition_state": job.is_transition_state,
 
         "ionization_potential_ev": job.ionization_potential_ev,

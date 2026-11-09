@@ -86,6 +86,22 @@ def test_frequency_only_output_does_not_invent_ir_intensities():
     assert web["convoluted_ir_spectrum"] == []
 
 
+def test_output_cut_off_in_the_hessian_distinguishes_requested_and_reported_ir():
+    job, = OrcaParser("""Program Version 6.1.0
+THE OPTIMIZATION HAS CONVERGED
+FINAL SINGLE POINT ENERGY -42.0
+ORCA PROPERTY CALCULATIONS
+IR spectrum                       ... YES
+SCF HESSIAN
+  => COSX Hessian                  ...
+""").parse()
+    result = job_to_web_json(job, "partial-frequency", 1)
+    assert result["ir_spectrum_requested"] is True
+    assert result["stationary_point_status"] == "INCOMPLETE_FREQUENCIES"
+    assert result["geometry_optimization_converged"] is True
+    assert result["ir_spectrum"] == result["vibrational_frequencies_cm"] == []
+
+
 @pytest.mark.parametrize("archive", [False, True])
 def test_multistep_output_draws_earlier_ir_bands_and_exports_a_vector_figure(tmp_path, archive):
     node = shutil.which("node")

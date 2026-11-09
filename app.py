@@ -1952,9 +1952,10 @@ def decode_text_bytes(raw_bytes: bytes) -> str:
     return raw_bytes.decode("utf-8", errors="replace")
 
 
-def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, target_dir: str) -> list[dict]:
+def extract_calculation_files_from_archive(raw_bytes: bytes | str, filename: str, target_dir: str) -> list[dict]:
     """Extract only .out files from ZIP, RAR, or TAR archives.
     
+    ZIP input may also be a local path to a downloaded job bundle.
     Hardened against Zip Slip, Tar Slip, symlink traversal, and decompression bomb attacks.
     """
     extracted_files = []
@@ -2000,7 +2001,7 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
     # 1. ZIP Archives
     if ext in (".zip", ".jar") or fn_lower.endswith(".zip"):
         try:
-            with zipfile.ZipFile(io.BytesIO(raw_bytes), "r") as zf:
+            with zipfile.ZipFile(io.BytesIO(raw_bytes) if isinstance(raw_bytes, bytes) else raw_bytes, "r") as zf:
                 for item in zf.infolist():
                     if len(extracted_files) >= MAX_ARCHIVE_FILE_COUNT:
                         log.warning("Archive reached maximum file count (%d)", MAX_ARCHIVE_FILE_COUNT)
@@ -2116,6 +2117,56 @@ def extract_calculation_files_from_archive(raw_bytes: bytes, filename: str, targ
     return extracted_files
 
 
+def analyze_output_archive(extracted: list[dict], target_file: str | None = None) -> dict | None:
+    """Parse each .out independently, preferring a file with IR when none is selected."""
+    from tools.normalize_scientific_json import normalize_to_canonical_schema
+
+    entries = []
+    for item in extracted:
+        try:
+            jobs = OrcaParser(io.StringIO(item["content"]), source_name=item["filename"]).parse()
+            if not jobs:
+                continue
+            name = core.safe_filename(os.path.splitext(item["basename"])[0])
+            molecule = MoleculeData(name=name, jobs=jobs, sources=[item["filename"]])
+            web = molecule_to_web_json(molecule)
+            ir_available = any(mode["frequency_cm"] > 0 and mode["intensity_km_mol"] > 0
+                               for job in jobs for mode in job.ir_spectrum)
+            canonical = None
+            try:
+                canonical = normalize_to_canonical_schema(molecule)
+            except Exception as exc:
+                log.warning("Could not build canonical schema for %s: %s", name, exc)
+            entries.append({
+                "filename": item["filename"],
+                "basename": item["basename"],
+                "molecule_name": name,
+                "raw_text": item["content"],
+                "molecule": web,
+                "jobs_count": len(jobs),
+                "latest_job": web["jobs"][-1],
+                "canonical_record": canonical,
+                "has_ir": ir_available,
+            })
+        except Exception as exc:
+            log.info("Skipping unreadable calculation %s: %s", item["filename"], exc)
+
+    if not entries:
+        return None
+    selected = next((entry for entry in entries
+                     if target_file in (entry["filename"], entry["basename"])), None)
+    if selected is None:
+        selected = next((entry for entry in entries if entry["has_ir"]), entries[0])
+    return {
+        "ok": True, "is_archive": True, "archive_entries": entries,
+        "selected_file": selected["filename"], "filename": selected["filename"],
+        "raw_text": selected["raw_text"], "name": selected["molecule_name"],
+        "molecule": selected["molecule"], "jobs_count": selected["jobs_count"],
+        "jobs": selected["molecule"]["jobs"], "latest_job": selected["latest_job"],
+        "canonical_record": selected["canonical_record"],
+    }
+
+
 @app.route("/api/session/heartbeat", methods=["POST"])
 def api_session_heartbeat():
     """Client heartbeat to refresh 30-minute session TTL."""
@@ -2149,7 +2200,6 @@ def api_orca_engine_parse():
     raw_text = ""
     name = "molecule"
     archive_entries = []
-    is_archive = False
 
     if "file" in request.files:
         f = request.files["file"]
@@ -2159,7 +2209,6 @@ def api_orca_engine_parse():
             name = core.safe_filename(os.path.splitext(f.filename)[0])
 
             if ext in (".zip", ".rar", ".tar", ".gz", ".tgz", ".xz", ".bz2") or f.filename.lower().endswith((".tar.gz", ".tar.xz")):
-                is_archive = True
                 extracted = extract_calculation_files_from_archive(raw_bytes, f.filename, session_dir)
                 if not extracted:
                     return error_response(
@@ -2167,67 +2216,13 @@ def api_orca_engine_parse():
                         422
                     )
 
-                # Parse all valid calculations inside the archive
-                for item in extracted:
-                    try:
-                        parsed_jobs = OrcaParser(io.StringIO(item["content"]), source_name=item["basename"]).parse()
-                        if parsed_jobs:
-                            entry_mol_name = core.safe_filename(os.path.splitext(item["basename"])[0])
-                            entry_mol = MoleculeData(name=entry_mol_name, jobs=parsed_jobs, sources=[item["filename"]])
-                            entry_canonical = None
-                            try:
-                                from tools.normalize_scientific_json import normalize_to_canonical_schema
-                                entry_canonical = normalize_to_canonical_schema(entry_mol)
-                            except Exception as c_err:
-                                log.warning("Could not build canonical schema for %s: %s", entry_mol_name, c_err)
-                            archive_entries.append({
-                                "filename": item["filename"],
-                                "basename": item["basename"],
-                                "raw_text": item["content"],
-                                "molecule": molecule_to_web_json(entry_mol),
-                                "jobs_count": len(parsed_jobs),
-                                "latest_job": job_to_web_json(parsed_jobs[-1], entry_mol_name, len(parsed_jobs)),
-                                "canonical_record": entry_canonical,
-                            })
-                    except Exception as e:
-                        log.info("Skipping non-calculation file %s: %s", item["filename"], e)
-
-                if not archive_entries:
-                    return error_response(
-                        f"Calculation files were found in '{f.filename}', but none could be parsed as valid ORCA outputs.",
-                        422
-                    )
-
-                # Target file index or default to first valid calculation
-                target_file = request.form.get("target_file")
-                selected_entry = next((e for e in archive_entries if e["filename"] == target_file or e["basename"] == target_file), archive_entries[0])
-
+                analyzed = analyze_output_archive(extracted, request.form.get("target_file"))
+                if not analyzed:
+                    return error_response("The archive's .out files did not contain recognizable ORCA results.", 422)
                 return jsonify({
-                    "ok": True,
+                    **analyzed,
                     "session_id": session_id,
-                    "is_archive": True,
                     "archive_filename": f.filename,
-                    "archive_entries": [
-                        {
-                            "filename": e["filename"],
-                            "basename": e["basename"],
-                            "molecule_name": e["molecule"]["name"],
-                            "jobs_count": e["jobs_count"],
-                            "raw_text": e["raw_text"],
-                            "molecule": e["molecule"],
-                            "latest_job": e["latest_job"],
-                            "canonical_record": e.get("canonical_record"),
-                        }
-                        for e in archive_entries
-                    ],
-                    "selected_file": selected_entry["filename"],
-                    "raw_text": selected_entry["raw_text"],
-                    "name": selected_entry["molecule"]["name"],
-                    "molecule": selected_entry["molecule"],
-                    "jobs_count": selected_entry["jobs_count"],
-                    "jobs": selected_entry["molecule"].get("jobs", []),
-                    "latest_job": selected_entry["latest_job"],
-                    "canonical_record": selected_entry.get("canonical_record"),
                     "cleanup_note": "Uploaded archive files will be automatically wiped from this server 30 minutes after your session ends.",
                 })
             else:
@@ -4386,52 +4381,12 @@ def api_orca_engine_analyze_job():
         if not zip_path or not os.path.isfile(zip_path):
             return error_response("No results bundle found on Kaggle for this job yet.", 404)
 
-        # Extract and find all .out or .log files
-        out_content = None
-        out_name = None
-        available_files = []
-
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            for item in zf.infolist():
-                available_files.append(item.filename)
-                if not out_content and item.filename.lower().endswith((".out", ".log", ".property.txt")):
-                    out_name = item.filename
-                    out_content = zf.read(item).decode("utf-8", errors="replace")
-
-        if not out_content:
-            return error_response(
-                f"Results bundle was downloaded, but no .out or .log calculation files were found. "
-                f"Available files: {', '.join(available_files) or 'none'}",
-                422
-            )
-
-        jobs = OrcaParser(io.StringIO(out_content), source_name=out_name or job_id).parse()
-        if not jobs:
-            return error_response(
-                f"Calculation output file '{out_name}' was found but contained no recognized ORCA calculation data.",
-                422
-            )
-
-        mol_name = core.safe_filename(os.path.splitext(os.path.basename(out_name or job_id))[0])
-        molecule = MoleculeData(name=mol_name, jobs=jobs, sources=[out_name or job_id])
-        canonical_record = None
-        try:
-            from tools.normalize_scientific_json import normalize_to_canonical_schema
-            canonical_record = normalize_to_canonical_schema(molecule)
-        except Exception as norm_err:
-            log.warning("Failed to normalize canonical schema for job %s: %s", job_id, norm_err)
-
-        return jsonify({
-            "ok": True,
-            "job_id": job_id,
-            "filename": out_name,
-            "raw_text": out_content,
-            "available_files": available_files,
-            "molecule": molecule_to_web_json(molecule),
-            "jobs": [job_to_web_json(j, mol_name, idx) for idx, j in enumerate(jobs, 1)],
-            "latest_job": job_to_web_json(jobs[-1], mol_name, len(jobs)),
-            "canonical_record": canonical_record,
-        })
+        with tempfile.TemporaryDirectory(prefix="orca-analyze-job-") as extracted_dir:
+            extracted = extract_calculation_files_from_archive(zip_path, "results.zip", extracted_dir)
+            analyzed = analyze_output_archive(extracted)
+        if not analyzed:
+            return error_response("This Kaggle bundle contains no readable ORCA .out files.", 422)
+        return jsonify({**analyzed, "job_id": job_id, "archive_filename": "Kaggle results"})
     except (kaggle_runner.KaggleCliUnavailable, kaggle_runner.KaggleUnreachable) as exc:
         log.error("kaggle CLI unavailable:\n%s", traceback.format_exc())
         return error_response(str(exc), 503)

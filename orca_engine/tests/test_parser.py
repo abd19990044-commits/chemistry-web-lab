@@ -93,16 +93,28 @@ class TestFrontierOrbitals:
         assert job.homo_lumo_gap_ev is None
         assert job.had_error_termination is True
 
-    def test_a_further_occupied_orbital_invalidates_a_stale_lumo(self) -> None:
-        """An out-of-order table must not leave a LUMO below the HOMO."""
+    def test_interleaved_orbital_table_uses_the_energy_extrema(self) -> None:
+        """Rows can be interleaved without discarding a valid virtual level."""
 
         window = OrcaParser(iter(())).job.orbital_window(SpinChannel.RESTRICTED)
         window.update_from_occupation(2.0, -5.0)
         window.update_from_occupation(0.0, -1.0)
         window.update_from_occupation(2.0, -4.0)
+        window.update_from_occupation(2.0, -5.5)
+        window.update_from_occupation(0.0, -1.2)
 
         assert window.homo_ev == pytest.approx(-4.0)
-        assert window.lumo_ev is None
+        assert window.lumo_ev == pytest.approx(-1.2)
+
+    def test_adjacent_tables_keep_the_latest_orbital_window(self) -> None:
+        job, = OrcaParser("""ORBITAL ENERGIES
+0 2.0000 -0.10 -2.72
+1 0.0000 -0.08 -2.18
+ORBITAL ENERGIES
+0 2.0000 -0.25 -6.80
+1 0.0000 -0.04 -1.09
+""").parse()
+        assert (job.homo_ev, job.lumo_ev) == (-6.80, -1.09)
 
 
 class TestCoordinates:

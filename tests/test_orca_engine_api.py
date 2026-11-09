@@ -166,45 +166,57 @@ def test_engine_thermochemistry(client):
     assert r["delta_h_kcal_mol"] < 0  # exothermic reaction
     assert r["delta_electronic_kcal_mol"] < 0
 
-def test_engine_analyze_job_mock(client, monkeypatch):
+def test_engine_analyze_job_finds_ir_in_later_archive_member(client, monkeypatch, tmp_path):
+    """An optimization output placed first cannot hide a later frequency output."""
     import kaggle_runner
     from orca_orchestrator.service import OrchestratorService
 
+    bundle = tmp_path / "results.zip"
+    with zipfile.ZipFile(bundle, "w") as zf:
+        zf.writestr("opt/compound.out", "Program Version 6.1.0\nFINAL SINGLE POINT ENERGY -42.0\n")
+        zf.writestr("freq/compound.out", """Program Version 6.1.0
+ORBITAL ENERGIES
+  4 2.0000 -0.194803 -5.301
+  5 0.0000 -0.044539 -1.212
+VIBRATIONAL FREQUENCIES
+  6: 1420.5 cm**-1
+IR SPECTRUM
+  Mode freq eps Int T**2 TX TY TZ
+  cm**-1 L/(mol*cm) km/mol a.u.
+  6: 1420.5 0.0109 55.3 0.001 (0.00 0.01 0.00)
+FINAL SINGLE POINT ENERGY -42.123
+****ORCA TERMINATED NORMALLY****
+""")
+        zf.writestr("unrelated.log", "FINAL SINGLE POINT ENERGY -90.00")
+        zf.writestr("../outside.out", "FINAL SINGLE POINT ENERGY -99.00")
+
     def mock_fetch(*args, **kwargs):
-        return "mock_path.zip", None
+        return str(bundle), None
 
     monkeypatch.setattr(kaggle_runner, "fetch_job_results", mock_fetch)
-    monkeypatch.setattr(OrchestratorService, "fetch_results", lambda self, creds, job_id: "mock_path.zip")
+    monkeypatch.setattr(OrchestratorService, "fetch_results", mock_fetch)
 
-    payload = {
+    res = client.post("/api/orca/engine/analyze-job", json={
         "kaggle_username": "mockuser",
         "kaggle_key": "mockkey0123456789abcdef01234567",
-        "job_id": "chem-tools-test-12345678"
-    }
-
-    monkeypatch.setattr(webapp.os.path, "isfile", lambda p: True)
-    
-    class MockZipFile:
-        def __init__(self, *args, **kwargs):
-            pass
-        def __enter__(self):
-            return self
-        def __exit__(self, *args):
-            pass
-        def infolist(self):
-            class Item:
-                filename = "orca_calc.out"
-            return [Item()]
-        def read(self, item):
-            return b"Program Version 6.0.0\nFINAL SINGLE POINT ENERGY -42.123\n****ORCA TERMINATED NORMALLY****\n"
-
-    monkeypatch.setattr(webapp.zipfile, "ZipFile", MockZipFile)
-
-    res = client.post("/api/orca/engine/analyze-job", json=payload)
+        "job_id": "chem-tools-test-12345678",
+    })
     assert res.status_code == 200
     data = res.get_json()
-    assert data["ok"] is True
+    assert data["selected_file"] == "freq/compound.out"
+    assert [(e["filename"], e["has_ir"]) for e in data["archive_entries"]] == [
+        ("opt/compound.out", False), ("freq/compound.out", True),
+    ]
     assert data["latest_job"]["e_elec_eh"] == -42.123
+    assert data["latest_job"]["homo_ev"] == -5.301
+    assert data["latest_job"]["ir_spectrum"][0]["intensity_km_mol"] == 55.3
+
+    with bundle.open("rb") as f:
+        explicit = client.post("/api/orca/engine/parse", data={
+            "file": (f, "results.zip"), "target_file": "opt/compound.out",
+        }).get_json()
+    assert explicit["selected_file"] == "opt/compound.out"
+    assert explicit["latest_job"]["ir_spectrum"] == []
 
 
 def test_engine_parse_zip_archive(client):

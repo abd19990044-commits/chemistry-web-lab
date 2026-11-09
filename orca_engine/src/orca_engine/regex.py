@@ -149,7 +149,7 @@ class RegexLibrary:
     COORD_SECTION_AU = re.compile(r"\bCARTESIAN\s+COORDINATES\s*\(\s*A\.U\.\s*\)", re.IGNORECASE)
     COORD_SECTION = re.compile(r"\bCARTESIAN\s+COORDINATES\b", re.IGNORECASE)
     ORBITAL_SECTION = re.compile(
-        r"\b(?:ORBITAL\s+ENERGIES|MOLECULAR\s+ORBITALS|MO\s+ENERGIES|MOLECULAR\s+ORBITAL\s+ENERGIES)\b",
+        r"^[-=*\s]*(?:ORBITAL\s+ENERGIES|MOLECULAR\s+ORBITALS|MO\s+ENERGIES|MOLECULAR\s+ORBITAL\s+ENERGIES)[-=*\s]*$",
         re.IGNORECASE,
     )
     SPIN_UP = re.compile(r"\b(?:SPIN\s+UP\s+ORBITALS|ALPHA\s+(?:MOLECULAR\s+)?ORBITALS)\b", re.IGNORECASE)
@@ -220,6 +220,7 @@ class RegexLibrary:
         r"^\s*[-=*]*\s*IR\s+SPECTRUM\s*[-=*]*\s*$",
         re.IGNORECASE,
     )
+    IR_SPECTRUM_REQUESTED = re.compile(r"^IR\s+spectrum\s*\.+\s*YES\s*$", re.IGNORECASE)
     IR_SPECTRUM_ROW = re.compile(
         r"^\s*(?P<mode>\d+)\s*:\s*(?P<values>.+)$",
         re.IGNORECASE,

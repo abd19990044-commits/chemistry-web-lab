@@ -97,7 +97,7 @@
   }
   async function exclusive(action){if(busy)throw Error('A figure export is already being prepared.');busy=true;try{return await action();}finally{busy=false;}}
   function savePlot(spec,name){return exclusive(()=>{const s=settings();return saveSVG(plot(spec,s),name,s,{kind:'spectrum',x_label:spec.xLabel,y_label:spec.yLabel,x_min:spec.xMin,x_max:spec.xMax,reverse_x:!!spec.reverseX,y_min:spec.yMin??0,y_max:spec.yMax,y2_label:spec.y2Label||null,layers:spec.series.map(v=>v.name),...spec.metadata});});}
-  function saveOrbitals(job,name){return exclusive(()=>{const s=settings();return saveSVG(orbitals(job,s),name,s,{kind:'frontier_orbital_eigenvalues',source_name:job.molecule||job.name||null,method:job.method||null,basis_set:job.basis_set||null,homo_ev:job.homo_ev,lumo_ev:job.lumo_ev,alpha_homo_ev:job.alpha_homo_ev,alpha_lumo_ev:job.alpha_lumo_ev,beta_homo_ev:job.beta_homo_ev,beta_lumo_ev:job.beta_lumo_ev});});}
+  function saveOrbitals(job,name){return exclusive(()=>{const s=settings();return saveSVG(orbitals(job,s),name,s,root.PublicationStyle.orbitalMetadata(job));});}
   async function renderMolecule(viewer,options={},preview=false){
     if(!root.PublicationMolecule)throw Error('Reload the page to load the molecular figure renderer.');
     const s=settings(),{width,height}=dimensions(s),atoms=viewer.getModel()?.selectedAtoms({});

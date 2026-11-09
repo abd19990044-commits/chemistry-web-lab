@@ -78,6 +78,7 @@ class OrcaParser:
         self._ir_intensity_column: int | None = None
         self._has_vibrational_table = False
         self._current_spin: SpinChannel | None = None
+        self._mo_matrix = False
         self._pending_mo_energies: list[float] | None = None
         self._coord_unit: CoordinateUnit | None = None
         self._current_charge_type: str = "hirshfeld"
@@ -195,6 +196,8 @@ class OrcaParser:
             line: Non-empty ORCA output line without leading or trailing space.
         """
 
+        if RegexLibrary.IR_SPECTRUM_REQUESTED.fullmatch(line):
+            self.job.ir_spectrum_requested = True
         for pattern, action in self._global_dispatch:
             match = pattern.search(line)
             if match is not None:
@@ -226,8 +229,12 @@ class OrcaParser:
                 self.job.thermochemistry_reliability = "FAILED_CALCULATION"
             # Step 2: Missing frequency calculation (single-point / electronic structure only)
             elif not self.job.vibrational_frequencies_cm:
-                self.job.stationary_point_status = "NO_FREQUENCY_CALCULATION"
-                self.job.thermochemistry_reliability = "ELECTRONIC_ONLY"
+                if self.job.ir_spectrum_requested and self.job.terminated_normally is not True:
+                    self.job.stationary_point_status = "INCOMPLETE_FREQUENCIES"
+                    self.job.thermochemistry_reliability = "INCOMPLETE_FREQUENCIES"
+                else:
+                    self.job.stationary_point_status = "NO_FREQUENCY_CALCULATION"
+                    self.job.thermochemistry_reliability = "ELECTRONIC_ONLY"
             else:
                 # Step 3: Check frequency completeness against total 3N modes expected in ORCA frequency output
                 expected_total = self.job.expected_total_frequencies_count
@@ -327,10 +334,15 @@ class OrcaParser:
             self._pending_mo_energies = None
             return
 
-        if RegexLibrary.ORBITAL_SECTION.search(line) or self._is_table_noise(line):
+        header = RegexLibrary.ORBITAL_SECTION.search(line)
+        if header is not None:
+            self._enter_orbitals(header, line)
             return
 
-        match = RegexLibrary.ORBITAL.search(line)
+        if self._is_table_noise(line):
+            return
+
+        match = None if self._mo_matrix else RegexLibrary.ORBITAL.search(line)
         if match is not None:
             occupation = float(match.group("occ"))
             if match.group("ev") is not None:
@@ -343,7 +355,7 @@ class OrcaParser:
 
         # Handle MOLECULAR ORBITALS block layout (LargePrint format)
         tokens = line.strip().split()
-        if tokens and all(re.match(r"^-?\d+\.\d+$", t) for t in tokens):
+        if self._mo_matrix and tokens and all(re.match(r"^-?\d+\.\d+$", t) for t in tokens):
             floats = [float(t) for t in tokens]
             if self._pending_mo_energies is None:
                 # First row of floats corresponds to orbital energies (Eh)
@@ -787,6 +799,7 @@ class OrcaParser:
         spin_channel = self._detect_spin_channel(line)
         if spin_channel is None:
             self.job.reset_orbitals()
+        self._mo_matrix = bool(re.search(r"\bMOLECULAR\s+ORBITALS\b", line, re.IGNORECASE))
         self.state = ParserState.ORBITALS
         self._current_spin = spin_channel
         self._pending_mo_energies = None

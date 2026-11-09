@@ -6461,10 +6461,42 @@
     return {source, step, modes: reported.length ? reported : frequencies.map((frequency_cm, i) => ({mode: i, frequency_cm})), hasBands: hasBands(source)};
   }
 
+  function configureAnalyzerArchive(data) {
+    if (data.preserveArchivePicker) return;
+    const bar = document.getElementById("engine-archive-bar");
+    const select = document.getElementById("engine-archive-select");
+    const button = document.getElementById("engine-archive-switch-btn");
+    if (!bar || !select) return;
+    const entries = data.archive_entries || [];
+    bar.classList.toggle("hidden", !entries.length);
+    select.replaceChildren();
+    select.onchange = null;
+    if (button) button.onclick = null;
+    if (!entries.length) return;
+    for (const entry of entries) {
+      const option = document.createElement("option");
+      option.value = entry.filename;
+      option.textContent = `${entry.filename}${entry.has_ir ? " · IR available" : ""}`;
+      select.append(option);
+    }
+    select.value = data.selected_file || entries[0].filename;
+    const switchOutput = () => {
+      const entry = entries.find(e => e.filename === select.value);
+      if (!entry || entry.filename === data.selected_file) return;
+      renderEngineResults({...data, selected_file: entry.filename, filename: entry.filename,
+        name: entry.molecule_name, molecule: entry.molecule, raw_text: entry.raw_text,
+        jobs: entry.molecule.jobs, latest_job: entry.latest_job,
+        jobs_count: entry.jobs_count, canonical_record: entry.canonical_record});
+    };
+    select.onchange = switchOutput;
+    if (button) button.onclick = switchOutput;
+  }
+
   function renderEngineResults(data) {
     if (!data) return;
     currentEngineData = data;
     window.currentEngineData = data;
+    configureAnalyzerArchive(data);
 
     const resultEl = document.getElementById("engine-result");
     if (resultEl) resultEl.classList.remove("hidden");
@@ -6756,23 +6788,34 @@
           freqTbody.appendChild(tr);
         });
       } else {
-        if (tsBadge) tsBadge.textContent = "No Vibrational Frequencies in Output";
-        freqTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:1rem;">Single point or optimization without frequency calculation.</td></tr>`;
+        const incomplete = job.ir_spectrum_requested && job.terminated_normally !== true;
+        if (tsBadge) tsBadge.textContent = incomplete ? "Incomplete Frequency Output" : "No Vibrational Frequencies in Output";
+        freqTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:1rem;">${incomplete ? "This output ended before the frequency table was reported." : "No vibrational frequency table was reported."}</td></tr>`;
       }
     }
 
     // Orbitals & Frontier Energy Levels
     const homo = job.homo_ev !== undefined ? job.homo_ev : (job.homo_energy_ev !== undefined ? job.homo_energy_ev : null);
     const lumo = job.lumo_ev !== undefined ? job.lumo_ev : (job.lumo_energy_ev !== undefined ? job.lumo_energy_ev : null);
-    const gap = job.homo_lumo_gap_ev !== undefined ? job.homo_lumo_gap_ev : (homo !== null && lumo !== null ? Math.abs(lumo - homo) : null);
+    const gap = Number.isFinite(job.homo_lumo_gap_ev) ? job.homo_lumo_gap_ev : (Number.isFinite(homo) && Number.isFinite(lumo) ? lumo - homo : null);
 
     const homoEl = document.getElementById("engine-val-homo");
     const lumoEl = document.getElementById("engine-val-lumo");
     const gapEl = document.getElementById("engine-val-gap");
 
-    if (homoEl) homoEl.textContent = homo !== null ? `${homo.toFixed(3)} eV` : " - eV";
-    if (lumoEl) lumoEl.textContent = lumo !== null ? `${lumo.toFixed(3)} eV` : " - eV";
-    if (gapEl) gapEl.textContent = gap !== null ? `ΔE_gap: ${gap.toFixed(3)} eV` : "ΔE_gap: - eV";
+    if (homoEl) homoEl.textContent = Number.isFinite(homo) ? `${homo.toFixed(3)} eV` : "Not reported";
+    if (lumoEl) lumoEl.textContent = Number.isFinite(lumo) ? `${lumo.toFixed(3)} eV` : "Not reported";
+    if (gapEl) gapEl.textContent = gap !== null ? `Δε: ${gap.toFixed(3)} eV` : "Not reported";
+    const orbitalFigure = document.getElementById("engine-orbital-figure");
+    if (orbitalFigure) {
+      try {
+        orbitalFigure.innerHTML = PublicationFigures.orbitals(analyzerOrbitalJob(), PublicationFigures.settings({
+          widthMm: 112, heightMm: 69, fontSize: 8, includeTitle: false, panel: "", grid: false
+        }));
+      } catch (error) {
+        orbitalFigure.textContent = error.message;
+      }
+    }
 
     // Conceptual DFT (CDFT) Reactivity Descriptors
     const ip = job.ionization_potential_ev !== undefined ? job.ionization_potential_ev : (homo !== null ? -homo : null);
@@ -6815,9 +6858,14 @@
       irSec.classList.toggle("hidden", Boolean(job.geometry_only));
       if (!job.geometry_only) {
         const notice = document.getElementById("engine-ir-data-status");
+        const sourceName = data.selected_file || data.filename || name;
         if (notice) notice.textContent = ir.hasBands
-          ? (ir.step ? `IR spectrum from calculation step ${ir.step}. Other results show the latest step.` : "Calculated bands use the integrated intensities reported by ORCA.")
-          : (ir.modes.length ? "No positive IR band intensities were reported. Frequencies alone cannot define an IR spectrum." : "No IR spectrum in this output. Open an ORCA FREQ/NUMFREQ output that includes an IR SPECTRUM table, or import measured FTIR data below.");
+          ? `Source: ${sourceName}${ir.step ? ` · calculation step ${ir.step}` : ""}. Integrated intensities reported by ORCA.`
+          : (data.archive_entries?.some(e => e.has_ir) ? "This file has no IR bands. Choose an output marked ‘IR available’ in the archive list above."
+            : ir.source.ir_spectrum_requested && ir.source.terminated_normally !== true && !ir.modes.length
+              ? "IR was requested, but this output ends before the vibrational frequencies and IR bands were reported. Open the completed frequency output."
+              : ir.modes.length ? "Frequencies were found without positive IR intensities. Open the FREQ/NUMFREQ output that contains the IR SPECTRUM table."
+                : "No IR spectrum in this file. Open a FREQ/NUMFREQ output with an IR SPECTRUM table or import measured FTIR below.");
         if (irModesTbody) {
           irModesTbody.replaceChildren();
           ir.modes.forEach((m, idx) => {
@@ -6830,9 +6878,16 @@
             irModesTbody.appendChild(tr);
           });
         }
-        loadedTheoreticalIRSpectra = loadedTheoreticalIRSpectra.filter(t => t.imported || t.sourceName !== name);
-        if (ir.hasBands) addTheoreticalIRCalculationToStudio(ir.step ? `${name} · step ${ir.step}` : name,
-          ir.modes, ir.source.method || "ORCA", ir.source.basis_set || "", {sourceName: name, calculationStep: ir.step});
+        loadedTheoreticalIRSpectra = loadedTheoreticalIRSpectra.filter(t => t.imported);
+        if (ir.hasBands) {
+          if (irViewMode === "experimental_only") {
+            irViewMode = "all";
+            const view = document.getElementById("ir-view-mode");
+            if (view) view.value = "all";
+          }
+          addTheoreticalIRCalculationToStudio(ir.step ? `${sourceName} · step ${ir.step}` : sourceName,
+            ir.modes, ir.source.method || "ORCA", ir.source.basis_set || "", {sourceName, calculationStep: ir.step});
+        }
         else updateIRSpectrumLayersTray();
         drawIRMultiSpectrum();
       }
@@ -6851,6 +6906,11 @@
     }
   }
   window.renderEngineResults = renderEngineResults;
+
+  function analyzerOrbitalJob() {
+    const data = currentEngineData || {};
+    return {...(data.latest_job || data.jobs?.[0] || {}), source_name: data.selected_file || data.filename || data.name || null};
+  }
 
 
   // =========================================================================
@@ -8709,7 +8769,7 @@
       try{PublicationPreview.open(()=>{const spec=publicationSpectrumSpec(kind);return {svg:PublicationFigures.plot(spec),name:(currentEngineData?.name||'spectrum')+'_'+kind,metadata:spec.metadata,series:spec.series.map(item=>item.name)};});}catch(error){showToast(error.message,'warning');}
     });
     document.getElementById('engine-orbitals-figure-preview')?.addEventListener('click',()=>{
-      try{PublicationPreview.open(()=>({svg:PublicationFigures.orbitals(currentEngineData?.latest_job||{}),name:(currentEngineData?.name||'molecule')+'_orbitals',metadata:{kind:'frontier_orbital_eigenvalues'}}));}catch(error){showToast(error.message,'warning');}
+      try{PublicationPreview.open(()=>{const job=analyzerOrbitalJob();return {svg:PublicationFigures.orbitals(job),name:(currentEngineData?.name||'molecule')+'_orbitals',metadata:PublicationStyle.orbitalMetadata(job)};});}catch(error){showToast(error.message,'warning');}
     });
     const form = document.getElementById("engine-form");
     const fileInput = document.getElementById("engine-file-input");
@@ -8885,7 +8945,7 @@
           name: file.name
         });
         if (!data.ok) throw new Error(data.error || "Failed to parse calculation.");
-        renderEngineResults(data);
+        renderEngineResults({...data, preserveArchivePicker: true});
         showToast(`Loaded calculation for <strong>${escapeHtml(file.name)}</strong>.`);
       } catch (err) {
         if (errorEl) showError(errorEl, err.message);
@@ -8983,16 +9043,14 @@
             });
             if (archiveBar) archiveBar.classList.remove("hidden");
 
-            if (!archiveSelect.dataset.listenerAttached) {
-              archiveSelect.dataset.listenerAttached = "true";
-              archiveSelect.addEventListener("change", (e) => {
-                const selectedFileName = e.target.value;
-                const targetFile = extractedPipelineFiles.find(f => f.name === selectedFileName);
-                if (targetFile) {
-                  loadExtractedFileIntoEngine(targetFile);
-                }
-              });
-            }
+            const loadSelected = () => {
+              const file = analyzeFiles.find(f => f.name === archiveSelect.value);
+              if (file) loadExtractedFileIntoEngine(file);
+            };
+            archiveSelect.onchange = loadSelected;
+            const switchButton = document.getElementById("engine-archive-switch-btn");
+            if (switchButton) switchButton.onclick = loadSelected;
+
           }
 
 
@@ -9091,51 +9149,6 @@
             if (!resp.ok || !data.ok) throw new Error(data.error || "Failed to parse ORCA output file.");
           } else {
             data = await postJSON("/api/orca/engine/parse", { content: textContent, name: "pasted_calculation" });
-          }
-
-          if (data.is_archive && data.archive_entries && data.archive_entries.length > 0) {
-            const archiveBar = document.getElementById("engine-archive-bar");
-            const archiveSelect = document.getElementById("engine-archive-select");
-            const switchBtn = document.getElementById("engine-archive-switch-btn");
-            if (archiveBar && archiveSelect) {
-              archiveSelect.innerHTML = "";
-              data.archive_entries.forEach(entry => {
-                const opt = document.createElement("option");
-                opt.value = entry.filename || entry.basename;
-                opt.textContent = `${entry.basename || entry.filename} (${entry.jobs_count || 1} job(s))`;
-                archiveSelect.appendChild(opt);
-              });
-              archiveSelect.value = data.selected_file || data.archive_entries[0].filename || data.archive_entries[0].basename;
-              archiveBar.classList.remove("hidden");
-
-              const switchCalculation = () => {
-                const selectedVal = archiveSelect.value;
-                const found = data.archive_entries.find(e => (e.filename === selectedVal || e.basename === selectedVal));
-                if (found) {
-                  const viewData = {
-                    ok: true,
-                    is_archive: true,
-                    archive_filename: data.archive_filename,
-                    archive_entries: data.archive_entries,
-                    selected_file: found.filename || found.basename,
-                    raw_text: found.raw_text,
-                    name: found.molecule_name || found.basename,
-                    molecule: found.molecule,
-                    jobs_count: found.jobs_count,
-                    jobs: (found.molecule && found.molecule.jobs) || (found.jobs) || [found.latest_job],
-                    latest_job: found.latest_job,
-                  };
-                  renderEngineResults(viewData);
-                  showToast(`Loaded calculation: <strong>${escapeHtml(found.basename || found.filename)}</strong>`);
-                }
-              };
-
-              archiveSelect.onchange = switchCalculation;
-              if (switchBtn) switchBtn.onclick = switchCalculation;
-            }
-          } else {
-            const archiveBar = document.getElementById("engine-archive-bar");
-            if (archiveBar) archiveBar.classList.add("hidden");
           }
 
           renderEngineResults(data);
@@ -10140,6 +10153,12 @@
       });
     }
 
+    document.getElementById("engine-jump-to-ir")?.addEventListener("click", () => {
+      const title = document.getElementById("engine-ir-heading");
+      title?.focus({preventScroll: true});
+      title?.scrollIntoView({behavior: "smooth", block: "start"});
+    });
+
     const irImportBtn = document.getElementById("engine-ir-import-freq-btn");
     const irImportInput = document.getElementById("engine-ir-import-freq-input");
     if (irImportBtn && irImportInput) {
@@ -10583,7 +10602,7 @@
 
     document.getElementById("engine-orbitals-download-png")?.addEventListener("click",async e=>{
       const button=e.currentTarget;button.disabled=true;
-      try{if(!currentEngineData)throw Error("No calculation loaded.");await PublicationFigures.saveOrbitals(currentEngineData.latest_job||{},`${currentEngineData.name||"molecule"}_orbitals_publication`);showToast("Orbital eigenvalue diagram exported.");}
+      try{if(!currentEngineData)throw Error("No calculation loaded.");await PublicationFigures.saveOrbitals(analyzerOrbitalJob(),`${currentEngineData.name||"molecule"}_orbitals_publication`);showToast("Orbital eigenvalue diagram exported.");}
       catch(err){showToast(err.message,"warning");}finally{button.disabled=false;}
     });
 

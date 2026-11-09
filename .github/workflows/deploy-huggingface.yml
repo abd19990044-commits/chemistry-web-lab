@@ -18,6 +18,7 @@ name: Deploy Hugging Face runtime
 # Publishes analyzer figure previews, journal typography, smooth molecules and true line-art TIFF.
 # Publishes explicit Kaggle CLI dependencies and a clean runtime startup check after CI succeeds.
 # Publishes corrected ORCA IR band parsing, publication layouts and data export checks.
+# Publishes the analyzer's archive IR selection, incomplete-frequency status and orbital figure.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later

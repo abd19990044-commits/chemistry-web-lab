@@ -59,11 +59,14 @@ assert.doesNotThrow(()=>P.dimensions(P.settings({widthMm:180,heightMm:110,dpi:12
 def test_orbital_axis_uses_actual_eigenvalues_and_no_fabricated_pairs():
     node(r'''
 const svg=P.orbitals({alpha_homo_ev:-25,alpha_lumo_ev:-15,beta_homo_ev:-24,beta_lumo_ev:-14});
-assert.ok(svg.includes('HOMO -25.000'));assert.ok(svg.includes('LUMO -14.000'));assert.ok(svg.includes('Δε = 10.000 eV'));
+assert.ok(svg.includes('HOMO −25.000 eV'));assert.ok(svg.includes('LUMO −14.000 eV'));assert.ok(svg.includes('Δε = 10.000 eV'));
 assert.ok(!svg.includes('Def2-TZVP'));assert.ok(!svg.includes('Gas Phase'));
-assert.throws(()=>P.orbitals({homo_ev:null,lumo_ev:1}),/No complete/);
+const partial=P.orbitals({alpha_homo_ev:-5,alpha_lumo_ev:1,beta_lumo_ev:-2});
+assert.ok(partial.includes('β spin')&&partial.includes('LUMO −2.000 eV'));
+assert.equal((partial.match(/class="orbital-gap"/g)||[]).length,1);
+assert.throws(()=>P.orbitals({}),/No HOMO or LUMO/);
 assert.ok(P.orbitals({homo_ev:0,lumo_ev:1}).includes('HOMO 0.000'));
-assert.ok(P.orbitals({homo_ev:1,lumo_ev:0}).includes('Δε = -1.000 eV'));
+assert.ok(P.orbitals({homo_ev:1,lumo_ev:0}).includes('Δε = −1.000 eV'));
 ''')
 
 

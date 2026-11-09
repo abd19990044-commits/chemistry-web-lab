@@ -6,6 +6,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
+from math import isfinite
 from typing import Any
 
 
@@ -113,9 +114,9 @@ class OrbitalEnergies:
     def update_from_occupation(self, occupation: float, energy_ev: float) -> None:
         """Update HOMO/LUMO values from an orbital table row.
 
-        Encountering a further occupied orbital invalidates any previously
-        assigned LUMO, so the pair always originates from the same orbital
-        table even if the table is not strictly ordered.
+        Track the energy extrema within the current table. Occupied and
+        unoccupied rows may be interleaved or ordered by orbital index rather
+        than energy. The parser resets the window on a new table.
 
         A LUMO is recorded even when the channel contains no occupied orbital
         at all. This is the situation for the beta channel of a one-electron
@@ -128,10 +129,12 @@ class OrbitalEnergies:
             energy_ev: Orbital energy in electronvolt.
         """
 
+        if not (isfinite(occupation) and 0 <= occupation <= 2 and isfinite(energy_ev)):
+            return
         if occupation > 1.0e-8:
-            self.homo_ev = energy_ev
-            self.lumo_ev = None
-        elif self.lumo_ev is None:
+            if self.homo_ev is None or energy_ev > self.homo_ev:
+                self.homo_ev = energy_ev
+        elif self.lumo_ev is None or energy_ev < self.lumo_ev:
             self.lumo_ev = energy_ev
 
     def has_data(self) -> bool:
@@ -215,6 +218,7 @@ class JobData:
     ir_frequencies_cm: list[float] = field(default_factory=list)
     ir_intensities_km_mol: list[float] = field(default_factory=list)
     ir_spectrum: list[dict[str, float | int]] = field(default_factory=list)
+    ir_spectrum_requested: bool = False
     stationary_point_status: str = "NO_FREQUENCY_CALCULATION"
     thermochemistry_reliability: str = "ELECTRONIC_ONLY"
 

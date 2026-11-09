@@ -114,24 +114,74 @@
     }
     return svg+'</g></svg>';
   }
-  function orbitals(job,s){
-    const P=root.PublicationFigures,{w,h}=P.dimensions(s,false),p=style(s),channels=[];
-    for(const [name,homo,lumo]of [['α',job.alpha_homo_ev,job.alpha_lumo_ev],['β',job.beta_homo_ev,job.beta_lumo_ev]])if(finite(homo)&&finite(lumo))channels.push({name,homo,lumo});
-    if(!channels.length&&finite(job.homo_ev)&&finite(job.lumo_ev))channels.push({name:'Frontier orbitals',homo:job.homo_ev,lumo:job.lumo_ev});
-    if(!channels.length)throw Error('No complete HOMO/LUMO eigenvalue pair was reported.');
-    const values=channels.flatMap(c=>[c.homo,c.lumo]),lo=Math.min(...values),hi=Math.max(...values),pad=Math.max((hi-lo)*.25,.75),min=lo-pad,max=hi+pad,left=48,top=28,bottom=43,pw=w-left-12,ph=h-top-bottom,Y=e=>top+ph-(e-min)/(max-min)*ph;
-    let svg=start(s,'Frontier orbital eigenvalues',{kind:'orbital_eigenvalues',channels,method:job.method||null,basis_set:job.basis_set||null,energy_unit:'eV',note:'Orbital eigenvalue differences are not optical excitation energies.'});
-    if(s.panel)svg+=text(s.panel,7,11,'font-size="8" font-weight="bold"');
-    if(s.includeTitle)svg+=text('Frontier orbital eigenvalues',w/2,12,`font-size="${p.axis}" text-anchor="middle"`);
-    svg+=line(left,top,left,top+ph,'stroke="#16191c" stroke-width="0.65"');
-    for(const e of P.ticks(min,max,5)){const y=Y(e);svg+=line(left,y,left+3,y,'stroke="#16191c" stroke-width="0.65"')+tick(e,left-6,y+p.size*.32,'end',p.size);}
-    svg+=axisTitle('Energy (eV)',p.size+2,top+ph/2,ph,p,true);
-    channels.forEach((c,i)=>{const center=left+pw*(i+.5)/channels.length,bw=Math.min(70,pw/channels.length*.58),yh=Y(c.homo),yl=Y(c.lumo),color=p.mono?'#111111':p.palette[i%p.palette.length];
-      svg+=line(center-bw/2,yh,center+bw/2,yh,`stroke="${color}" stroke-width="${p.stroke+ .25}"`)+line(center-bw/2,yl,center+bw/2,yl,`stroke="${color}" stroke-width="${p.stroke+ .25}" stroke-dasharray="4 2"`);
-      svg+=text(`HOMO ${c.homo.toFixed(3)}`,center,yh+p.size+5,'text-anchor="middle"')+text(`LUMO ${c.lumo.toFixed(3)}`,center,yl-5,'text-anchor="middle"');
-      if(Math.abs(yh-yl)>12)svg+=line(center,Math.min(yh,yl)+5,center,Math.max(yh,yl)-5,'stroke="#646b72" stroke-width="0.5" stroke-dasharray="2 2"');
-      svg+=text(`Δε = ${(c.lumo-c.homo).toFixed(3)} eV`,center,h-20,'text-anchor="middle"')+text(c.name,center,h-7,'text-anchor="middle" font-weight="bold"');
-    });return svg+'</g></svg>';
+  function orbitalMetadata(job) {
+    const channels = [
+      {name:'α spin', homo:job.alpha_homo_ev, lumo:job.alpha_lumo_ev},
+      {name:'β spin', homo:job.beta_homo_ev, lumo:job.beta_lumo_ev}
+    ].filter(c=>finite(c.homo)||finite(c.lumo));
+    if(!channels.length&&(finite(job.homo_ev)||finite(job.lumo_ev))) {
+      channels.push({name:null,homo:job.homo_ev,lumo:job.lumo_ev});
+    }
+    return {
+      kind:'frontier_orbital_eigenvalues', source_name:job.source_name||job.molecule||job.name||null,
+      method:job.method||null, basis_set:job.basis_set||null, orca_version:job.orca_version||null,
+      energy_unit:'eV', channels:channels.map(c=>({
+        name:c.name,homo:finite(c.homo)?c.homo:null,lumo:finite(c.lumo)?c.lumo:null,
+        gap:finite(c.homo)&&finite(c.lumo)?c.lumo-c.homo:null
+      })),
+      reported_homo_ev:finite(job.homo_ev)?job.homo_ev:null, reported_lumo_ev:finite(job.lumo_ev)?job.lumo_ev:null,
+      reported_gap_ev:finite(job.homo_ev)&&finite(job.lumo_ev)?job.lumo_ev-job.homo_ev:null,
+      note:'Orbital eigenvalue differences are not optical excitation energies.'
+    };
   }
-  root.PublicationStyle={style,plot,orbitals,peakCandidates};
+  function orbitals(job,s){
+    const P=root.PublicationFigures,{w,h}=P.dimensions(s,false),p=style(s),meta=orbitalMetadata(job),channels=meta.channels;
+    if(!channels.length)throw Error('No HOMO or LUMO eigenvalues were reported.');
+    const format=v=>v.toFixed(3).replace(/^-/, '−');
+    const values=channels.flatMap(c=>[c.homo,c.lumo]).filter(finite);
+    const lo=Math.min(...values),hi=Math.max(...values),pad=hi>lo?Math.max((hi-lo)*.16,.0004):.5;
+    const min=lo-pad,max=hi+pad,ticks=P.ticks(min,max,h<165?4:5);
+    const fs=p.size,top=s.includeTitle?fs*3.2:Math.max(fs*2.1,14),bottom=channels[0].name?fs*3.6:fs*2.6;
+    const left=Math.max(41,fs*3.7+Math.max(0,...ticks.map(t=>textWidth(number(t),fs,p.font)))),right=fs+7;
+    const pw=w-left-right,ph=h-top-bottom,column=pw/channels.length;
+    if(column<Math.max(60,8.4*fs)||ph<Math.max(45,fs*4.5))throw Error('Choose a larger figure or smaller text for this orbital diagram.');
+    const Y=e=>top+ph-(e-min)/(max-min)*ph;
+    let svg=start(s,'Frontier orbital eigenvalues',meta);
+    if(s.panel)svg+=text(s.panel,7,fs+4,'font-weight="bold"');
+    if(s.includeTitle)svg+=text('Frontier orbital eigenvalues',w/2,fs+6,`font-size="${p.axis}" text-anchor="middle"`);
+    for(const e of ticks){
+      const y=Y(e);
+      if(p.grid)svg+=line(left,y,left+pw,y,'stroke="#dce2e7" stroke-width="0.4"');
+      svg+=line(left,y,left+3,y,'stroke="#16191c" stroke-width="0.65"')+tick(e,left-6,y+fs*.32,'end',fs);
+    }
+    svg+=line(left,top,left,top+ph,'stroke="#16191c" stroke-width="0.65"');
+    if(p.frame==='boxed')svg+=line(left,top,left+pw,top,'stroke="#16191c" stroke-width="0.65"')+line(left+pw,top,left+pw,top+ph,'stroke="#16191c" stroke-width="0.65"')+line(left,top+ph,left+pw,top+ph,'stroke="#16191c" stroke-width="0.65"');
+    svg+=axisTitle('Energy (eV)',fs+1,top+ph/2,ph+fs,p,true);
+    channels.forEach((c,i)=>{
+      const center=left+column*(i+.5),bw=Math.min(column*.72,fs*15),x0=center-bw/2,x1=center+bw/2;
+      const color=p.mono?'#111111':p.palette[i%p.palette.length];
+      const levels=[{label:'HOMO',value:c.homo,dashed:false},{label:'LUMO',value:c.lumo,dashed:true}].filter(q=>finite(q.value));
+      const low=levels.length===2?Math.min(...levels.map(q=>Y(q.value))):null;
+      const high=levels.length===2?Math.max(...levels.map(q=>Y(q.value))):null;
+      for(const level of levels){
+        const y=Y(level.value),above=levels.length===1||(c.homo===c.lumo?level.dashed:y===low);
+        const labelY=above?y-4:y+fs+4;
+        svg+=line(left,y,x0,y,'stroke="#c7ced5" stroke-width="0.45" stroke-dasharray="2 2"');
+        svg+=line(x0,y,x1,y,`class="orbital-level" data-level="${level.label}" stroke="${color}" stroke-width="${p.stroke+.25}"${level.dashed?' stroke-dasharray="4 2"':''}`);
+        svg+=text(`${level.label} ${format(level.value)} eV`,center,labelY,'text-anchor="middle" font-weight="600"');
+      }
+      if(c.gap!==null){
+        const gap=`Δε = ${format(c.gap)} eV`;
+        if(high-low>fs*3){
+          const labelWidth=textWidth(gap,fs,p.font),x=center-labelWidth/2-4,y=(low+high)/2;
+          const bracket='stroke="#444b53" stroke-width="0.65"';
+          svg+=line(x,low+3,x,high-3,bracket)+line(x-3,low+3,x+3,low+3,bracket)+line(x-3,high-3,x+3,high-3,bracket);
+          svg+=text(gap,x+8,y+fs*.32,'class="orbital-gap" font-weight="600"');
+        }else svg+=text(gap,center,top+ph+fs*1.35,'class="orbital-gap" text-anchor="middle"');
+      }
+      if(c.name)svg+=text(c.name,center,h-fs*.7,'text-anchor="middle" font-weight="600"');
+    });
+    return svg+'</g></svg>';
+  }
+  root.PublicationStyle={style,plot,orbitals,orbitalMetadata,peakCandidates};
 })(globalThis);
