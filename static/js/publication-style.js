@@ -12,9 +12,26 @@
     if(!finite(size)||size<5||size>14||!finite(stroke)||stroke<.4||stroke>1.5)throw Error('Use 5-14 pt text and 0.4-1.5 pt curve widths.');
     return {size,axis:size+.5,stroke,font:fonts[s.fontFamily]||fonts.arial,palette:palettes[s.palette]||palettes.accessible,mono:s.monochrome||s.format==='tiff-line',legend:['top','bottom','right','none'].includes(s.legend)?s.legend:'bottom',frame:s.frame==='boxed'?'boxed':'open',grid:!!s.grid,peaks:!!s.peakLabels};
   }
-  function wrap(value,width,size){
-    const limit=Math.max(6,Math.floor(width/(size*.54))),out=[];let valueLeft=String(value||'');
-    while(valueLeft.length>limit){let cut=valueLeft.lastIndexOf(' ',limit);if(cut<limit/2)cut=limit;out.push(valueLeft.slice(0,cut));valueLeft=valueLeft.slice(cut).trimStart();}out.push(valueLeft);return out;
+  let measuringContext;
+  function textWidth(value,size,font){
+    if(measuringContext===undefined){
+      try{measuringContext=root.document?.createElement('canvas').getContext('2d')||null;}catch{measuringContext=null;}
+    }
+    if(measuringContext){measuringContext.font=`${size}px ${font}`;return measuringContext.measureText(value).width;}
+    return Array.from(value).reduce((w,c)=>w+(/[ilI1.,:'| ]/.test(c)?.32:/[MW@%]/.test(c)?.91:.62)*size,0);
+  }
+  function wrap(value,width,size,font){
+    const rows=[];let row='';
+    for(const word of String(value||'').trim().split(/\s+/)){
+      if(row&&textWidth(`${row} ${word}`,size,font)>width){rows.push(row);row='';}
+      if(textWidth(word,size,font)<=width){row=row?`${row} ${word}`:word;continue;}
+      for(const character of word){
+        if(row&&textWidth(row+character,size,font)>width){rows.push(row);row='';}
+        row+=character;
+      }
+    }
+    if(row)rows.push(row);
+    return rows;
   }
   const text=(v,x,y,attrs='')=>`<text x="${x}" y="${y}" ${attrs}>${esc(v)}</text>`;
   const line=(x1,y1,x2,y2,attrs='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${attrs}/>`;
@@ -27,7 +44,7 @@
     const {w,h}=root.PublicationFigures.dimensions(s,false),p=style(s);
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${s.widthMm}mm" height="${s.heightMm}mm" viewBox="0 0 ${w} ${h}" role="img"><title>${esc(title)}</title><metadata>${esc(JSON.stringify({software:'Chemistry Web Lab',color_space:'sRGB',width_mm:s.widthMm,height_mm:s.heightMm,...meta,figure_style:{font:p.font,text_pt:p.size,curve_pt:p.stroke,palette:p.mono?'monochrome':s.palette||'accessible',legend:p.legend,frame:p.frame,grid:p.grid}}))}</metadata><rect width="${w}" height="${h}" fill="#ffffff"/><g font-family="${p.font}" font-size="${p.size}" fill="#16191c" stroke-linejoin="round" stroke-linecap="round">`;
   }
-  function axisTitle(value,x,y,width,p,vertical=false){const rows=wrap(value,width,p.axis);if(rows.length>2)throw Error('Axis title needs more space. Shorten it, reduce text size or enlarge the figure.');if(vertical)x+=(vertical==='right'?-1:1)*(4+(rows.length-1)*(p.axis+2)/2);return `<g class="axis-title" transform="translate(${x} ${y})${vertical?' rotate(-90)':''}" font-size="${p.axis}">`+rows.map((v,i)=>text(v,0,(i-(rows.length-1)/2)*(p.axis+2),'text-anchor="middle"')).join('')+'</g>';}
+  function axisTitle(value,x,y,width,p,vertical=false){const rows=wrap(value,width,p.axis,p.font);if(rows.length>2)throw Error('Axis title needs more space. Shorten it, reduce text size or enlarge the figure.');if(vertical)x+=(vertical==='right'?-1:1)*(4+(rows.length-1)*(p.axis+2)/2);return `<g class="axis-title" transform="translate(${x} ${y})${vertical==='right'?' rotate(90)':vertical?' rotate(-90)':''}" font-size="${p.axis}">`+rows.map((v,i)=>text(v,0,(i-(rows.length-1)/2)*(p.axis+2),'text-anchor="middle"')).join('')+'</g>';}
   function peakCandidates(series,spec){
     const dips=spec.metadata?.y_mode==='transmittance'||/transmittance|%T/i.test(spec.yLabel),out=[];
     series.forEach((item,index)=>{const pts=item.points||[],candidates=[];let low=Infinity,high=-Infinity;for(const q of pts)if(finite(q.x)&&finite(q.y)&&q.x>=spec.xMin&&q.x<=spec.xMax){low=Math.min(low,q.y);high=Math.max(high,q.y);}for(let i=0;i<pts.length;i++){const q=pts[i];if(!finite(q.x)||!finite(q.y)||q.x<spec.xMin||q.x>spec.xMax)continue;
@@ -44,17 +61,18 @@
     if(!series.length||!series.some(v=>(v.points||[]).some(q=>finite(q.x)&&finite(q.y))))throw Error('No finite spectrum data are available for export.');
     if(series.reduce((n,v)=>n+(v.points?.length||0),0)>500000)throw Error('Too many points for one figure. Export fewer visible layers.');
     const x0=spec.xMin,x1=spec.xMax,y0=spec.yMin??0,y1=spec.yMax,xt=P.ticks(x0,x1,w<350?4:6),yt=P.ticks(y0,y1,4),y2t=spec.y2Label?P.ticks(spec.y2Min??0,spec.y2Max,4):[];
-    const titles=s.includeTitle?wrap(spec.title,w-35,fs+1):[],titleHeight=titles.length*(fs+4),legend=spec.showLegend===false?'none':p.legend;
-    const tickWidth=Math.max(...yt.map(v=>number(v).length))*fs*.54;
-    const left=Math.max(45,tickWidth+fs*4.5),axisRight=spec.y2Label?Math.max(52,Math.max(...y2t.map(v=>number(v).length))*fs*.54+fs*4.5):12;
+    const titles=s.includeTitle?wrap(spec.title,w-35,fs+1,p.font):[],titleHeight=titles.length*(fs+4),legend=spec.showLegend===false?'none':p.legend;
+    const tickWidth=values=>Math.max(0,...values.map(v=>textWidth(number(v).replace(/e\+?/, '×10'),fs,p.font)));
+    const xEdge=Math.max(12,tickWidth(xt)/2+4);
+    const left=Math.max(45,tickWidth(yt)+fs*3.9),axisRight=spec.y2Label?Math.max(48,tickWidth(y2t)+fs*3.9):xEdge;
     const legendWidth=legend==='right'?Math.min(w*.3,135):w-left-axisRight,columns=legend==='right'||w<350?1:2,cell=legendWidth/columns;
     const legendRows=[];let legendHeight=0;
-    if(legend!=='none')for(let i=0;i<series.length;i+=columns){const row=series.slice(i,i+columns).map((item,j)=>({index:i+j,lines:wrap(item.displayName||item.name,cell-26,fs)}));const height=Math.max(...row.map(item=>item.lines.length))*(fs+2)+5;legendRows.push({items:row,offset:legendHeight});legendHeight+=height;}
+    if(legend!=='none')for(let i=0;i<series.length;i+=columns){const row=series.slice(i,i+columns).map((item,j)=>({index:i+j,lines:wrap(item.displayName||item.name,cell-26,fs,p.font)}));const height=Math.max(...row.map(item=>item.lines.length))*(fs+2)+5;legendRows.push({items:row,offset:legendHeight});legendHeight+=height;}
     const top=16+titleHeight+(legend==='top'?legendHeight+5:0),bottom=fs*4.5+(legend==='bottom'?legendHeight+5:0),right=axisRight+(legend==='right'?legendWidth+10:0),pw=w-left-right,ph=h-top-bottom;
     if(pw<80||ph<60||(legend==='right'&&legendHeight>ph))throw Error('Labels need more space. Increase the figure dimensions, move the legend, or reduce visible layers.');
     const X=x=>left+(spec.reverseX?(x1-x):(x-x0))/(x1-x0)*pw,Y=(y,secondary=false)=>top+ph-(y-(secondary?(spec.y2Min??0):y0))/((secondary?spec.y2Max:y1)-(secondary?(spec.y2Min??0):y0))*ph;
     const clip='publication-plot-'+(++serial),color=i=>p.mono?'#111111':p.palette[i%p.palette.length],dash=i=>dashes[i%dashes.length];
-    let svg=start(s,spec.title||'Scientific spectrum',{...spec.metadata,axes:{x:spec.xLabel,y:spec.yLabel,y2:spec.y2Label||null},source_layers:series.map(v=>v.name),display_layers:series.map(v=>v.displayName||v.name),peak_labels:p.peaks?'Strongest local extrema; numerical positions only, no chemical assignment':false});
+    let svg=start(s,spec.title||'Scientific spectrum',{...spec.metadata,axes:{x:spec.xLabel,y:spec.yLabel,y2:spec.y2Label||null,x_range:[x0,x1],y_range:[y0,y1],y2_range:spec.y2Label?[spec.y2Min??0,spec.y2Max]:null,descending_x:!!spec.reverseX},source_layers:series.map(v=>v.name),display_layers:series.map(v=>v.displayName||v.name),peak_labels:p.peaks?'Strongest local extrema; numerical positions only, no chemical assignment':false});
     if(s.panel)svg+=text(s.panel,7,11,`font-size="${Math.max(8,fs)}" font-weight="bold"`);
     titles.forEach((v,i)=>{svg+=text(v,w/2,12+i*(fs+4),`font-size="${fs+1}" text-anchor="middle"`);});
     if(legend!=='none'){const lx=legend==='right'?w-legendWidth: left,ly=legend==='top'?16+titleHeight:legend==='bottom'?top+ph+fs*4.2:top+fs;
@@ -64,16 +82,36 @@
     svg+=line(left,top,left,top+ph,'stroke="#16191c" stroke-width="0.65"')+line(left,top+ph,left+pw,top+ph,'stroke="#16191c" stroke-width="0.65"');
     if(p.frame==='boxed')svg+=line(left,top,left+pw,top,'stroke="#16191c" stroke-width="0.65"');
     if(p.frame==='boxed'||spec.y2Label)svg+=line(left+pw,top,left+pw,top+ph,'stroke="#16191c" stroke-width="0.65"');
-    for(const x of xt){const px=X(x);svg+=line(px,top+ph-3,px,top+ph,'stroke="#16191c" stroke-width="0.65"')+tick(x,px,top+ph+fs+5,'middle',fs);if(p.frame==='boxed')svg+=line(px,top,px,top+3,'stroke="#16191c" stroke-width="0.65"');}
+    let tickRight=-Infinity;
+    for(const x of xt.slice().sort((a,b)=>X(a)-X(b))){const px=X(x),half=textWidth(number(x),fs,p.font)/2;
+      if(px-half<tickRight+5)continue;
+      tickRight=px+half;
+      svg+=line(px,top+ph-3,px,top+ph,'stroke="#16191c" stroke-width="0.65"')+tick(x,px,top+ph+fs+5,'middle',fs);if(p.frame==='boxed')svg+=line(px,top,px,top+3,'stroke="#16191c" stroke-width="0.65"');}
     for(const y of yt){const py=Y(y);svg+=line(left,py,left+3,py,'stroke="#16191c" stroke-width="0.65"')+tick(y,left-6,py+fs*.32,'end',fs);}
-    svg+=axisTitle(spec.xLabel,left+pw/2,top+ph+fs*2.8,pw,p)+axisTitle(spec.yLabel,fs+1,top+ph/2,ph+10,p,true);
-    if(spec.y2Label){for(const y of y2t){const py=Y(y,true);svg+=line(left+pw-3,py,left+pw,py,'stroke="#16191c" stroke-width="0.65"')+tick(y,left+pw+6,py+fs*.32,'start',fs);}svg+=axisTitle(spec.y2Label,w-(legend==='right'?legendWidth+10:0)-fs-1,top+ph/2,ph+10,p,'right');}
+    const verticalTitleLength=ph+Math.min(top-3,fs+8)*2;
+    svg+=axisTitle(spec.xLabel,left+pw/2,top+ph+fs*2.8,pw,p)+axisTitle(spec.yLabel,fs+1,top+ph/2,verticalTitleLength,p,true);
+    if(spec.y2Label){for(const y of y2t){const py=Y(y,true);svg+=line(left+pw-3,py,left+pw,py,'stroke="#16191c" stroke-width="0.65"')+tick(y,left+pw+6,py+fs*.32,'start',fs);}svg+=axisTitle(spec.y2Label,w-(legend==='right'?legendWidth+10:0)-fs-1,top+ph/2,verticalTitleLength,p,'right');}
     svg+=`<g clip-path="url(#${clip})">`;
-    series.forEach((item,index)=>{let path='',connected=false;for(const q of item.points||[]){if(!finite(q.x)||!finite(q.y)){connected=false;continue;}const x=X(q.x),y=Y(q.y,item.axis===2);
-      path+=item.sticks?`M${x.toFixed(3)},${Y(item.baseline??0,item.axis===2).toFixed(3)}L${x.toFixed(3)},${y.toFixed(3)}`:`${connected?'L':'M'}${x.toFixed(3)},${y.toFixed(3)}`;connected=true;}
-      svg+=`<path class="data-series" data-axis="${item.axis===2?2:1}" d="${path}" fill="none" stroke="${color(index)}" stroke-width="${p.stroke}"${item.sticks?'':` stroke-dasharray="${dash(index)}"`}/>`;
+    series.forEach((item,index)=>{let path='',connected=false,single=null;const singles=[];for(const q of item.points||[]){if(!finite(q.x)||!finite(q.y)){if(single)singles.push(single);single=null;connected=false;continue;}const x=X(q.x),y=Y(q.y,item.axis===2);
+      if(item.sticks){path+=`M${x.toFixed(3)},${Y(item.baseline??0,item.axis===2).toFixed(3)}L${x.toFixed(3)},${y.toFixed(3)}`;continue;}
+      single=connected?null:{x,y};
+      path+=`${connected?'L':'M'}${x.toFixed(3)},${y.toFixed(3)}`;connected=true;}
+      if(single)singles.push(single);
+      svg+=`<path d="${path}" class="data-series" data-axis="${item.axis===2?2:1}" fill="none" stroke="${color(index)}" stroke-width="${p.stroke}" stroke-dasharray="${dash(index)}"/>`;
+      for(const {x,y} of singles)svg+=`<circle cx="${x}" cy="${y}" r="${p.stroke*1.3}" fill="${color(index)}"/>`;
     });svg+='</g>';
-    if(p.peaks){const occupied=[];for(const q of peakCandidates(series,spec)){const x=X(q.x),y=Y(q.y,q.axis);if(y<top||y>top+ph)continue;const label=q.x.toFixed(spec.metadata?.spectrum==='NMR'?2:spec.metadata?.spectrum==='UV-Vis'?1:0),width=label.length*fs*.54,tx=Math.max(left+width/2,Math.min(left+pw-width/2,x)),ty=Math.max(top+fs,Math.min(top+ph-fs,y-fs-3));if(occupied.some(b=>Math.abs(b.x-tx)<(b.w+width)/2+3&&Math.abs(b.y-ty)<fs*1.5))continue;occupied.push({x:tx,y:ty,w:width});svg+=line(x,y,tx,ty+2,'stroke="#555" stroke-width="0.4"')+text(label,tx,ty,'text-anchor="middle"');}}
+    if(p.peaks){const occupied=[],dip=spec.metadata?.y_mode==='transmittance'||/transmittance|%T/i.test(spec.yLabel);
+      for(const q of peakCandidates(series,spec)){
+        const x=X(q.x),y=Y(q.y,q.axis);if(y<top||y>top+ph)continue;
+        const label=q.x.toFixed(spec.metadata?.spectrum==='NMR'?2:spec.metadata?.spectrum==='UV-Vis'?1:0),width=textWidth(label,fs,p.font);
+        const offsets=[dip?fs+6:-6,dip?-6:fs+6],dx=width/2+8;
+        const positions=[[x,y+offsets[0]],[x+dx,y+offsets[0]],[x-dx,y+offsets[0]],[x+dx,y+offsets[1]],[x-dx,y+offsets[1]]];
+        const placement=positions.find(([u,v])=>u-width/2>=left+2&&u+width/2<=left+pw-2&&v>=top+fs&&v<=top+ph-3&&occupied.every(b=>Math.abs(b.x-u)>=(b.w+width)/2+4||Math.abs(b.y-v)>=fs*1.5));
+        if(!placement)continue;
+        const [tx,ty]=placement;occupied.push({x:tx,y:ty,w:width});
+        svg+=line(x,y,tx,ty+(ty<y?2:-fs),'stroke="#555" stroke-width="0.45"')+text(label,tx,ty,'text-anchor="middle" paint-order="stroke fill" stroke="white" stroke-width="1.8"');
+      }
+    }
     return svg+'</g></svg>';
   }
   function orbitals(job,s){

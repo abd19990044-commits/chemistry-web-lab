@@ -6447,6 +6447,20 @@
       });
   }
 
+  function analyzerIRData(data, latestJob) {
+    const jobs = data.jobs?.length ? data.jobs : data.molecule?.jobs || [];
+    const hasBands = job => (job?.ir_spectrum || []).some(m =>
+      Number.isFinite(m?.frequency_cm) && m.frequency_cm > 0 &&
+      Number.isFinite(m.intensity_km_mol) && m.intensity_km_mol > 0);
+    const candidates = jobs.slice().reverse();
+    const earlier = !hasBands(latestJob) && candidates.find(hasBands);
+    const source = earlier || latestJob;
+    const step = earlier && earlier !== latestJob ? jobs.indexOf(earlier) + 1 : null;
+    const reported = source.ir_spectrum || [];
+    const frequencies = source.vibrational_frequencies_cm || source.vibrational_frequencies || source.frequencies || [];
+    return {source, step, modes: reported.length ? reported : frequencies.map((frequency_cm, i) => ({mode: i, frequency_cm})), hasBands: hasBands(source)};
+  }
+
   function renderEngineResults(data) {
     if (!data) return;
     currentEngineData = data;
@@ -6796,39 +6810,31 @@
     // Vibrational IR / FTIR Multi-Spectrum Studio
     const irSec = document.getElementById("engine-ir-section");
     const irModesTbody = document.getElementById("engine-ir-modes-tbody");
-    const irModes = job.ir_spectrum || [];
-    const vibFreqs = job.vibrational_frequencies_cm || job.vibrational_frequencies || job.frequencies || [];
-    
     if (irSec) {
-      if (irModes.length > 0 || vibFreqs.length > 0) {
-        irSec.classList.remove("hidden");
-        
-        // Populate theoretical IR table
+      const ir = analyzerIRData(data, job);
+      irSec.classList.toggle("hidden", Boolean(job.geometry_only));
+      if (!job.geometry_only) {
+        const notice = document.getElementById("engine-ir-data-status");
+        if (notice) notice.textContent = ir.hasBands
+          ? (ir.step ? `IR spectrum from calculation step ${ir.step}. Other results show the latest step.` : "Calculated bands use the integrated intensities reported by ORCA.")
+          : (ir.modes.length ? "No positive IR band intensities were reported. Frequencies alone cannot define an IR spectrum." : "No IR spectrum in this output. Open an ORCA FREQ/NUMFREQ output that includes an IR SPECTRUM table, or import measured FTIR data below.");
         if (irModesTbody) {
-          irModesTbody.innerHTML = "";
-          const list = irModes.length > 0 ? irModes : vibFreqs.map((f, idx) => ({ mode: idx + 1, frequency_cm: typeof f === 'number' ? f : (f.frequency_cm ?? f.wavenumber_cm ?? f.freq ?? 0), intensity_km_mol: (typeof f === 'object' && (f.intensity_km_mol ?? f.intensity)) != null ? (f.intensity_km_mol ?? f.intensity) : 10.0 }));
-          list.forEach((m, idx) => {
-            const freq = typeof m === 'number' ? m : (m.frequency_cm != null ? m.frequency_cm : (m.wavenumber_cm != null ? m.wavenumber_cm : (m.freq != null ? m.freq : 0)));
-            const t2 = (typeof m === 'object' && (m.intensity_km_mol != null || m.intensity != null)) ? (m.intensity_km_mol ?? m.intensity) : 10.0;
+          irModesTbody.replaceChildren();
+          ir.modes.forEach((m, idx) => {
+            const freq = m.frequency_cm;
+            if (!Number.isFinite(freq)) return;
             const tr = document.createElement("tr");
-            tr.innerHTML = `
-              <td style="font-family:var(--font-mono); font-size:0.8rem;">#${m.mode || (idx + 1)}</td>
-              <td style="font-family:var(--font-mono); font-size:0.8rem; ${freq < 0 ? 'color:var(--accent-danger); font-weight:bold;' : ''}">
-                ${freq.toFixed(2)} cm⁻¹
-              </td>
-              <td style="font-family:var(--font-mono); font-size:0.8rem; color:var(--primary); font-weight:600;">
-                ${t2.toFixed(3)}
-              </td>
-              <td style="font-size:0.75rem; color:var(--text-muted);">${freq < 0 ? 'Imaginary (TS)' : 'Harmonic IR Mode'}</td>
-            `;
+            for (const value of [m.mode ?? idx, freq.toFixed(2), Number.isFinite(m.intensity_km_mol) ? m.intensity_km_mol.toPrecision(5) : "—", freq < 0 ? "Imaginary" : freq === 0 ? "Zero-frequency mode" : "Harmonic mode"]) {
+              tr.insertCell().textContent = value;
+            }
             irModesTbody.appendChild(tr);
           });
         }
-
-        addTheoreticalIRCalculationToStudio(name, irModes.length > 0 ? irModes : vibFreqs, job.method || "ORCA DFT", job.basis_set || "");
+        loadedTheoreticalIRSpectra = loadedTheoreticalIRSpectra.filter(t => t.imported || t.sourceName !== name);
+        if (ir.hasBands) addTheoreticalIRCalculationToStudio(ir.step ? `${name} · step ${ir.step}` : name,
+          ir.modes, ir.source.method || "ORCA", ir.source.basis_set || "", {sourceName: name, calculationStep: ir.step});
+        else updateIRSpectrumLayersTray();
         drawIRMultiSpectrum();
-      } else {
-        irSec.classList.add("hidden");
       }
     }
 
@@ -7282,11 +7288,24 @@
       minWn = isNaN(minInp) ? 400 : minInp;
       maxWn = isNaN(maxInp) ? 4000 : maxInp;
       if (minWn >= maxWn) maxWn = minWn + 100;
-    } else if (irViewportMode === "full" && (activeExps || []).length > 0) {
-      const allMins = activeExps.map(e => Math.min(...e.raw_data.map(p => p.wavenumber_cm)));
-      const allMaxs = activeExps.map(e => Math.max(...e.raw_data.map(p => p.wavenumber_cm)));
-      minWn = Math.max(200, Math.floor(Math.min(...allMins, 400)));
-      maxWn = Math.min(6000, Math.ceil(Math.max(...allMaxs, 4000)));
+    } else if (irViewportMode === "full" || irViewportMode === "standard") {
+      const scale = Number(document.getElementById("engine-ir-scale-slider")?.value || 1);
+      const shift = Number(document.getElementById("engine-ir-shift-slider")?.value || 0);
+      let lo = Infinity, hi = -Infinity, hasMidIR = false;
+      const include = wn => {
+        if (!Number.isFinite(wn) || wn < 0) return;
+        lo = Math.min(lo, wn); hi = Math.max(hi, wn);
+        hasMidIR ||= wn >= 400 && wn <= 4000;
+      };
+      for (const t of activeTheos) for (const m of t.modes) {
+        if (m.intensity_km_mol > 0) include(m.frequency_cm * scale + shift);
+      }
+      for (const e of activeExps) for (const p of e.raw_data) include(p.wavenumber_cm);
+      if (Number.isFinite(lo) && (irViewportMode === "full" || !hasMidIR)) {
+        const margin = Math.max(25, (hi - lo) * .025);
+        minWn = Math.max(0, Math.floor(lo - margin));
+        maxWn = Math.ceil(hi + margin);
+      }
     }
 
     if (irManualRangeEnabled) {
@@ -7874,18 +7893,10 @@
     const id = `theo_ir_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const color = THEO_IR_PALETTE[loadedTheoreticalIRSpectra.length % THEO_IR_PALETTE.length];
 
-    const normalizedModes = irModes.map((m, idx) => {
-      if (typeof m === "number") {
-        return { mode: idx + 1, frequency_cm: m, intensity_km_mol: 10.0 };
-      }
-      return {
-        mode: m.mode || (idx + 1),
-        frequency_cm: m.frequency_cm || m.wavenumber_cm || m.freq || 0,
-        intensity_km_mol: (m.intensity_km_mol != null) ? m.intensity_km_mol : ((m.intensity != null) ? m.intensity : 10.0),
-      };
-    }).filter(m => m.frequency_cm > 0);
+    const normalizedModes = irModes.filter(m => Number.isFinite(m?.frequency_cm) && m.frequency_cm > 0 &&
+      Number.isFinite(m.intensity_km_mol) && m.intensity_km_mol >= 0);
 
-    if (!normalizedModes.length) return;
+    if (!normalizedModes.some(m => m.intensity_km_mol > 0)) return;
 
     const existingIdx = loadedTheoreticalIRSpectra.findIndex(t => t.name === name);
     const item = {
@@ -8186,13 +8197,14 @@
   }
 
   function computeIRConvolution(modes, scalingFactor = 1.0, fwhmCm = 15.0, shiftCm = 0.0, startCm = 400, endCm = 4000, stepCm = 2, normMax = null) {
-    if (!modes || !modes.length || fwhmCm <= 0) return [];
+    if (!modes?.length || ![startCm, endCm, stepCm, fwhmCm, scalingFactor, shiftCm].every(Number.isFinite) ||
+        fwhmCm <= 0 || stepCm <= 0 || endCm < startCm) return [];
     const valid = [];
     modes.forEach(m => {
       const freq = typeof m === "number" ? m : (m.frequency_cm || m.freq || 0);
-      const intensity = (typeof m === "object" && m.intensity_km_mol != null) ? m.intensity_km_mol : 10.0;
-      if (freq > 0) {
-        valid.push({ wn: (freq * scalingFactor) + shiftCm, intensity: Math.max(0, intensity) });
+      const intensity = m?.intensity_km_mol;
+      if (Number.isFinite(freq) && freq > 0 && Number.isFinite(intensity) && intensity > 0) {
+        valid.push({ wn: (freq * scalingFactor) + shiftCm, intensity });
       }
     });
     if (!valid.length) return [];
@@ -8202,7 +8214,9 @@
     const points = [];
     let maxA = 0;
 
-    for (let currentWn = startCm; currentWn <= endCm; currentWn += stepCm) {
+    const intervals = Math.min(20000, Math.ceil((endCm - startCm) / Math.min(stepCm, fwhmCm / 4)));
+    for (let i = 0; i <= intervals; i++) {
+      const currentWn = intervals ? startCm + (endCm - startCm) * (i / intervals) : startCm;
       let absVal = 0.0;
       for (let i = 0; i < valid.length; i++) {
         const diff = currentWn - valid[i].wn;
@@ -8219,7 +8233,7 @@
       const aNorm = denom > 0 ? (pt.abs / denom) : 0;
       const tPct = 100.0 * Math.pow(10, -aNorm);
       return {
-        wavenumber_cm: Math.round(pt.wn * 10) / 10,
+        wavenumber_cm: pt.wn,
         absorbance: pt.abs,
         absorbance_norm: aNorm,
         transmittance_pct: tPct
@@ -8235,16 +8249,6 @@
       c.forEach(p2 => { if (p2.absorbance > globalMaxAbs) globalMaxAbs = p2.absorbance; });
     });
     return globalMaxAbs > 0 ? globalMaxAbs : null;
-  }
-
-  function irDisplayedHeaders() {
-    if (irYAxisMode === "theory_intensity") {
-      return { yHeader: "Relative_Intensity", yUnit: "km/mol" };
-    }
-    if (irYAxisMode === "absorbance") {
-      return { yHeader: "Absorbance", yUnit: "a.u." };
-    }
-    return { yHeader: "Relative_Transmittance_pct", yUnit: "%" };
   }
 
   function renderIRSpectrumToCanvas(canvas, scale = 1, isExport = false) {
@@ -8268,35 +8272,29 @@
     const shift = parseFloat(document.getElementById("engine-ir-shift-slider")?.value || "0");
 
     const activeTheos = loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo"));
-    const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp"));
+    const isIntensity = (irYAxisMode === "theory_intensity");
+    const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp") && !isIntensity);
 
     if (activeTheos.length === 0 && activeExps.length === 0) {
       ctx.fillStyle = isLight ? "#475569" : "#91A5BE";
       ctx.font = "14px Inter, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("No active IR spectra selected. Enable datasets in the tray above.", width / 2, height / 2);
+      ctx.fillText(isIntensity ? "Integrated intensity requires calculated ORCA IR bands." : "No visible IR spectrum. Load IR data or enable a layer.", width / 2, height / 2);
       ctx.restore();
       return;
     }
 
     const { minWn, maxWn } = getIRBounds(activeTheos, activeExps);
 
-    const sharedNormMax = getIRSharedNormMax(scaleFactor, fwhm, shift, minWn, maxWn);
+    const sharedNormMax = isIntensity ? null : getIRSharedNormMax(scaleFactor, fwhm, shift, minWn, maxWn);
     const theoCurves = activeTheos.map(theo => ({
       theo,
-      curve: computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2, sharedNormMax),
+      curve: isIntensity ? [] : computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2, sharedNormMax),
     }));
 
-    const isIntensity = (irYAxisMode === "theory_intensity");
     const isTrans = (irYAxisMode === "transmittance");
     const isAbs = (irYAxisMode === "absorbance");
     const isTheoOnly = (activeTheos.length > 0 && activeExps.length === 0);
-    if (irViewMode === "experimental_only" && activeExps.length === 0) {
-      ctx.font = "bold 13px Inter, sans-serif";
-      ctx.fillStyle = axisColor;
-      ctx.textAlign = "center";
-      ctx.fillText("No experimental spectrum loaded. Import one to compare.", width / 2, height / 2);
-    }
 
     const padding = getIRPadding();
     const plotW = width - padding.left - padding.right;
@@ -8305,15 +8303,19 @@
     const mapX = (wn) => padding.left + ((maxWn - wn) / (maxWn - minWn)) * plotW;
 
     let minY = 0.0;
-    let maxAbs = 1.0;
-    const theoMaxAbs = Math.max(...theoCurves.flatMap(tc => tc.curve.map(p => p.absorbance)), 0.1);
-    const expMaxAbs = Math.max(...activeExps.flatMap(e => e.raw_data.map(p => p.absorbance)), 0.1);
-    maxAbs = Math.max(theoMaxAbs, expMaxAbs) * 1.15;
-
-    let maxIntensity = 100.0;
-    const allTheoModes = activeTheos.flatMap(t => (t.modes || (t.theo && t.theo.modes) || []));
-    const maxTheoModeInt = allTheoModes.length > 0 ? Math.max(...allTheoModes.map(m => m.intensity_km_mol || 0), 10.0) : 100.0;
-    maxIntensity = Math.ceil((maxTheoModeInt * 1.15) / 10) * 10 || 100.0;
+    let absPeak = 0, bandPeak = 0;
+    for (const {theo, curve} of theoCurves) {
+      for (const p of curve) absPeak = Math.max(absPeak, p.absorbance);
+      for (const m of theo.modes) {
+        const wn = m.frequency_cm * scaleFactor + shift;
+        if (wn >= minWn && wn <= maxWn) bandPeak = Math.max(bandPeak, m.intensity_km_mol);
+      }
+    }
+    for (const e of activeExps) for (const p of e.raw_data) {
+      if (p.wavenumber_cm >= minWn && p.wavenumber_cm <= maxWn && Number.isFinite(p.absorbance)) absPeak = Math.max(absPeak, p.absorbance);
+    }
+    const maxAbs = (absPeak || 1) * 1.15;
+    const maxIntensity = (bandPeak || 1) * 1.15;
 
     let maxY = isIntensity ? maxIntensity : (isTrans ? 100.0 : maxAbs);
 
@@ -8323,9 +8325,8 @@
       }
       if (irManualMaxY !== null && !isNaN(irManualMaxY) && irManualMaxY > minY) {
         maxY = irManualMaxY;
-        maxAbs = irManualMaxY;
-        maxIntensity = irManualMaxY;
       }
+      if (minY >= maxY) minY = 0;
     }
 
     const mapY = (val) => {
@@ -8357,13 +8358,14 @@
     ctx.strokeRect(padding.left, padding.top, plotW, plotH);
 
     const wnSpan = maxWn - minWn;
-    const wnStep = wnSpan > 2000 ? 500 : (wnSpan > 800 ? 200 : 100);
+    const wnStep = 10 ** Math.floor(Math.log10(wnSpan / 7));
+    const tickStep = [1, 2, 5, 10].map(n => n * wnStep).find(step => wnSpan / step <= 8) || 10 * wnStep;
 
     ctx.strokeStyle = axisColor;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
 
-    for (let wnVal = Math.floor(maxWn / wnStep) * wnStep; wnVal >= minWn; wnVal -= wnStep) {
+    for (let wnVal = Math.floor(maxWn / tickStep) * tickStep; wnVal >= minWn; wnVal -= tickStep) {
       const xPos = mapX(wnVal);
       if (xPos >= padding.left && xPos <= width - padding.right) {
         ctx.moveTo(xPos, padding.top + plotH);
@@ -8387,10 +8389,10 @@
     ctx.font = "bold 11px Inter, sans-serif";
     ctx.textAlign = "center";
 
-    for (let wnVal = Math.floor(maxWn / wnStep) * wnStep; wnVal >= minWn; wnVal -= wnStep) {
+    for (let wnVal = Math.floor(maxWn / tickStep) * tickStep; wnVal >= minWn; wnVal -= tickStep) {
       const xPos = mapX(wnVal);
       if (xPos >= padding.left + 15 && xPos <= width - padding.right - 15) {
-        ctx.fillText(wnVal.toString(), xPos, padding.top + plotH + 18);
+        ctx.fillText(Number(wnVal.toPrecision(7)).toString(), xPos, padding.top + plotH + 18);
       }
     }
 
@@ -8427,7 +8429,7 @@
     } else if (isTrans) {
       yAxisTitle = isTheoOnly ? "Theoretical IR Transmittance (Pseudo-%T)" : "Transmittance (%)";
     } else if (isAbs) {
-      yAxisTitle = "Absorbance (a.u.)";
+      yAxisTitle = activeTheos.length ? "Calculated signal / absorbance (a.u.)" : "Absorbance";
     }
     if (irCustomTitles.y) yAxisTitle = irCustomTitles.y;
 
@@ -8447,13 +8449,13 @@
     ctx.rect(padding.left, padding.top, plotW, plotH);
     ctx.clip();
 
-    if (showTheoreticalIRSticks) {
+    if (isIntensity || showTheoreticalIRSticks) {
       theoCurves.forEach(({ theo }) => {
         ctx.strokeStyle = theo.color;
         ctx.lineWidth = 1.8;
         theo.modes.forEach(m => {
           const scaledWn = (m.frequency_cm * scaleFactor) + shift;
-          if (scaledWn >= minWn && scaledWn <= maxWn) {
+          if (m.intensity_km_mol > 0 && scaledWn >= minWn && scaledWn <= maxWn) {
             const xPos = mapX(scaledWn);
             let stickY, baselineY;
             if (isIntensity) {
@@ -8493,9 +8495,7 @@
         if (pt.wavenumber_cm >= minWn && pt.wavenumber_cm <= maxWn) {
           const x = mapX(pt.wavenumber_cm);
           let yVal;
-          if (isIntensity) {
-            yVal = mapY(pt.absorbance_norm * maxTheoModeInt);
-          } else if (isTrans) {
+          if (isTrans) {
             yVal = mapY(pt.transmittance_pct);
           } else {
             yVal = mapY(pt.absorbance);
@@ -8524,9 +8524,7 @@
         if (typeof pt.wavenumber_cm === 'number' && !isNaN(pt.wavenumber_cm)) {
           const x = mapX(pt.wavenumber_cm);
           let yVal;
-          if (isIntensity) {
-            yVal = mapY((pt.absorbance / (maxAbs || 1)) * maxTheoModeInt);
-          } else if (isTrans) {
+          if (isTrans) {
             yVal = mapY(pt.transmittance_pct !== undefined ? pt.transmittance_pct : (100 * Math.pow(10, -pt.absorbance)));
           } else {
             yVal = mapY(pt.absorbance !== undefined ? pt.absorbance : (pt.transmittance_pct ? -Math.log10(Math.max(0.0001, pt.transmittance_pct / 100)) : 0));
@@ -8578,6 +8576,16 @@
   function drawIRMultiSpectrum() {
     const canvas = document.getElementById("engine-ir-canvas");
     if (!canvas) return;
+    const notice = document.getElementById("engine-ir-view-status");
+    if (notice) {
+      const hasExperiment = loadedExperimentalIRSpectra.some(e => e.visible && irViewAllows("exp"));
+      const hasTheory = loadedTheoreticalIRSpectra.some(t => t.visible && irViewAllows("theo"));
+      notice.textContent = hasExperiment && irYAxisMode === "theory_intensity"
+        ? "Integrated intensity shows calculated bands only. Switch to transmittance or absorbance to show measured FTIR."
+        : hasTheory && hasExperiment && irYAxisMode === "absorbance"
+          ? "Calculated signal is uncalibrated. The publication figure uses separate axes for calculated signal and measured absorbance."
+          : "";
+    }
     renderIRSpectrumToCanvas(canvas, 1, false);
   }
 
@@ -8598,7 +8606,7 @@
     drawIRMultiSpectrum();
   }
 
-  function publicationSpectrumSpec(kind) {
+  function publicationSpectrumSpec(kind, irSelection) {
     const peak=(points,key)=>points.reduce((n,p)=>Number.isFinite(p[key])?Math.max(n,p[key]):n,0)||1;
     const source={source_name:currentEngineData?.name||null,source_type:"ORCA / imported spectrum"};
     if(kind==="uvvis"){
@@ -8621,25 +8629,37 @@
         showLegend:showUVVisLegend,series,metadata:{...source,spectrum:"UV-Vis",sigma_nm:sigma,theoretical_shift_nm:shift,normalization:spectrumNormalizeMode,theoretical_intensity:"1000 times oscillator-strength-weighted Gaussian density in wavelength; arbitrary scale, not calibrated molar absorptivity",experimental_data:"Raw samples; no smoothing or theoretical shift applied"}};
     }
     if(kind==="ir"){
-      const theories=loadedTheoreticalIRSpectra.filter(t=>t.visible&&irViewAllows("theo"));
-      const experiments=loadedExperimentalIRSpectra.filter(t=>t.visible&&irViewAllows("exp"));
+      const intensity=irYAxisMode==="theory_intensity",trans=irYAxisMode==="transmittance";
+      const theories=irSelection?.theories??loadedTheoreticalIRSpectra.filter(t=>t.visible&&irViewAllows("theo"));
+      const experiments=intensity?[]:irSelection?.experiments??loadedExperimentalIRSpectra.filter(t=>t.visible&&irViewAllows("exp"));
       const {minWn,maxWn}=getIRBounds(theories,experiments);
       const scale=Number(document.getElementById("engine-ir-scale-slider")?.value||1),fwhm=Number(document.getElementById("engine-ir-fwhm-slider")?.value||15),shift=Number(document.getElementById("engine-ir-shift-slider")?.value||0);
-      const norm=getIRSharedNormMax(scale,fwhm,shift,minWn,maxWn),trans=irYAxisMode==="transmittance",intensity=irYAxisMode==="theory_intensity";
-      if(intensity&&experiments.length)throw Error("Use absorbance or transmittance to compare experimental and calculated IR. Integrated band intensities are available for calculated modes only.");
-      let maximum=0;
+      const norm=trans?getIRSharedNormMax(scale,fwhm,shift,minWn,maxWn):null;
+      const dual=!intensity&&!trans&&theories.length>0&&experiments.length>0;
+      let maximum=0,expMaximum=0,expMinimum=0;
       const series=theories.map(t=>{
-        const curve=intensity?(t.modes||[]).map(m=>({x:m.frequency_cm*scale+shift,y:m.intensity_km_mol})):
+        const curve=intensity?(t.modes||[]).filter(m=>m.frequency_cm>0&&m.intensity_km_mol>0)
+          .map(m=>({x:m.frequency_cm*scale+shift,y:m.intensity_km_mol})).filter(p=>p.x>=minWn&&p.x<=maxWn):
           computeIRConvolution(t.modes,scale,fwhm,shift,minWn,maxWn,2,norm).map(p=>({x:p.wavenumber_cm,y:trans?p.transmittance_pct:p.absorbance}));
-        maximum=Math.max(maximum,peak(curve,"y"));return {name:`Calculated${trans?" pseudo-%T":""}: ${t.name}`,points:curve,sticks:intensity};
+        for(const p of curve) if(Number.isFinite(p.y)) maximum=Math.max(maximum,p.y);
+        return {name:`Calculated${trans?" pseudo-%T":""}: ${t.name}`,points:curve,sticks:intensity,
+          quantity:intensity?"Integrated intensity (km/mol)":trans?"Pseudo-transmittance (%)":"Calculated signal (a.u.)"};
       });
-      for(const e of experiments){const points=e.raw_data.map(p=>({x:p.wavenumber_cm,y:trans?(Number.isFinite(p.transmittance_pct)?p.transmittance_pct:100*10**(-p.absorbance)):(Number.isFinite(p.absorbance)?p.absorbance:-Math.log10(Math.max(.0001,p.transmittance_pct/100)))}));maximum=Math.max(maximum,peak(points,"y"));series.push({name:`Experimental: ${e.label||e.file_name}`,points});}
-      const minY=irManualRangeEnabled&&Number.isFinite(irManualMinY)?irManualMinY:0;
-      const maxY=irManualRangeEnabled&&Number.isFinite(irManualMaxY)&&irManualMaxY>minY?irManualMaxY:trans?100:Math.max(maximum,.1)*1.15;
+      for(const e of experiments){const points=e.raw_data.map(p=>({x:p.wavenumber_cm,y:trans?(Number.isFinite(p.transmittance_pct)?p.transmittance_pct:100*10**(-p.absorbance)):(Number.isFinite(p.absorbance)?p.absorbance:-Math.log10(Math.max(.0001,p.transmittance_pct/100)))}));
+        for(const p of points) if(Number.isFinite(p.y)&&p.x>=minWn&&p.x<=maxWn){expMaximum=Math.max(expMaximum,p.y);expMinimum=Math.min(expMinimum,p.y);}
+        series.push({name:`Experimental: ${e.label||e.file_name}`,points,axis:dual?2:1,quantity:trans?"Transmittance (%)":"Absorbance"});}
+      const autoMin=!trans&&!theories.length?expMinimum:0;
+      const autoMax=trans?100:(theories.length?maximum||1:expMaximum||1)*1.15;
+      const requestedMin=irManualRangeEnabled&&Number.isFinite(irManualMinY)?irManualMinY:autoMin;
+      const maxY=irManualRangeEnabled&&Number.isFinite(irManualMaxY)&&irManualMaxY>requestedMin?irManualMaxY:autoMax;
+      const minY=requestedMin<maxY?requestedMin:autoMin;
       return {title:irCustomTitles.title||"Infrared spectrum",xMin:minWn,xMax:maxWn,reverseX:true,yMin:minY,yMax:maxY,
-        xLabel:irCustomTitles.x||"Wavenumber (cm⁻¹)",yLabel:irCustomTitles.y||(intensity?"IR intensity (km mol⁻¹)":trans?(theories.length?"Transmittance / pseudo-%T (%)":"Transmittance (%)"):"Absorbance (a.u.)"),
+        xLabel:irCustomTitles.x||"Wavenumber (cm⁻¹)",yLabel:irCustomTitles.y||(intensity?"Integrated IR intensity (km mol⁻¹)":trans?(theories.length?(experiments.length?"Transmittance / pseudo-%T (%)":"Calculated pseudo-%T"):"Transmittance (%)"):theories.length?"Calculated signal (a.u.)":"Absorbance"),
+        y2Label:dual?"Measured absorbance":null,y2Min:expMinimum,y2Max:(expMaximum||1)*1.15,
         series,showLegend:showIRLegend,metadata:{...source,spectrum:"IR",frequency_scale:scale,theoretical_shift_cm_1:shift,fwhm_cm_1:fwhm,y_mode:irYAxisMode,
-          representation:intensity?"Integrated calculated bands (sticks)":"Displayed broadened curves",experimental_data:"Raw samples; no frequency scaling, shift or smoothing applied",theoretical_transmittance:trans?"Pseudo-transmittance; not a measured transmittance":null}};
+          calculated_layers:theories.map(t=>({name:t.name,method:t.method||null,basis_set:t.basis||null,step:t.calculationStep??null})),
+          normalization:trans?(norm?"shared":"per spectrum"):null,
+          representation:intensity?"Integrated calculated bands (sticks)":"Lorentzian broadening of calculated bands; measured samples unchanged except for selected A/%T conversion",theoretical_transmittance:trans&&theories.length?"Pseudo-transmittance; not a measured transmittance":null}};
     }
     const spectrum=currentNMRNucleus==="1H"?currentNMRData?.h1_spectrum:currentNMRData?.c13_spectrum;
     if(!spectrum?.peaks?.length)throw Error("No calculated NMR signals are available for the selected nucleus.");
@@ -8647,6 +8667,35 @@
       yMin:0,yMax:Math.max(1,...spectrum.peaks.map(p=>p.intensity))*1.15,xLabel:spectrum.is_reference_applied?"Chemical shift, δ (ppm)":"Isotropic shielding, σ (ppm)",yLabel:"Relative intensity (a.u.)",
       series:[{name:`Calculated ${currentNMRNucleus} NMR${spectrum.is_reference_applied?" (referenced)":" (unreferenced shielding)"}`,sticks:true,points:spectrum.peaks.map(p=>({x:p.position_ppm,y:p.intensity}))}],
       metadata:{...source,spectrum:"NMR",nucleus:currentNMRNucleus,reference_applied:!!spectrum.is_reference_applied,reference_selection:currentNMRReference,reference:spectrum.reference_info||null,provenance:currentNMRData.provenance||null}};
+  }
+
+  function exportIRData(format, selection) {
+    const spec = publicationSpectrumSpec("ir", selection);
+    const layers = spec.series.map(layer => ({...layer, points: layer.points
+      .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= spec.xMin && p.x <= spec.xMax)
+      .sort((a,b) => b.x - a.x)})).filter(layer => layer.points.length);
+    if (!layers.length) {
+      showToast("No IR data in the selected range and representation.", "warning");
+      return;
+    }
+    if (format === "csv") {
+      const quote = s => `"${s.replace(/"/g, '""')}"`;
+      const rows = ["Series,Wavenumber_cm-1,Quantity,Value"];
+      for (const layer of layers) {
+        const name = quote(layer.name), quantity = quote(layer.quantity);
+        for (const {x,y} of layer.points) rows.push(`${name},${x},${quantity},${y}`);
+      }
+      downloadTextFile("IR_visible_spectra.csv", rows.join("\r\n") + "\r\n");
+    } else {
+      const columns = layers.map(layer => ({xHeader: "Wavenumber_cm-1", yHeader: `${layer.name} (${layer.quantity})`.replace(/[\t\r\n]+/g, " "),
+        xs: layer.points.map(p=>p.x), ys: layer.points.map(p=>p.y)}));
+      downloadTextFile("IR_visible_spectra_XY.txt", buildXYText(columns, ["IR spectrum", JSON.stringify(spec.metadata)]));
+    }
+  }
+
+  function exportIRXYSingle(kind, idx) {
+    const layer = (kind === "theo" ? loadedTheoreticalIRSpectra : loadedExperimentalIRSpectra)[idx];
+    if (layer) exportIRData("xy", {theories:kind === "theo"?[layer]:[], experiments:kind === "exp"?[layer]:[]});
   }
   async function exportPublicationSpectrum(kind,button){
     if(button)button.disabled=true;
@@ -10056,82 +10105,7 @@
       });
     }
 
-    function exportIRXYSingle(kind, idx) {
-      const scaleFactor = parseFloat(irScaleSlider?.value || "1.0");
-      const fwhm = parseFloat(irFwhmSlider?.value || "15.0");
-      const shift = parseFloat(irShiftSlider?.value || "0");
-      const headers = irDisplayedHeaders();
-      if (kind === "theo") {
-        const theo = loadedTheoreticalIRSpectra[idx];
-        if (!theo) return;
-        const sharedNormMax = getIRSharedNormMax(scaleFactor, fwhm, shift, 400, 4000);
-        const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, 400, 4000, 2, sharedNormMax);
-        // canonical FTIR presentation order: 4000 -> 400 (same coordinate pairs,
-        // ordered to match the plotted X axis; the renderer's mapX already draws
-        // 4000 on the left). No recalculation.
-        const ordered = curve.slice().reverse();
-        const xs = ordered.map(p => p.wavenumber_cm);
-        let ys;
-        if (irYAxisMode === "absorbance") ys = ordered.map(p => p.absorbance);
-        else if (irYAxisMode === "theory_intensity") {
-          const maxModeInt = theo.modes.length ? Math.max(...theo.modes.map(m => m.intensity_km_mol || 0), 10) : 100;
-          ys = ordered.map(p => p.absorbance_norm * maxModeInt);
-        } else ys = ordered.map(p => p.transmittance_pct);
-        const stem = sanitizeFileStem(theo.name);
-        const meta = ["Chemistry Lab", "Spectrum: " + theo.name, "Type: Simulated IR",
-          "X: Wavenumber (cm^-1)", "Y: " + headers.yHeader + " (" + headers.yUnit + ")",
-          "FWHM: " + fwhm + " cm^-1", "Scaling: " + scaleFactor, "Normalization: Per Spectrum"];
-        downloadTextFile(stem + "_XY.txt", buildXYText(
-          [{ xHeader: "Wavenumber_cm-1", yHeader: headers.yHeader, xs, ys }], meta));
-        return;
-      }
-      const exp = loadedExperimentalIRSpectra[idx];
-      if (!exp) return;
-      const xs = exp.raw_data.map(p => p.wavenumber_cm);
-      const ys = exp.raw_data.map(p => (irYAxisMode === "absorbance" ? p.absorbance : p.transmittance_pct));
-      const yHeader = irYAxisMode === "absorbance" ? "Absorbance" : "Transmittance_pct";
-      const stem = sanitizeFileStem(exp.label || exp.file_name);
-      const meta = ["Chemistry Lab", "Spectrum: " + (exp.label || exp.file_name),
-        "Type: Experimental FTIR", "Source file: " + exp.file_name,
-        "X: Wavenumber (cm^-1)", "Y: " + yHeader];
-      downloadTextFile(stem + "_XY.txt", buildXYText(
-        [{ xHeader: "Wavenumber_cm-1", yHeader, xs, ys }], meta));
-    }
-    function exportIRXYVisible() {
-      const scaleFactor = parseFloat(irScaleSlider?.value || "1.0");
-      const fwhm = parseFloat(irFwhmSlider?.value || "15.0");
-      const shift = parseFloat(irShiftSlider?.value || "0");
-      const headers = irDisplayedHeaders();
-      const sharedNormMax = getIRSharedNormMax(scaleFactor, fwhm, shift, 400, 4000);
-      const columns = [];
-      const meta = ["Chemistry Lab", "View: " + irViewMode, "X: Wavenumber (cm^-1)",
-        "Y: " + headers.yHeader + " (" + headers.yUnit + ")", "FWHM: " + fwhm + " cm^-1",
-        "Normalization: " + (sharedNormMax ? "Shared" : "Per Spectrum")];
-      loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo")).forEach(theo => {
-        const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, 400, 4000, 2, sharedNormMax);
-        const ordered = curve.slice().reverse();
-        let ys;
-        if (irYAxisMode === "absorbance") ys = ordered.map(p => p.absorbance);
-        else if (irYAxisMode === "theory_intensity") {
-          const maxModeInt = theo.modes.length ? Math.max(...theo.modes.map(m => m.intensity_km_mol || 0), 10) : 100;
-          ys = ordered.map(p => p.absorbance_norm * maxModeInt);
-        } else ys = ordered.map(p => p.transmittance_pct);
-        columns.push({ xHeader: "Wavenumber_cm-1", yHeader: theo.name,
-          xs: ordered.map(p => p.wavenumber_cm), ys });
-      });
-      loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp")).forEach(exp => {
-        columns.push({ xHeader: "Wavenumber_cm-1_" + sanitizeFileStem(exp.label || exp.file_name),
-          yHeader: (exp.label || exp.file_name) + "_" + (irYAxisMode === "absorbance" ? "Absorbance" : "Transmittance_pct"),
-          xs: exp.raw_data.map(p => p.wavenumber_cm),
-          ys: exp.raw_data.map(p => (irYAxisMode === "absorbance" ? p.absorbance : p.transmittance_pct)) });
-      });
-      if (!columns.length) return;
-      downloadTextFile("IR_visible_curves_XY.txt", buildXYText(columns, meta));
-    }
-    const irExportXYVisibleBtn = document.getElementById("ir-export-xy-visible");
-    if (irExportXYVisibleBtn) {
-      irExportXYVisibleBtn.addEventListener("click", exportIRXYVisible);
-    }
+    document.getElementById("ir-export-xy-visible")?.addEventListener("click", () => exportIRData("xy"));
     const irViewModeSel = document.getElementById("ir-view-mode");
     if (irViewModeSel) {
       irViewModeSel.addEventListener("change", (e) => {
@@ -10495,7 +10469,8 @@
     if (irCanvas && irTooltip) {
       irCanvas.addEventListener("mousemove", (e) => {
         const activeTheos = loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo"));
-        const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp"));
+        const intensityMode = irYAxisMode === "theory_intensity";
+        const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp") && !intensityMode);
         if (!activeTheos.length && !activeExps.length) {
           irTooltip.classList.add("hidden");
           return;
@@ -10533,21 +10508,34 @@
 
         // Precise theoretical calculation/interpolation
         activeTheos.forEach(theo => {
+          if (intensityMode) {
+            const tolerance = 6 * (maxWn - minWn) / plotW;
+            let nearest = null, distance = tolerance;
+            for (const mode of theo.modes) {
+              const wn = mode.frequency_cm * scaleFactor + shift;
+              const d = Math.abs(wn - wnHover);
+              if (mode.intensity_km_mol > 0 && d < distance) {
+                nearest = {wn, intensity: mode.intensity_km_mol};
+                distance = d;
+              }
+            }
+            if (nearest) {
+              hasReadings = true;
+              tooltipHtml += `<div>${escapeHtml(theo.name)}: <strong>${nearest.intensity.toPrecision(4)} km·mol⁻¹</strong> at ${nearest.wn.toFixed(1)} cm⁻¹</div>`;
+            }
+            return;
+          }
           const curve = computeIRConvolution(theo.modes, scaleFactor, fwhm, shift, minWn, maxWn, 2, sharedNormMax);
           const ptAbs = interpolatePoint(curve, wnHover, "wavenumber_cm", "absorbance");
           const ptTrans = interpolatePoint(curve, wnHover, "wavenumber_cm", "transmittance_pct");
-          const ptNorm = interpolatePoint(curve, wnHover, "wavenumber_cm", "absorbance_norm");
 
           if (ptAbs !== null && !isNaN(ptAbs)) {
             hasReadings = true;
             let valStr = "";
-            if (irYAxisMode === "theory_intensity") {
-              const maxModeInt = theo.modes.length ? Math.max(...theo.modes.map(m => m.intensity_km_mol || 0), 10) : 100;
-              valStr = `${((ptNorm !== null ? ptNorm : ptAbs) * maxModeInt).toFixed(2)} km·mol⁻¹`;
-            } else if (irYAxisMode === "transmittance") {
+            if (irYAxisMode === "transmittance") {
               valStr = `${(ptTrans !== null ? ptTrans : (100 * Math.pow(10, -ptAbs))).toFixed(1)}%`;
             } else {
-              valStr = `Abs = ${ptAbs.toFixed(4)} a.u.`;
+              valStr = `Calculated signal = ${ptAbs.toPrecision(4)} a.u.`;
             }
             tooltipHtml += `<div style="display:flex; align-items:center; gap:6px; margin:2px 0;"><span style="color:${escapeHtml(theo.color)}; font-size:1.1em;">â-</span> <span>${escapeHtml(theo.name)}:</span> <strong>${valStr}</strong></div>`;
           }
@@ -10591,56 +10579,7 @@
 
     irDownloadPngBtn?.addEventListener("click",e=>exportPublicationSpectrum("ir",e.currentTarget));
 
-    // IR CSV Export
-    if (irExportCsvBtn) {
-      irExportCsvBtn.addEventListener("click", () => {
-        const activeTheos = loadedTheoreticalIRSpectra.filter(t => t.visible && irViewAllows("theo"));
-        const activeExps = loadedExperimentalIRSpectra.filter(e => e.visible && irViewAllows("exp"));
-
-        if (!activeTheos.length && !activeExps.length) {
-          showToast("No active IR spectrum layers to export.");
-          return;
-        }
-
-        const scaleFactor = parseFloat(irScaleSlider?.value || "1.0");
-        const fwhm = parseFloat(irFwhmSlider?.value || "15.0");
-        const shift = parseFloat(irShiftSlider?.value || "0");
-
-        let csv = "Wavenumber_cm-1";
-        activeTheos.forEach(t => {
-          csv += `,"Theory_${t.name.replace(/,/g, '_')}_${irYAxisMode === 'transmittance' ? 'Transmittance_pct' : 'Absorbance'}"`;
-        });
-        activeExps.forEach(e => {
-          csv += `,"Exp_${e.file_name.replace(/,/g, '_')}_${irYAxisMode === 'transmittance' ? 'Transmittance_pct' : 'Absorbance'}"`;
-        });
-        csv += "\n";
-
-        for (let wn = 4000; wn >= 400; wn -= 2) {
-          let row = `${wn}`;
-          activeTheos.forEach(t => {
-            const curve = computeIRConvolution(t.modes, scaleFactor, fwhm, shift, wn, wn, 2);
-            const val = curve[0] ? (irYAxisMode === 'transmittance' ? curve[0].transmittance_pct : curve[0].absorbance) : 0;
-            row += `,${val}`;
-          });
-          activeExps.forEach(e => {
-            const pt = e.raw_data.find(p => Math.abs(p.wavenumber_cm - wn) < 1.0);
-            row += `,${pt ? (irYAxisMode === 'transmittance' ? pt.transmittance_pct : pt.absorbance) : ''}`;
-          });
-          csv += `${row}\n`;
-        }
-
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `ir_multi_spectrum_${Date.now()}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        showToast("Exported multi-spectrum IR dataset to CSV.");
-      });
-    }
+    irExportCsvBtn?.addEventListener("click", () => exportIRData("csv"));
 
     document.getElementById("engine-orbitals-download-png")?.addEventListener("click",async e=>{
       const button=e.currentTarget;button.disabled=true;

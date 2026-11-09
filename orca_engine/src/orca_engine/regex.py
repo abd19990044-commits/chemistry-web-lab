@@ -217,11 +217,11 @@ class RegexLibrary:
         re.IGNORECASE,
     )
     IR_SPECTRUM_SECTION = re.compile(
-        r"\bIR\s+SPECTRUM\b",
+        r"^\s*[-=*]*\s*IR\s+SPECTRUM\s*[-=*]*\s*$",
         re.IGNORECASE,
     )
     IR_SPECTRUM_ROW = re.compile(
-        rf"^\s*(?P<mode>\d+):\s*(?P<freq>{FLOAT})\s+(?P<t2>{FLOAT})",
+        r"^\s*(?P<mode>\d+)\s*:\s*(?P<values>.+)$",
         re.IGNORECASE,
     )
 

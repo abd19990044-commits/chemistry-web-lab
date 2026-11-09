@@ -556,6 +556,8 @@ class JobData:
             or self.entropy_correction_eh is not None
             or self.elements
             or self.tddft_cm
+            or self.vibrational_frequencies_cm
+            or self.ir_spectrum
             or self.has_orbital_data()
             or self.terminated_normally is not None
             or self.error_messages

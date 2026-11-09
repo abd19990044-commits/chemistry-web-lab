@@ -112,7 +112,7 @@ const original=[1,2,3,4,0,0,0,1];const viewer={getView:()=>original};
 
 def test_spectrum_adapter_preserves_raw_samples_and_declares_all_transformations():
     app = (ROOT / 'static/js/app.js').read_text(encoding='utf-8')
-    function = app[app.index('  function publicationSpectrumSpec(kind)'):app.index('  async function exportPublicationSpectrum(')]
+    function = app[app.index('  function publicationSpectrumSpec('):app.index('  function exportIRData(')]
     node(r'''
 const document={getElementById:id=>({value:({'engine-sigma-slider':20,'engine-shift-slider':5,'engine-ir-scale-slider':1.1,'engine-ir-fwhm-slider':15,'engine-ir-shift-slider':5})[id]})};
 const currentEngineData={name:'fixture'},uvViewAllows=()=>true,irViewAllows=()=>true;
@@ -133,8 +133,8 @@ spectrumNormalizeMode='none';const rawUv=publicationSpectrumSpec('uvvis');assert
 const ir=publicationSpectrumSpec('ir');assert.equal(ir.series[0].points[0].x,1105);assert.equal(ir.series[1].points[0].x,1000);assert.equal(ir.series[1].points[0].y,50);assert.equal(ir.reverseX,true);assert.ok(ir.yLabel.includes('pseudo'));
 const nmr=publicationSpectrumSpec('nmr');assert.equal(nmr.reverseX,false);assert.ok(nmr.xLabel.includes('shielding'));assert.equal(nmr.series[0].points[0].x,3);
 assert.equal(JSON.stringify([loadedExperimentalSpectra,loadedExperimentalIRSpectra,currentNMRData]),before);
-irYAxisMode='theory_intensity';assert.throws(()=>publicationSpectrumSpec('ir'),/Integrated band intensities/);
-loadedExperimentalIRSpectra=[];const bands=publicationSpectrumSpec('ir');assert.equal(bands.series[0].sticks,true);assert.equal(bands.series[0].points[0].y,100);
+irYAxisMode='absorbance';const abs=publicationSpectrumSpec('ir');assert.equal(abs.series[1].axis,2);assert.equal(abs.y2Label,'Measured absorbance');assert.equal(abs.series[1].points[0].y,.5);
+irYAxisMode='theory_intensity';const bands=publicationSpectrumSpec('ir');assert.equal(bands.series.length,1);assert.equal(bands.series[0].sticks,true);assert.equal(bands.series[0].points[0].y,100);
 currentNMRData.h1_spectrum.is_reference_applied=true;assert.equal(publicationSpectrumSpec('nmr').reverseX,true);
 ''')
 

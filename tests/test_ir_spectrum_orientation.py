@@ -166,8 +166,6 @@ def test_ir_spectrum_orientation():
            "Theoretical IR Transmittance (Pseudo-%T)" in src)
     _check("tooltip shows %T for transmittance mode (same quantity as the axis)",
            "irYAxisMode === 'transmittance' ? `${p.transmittance_pct.toFixed(2)} %T`" in src)
-    _check("CSV export follows the selected display quantity",
-           "irYAxisMode === 'transmittance' ? 'Transmittance_pct' : 'Absorbance'" in src)
     _check("experimental %T->A conversion uses Beer-Lambert direction (-log10), not subtraction",
            "-Math.log10(Math.max(0.0001, tPct / 100))" in src)
     _check("experimental quantity detection heuristic present (documented limitation: "

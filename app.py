@@ -3747,9 +3747,9 @@ def api_orca_engine_import_orca_output():
             results.append(entry)
             return
 
-        ir_job = next((j for j in parsed_jobs
-                       if getattr(j, "ir_frequencies_cm", None)
-                       and getattr(j, "ir_intensities_km_mol", None)), None)
+        ir_job = next((j for j in reversed(parsed_jobs)
+                       if any(m["frequency_cm"] > 0 and m["intensity_km_mol"] > 0
+                              for m in j.ir_spectrum)), None)
         uv_job = next((j for j in parsed_jobs
                        if getattr(j, "tddft_cm", None) and getattr(j, "tddft_fosc", None)), None)
         capabilities = {"ir": ir_job is not None, "uv": uv_job is not None}
@@ -3763,14 +3763,7 @@ def api_orca_engine_import_orca_output():
 
         entry["status"] = "loaded"
         if ir_job:
-            modes = []
-            for i, (fc, t2) in enumerate(zip(ir_job.ir_frequencies_cm,
-                                             ir_job.ir_intensities_km_mol)):
-                try:
-                    modes.append({"mode": i + 1, "frequency_cm": float(fc),
-                                  "intensity_km_mol": float(t2)})
-                except (TypeError, ValueError):
-                    continue
+            modes = ir_job.ir_spectrum
             imaginary = sum(1 for m in modes if m["frequency_cm"] < 0)
             entry["ir"] = {
                 "modes": modes,

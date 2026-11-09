@@ -145,7 +145,7 @@ def convolute_ir_spectrum(
 
     Args:
         frequencies_cm: Harmonic vibrational frequencies in cm^-1.
-        intensities_km_mol: IR intensities (T^2) in km/mol.
+        intensities_km_mol: Integrated band intensities in km/mol.
         scaling_factor: Harmonic vibrational frequency scaling factor.
         fwhm_cm: Full Width at Half Maximum line width in cm^-1.
         start_cm: Beginning wavenumber of the IR spectrum grid.
@@ -155,16 +155,11 @@ def convolute_ir_spectrum(
     Returns:
         List of dictionaries with 'wavenumber_cm', 'absorbance', 'absorbance_norm', and 'transmittance_pct'.
     """
-    if not frequencies_cm or fwhm_cm <= 0:
+    if not frequencies_cm or intensities_km_mol is None or len(intensities_km_mol) != len(frequencies_cm) or fwhm_cm <= 0 or step_cm <= 0:
         return []
 
-    if intensities_km_mol and len(intensities_km_mol) == len(frequencies_cm):
-        intensities = list(intensities_km_mol)
-    else:
-        intensities = [10.0] * len(frequencies_cm)
-
     modes: list[tuple[float, float]] = []
-    for freq, intensity in zip(frequencies_cm, intensities, strict=False):
+    for freq, intensity in zip(frequencies_cm, intensities_km_mol, strict=True):
         if freq > 0:
             modes.append((freq * scaling_factor, max(0.0, float(intensity))))
 
@@ -236,8 +231,7 @@ def job_to_web_json(
     spectrum = convolute_uvvis_spectrum(job.tddft_cm, job.tddft_fosc)
 
     # Build IR spectrum dataset
-    ir_freqs = job.ir_frequencies_cm or job.vibrational_frequencies_cm
-    ir_conv = convolute_ir_spectrum(ir_freqs, job.ir_intensities_km_mol)
+    ir_conv = convolute_ir_spectrum(job.ir_frequencies_cm, job.ir_intensities_km_mol)
 
     web_data: dict[str, object] = {
         **base_dict,

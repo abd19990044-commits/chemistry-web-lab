@@ -106,7 +106,8 @@ def test_single_valid_freq_output(client):
     assert entry["capabilities"]["ir"] is True and entry["capabilities"]["uv"] is False
     modes = entry["ir"]["modes"]
     by_freq = {m["frequency_cm"]: m["intensity_km_mol"] for m in modes}
-    assert by_freq[1000.0] == 0.01 and by_freq[1500.0] == 0.05 and by_freq[3000.0] == 0.1
+    assert by_freq == {0.0: 0.0, 1000.0: 1.0432, 1500.0: 5.2161, 3000.0: 10.4323}
+    assert [m["mode"] for m in modes] == [0, 6, 7, 8]
     assert entry["ir"]["imaginary_frequency_count"] == 0
     assert entry["ir"]["mode_count"] == len(modes)
 
@@ -117,8 +118,8 @@ def test_multiple_valid_freq_outputs(client):
     assert data["loaded"] == 2 and data["rejected"] == 0
     a = _by_name(data, "a.out")["ir"]["modes"]
     b = _by_name(data, "b.out")["ir"]["modes"]
-    assert max(m["intensity_km_mol"] for m in a if m["frequency_cm"] > 0) == 0.1
-    assert max(m["intensity_km_mol"] for m in b if m["frequency_cm"] > 0) == 0.08
+    assert max(m["intensity_km_mol"] for m in a if m["frequency_cm"] > 0) == 10.4323
+    assert max(m["intensity_km_mol"] for m in b if m["frequency_cm"] > 0) == 8.3456
 
 
 def test_mixed_valid_and_invalid_batch(client):

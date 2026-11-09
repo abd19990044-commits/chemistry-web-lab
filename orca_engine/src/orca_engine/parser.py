@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 from collections.abc import Callable, Iterator, Sequence
 from enum import Enum
@@ -74,6 +75,8 @@ class OrcaParser:
         self.job = JobData()
         self.state = ParserState.SEARCHING
         self._expecting_basis = False
+        self._ir_intensity_column: int | None = None
+        self._has_vibrational_table = False
         self._current_spin: SpinChannel | None = None
         self._pending_mo_energies: list[float] | None = None
         self._coord_unit: CoordinateUnit | None = None
@@ -269,6 +272,8 @@ class OrcaParser:
         self.state = ParserState.SEARCHING
         self._expecting_basis = False
         self._current_spin = None
+        self._ir_intensity_column = None
+        self._has_vibrational_table = False
         self._coord_unit = None
         self._nmr_lines = []
 
@@ -421,37 +426,64 @@ class OrcaParser:
 
         del match, line
         self.state = ParserState.IR_SPECTRUM
+        self._ir_intensity_column = None
         self.job.ir_frequencies_cm = []
         self.job.ir_intensities_km_mol = []
         self.job.ir_spectrum = []
+        if not self._has_vibrational_table:
+            self.job.vibrational_frequencies_cm = []
+            self.job.imaginary_frequencies_cm = []
+            self.job.imaginary_frequencies_count = 0
 
     def _handle_ir_spectrum(self, line: str) -> None:
-        """Handle IR spectrum section lines with frequencies and T^2 intensities."""
+        """Read integrated IR band intensities, never eps or dipole derivatives."""
 
         if RegexLibrary.IR_SPECTRUM_SECTION.search(line) or set(line) <= {"-", "="}:
             return
 
         upper = line.upper()
         if "MODE" in upper and "FREQ" in upper:
+            # Modern ORCA: freq eps Int T**2 TX TY TZ. Some older outputs
+            # have freq T**2 IR int; legacy single-intensity tables put it
+            # immediately after freq. TX/TY/TZ are not intensity columns.
+            if re.search(r"\bINT(?:ENSITY)?\b", upper):
+                prefix = re.split(r"\b(?:IR\s+)?INT(?:ENSITY)?\b", upper, maxsplit=1)[0]
+                self._ir_intensity_column = 1 + len(re.findall(r"\bEPS\b|T\*\*2", prefix))
+            elif "EPS" not in upper and ("KM/MOL" in upper or ("T**2" in upper and "A.U." not in upper)):
+                self._ir_intensity_column = 1
+            return
+        if "A.U." in upper and "KM/MOL" not in upper and self._ir_intensity_column == 1:
+            # A units row may identify a lone T**2 column as atomic units.
+            if "CM" in upper:
+                self._ir_intensity_column = None
             return
 
         match = RegexLibrary.IR_SPECTRUM_ROW.search(line)
         if match is not None:
+            column = self._ir_intensity_column
+            fields = match.group("values").split()
+            if column is None or len(fields) <= column:
+                return
+            try:
+                freq_cm = float(fields[0].replace("D", "E").replace("d", "e"))
+                intensity = float(fields[column].replace("D", "E").replace("d", "e"))
+            except ValueError:
+                return
+            if not (math.isfinite(freq_cm) and math.isfinite(intensity) and intensity >= 0):
+                return
             mode = int(match.group("mode"))
-            freq_cm = float(match.group("freq"))
-            t2 = float(match.group("t2"))
             self.job.ir_frequencies_cm.append(freq_cm)
-            self.job.ir_intensities_km_mol.append(t2)
+            self.job.ir_intensities_km_mol.append(intensity)
             self.job.ir_spectrum.append({
                 "mode": mode,
                 "frequency_cm": freq_cm,
-                "intensity_km_mol": t2,
+                "intensity_km_mol": intensity,
             })
             if freq_cm < 0.0:
                 if freq_cm not in self.job.imaginary_frequencies_cm:
                     self.job.imaginary_frequencies_cm.append(freq_cm)
                     self.job.imaginary_frequencies_count = len(self.job.imaginary_frequencies_cm)
-            if not self.job.vibrational_frequencies_cm or len(self.job.vibrational_frequencies_cm) < len(self.job.ir_frequencies_cm):
+            if not self._has_vibrational_table:
                 self.job.vibrational_frequencies_cm.append(freq_cm)
             return
 
@@ -463,7 +495,8 @@ class OrcaParser:
                 action(m, line)
                 return
 
-        if self._looks_like_major_section(line) or "THERMOCHEMISTRY" in line.upper():
+        if (self.job.ir_spectrum or self._looks_like_major_section(line)
+                or any(section in upper for section in ("THERMOCHEMISTRY", "RAMAN SPECTRUM", "NORMAL MODES", "OVERTONES"))):
             self.state = ParserState.SEARCHING
             self._handle_searching(line)
 
@@ -492,6 +525,7 @@ class OrcaParser:
 
         del match, line
         self.state = ParserState.FREQUENCIES
+        self._has_vibrational_table = True
         self.job.imaginary_frequencies_cm = []
         self.job.imaginary_frequencies_count = 0
         self.job.vibrational_frequencies_cm = []
