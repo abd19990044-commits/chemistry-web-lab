@@ -1225,10 +1225,13 @@ def reconcile_kaggle_stages(
             remote_state = str(
                 observed.get("remote_state") or observed.get("state") or "UNKNOWN"
             ).upper()
+            finished = str(observed.get("state", "")).upper() == "FINISHED"
+            if finished:
+                remote_state = "COMPLETE"
             stage["remote_state"] = remote_state
             stage["last_remote_status_at"] = utcnow_iso(store.now_provider)
             changed = True
-            if observed.get("remote_status_unknown") or remote_state in {"UNKNOWN", "REMOTE_STATUS_UNKNOWN"}:
+            if not finished and (observed.get("remote_status_unknown") or remote_state in {"UNKNOWN", "REMOTE_STATUS_UNKNOWN"}):
                 stage["waiting_reason"] = "KAGGLE_STATUS_UNKNOWN"
                 continue
             if remote_state in {"ERROR", "FAILED"}:
@@ -1244,7 +1247,7 @@ def reconcile_kaggle_stages(
                 species["state"] = "CANCELLED"
                 reaction["state"] = "WAITING"
                 continue
-            if remote_state not in {"COMPLETE", "COMPLETED", "FINISHED"} and str(observed.get("state", "")).upper() != "FINISHED":
+            if remote_state not in {"COMPLETE", "COMPLETED", "FINISHED"}:
                 stage["state"] = "RUNNING" if remote_state in {"RUNNING", "STARTING"} else "SUBMITTED"
                 stage.pop("waiting_reason", None)
                 continue
@@ -1253,12 +1256,23 @@ def reconcile_kaggle_stages(
             # archive_job_results keeps that distinction durable; retrying this
             # reconciliation is safe because the orchestrator/result store are
             # idempotent and the stage has a stable job identity.
-            manifest = service.archive_job_results(
-                creds, job_id, slug=stage.get("kaggle_slug"), download_timeout=45
-            )
+            entering_verification = stage.get("state") != "VERIFYING_RESULTS"
+            stage["state"] = "VERIFYING_RESULTS"
+            stage["waiting_reason"] = "KAGGLE_OUTPUT_NOT_AVAILABLE"
+            if not finished:
+                # The stopped window may have a successor. Do not archive an
+                # earlier window or dispatch the dependent stage prematurely.
+                continue
+            if entering_verification:
+                store.save_reaction(reaction)
+            try:
+                # The orchestrator selects the latest verified window; the
+                # originally submitted slug can point to an older checkpoint.
+                manifest = service.archive_job_results(creds, job_id, download_timeout=45)
+            except Exception as exc:
+                stage["last_status_error"] = type(exc).__name__
+                continue
             if not manifest:
-                stage["state"] = "SUBMITTED"
-                stage["waiting_reason"] = "KAGGLE_OUTPUT_NOT_AVAILABLE"
                 continue
             zip_path, _ = service.result_store.retrieve(job_id, creds.username)
             output_text = None

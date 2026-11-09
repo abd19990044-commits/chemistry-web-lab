@@ -492,8 +492,8 @@
     anchorEl.href = b64ToDataUrl(b64, mime);
     anchorEl.download = filename;
   }
-  async function postJSON(url, body) {
-    const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  async function postJSON(url, body, options = {}) {
+    const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: options.signal });
     const contentType = resp.headers.get("content-type") || "";
     let data = null;
     if (contentType.includes("application/json")) data = await resp.json().catch(() => null);
@@ -4384,18 +4384,36 @@
   // list, without clobbering jobs already tracked locally (which carry
   // live status/timing info this merge can't reconstruct).
   function kaggleRemotePatch(job, remote) {
+    const slug = remote.current_slug || job.remoteSlug || job.jobId;
+    const sameWindow = !job.remoteSlug || slug === job.remoteSlug;
+    const observedAt = Number(remote.remote_observed_at) || 0;
+    if (sameWindow && observedAt && observedAt < (job.remoteObservedAt || 0)) return {};
+    if (sameWindow && TERMINAL_STATUSES.includes(job.status) && !TERMINAL_STATUSES.includes(remote.status) &&
+        (!observedAt || observedAt <= (job.remoteObservedAt || 0))) return {};
     const patch = {
       remoteStatusUnknown: Boolean(remote.remote_status_unknown),
       remoteActive: typeof remote.remote_active === "boolean" ? remote.remote_active : null,
       remoteState: remote.remote_state || "UNKNOWN",
       cfSyncStatus: remote.cf_sync_status || "DEGRADED_UNSYNCED",
+      remoteSlug: slug,
+      remoteObservedAt: observedAt || (sameWindow ? job.remoteObservedAt || 0 : 0),
     };
-    if (patch.remoteStatusUnknown) {
+    if (remote.kaggle_url) patch.kaggleUrl = remote.kaggle_url;
+    if (remote.chain_ids?.length) patch.chainIds = remote.chain_ids;
+    if (patch.remoteStatusUnknown && !TERMINAL_STATUSES.includes(remote.status)) {
       patch.warning = remote.note || "Kaggle status is temporarily unavailable; retrying verification.";
+      if (sameWindow && job.remoteState === "COMPLETE") {
+        patch.remoteState = "COMPLETE";
+        patch.remoteActive = false;
+      }
     } else if (remote.status && remote.status !== "unknown") {
       patch.status = remote.status;
-      patch.warning = remote.warning || remote.note || null;
-      patch.finishedAt = TERMINAL_STATUSES.includes(remote.status) ? (job.finishedAt || Date.now()) : null;
+      const stopped = patch.remoteState === "COMPLETE" || TERMINAL_STATUSES.includes(remote.status);
+      if (stopped) patch.remoteActive = false;
+      patch.warning = patch.status === "verifying" && patch.remoteState === "COMPLETE"
+        ? "Kaggle has finished this run. The site is checking its output or continuation."
+        : remote.warning || remote.note || null;
+      patch.finishedAt = stopped ? ((sameWindow && job.finishedAt) || Date.now()) : null;
     }
     return patch;
   }
@@ -5223,12 +5241,14 @@
       } else if (job.status === "waiting_dependency") {
         const parentNum = (job.stage || 2) - 1;
         statusBadge.textContent = `🔗 Waiting for Stage ${parentNum}`;
+      } else if (job.status === "verifying" && job.remoteState === "COMPLETE") {
+        statusBadge.textContent = "Completed on Kaggle · verifying results";
       } else {
         statusBadge.textContent = STATUS_LABELS[job.status] || job.status;
       }
       nameRow.appendChild(statusBadge);
 
-      if (job.status !== "complete") {
+      if (job.status !== "complete" && !(job.status === "verifying" && job.remoteState === "COMPLETE")) {
         const timerBadge = document.createElement("span");
         timerBadge.className = "job-timer";
         timerBadge.dataset.status = job.status;
@@ -5251,12 +5271,12 @@
         nameRow.appendChild(timerBadge);
       }
 
-      if (job.status === "complete") {
+      if (job.status === "complete" || (job.status === "verifying" && job.remoteState === "COMPLETE" && !job.serverWorkflowId)) {
         const downloadFullBtn = document.createElement("button");
         downloadFullBtn.type = "button";
         downloadFullBtn.className = "btn btn-ghost btn-small";
         downloadFullBtn.innerHTML = "📦 Full ZIP";
-        downloadFullBtn.title = "Download full verified scientific result archive";
+        downloadFullBtn.title = "Download the available output from this Kaggle run";
         downloadFullBtn.addEventListener("click", () => downloadJobResults(job, downloadFullBtn, "full"));
         nameRow.appendChild(downloadFullBtn);
 
@@ -5840,21 +5860,24 @@
         return;
       }
       const data = await postJSON("/api/kaggle/status", {
-        ...credsFor(job), job_id: job.jobId,
-      });
+        ...credsFor(job), job_id: job.rootId || job.jobId,
+      }, {signal: AbortSignal.timeout(65000)});
       if (!stillCurrent()) return;
+      const latestJob = loadJobs().find(candidate => candidate.jobId === job.jobId) || job;
+      const remotePatch = kaggleRemotePatch(latestJob, data);
+      if (!Object.keys(remotePatch).length) return;
 
-      if (data.status === "restarting" && data.next_job_id) {
+      if (!data.job_id && data.status === "restarting" && data.next_job_id) {
         const chainIds = (job.chainIds && job.chainIds.length) ? job.chainIds : [job.jobId];
         const chain = (job.chain && job.chain.length)
           ? job.chain : [{ id: job.jobId, url: job.kaggleUrl }];
         const nextUrl = data.next_kaggle_url || job.kaggleUrl;
         if (chainIds.includes(data.next_job_id)) {
-          updateJob(job.jobId, kaggleRemotePatch(job, data));
+          updateJob(job.jobId, remotePatch);
           return;
         }
         updateJob(job.jobId, {
-          ...kaggleRemotePatch(job, data),
+          ...remotePatch,
           jobId: data.next_job_id,
           rootId: job.rootId || job.jobId,
           status: "running",
@@ -5866,14 +5889,10 @@
         });
         return;
       }
-      if (data.status === "complete" && job.status !== "complete") {
-        updateJob(job.jobId, { ...kaggleRemotePatch(job, data), status: "complete", finishedAt: Date.now(), warning: data.warning || null, notifiedComplete: true });
+      if (remotePatch.status === "complete" && latestJob.status !== "complete") {
+        updateJob(job.jobId, { ...remotePatch, warning: data.warning || null, notifiedComplete: true });
         if (!job.notifiedComplete) {
-          if (data.warning) {
-            showToast(`<strong>${job.name}</strong> stopped early - only partial results are available. Open the Jobs tab for details.`);
-          } else {
-            showToast(`<strong>${job.name}</strong> finished. Open the Jobs tab to download the results.`);
-          }
+          showToast(`<strong>${escapeHtml(job.name)}</strong> finished. Open Jobs for results and any warnings.`);
         }
         // Polling stops here: this job is terminal, and pollAllActiveJobs()
         // only ever selects non-terminal jobs. If this job is a stage of a
@@ -5883,20 +5902,13 @@
         await processKaggleQueue();
         return;
       }
-      if (data.status && data.status !== "unknown") {
-        const patch = kaggleRemotePatch(job, data);
-        if (TERMINAL_STATUSES.includes(data.status)) {
-          patch.finishedAt = job.finishedAt || Date.now();
-        }
-        if (data.warning) patch.warning = data.warning;
-        else if (data.status === "error" && data.note) patch.warning = data.note;
-        updateJob(job.jobId, patch);
-        if (TERMINAL_STATUSES.includes(data.status)) await processKaggleQueue();
-      } else {
-        updateJob(job.jobId, kaggleRemotePatch(job, data));
-      }
+      updateJob(job.jobId, remotePatch);
+      if (remotePatch.remoteActive === false || TERMINAL_STATUSES.includes(remotePatch.status)) await processKaggleQueue();
     } catch (err) {
       console.warn(`Status check failed for ${job.jobId}:`, err.message);
+      if (stillCurrent() && job.backend !== "server_local" && !job.localJobId) {
+        updateJob(job.jobId, {remoteStatusUnknown: true, warning: "Could not refresh Kaggle status. Showing the last known state."});
+      }
       // Transient network/API failure must not demote a running job back to
       // "queued" (which would re-submit it); it stays as-is and the next
       // poll retry is the only effect.
@@ -5951,8 +5963,8 @@
   }
 
   async function refreshAllJobs() {
-    await syncPersistentServerJobs();
     pollAllActiveJobs();
+    await syncPersistentServerJobs();
   }
 
   document.getElementById("jobs-refresh-btn").addEventListener("click", refreshAllJobs);

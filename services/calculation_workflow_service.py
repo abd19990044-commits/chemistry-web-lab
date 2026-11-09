@@ -157,6 +157,7 @@ def describe_workflow(reaction):
         "SUBMITTED": "queued",
         "STARTING": "running",
         "RUNNING": "running",
+        "VERIFYING_RESULTS": "verifying",
         "COMPLETE": "complete",
         "COMPLETED_WITH_WARNINGS": "complete",
         "FAILED": "error",
@@ -184,7 +185,8 @@ def describe_workflow(reaction):
                     "kaggleUsername": stage.get("kaggle_slug", "").split("/")[0] or reaction.get("kaggle_username"),
                     "localJobId": stage.get("local_job_id"),
                     "kaggleUrl": stage.get("kaggle_url"),
-                    "warning": stage.get("error") or stage.get("waiting_reason"),
+                    "warning": stage.get("error") or ("Kaggle finished this run; waiting for verified output." if stage.get("state") == "VERIFYING_RESULTS" else stage.get("waiting_reason")),
+                    "remoteState": stage.get("remote_state"),
                     "remoteActive": stage.get("remote_state") == "RUNNING" if stage.get("remote_state") else None,
                     "submittedAt": millis(
                         stage.get("submitted_at") or stage.get("queued_at") or reaction.get("created_at")

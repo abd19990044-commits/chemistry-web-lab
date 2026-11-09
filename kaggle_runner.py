@@ -3706,29 +3706,14 @@ def delete_job(kaggle_username: str, kaggle_key: str, job_id: str) -> None:
             raise RuntimeError(message)
 
 
-_KERNEL_STATUS_WORDS = (
-    ("complete", "complete"),
-    ("error", "error"),
-    ("running", "running"),
-    ("queued", "queued"),
-    ("queue", "queued"),
-    ("cancel", "cancelled"),
-    ("new_script", "queued"),
-)
-
-
 def _classify_kernel_status(text: str) -> str:
     """`kaggle kernels status` prints e.g.
     `someone/chem-tools-x has status "KernelWorkerStatus.COMPLETE"`.
     The status word is read out of the quoted value only - matching against
     the whole line would let the kernel slug or a failure message decide the
     status (a job named 'my-error-test' is not an errored job)."""
-    quoted = re.findall(r'status\s+"([^"]+)"', text or "", flags=re.IGNORECASE)
-    probe = (quoted[-1] if quoted else (text or "")).lower()
-    for needle, status in _KERNEL_STATUS_WORDS:
-        if needle in probe:
-            return status
-    return "unknown"
+    from orca_orchestrator.kaggle_api import classify_status
+    return classify_status(text)
 
 
 _RESTART_SUFFIX_RE = re.compile(r"^(?P<base>.+?)-r(?P<n>\d+)$")
@@ -3751,7 +3736,7 @@ def _probe_successor(env, owner: str, job_id: str):
     try:
         probe = _run_kaggle_cli(
             ["kaggle", "kernels", "status", f"{owner}/{candidate}"],
-            env=env, timeout=45, attempts=2, base_delay=2.0,
+            env=env, timeout=8, attempts=1,
         )
     except Exception:  # noqa: BLE001
         return None, None
@@ -3779,7 +3764,7 @@ def check_job_status(kaggle_username: str, kaggle_key: str, job_id: str) -> dict
         kernel_ref = f"{auth['username']}/{job_id}"
         status_result = _run_kaggle_cli(
             ["kaggle", "kernels", "status", kernel_ref],
-            env=env, timeout=60,
+            env=env, timeout=15, attempts=1,
         )
         status_text = ((status_result.stdout or "") + "\n" + (status_result.stderr or "")).strip()
         status = _classify_kernel_status(status_text)
@@ -3805,7 +3790,9 @@ def check_job_status(kaggle_username: str, kaggle_key: str, job_id: str) -> dict
             return {"status": "unknown", "next_job_id": None, "next_kaggle_url": None, "note": note}
 
         result = {"status": status, "next_job_id": None, "next_kaggle_url": None,
-                  "note": status_text}
+                  "note": status_text, "remote_state": status.upper(),
+                  "remote_active": status in {"running", "queued"} if status != "unknown" else None,
+                  "remote_status_unknown": status == "unknown", "remote_observed_at": time.time()}
 
         # The hand-off marker is checked whenever the session has *stopped* for
         # any reason - not only on a clean "complete". A window that filled the
@@ -3822,23 +3809,23 @@ def check_job_status(kaggle_username: str, kaggle_key: str, job_id: str) -> dict
             # "Download results" click) allows a much longer timeout.
             out_dir = tempfile.mkdtemp(prefix="kaggle-output-")
             try:
-                handoff = _run_kaggle_cli(
-                    ["kaggle", "kernels", "output", kernel_ref, "-p", out_dir,
-                     "--file-pattern", r"(NEXT_JOB_ID|NEXT_JOB_URL|JOB_NOTE)\.txt$"],
-                    env=env, timeout=45, attempts=3, base_delay=2.0,
-                )
-                if handoff.returncode != 0:
+                try:
+                    handoff = _run_kaggle_cli(
+                        ["kaggle", "kernels", "output", kernel_ref, "-p", out_dir,
+                         "--file-pattern", r"(NEXT_JOB_ID|NEXT_JOB_URL|JOB_NOTE)\.txt$"],
+                        env=env, timeout=8, attempts=1,
+                    )
+                except subprocess.TimeoutExpired:
+                    handoff = None
+                if handoff is None or handoff.returncode != 0:
                     probe_id, probe_url = _probe_successor(env, auth["username"], job_id)
                     if probe_id:
                         return {"status": "restarting", "next_job_id": probe_id,
                                 "next_kaggle_url": probe_url,
                                 "note": ("Kaggle would not list this window's output, but its "
                                          "continuation notebook exists and is being followed.")}
-                    handoff_text = (handoff.stderr or handoff.stdout or "").strip()
-                    return {"status": "restarting" if status == "complete" else (status if status != "unknown" else "unknown"),
-                            "next_job_id": None,
-                            "next_kaggle_url": None,
-                            "note": ("Kaggle rate-limited output files listing; will retry on next poll. %s" % handoff_text).strip()}
+                    return {**result, "status": "verifying" if status == "complete" else status,
+                            "note": "Kaggle finished this run; output listing is temporarily unavailable. Verification will retry."}
 
                 def _read(name):
                     path = os.path.join(out_dir, name)
@@ -3858,10 +3845,14 @@ def check_job_status(kaggle_username: str, kaggle_key: str, job_id: str) -> dict
                     # address that 404s, with the working notebook lost from
                     # view. That phantom hand-off is exactly what made a chain
                     # look alive while nothing was running.
-                    probe = _run_kaggle_cli(
-                        ["kaggle", "kernels", "status", f"{auth['username']}/{next_id}"],
-                        env=env, timeout=45, attempts=2, base_delay=2.0,
-                    )
+                    try:
+                        probe = _run_kaggle_cli(
+                            ["kaggle", "kernels", "status", f"{auth['username']}/{next_id}"],
+                            env=env, timeout=8, attempts=1,
+                        )
+                    except subprocess.TimeoutExpired:
+                        return {**result, "status": "verifying" if status == "complete" else status,
+                                "note": "Kaggle stopped this run; continuation verification will retry."}
                     probe_text = ((probe.stdout or "") + "\n" + (probe.stderr or "")).strip()
                     next_status = _classify_kernel_status(probe_text)
                     if next_status == "unknown" and probe.returncode != 0:

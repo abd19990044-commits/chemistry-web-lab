@@ -224,7 +224,7 @@ class KaggleClient:
         ref = f"{self.creds.username}/{slug}"
         try:
             proc = self._run(["kaggle", "kernels", "status", ref],
-                             timeout=45, operation="kernels_status",
+                             timeout=15, operation="kernels_status",
                              allow_nonzero=True, slug=slug)
         except OrchestratorError:
             raise
@@ -423,7 +423,8 @@ class KaggleClient:
 
     # -- output ------------------------------------------------------------
     def fetch_output(self, slug: str, *, file_pattern: str | None = None,
-                     timeout: float = 600.0, page_size: int = 200) -> str:
+                     timeout: float = 600.0, page_size: int = 200,
+                     retry: RetryPolicy | None = None) -> str:
         """Downloads kernel output into a NEW temp directory and returns it."""
         if not is_valid_slug(slug):
             raise ValidationError("invalid kernel slug", slug=slug)
@@ -466,7 +467,7 @@ class KaggleClient:
             return out_dir
 
         try:
-            return self.retry.call("kaggle kernels output", attempt, slug=slug)
+            return (retry or self.retry).call("kaggle kernels output", attempt, slug=slug)
         except BaseException:
             shutil.rmtree(out_dir, ignore_errors=True)
             raise
@@ -474,7 +475,10 @@ class KaggleClient:
     def fetch_ledger_files(self, slug: str) -> dict[str, bytes]:
         """Fetches only the small control-plane files."""
         pattern = r"(STATE|CHECKPOINT|HEARTBEAT|NEXT_JOB_ID|NEXT_JOB_URL|JOB_NOTE)\.(json|txt)$"
-        out_dir = self.fetch_output(slug, file_pattern=pattern, timeout=90, page_size=50)
+        # A delayed Kaggle output listing must not block a browser's status
+        # response through multiple long retries. The next poll retries it.
+        out_dir = self.fetch_output(slug, file_pattern=pattern, timeout=10, page_size=50,
+                                    retry=RetryPolicy(max_attempts=1))
         try:
             files: dict[str, bytes] = {}
             for name in os.listdir(out_dir):

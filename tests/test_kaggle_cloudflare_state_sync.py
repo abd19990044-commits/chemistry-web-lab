@@ -1,5 +1,8 @@
 """Stopped Kaggle windows and durable Cloudflare metadata must converge."""
 from copy import deepcopy
+from pathlib import Path
+import shutil
+import subprocess
 
 import pytest
 
@@ -9,8 +12,9 @@ from orca_orchestrator.cloudflare_controller import (
 )
 from orca_orchestrator.config import StoreConfig
 from orca_orchestrator.credentials import KaggleCredentials
-from orca_orchestrator.errors import NetworkError
+from orca_orchestrator.errors import NetworkError, RateLimitError
 from orca_orchestrator.kaggle_api import KernelStatus, classify_status
+from orca_orchestrator.ledger import LedgerRecord
 from orca_orchestrator.models import JobManifest
 from orca_orchestrator.reconciler import Observation, Reconciler, decide
 from orca_orchestrator.service import OrchestratorService
@@ -71,6 +75,74 @@ def test_reconciler_persists_remote_stop_despite_missing_output(monkeypatch, sto
     assert store.require_job(job.job_id).state == expected
     assert result._extra["last_seen_remote_state"] == remote.upper()
     assert not result._extra["remote_status_unknown"]
+
+
+def test_browser_status_reports_kaggle_completion_before_output_verifies(monkeypatch, store):
+    from app import app
+    from orca_orchestrator import legacy_compat
+
+    job = running_job()
+    store.put_job(job)
+    service = OrchestratorService(store=store)
+    monkeypatch.setattr(service, "ensure_authenticated", lambda creds: CREDS)
+    monkeypatch.setattr(service, "defer_cloudflare_sync", lambda job_id: None)
+    monkeypatch.setattr(legacy_compat, "get_service", lambda: service)
+
+    class Client:
+        def __init__(self, creds):
+            pass
+
+        def kernel_exists(self, slug):
+            return KernelStatus(slug, "complete") if slug == job.current_slug else None
+
+    monkeypatch.setattr("orca_orchestrator.reconciler.KaggleClient", Client)
+    calls = 0
+
+    def ledger(client, slug):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RateLimitError("output listing is delayed")
+        finished = deepcopy(job)
+        finished.enter_state(JobState.FINISHED)
+        return LedgerRecord(slug, job=finished)
+
+    monkeypatch.setattr("orca_orchestrator.reconciler.read_window", ledger)
+    client = app.test_client()
+    payload = {"kaggle_username": CREDS.username, "kaggle_key": CREDS.key, "job_id": job.job_id}
+    stopped = client.post("/api/kaggle/status", json=payload).get_json()
+    assert stopped["status"] == "verifying"
+    assert stopped["remote_state"] == "COMPLETE" and stopped["remote_active"] is False
+    assert stopped["state"] == "RUNNING"  # The scientific workflow has not verified its output yet.
+    assert stopped["remote_observed_at"] > 0
+    assert stopped["next_job_id"] is None
+    finished = client.post("/api/kaggle/status", json=payload).get_json()
+    assert finished["status"] == "complete" and finished["state"] == "FINISHED"
+    assert finished["remote_active"] is False
+    assert finished["remote_observed_at"] >= stopped["remote_observed_at"]
+
+
+def test_frontend_frees_finished_window_slot_and_rejects_an_older_running_snapshot():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js required")
+    src = (Path(__file__).resolve().parents[1] / "static/js/app.js").read_text(encoding="utf-8")
+    start = src.index("  function kaggleRemotePatch(")
+    end = src.index("  function mergeRemoteJobs(", start)
+    script = 'const assert = require("node:assert/strict"); const TERMINAL_STATUSES = ["complete","error","cancelled"];\n' + src[start:end] + r'''
+let job={jobId:'chem-tools-sync-test',status:'running',remoteActive:true};
+const completeWindow={status:'verifying',remote_state:'COMPLETE',remote_active:false,remote_observed_at:50,current_slug:job.jobId};
+job={...job,...kaggleRemotePatch(job,completeWindow)};
+assert.equal(job.status,'verifying');assert.ok(job.finishedAt);
+assert.equal(isActiveOnKaggle(job),false);assert.equal(reservesKaggleSlot(job),false);
+assert.deepEqual(kaggleRemotePatch(job,{status:'running',remote_active:true,remote_observed_at:49,current_slug:job.jobId}),{});
+const checked=kaggleRemotePatch(job,{...completeWindow,status:'complete',remote_observed_at:51});
+assert.equal(checked.finishedAt,job.finishedAt);assert.equal(checked.status,'complete');
+const successor=kaggleRemotePatch(job,{status:'running',remote_state:'RUNNING',remote_active:true,remote_observed_at:52,current_slug:job.jobId+'-r1'});
+assert.equal(successor.status,'running');assert.equal(successor.finishedAt,null);
+'''
+    checked = subprocess.run([node, "-e", script], capture_output=True, text=True, encoding="utf-8", timeout=20)
+    assert checked.returncode == 0, checked.stderr
 
 
 class VersionedBackend(InMemoryCloudflareBackend):

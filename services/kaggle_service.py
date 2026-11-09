@@ -154,11 +154,12 @@ def check_status(kaggle_username, kaggle_key, job_id, owner=None):
             modern_service = get_service()
             modern_creds = parse_credentials(kaggle_username, kaggle_key)
             if modern_service.store.get_job(job_id) is not None:
+                from orca_orchestrator.legacy_compat import _legacy_job
                 described = modern_service.status(modern_creds, job_id)
-                remote_status = str(described.get("remote_state") or "unknown").lower()
-                if remote_status == "unknown":
-                    remote_status = str(described.get("state") or "unknown").lower()
-                return {"ok": True, **described, "status": remote_status}, 200
+                current = described.get("current_slug")
+                return {"ok": True, **described, **_legacy_job(described),
+                        "next_job_id": current if current and current != job_id else None,
+                        "next_kaggle_url": described.get("kaggle_url")}, 200
         except Exception as modern_exc:
             # A tracked job is not allowed to silently become a legacy job if
             # the modern status observation is temporarily unavailable.  The

@@ -548,6 +548,7 @@ class Reconciler:
                 job._extra["remote_status_unknown"] = observed_state in (None, "unknown")
                 if observed_state and observed_state != "unknown":
                     job._extra["last_seen_remote_state"] = observed_state.upper()
+                    job._extra["remote_observed_at"] = obs.observed_at
                 if obs.error is not None and isinstance(obs.error, (AuthenticationError, KaggleUnavailableError)):
                     if obs.kernel_status is None:
                         raise obs.error
@@ -597,17 +598,22 @@ class Reconciler:
 
         # ---- adopt the ledger's own view --------------------------------
         if decision.action == "adopt_ledger":
-            if obs.record is not None:
+            confirmed_successor = obs.successor_status is not None and bool(decision.detail.get("next_slug"))
+            if obs.record is not None and not confirmed_successor:
                 job = self._adopt(job, obs.record, decision, correlation_id, actor)
             else:
                 previous_state = job.state
                 if decision.detail.get("next_slug"):
                     next_slug = decision.detail["next_slug"]
+                    checkpoint = obs.record.checkpoint if obs.record else None
+                    if checkpoint and checkpoint.job_id == job.job_id and checkpoint.epoch == job.epoch:
+                        job = self._adopt_checkpoint(job, obs.record)
                     if next_slug not in job.chain_slugs:
                         job.chain_slugs.append(next_slug)
                     job.current_slug = next_slug
                     job._extra["last_seen_remote_state"] = obs.successor_status.status.upper() if obs.successor_status else "UNKNOWN"
-                    job._extra["remote_status_unknown"] = obs.successor_status is None
+                    job._extra["remote_status_unknown"] = job._extra["last_seen_remote_state"] == "UNKNOWN"
+                    job._extra["remote_observed_at"] = obs.observed_at
                     job.epoch = max(job.epoch + 1, job.epoch)
                     if job.state is not JobState.QUEUED:
                         # This is an external-ledger adoption, so the normal
@@ -793,7 +799,7 @@ class Reconciler:
                 if key in job._extra:
                     ledger_job._extra[key] = job._extra[key]
             if ledger_job.current_slug == job.current_slug:
-                for key in ("last_seen_remote_state", "remote_status_unknown"):
+                for key in ("last_seen_remote_state", "remote_status_unknown", "remote_observed_at"):
                     if key in job._extra:
                         ledger_job._extra[key] = job._extra[key]
             else:
@@ -815,6 +821,9 @@ class Reconciler:
             job.chain_slugs.append(record.legacy_next_slug)
             job.current_slug = record.legacy_next_slug
             job.epoch = max(job.epoch + 1, job.epoch)
+            job._extra["last_seen_remote_state"] = "UNKNOWN"
+            job._extra["remote_status_unknown"] = True
+            job._extra.pop("remote_observed_at", None)
         if decision.trigger == Trigger.ORCA_COMPLETE and (ledger_job is None or job.state is not JobState.FINISHED):
             previous_state = job.state
             if job.state is not JobState.FINISHED:

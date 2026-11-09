@@ -125,6 +125,39 @@ def test_kaggle_reconciliation_preserves_remote_unknown(tmp_path, monkeypatch):
     assert stage["waiting_reason"] == "KAGGLE_STATUS_UNKNOWN"
 
 
+def test_kaggle_workflow_displays_stopped_window_before_archiving_latest_results(tmp_path, monkeypatch):
+    from orca_orchestrator import credential_vault, service as orchestrator_service
+    from orca_orchestrator.errors import NetworkError
+    from services.calculation_workflow_service import describe_workflow
+    from services.reaction_workflow_service import ReactionStore, new_stage, reconcile_kaggle_stages
+
+    creds = SimpleNamespace(username="alice")
+    monkeypatch.setattr(credential_vault, "get_vault_manager", lambda: SimpleNamespace(load_credentials=lambda owner: creds))
+    calls = []
+    observations = iter([
+        {"state": "RUNNING", "remote_state": "COMPLETE"},
+        {"state": "FINISHED", "remote_state": "COMPLETE", "current_slug": "chem-tools-stage-r1"},
+    ])
+
+    def delayed_archive(credentials, job_id, **kwargs):
+        calls.append((job_id, kwargs))
+        raise NetworkError("output storage is temporarily unavailable")
+
+    service = SimpleNamespace(status=lambda *args: next(observations), archive_job_results=delayed_archive)
+    monkeypatch.setattr(orchestrator_service, "get_service", lambda: service)
+    stage = new_stage("OPT", "Optimization", order=0, backend="kaggle")
+    stage.update(state="RUNNING", kaggle_job_id="chem-tools-stage", kaggle_slug="chem-tools-stage")
+    reaction = {"reaction_id": "rxn-delayed", "owner": "alice", "state": "RUNNING", "species": [{
+        "species_id": "sp-1", "workflow_id": "wf-1", "display_name": "H", "stages": [stage],
+    }]}
+    store = ReactionStore(str(tmp_path))
+    for expected in ([], [("chem-tools-stage", {"download_timeout": 45})]):
+        result = reconcile_kaggle_stages(reaction, owner_id="alice", state_dir=str(tmp_path), store=store)
+        job = describe_workflow(reaction)["jobs"][0]
+        assert result["completed_stage_ids"] == [] and calls == expected
+        assert job["status"] == "verifying" and job["remoteState"] == "COMPLETE" and job["remoteActive"] is False
+
+
 def test_kaggle_runner_missing_secret_does_not_abort_current_orca_window(tmp_path, monkeypatch):
     """A missing User Secret must not kill the notebook before ORCA starts."""
     import sys

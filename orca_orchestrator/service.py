@@ -521,6 +521,7 @@ class OrchestratorService:
             "state": job.state.value,
             "local_state": extra.get("local_state", job.state.value),
             "remote_state": extra.get("last_seen_remote_state", "UNKNOWN"),
+            "remote_observed_at": extra.get("remote_observed_at"),
             "remote_status_unknown": bool(extra.get("remote_status_unknown", False)),
             "remote_active": (None if extra.get("remote_status_unknown") or
                               extra.get("last_seen_remote_state", "UNKNOWN").upper() == "UNKNOWN"

@@ -71,6 +71,12 @@ def _legacy_status(state, job_dict=None):
     if state in {"FINISHED", "COMPLETED", "COMPLETE", "DONE"}: return "complete"
     if state in {"FAILED", "ERROR"}: return "error"
     if state in {"CANCELLED", "CANCELED"}: return "cancelled"
+    if job_dict and not job_dict.get("remote_status_unknown"):
+        remote = str(job_dict.get("remote_state") or "").upper()
+        if remote == "COMPLETE":
+            # The notebook is no longer consuming a slot. Its outputs or a
+            # continuation may still need verification; do not advance stages.
+            return "verifying"
     if job_dict and (job_dict.get("current_slug") != job_dict.get("job_id") or job_dict.get("epoch", 0) > 0):
         return "restarting"
     if state in {"RUNNING", "READY"}: return "running"
@@ -104,6 +110,7 @@ def _legacy_job(job):
         "remote_state": job.get("remote_state"),
         "remote_active": job.get("remote_active"),
         "remote_status_unknown": job.get("remote_status_unknown", False),
+        "remote_observed_at": job.get("remote_observed_at"),
         "deleted_on_kaggle": job.get("deleted_on_kaggle", False),
         "result_state": job.get("result_state", "REMOTE_ONLY"),
         "storage_durability": job.get("storage_durability", "ephemeral_local"),
@@ -238,6 +245,8 @@ def status():
     curr_slug = job.get("current_slug") or job.get("job_id")
     next_slug = curr_slug if curr_slug != job_id else None
     note_text = job.get("note") or (job.get("error") or {}).get("message") or ""
+    if out["status"] == "verifying" and not note_text:
+        note_text = "Kaggle finished this run; waiting for output files or continuation verification."
     out.update({
         "note": note_text,
         "warning": note_text,
