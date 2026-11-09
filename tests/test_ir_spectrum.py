@@ -130,7 +130,7 @@ const formatAxisTick = v => String(v);
 let downloaded;
 const downloadTextFile = (name,text) => { downloaded={name,text}; };
 eval(['analyzerIRData', 'addTheoreticalIRCalculationToStudio', 'getIRBounds', 'getIRPadding',
-  'computeIRConvolution', 'getIRSharedNormMax', 'renderIRSpectrumToCanvas', 'publicationSpectrumSpec', 'exportIRData'].map(functionBody).join('\n') +
+  'computeIRConvolution', 'getIRSharedNormMax', 'renderIRSpectrumToCanvas', 'publicationSpectrumSpec', 'exportIRData', 'buildXYText'].map(functionBody).join('\n') +
 `\nconst ir = analyzerIRData(currentEngineData, currentEngineData.latest_job);
 assert.equal(ir.step, 1); assert.equal(ir.hasBands, true);
 addTheoreticalIRCalculationToStudio('water · step 1', ir.modes, 'ORCA', '', {calculationStep:ir.step});
@@ -139,6 +139,9 @@ assert.deepEqual(spec.series[0].points, [{x:1190.75,y:7.8},{x:2954.25,y:106.35}]
 exportIRData('csv');
 assert.ok(downloaded.text.includes('2954.25,"Integrated intensity (km/mol)",106.35'));
 assert.ok(downloaded.text.includes('1190.75,"Integrated intensity (km/mol)",7.8'));
+exportIRData('xy');
+const xy = downloaded.text.trim().split('\\n').filter(line=>!line.startsWith('#'));
+assert.deepEqual(xy.slice(1).map(line=>line.split('\\t').map(Number)), [[2954.25,106.35],[1190.75,7.8]]);
 assert.equal(spec.reverseX, true); assert.equal(spec.metadata.calculated_layers[0].step, 1);
 const svg = PublicationFigures.plot(spec, PublicationFigures.settings({widthMm:85,heightMm:65,peakLabels:true}));
 assert.ok(svg.includes('1191</text>')); assert.ok(svg.includes('2954</text>'));

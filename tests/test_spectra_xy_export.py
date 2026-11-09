@@ -320,7 +320,7 @@ def test_static_wiring():
     src = open(APP_JS, encoding="utf-8").read()
     html = open(INDEX, encoding="utf-8").read()
     for fn in ("buildXYText", "sanitizeFileStem", "downloadTextFile",
-               "exportIRXYSingle", "exportIRXYVisible", "exportUVXYSingle", "exportUVXYVisible"):
+               "exportIRXYSingle", "exportIRData", "exportUVXYSingle", "exportUVXYVisible"):
         assert ("function " + fn) in src, fn + " missing"
     for el in ("ir-view-mode", "uv-view-mode", "ir-graph-title", "ir-x-title", "ir-y-title",
                "uv-graph-title", "uv-x-title", "uv-y-title", "ir-titles-reset", "uv-titles-reset",
@@ -334,12 +334,13 @@ def test_static_wiring():
     assert "irCustomTitles.title || \"Simulated IR Spectrum\"" in src and "ctx.fillText(uvCustomTitles.title" in src
     assert "if (irCustomTitles.y) yAxisTitle = irCustomTitles.y;" in src
     assert "uvCustomTitles.y || (spectrumNormalizeMode" in src
-    # export uses the same renderer pipeline (no second convolution)
-    assert re.search(r"exportIRXYSingle[\s\S]{0,600}computeIRConvolution", src)
-    assert "const ordered = curve.slice().reverse();" in src  # canonical 4000->400 emission order
+    # Both IR data buttons are wired to the same figure data adapter.
+    # Actual descending coordinates and intensities are exercised from ORCA
+    # upload through the export in test_ir_spectrum.py.
+    assert 'getElementById("ir-export-xy-visible")?.addEventListener("click", () => exportIRData("xy"))' in src
+    assert 'irExportCsvBtn?.addEventListener("click", () => exportIRData("csv"))' in src
     assert re.search(r"exportUVXYSingle[\s\S]{0,600}computeUvvisConvolution", src)
-    # experimental-only empty-state message
-    assert "No experimental spectrum loaded" in src
+    assert "No visible IR spectrum. Load IR data or enable a layer." in src
     # imported/experimental display names escaped at HTML boundaries
     assert "${escapeHtml(theo.name)}" in src and "${escapeHtml(exp.label || exp.file_name)}" in src
 

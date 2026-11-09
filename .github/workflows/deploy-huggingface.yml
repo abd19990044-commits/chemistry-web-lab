@@ -17,7 +17,7 @@ name: Deploy Hugging Face runtime
 # Preserves full RXN chemistry with editable KET captions and expands without fullscreen permission.
 # Publishes analyzer figure previews, journal typography, smooth molecules and true line-art TIFF.
 # Publishes explicit Kaggle CLI dependencies and a clean runtime startup check after CI succeeds.
-# Publishes corrected ORCA IR band parsing and the analyzer publication layouts.
+# Publishes corrected ORCA IR band parsing, publication layouts and data export checks.
 on:
   workflow_dispatch:
   # Bootstrap this deployment when the workflow is added to main. Later

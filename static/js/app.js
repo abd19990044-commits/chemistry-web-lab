@@ -6824,7 +6824,7 @@
             const freq = m.frequency_cm;
             if (!Number.isFinite(freq)) return;
             const tr = document.createElement("tr");
-            for (const value of [m.mode ?? idx, freq.toFixed(2), Number.isFinite(m.intensity_km_mol) ? m.intensity_km_mol.toPrecision(5) : "—", freq < 0 ? "Imaginary" : freq === 0 ? "Zero-frequency mode" : "Harmonic mode"]) {
+            for (const value of [m.mode ?? idx, freq.toFixed(2), Number.isFinite(m.intensity_km_mol) ? m.intensity_km_mol.toPrecision(5) : "Not reported", freq < 0 ? "Imaginary" : freq === 0 ? "Zero-frequency mode" : "Harmonic mode"]) {
               tr.insertCell().textContent = value;
             }
             irModesTbody.appendChild(tr);
